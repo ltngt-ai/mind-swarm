@@ -1,0 +1,99 @@
+#!/bin/bash
+# Mind-Swarm quick start script
+
+set -e
+
+# Colors for output
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+# Check if virtual environment exists
+if [ ! -d ".venv" ]; then
+    echo -e "${YELLOW}Virtual environment not found. Creating...${NC}"
+    python3 -m venv .venv
+fi
+
+# Activate virtual environment
+source .venv/bin/activate
+
+# Check if package is installed in dev mode
+if ! pip show mind-swarm > /dev/null 2>&1; then
+    echo -e "${YELLOW}Installing Mind-Swarm in development mode...${NC}"
+    pip install -e ".[dev]"
+fi
+
+# Function to show usage
+show_usage() {
+    echo -e "${CYAN}Mind-Swarm Quick Start${NC}"
+    echo ""
+    echo "Usage: ./run.sh [command]"
+    echo ""
+    echo "Commands:"
+    echo "  server    - Start the Mind-Swarm server"
+    echo "  client    - Connect to the server (interactive mode)"
+    echo "  status    - Check server and system status"
+    echo "  stop      - Stop the server"
+    echo "  restart   - Restart the server"
+    echo "  logs      - View server logs"
+    echo "  demo      - Start server and spawn 3 agents"
+    echo ""
+    echo "Example workflow:"
+    echo "  1. ./run.sh server    # Start the server"
+    echo "  2. ./run.sh client    # Connect and interact"
+}
+
+# Parse command
+COMMAND=${1:-help}
+
+case $COMMAND in
+    server|start)
+        echo -e "${GREEN}Starting Mind-Swarm server...${NC}"
+        mind-swarm server start
+        echo ""
+        echo -e "${CYAN}Server is running in the background.${NC}"
+        echo "View logs with: ./run.sh logs"
+        echo "Connect with: ./run.sh client"
+        ;;
+    
+    client|connect)
+        echo -e "${GREEN}Connecting to Mind-Swarm server...${NC}"
+        mind-swarm connect --interactive
+        ;;
+    
+    status)
+        mind-swarm status
+        ;;
+    
+    stop)
+        echo -e "${YELLOW}Stopping Mind-Swarm server...${NC}"
+        mind-swarm server stop
+        ;;
+    
+    restart)
+        echo -e "${YELLOW}Restarting Mind-Swarm server...${NC}"
+        mind-swarm server restart
+        ;;
+    
+    logs)
+        mind-swarm server logs
+        ;;
+    
+    demo)
+        echo -e "${GREEN}Starting Mind-Swarm demo...${NC}"
+        echo "1. Starting server..."
+        mind-swarm server start
+        sleep 3
+        echo "2. Spawning 3 agents..."
+        mind-swarm connect --spawn 3 --no-interactive
+        echo ""
+        echo -e "${GREEN}Demo ready!${NC}"
+        echo "Connect with: ./run.sh client"
+        ;;
+    
+    help|*)
+        show_usage
+        ;;
+esac

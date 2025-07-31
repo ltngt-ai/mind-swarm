@@ -1,0 +1,73 @@
+# AI Model Presets Configuration for Mind-Swarm
+# These presets can be referenced by name instead of specifying full model details
+# 
+# Format:
+#   name: Preset identifier used in code
+#   provider: AI provider (ollama, openai, openrouter, local)
+#   model: Model identifier
+#   temperature: Generation temperature (0.0-2.0)
+#   max_tokens: Maximum tokens to generate
+#   api_settings: Provider-specific settings (optional)
+#
+# For local models, you can specify host in the model field:
+#   model: llama3.2:3b@192.168.1.100:11434
+
+ai_presets:
+  # Local models (via OpenAI-compatible server)
+  - name: local_explorer
+    provider: local
+    model: llama3.2:3b
+    temperature: 0.7
+    max_tokens: 2048
+    api_settings:
+      host: http://192.168.1.147:1234
+    
+  - name: local_smart
+    provider: local
+    model: llama3.2:8b
+    temperature: 0.5
+    max_tokens: 4096
+    api_settings:
+      host: http://192.168.1.147:1234
+    
+  - name: local_code
+    provider: local
+    model: qwen2.5-coder:3b
+    temperature: 0.2
+    max_tokens: 4096
+    api_settings:
+      host: http://192.168.1.147:1234
+    
+  # OpenRouter models (need API key)
+  - name: fast_cheap
+    provider: openrouter
+    model: google/gemini-2.0-flash-exp:free
+    temperature: 0.5
+    max_tokens: 4096
+    
+  - name: smart_balanced
+    provider: openrouter
+    model: anthropic/claude-3.5-haiku
+    temperature: 0.7
+    max_tokens: 4096
+    
+  - name: smart_expensive
+    provider: openrouter
+    model: anthropic/claude-3.5-sonnet
+    temperature: 0.7
+    max_tokens: 8192
+    
+  - name: ultra_smart
+    provider: openrouter
+    model: openai/gpt-4o
+    temperature: 0.7
+    max_tokens: 8192
+    
+  # Default preset
+  - name: default
+    provider: local
+    model: llama3.2:3b
+    temperature: 0.7
+    max_tokens: 2048
+    api_settings:
+      host: http://192.168.1.147:1234

@@ -1,0 +1,81 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mind-swarm"
+version = "0.1.0"
+description = "A multi-agent AI system with shared memory and distributed problem-solving"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Mind-Swarm Team", email = "contact@mindswarm.ai"},
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "asyncio",
+    "aiofiles",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "rich",  # For better logging and CLI output
+    "typer[all]",  # CLI framework
+    "watchdog",  # File system monitoring
+    "psutil",  # Process management
+    "httpx",  # Async HTTP client
+    "fastapi",  # Web framework for server
+    "uvicorn[standard]",  # ASGI server
+    "websockets",  # WebSocket client
+    "ollama",  # Local AI model integration
+    "openai",  # For premium model access
+    "anthropic",  # For Claude access
+    "pyyaml",  # Configuration files
+    "python-dotenv",  # Environment variables
+    "dspy-ai>=2.4",  # DSPy for structured prompting
+    "requests",  # For OpenRouter HTTP calls
+    "litellm",  # For DSPy LLM integrations
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio",
+    "pytest-cov",
+    "black",
+    "ruff",
+    "mypy",
+    "pre-commit",
+    "ipython",
+]
+
+[project.scripts]
+mind-swarm = "mind_swarm.cli:app"
+mind-swarm-server = "mind_swarm.server.daemon:main"
+mind-swarm-agent = "mind_swarm.agent_executable:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 100
+target-version = ['py310']
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "N", "W", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
