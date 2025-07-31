@@ -211,20 +211,36 @@ class CognitiveLoopV2:
     
     async def _think(self, request: ThinkingRequest) -> ThinkingResponse:
         """Send a thinking request through the brain interface."""
+        logger.info(f"AGENT: Starting _think for {self.agent_id}")
+        
         # Write request to brain file
-        self.brain_file.write_text(request.to_brain_format())
+        request_text = request.to_brain_format()
+        logger.info(f"AGENT: Writing to brain file, length: {len(request_text)}")
+        self.brain_file.write_text(request_text)
+        logger.info(f"AGENT: Successfully wrote to brain file")
         
         # Wait for response
+        wait_count = 0
         while True:
             content = self.brain_file.read_text()
+            wait_count += 1
+            
             if "<<<THOUGHT_COMPLETE>>>" in content:
+                logger.info(f"AGENT: Got response after {wait_count} checks, content length: {len(content)}")
+                logger.info(f"AGENT: Response preview: {content}")
+                
                 # Parse response
                 response = ThinkingResponse.from_brain_format(content)
+                logger.info(f"AGENT: Parsed response successfully")
                 
                 # Reset brain for next use
                 self.brain_file.write_text("This is your brain. Write your thoughts here to think.")
+                logger.info(f"AGENT: Reset brain file for next use")
                 
                 return response
+            
+            if wait_count % 100 == 0:  # Log every 100 checks (1 second)
+                logger.info(f"AGENT: Still waiting for response, check #{wait_count}")
             
             await asyncio.sleep(0.01)
     
@@ -350,4 +366,4 @@ class CognitiveLoopV2:
         msg_file = self.outbox_dir / f"{msg_id}.msg"
         msg_file.write_text(json.dumps(response_msg, indent=2))
         
-        logger.info(f"Sent response: {content[:50]}...")
+        logger.info(f"Sent response: {content}")

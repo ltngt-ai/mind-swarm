@@ -124,6 +124,48 @@ class BrainHandlerV2:
         # Use our custom DSPy configuration
         configure_dspy_for_mind_swarm(lm_config)
     
+    async def process_structured_thinking(self, agent_id: str, request_data: Dict[str, Any]) -> str:
+        """Process a structured thinking request from parsed JSON.
+        
+        Args:
+            agent_id: The agent making the request
+            request_data: Parsed thinking request data
+            
+        Returns:
+            Response formatted for brain file protocol
+        """
+        try:
+            logger.info(f"BRAIN V2: Starting structured thinking for {agent_id}")
+            
+            # Extract components
+            signature_info = request_data.get("signature", {})
+            input_values = request_data.get("input_values", {})
+            
+            logger.info(f"BRAIN V2: Extracted signature: {signature_info.get('task', 'unknown')}")
+            logger.info(f"BRAIN V2: Input values count: {len(input_values)}")
+            
+            # Process the thinking request
+            result = await self._process_thinking(
+                agent_id,
+                signature_info,
+                input_values
+            )
+            
+            logger.info(f"BRAIN V2: Processing complete, result keys: {list(result.keys())}")
+            
+            # Format and return response
+            formatted_response = self._format_response(result)
+            logger.info(f"BRAIN V2: Formatted response length: {len(formatted_response)}")
+            
+            return formatted_response
+            
+        except Exception as e:
+            logger.error(f"Error processing structured thinking from {agent_id}: {e}", exc_info=True)
+            return json.dumps({
+                "output_values": {"error": str(e)},
+                "metadata": {"error": True}
+            })
+    
     async def process_thinking_request(self, agent_id: str, request_text: str) -> str:
         """Process a thinking request from an agent.
         

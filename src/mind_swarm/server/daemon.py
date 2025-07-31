@@ -68,7 +68,10 @@ def main():
     parser = argparse.ArgumentParser(description="Mind-Swarm Server Daemon")
     parser.add_argument("--host", default="127.0.0.1", help="Server host address")
     parser.add_argument("--port", type=int, default=8888, help="Server port")
-    parser.add_argument("--log-file", default="/tmp/mind-swarm-server.log", help="Log file path")
+    # Default log file in project root
+    project_root = Path(__file__).parent.parent.parent.parent
+    default_log = project_root / "mind-swarm.log"
+    parser.add_argument("--log-file", default=str(default_log), help="Log file path")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     
     args = parser.parse_args()

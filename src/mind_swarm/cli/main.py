@@ -334,7 +334,9 @@ def server(
 ):
     """Manage Mind-Swarm server."""
     pid_file = Path("/tmp/mind-swarm-server.pid")
-    log_file = Path("/tmp/mind-swarm-server.log")
+    # Use project root for log file
+    project_root = Path(__file__).parent.parent.parent.parent
+    log_file = project_root / "mind-swarm.log"
     
     if action == "start":
         # Check if already running
@@ -351,6 +353,11 @@ def server(
                 pid_file.unlink()
         
         console.print(f"[cyan]Starting Mind-Swarm server on {host}:{port}...[/cyan]")
+        
+        # Clear log file on start
+        if log_file.exists():
+            log_file.unlink()
+        log_file.parent.mkdir(parents=True, exist_ok=True)
         
         # Start server in background
         cmd = [

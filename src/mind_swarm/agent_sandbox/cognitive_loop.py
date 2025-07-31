@@ -252,7 +252,7 @@ class CognitiveLoop:
         response = await self._use_brain(full_context)
         
         # Update working memory with result
-        self.working_memory.add_reasoning_step("Completed thinking", result=response[:100] + "...")
+        self.working_memory.add_reasoning_step("Completed thinking", result=response)
         
         return response
     

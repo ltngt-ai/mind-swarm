@@ -26,8 +26,20 @@ sudo apt install bubblewrap
 
 #### Server Management
 ```bash
+# IMPORTANT: Set environment variable for server commands
+export SUBSPACE_ROOT=/home/deano/projects/mind-swarm/subspace
+
 # Start the server daemon (runs in background)
-run.sh start
+source .venv/bin/activate && python -m mind_swarm.server.daemon --host 127.0.0.1 --port 8888 --log-file /home/deano/projects/mind-swarm/mind-swarm.log &
+
+# Or use convenience script (may have issues with env vars)
+./run.sh server
+
+# Check server status
+ps aux | grep "mind_swarm.*daemon" | grep -v grep
+
+# Stop server
+kill $(ps aux | grep "mind_swarm.*daemon" | grep -v grep | awk '{print $2}')
 ```
 
 #### Client Commands

@@ -60,7 +60,7 @@ class WorkingMemory:
         self.observations = []
         
         # Add to thoughts
-        self.add_thought(f"New task: {task[:50]}...")
+        self.add_thought(f"New task: {task}")
     
     def add_thought(self, thought: str):
         """Add a thought to working memory."""

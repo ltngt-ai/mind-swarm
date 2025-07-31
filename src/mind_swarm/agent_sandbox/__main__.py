@@ -6,16 +6,12 @@ import os
 import sys
 import logging
 
-# Set up logging - write to a file in the home directory
-log_file = '/home/logs/agent.log'
-os.makedirs(os.path.dirname(log_file), exist_ok=True)
-
+# Set up logging - only to stdout/stderr which will be captured by subspace
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler(log_file),
-        logging.StreamHandler()
+        logging.StreamHandler()  # Only stdout, no file handler
     ]
 )
 logger = logging.getLogger("agent")

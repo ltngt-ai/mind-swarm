@@ -253,7 +253,7 @@ Please think through this following these steps:
                 self.thinking = False
                 
                 # Add to working memory
-                self.working_memory.add_thought(f"Brain response: {response[:100]}...")
+                self.working_memory.add_thought(f"Brain response: {response}")
                 
                 return response
             
@@ -275,7 +275,7 @@ Please think through this following these steps:
         outbox_file = self.outbox_path / f"{msg_id}.msg"
         outbox_file.write_text(json.dumps(response_msg, indent=2))
         
-        logger.info(f"Sent response: {response[:50]}...")
+        logger.info(f"Sent response: {response}")
     
     async def run_cycle(self) -> bool:
         """Run one cycle of the cognitive loop.

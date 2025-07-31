@@ -27,6 +27,9 @@ class MindSwarmDSPyLM(dspy.LM):
         self.temperature = config.get("temperature", 0.7)
         self.max_tokens = config.get("max_tokens", 1000)
         
+        # Debug: log the config we received
+        logger.info(f"DSPy LM initializing with config: {config}")
+        
         # Set up provider-specific configuration
         self._setup_provider()
         
@@ -53,9 +56,10 @@ class MindSwarmDSPyLM(dspy.LM):
         elif self.provider in ["openai_compatible", "local", "ollama"]:
             # Local or custom OpenAI-compatible endpoint
             self.api_key = self.config.get("api_key", "dummy")
-            provider_settings = self.config.get("provider_settings", {})
-            host = provider_settings.get("host", "http://localhost:1234")
-            self.api_base = f"{host}/v1" if not host.endswith("/v1") else host
+            # Use base_url directly from config
+            base_url = self.config.get("base_url", "http://localhost:1234")
+            self.api_base = f"{base_url}/v1" if not base_url.endswith("/v1") else base_url
+            logger.info(f"Configured local provider with base URL: {self.api_base}")
         
         else:
             # Default values
@@ -84,6 +88,10 @@ class MindSwarmDSPyLM(dspy.LM):
             else:
                 model_str = self.model
             
+            # PROOF: Log LLM request details
+            logger.info(f"LM REQUEST: model={model_str}, api_base={getattr(self, 'api_base', 'None')}, temp={temperature}")
+            logger.info(f"LM REQUEST PROMPT: {prompt}")
+            
             response = completion(
                 model=model_str,
                 messages=[{"role": "user", "content": prompt}],
@@ -93,7 +101,10 @@ class MindSwarmDSPyLM(dspy.LM):
                 api_base=self.api_base if hasattr(self, 'api_base') else None,
             )
             
-            return response.choices[0].message.content
+            response_text = response.choices[0].message.content
+            logger.info(f"LM RESPONSE: {response_text}")
+            
+            return response_text
             
         except Exception as e:
             logger.error(f"Error calling LLM: {e}")

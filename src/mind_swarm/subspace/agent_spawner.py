@@ -18,6 +18,7 @@ class AgentProcess:
         self.agent_id = agent_id
         self.process = process
         self.sandbox = sandbox
+        self.log_tasks = []  # Tasks for reading stdout/stderr
         self.start_time = asyncio.get_event_loop().time()
     
     async def is_alive(self) -> bool:
@@ -52,6 +53,15 @@ class AgentProcess:
             logger.warning(f"Agent {self.agent_id} didn't shutdown gracefully, forcing...")
             self.process.terminate()
             await self.process.wait()
+        
+        # Cancel log tasks
+        for task in self.log_tasks:
+            if not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
 
 
 class AgentSpawner:
@@ -124,6 +134,9 @@ class AgentSpawner:
         # Track the agent
         agent_process = AgentProcess(agent_id, process, sandbox)
         self.agents[agent_id] = agent_process
+        
+        # Set up logging for the agent
+        await self._setup_agent_logging(agent_process)
         
         # Start monitoring if not already running
         if not self._monitor_task or self._monitor_task.done():
@@ -240,3 +253,56 @@ class AgentSpawner:
             self._monitor_task.cancel()
         
         logger.info("All agents shut down")
+    
+    async def _setup_agent_logging(self, agent_process: AgentProcess):
+        """Set up logging tasks for an agent process."""
+        # Create logs directory outside the sandbox
+        logs_dir = self.subspace.root_path / "logs" / "agents"
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Log file path
+        log_file = logs_dir / f"{agent_process.agent_id}.log"
+        
+        # Create tasks to read stdout and stderr
+        if agent_process.process.stdout:
+            stdout_task = asyncio.create_task(
+                self._read_and_log_stream(
+                    agent_process.process.stdout,
+                    log_file,
+                    agent_process.agent_id,
+                    "stdout"
+                )
+            )
+            agent_process.log_tasks.append(stdout_task)
+        
+        if agent_process.process.stderr:
+            stderr_task = asyncio.create_task(
+                self._read_and_log_stream(
+                    agent_process.process.stderr,
+                    log_file,
+                    agent_process.agent_id,
+                    "stderr"
+                )
+            )
+            agent_process.log_tasks.append(stderr_task)
+    
+    async def _read_and_log_stream(self, stream, log_file: Path, agent_id: str, stream_name: str):
+        """Read from a stream and write to log file."""
+        try:
+            with open(log_file, 'a') as f:
+                while True:
+                    line = await stream.readline()
+                    if not line:
+                        break
+                    
+                    # Decode and write to file
+                    text = line.decode('utf-8', errors='replace')
+                    f.write(text)
+                    f.flush()
+                    
+                    # Also log important messages to server log
+                    if stream_name == "stderr" or "ERROR" in text or "WARNING" in text:
+                        logger.info(f"Agent {agent_id} {stream_name}: {text.strip()}")
+                        
+        except Exception as e:
+            logger.error(f"Error reading {stream_name} for agent {agent_id}: {e}")

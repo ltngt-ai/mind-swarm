@@ -97,16 +97,36 @@ class BodyManager:
         """Main loop for monitoring body files."""
         # Track what we're currently processing
         processing: Dict[str, bool] = {}
+        loop_count = 0
+        
+        logger.info(f"MONITOR: Starting monitor loop for {self.agent_id}")
         
         while True:
             try:
+                loop_count += 1
+                
+                # Log periodically to prove the loop is running
+                if loop_count % 1000 == 0:
+                    logger.info(f"MONITOR: Loop #{loop_count} for {self.agent_id}, processing state: {processing}")
+                
                 for name, body_file in self.body_files.items():
                     file_path = self.agent_home / name
                     
                     if not file_path.exists():
+                        if loop_count % 1000 == 0:
+                            logger.info(f"MONITOR: File {name} does not exist for {self.agent_id}")
                         continue
                     
                     content = file_path.read_text()
+                    
+                    # Log brain file content checks more frequently
+                    if name == "brain" and loop_count % 500 == 0:
+                        logger.info(f"MONITOR: Brain file check #{loop_count} for {self.agent_id}")
+                        logger.info(f"MONITOR: Content length: {len(content)}, has END marker: {'<<<END_THOUGHT>>>' in content}")
+                        logger.info(f"MONITOR: Processing state for brain: {processing.get('brain', False)}")
+                        logger.info(f"MONITOR: FULL CONTENT: {repr(content)}")
+                        logger.info(f"MONITOR: HELP TEXT: {repr(body_file.help_text)}")
+                        logger.info(f"MONITOR: CONTENT EQUALS HELP: {content.strip() == body_file.help_text.strip()}")
                     
                     # For brain file, check for end marker
                     if name == "brain":
@@ -116,22 +136,38 @@ class BodyManager:
                             
                             # Extract the prompt
                             prompt = content.split("<<<END_THOUGHT>>>")[0].strip()
-                            logger.debug(f"Brain activated by {self.agent_id}: {prompt[:50]}...")
+                            logger.info(f"BODY: Brain activated by {self.agent_id}, prompt length: {len(prompt)}")
+                            logger.info(f"BODY: Prompt preview: {prompt}")
                             
                             if body_file.handler:
+                                logger.info(f"BODY: Calling brain handler for {self.agent_id}")
                                 # Process the thought
                                 response = await body_file.handler(self.agent_id, prompt)
+                                
+                                logger.info(f"BODY: Got response from handler, length: {len(response)}")
+                                logger.info(f"BODY: Response preview: {response}")
                                 
                                 # Write response with completion marker
                                 # From agent's perspective, this happens instantly
                                 # Check if response already has completion marker
                                 if "<<<THOUGHT_COMPLETE>>>" not in response:
-                                    file_path.write_text(f"{response}\n<<<THOUGHT_COMPLETE>>>")
+                                    final_response = f"{response}\n<<<THOUGHT_COMPLETE>>>"
                                 else:
-                                    file_path.write_text(response)
+                                    final_response = response
+                                
+                                logger.info(f"BODY: Writing response to brain file for {self.agent_id}")
+                                file_path.write_text(final_response)
+                                logger.info(f"BODY: Successfully wrote response to brain file")
+                                
+                                # After writing response, reset processing flag so we can handle the next request
+                                logger.info(f"MONITOR: Request processed, resetting processing flag for {self.agent_id}")
+                                processing[name] = False
+                            else:
+                                logger.error(f"BODY: No handler for brain file of {self.agent_id}")
                         
                         elif content.strip() == body_file.help_text.strip():
                             # Agent has reset the file, we can process again
+                            logger.info(f"MONITOR: Agent {self.agent_id} reset brain file, enabling processing")
                             processing[name] = False
                 
                 # Adaptive delay - longer when nothing is happening

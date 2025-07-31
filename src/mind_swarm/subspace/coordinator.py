@@ -298,12 +298,24 @@ class SubspaceCoordinator:
         
         Args:
             agent_id: The agent making the request
-            prompt: The thought to process
+            prompt: The thought to process (may be JSON ThinkingRequest)
             
         Returns:
             The AI response
         """
-        logger.info(f"Processing thought for {agent_id}: {prompt[:50]}...")
+        # Check if this is a structured thinking request
+        if prompt.strip().startswith("{") and '"type": "thinking_request"' in prompt:
+            # Parse the JSON thinking request
+            try:
+                import json
+                request_data = json.loads(prompt.strip())
+                logger.info(f"Processing thought for {agent_id}: {json.dumps(request_data, indent=2)}")
+            except json.JSONDecodeError:
+                logger.error(f"Failed to parse thinking request from {agent_id}")
+                return "Error: Invalid thinking request format"
+        else:
+            # Plain text prompt - log it
+            logger.info(f"Processing thought for {agent_id}: {prompt}")
         
         try:
             # Get agent configuration to determine which model to use
@@ -352,11 +364,24 @@ class SubspaceCoordinator:
                 
                 brain_handler = self._brain_handlers[preset_name]
             
-            # Process the thinking request
-            response = await brain_handler.process_thinking_request(agent_id, prompt)
-            
-            logger.info(f"Thought processed for {agent_id}")
-            return response
+            # Process the thinking request based on format
+            if self.use_v2_brain and 'request_data' in locals():
+                # Structured thinking request for V2 brain
+                response = await brain_handler.process_structured_thinking(agent_id, request_data)
+                
+                # Format response for brain file protocol
+                if isinstance(response, dict):
+                    response_text = json.dumps(response, indent=2)
+                else:
+                    response_text = str(response)
+                    
+                logger.info(f"Thought processed for {agent_id}")
+                return response_text + "\n<<<THOUGHT_COMPLETE>>>"
+            else:
+                # Original plain text processing
+                response = await brain_handler.process_thinking_request(agent_id, prompt)
+                logger.info(f"Thought processed for {agent_id}")
+                return response
             
         except Exception as e:
             logger.error(f"Error processing AI request for {agent_id}: {e}")
@@ -389,10 +414,9 @@ class SubspaceCoordinator:
             if isinstance(config_dict, dict) and 'base_url' in config_dict:
                 lm_config["base_url"] = config_dict['base_url']
         
-        # Check for provider_settings (for local models)
-        if "provider_settings" in ai_config:
-            provider_settings = ai_config["provider_settings"]
-            if isinstance(provider_settings, dict) and "host" in provider_settings:
-                lm_config["base_url"] = provider_settings["host"]
+        # Check for provider_settings or api_settings (for local models)
+        settings = ai_config.get("provider_settings") or ai_config.get("api_settings")
+        if settings and isinstance(settings, dict) and "host" in settings:
+            lm_config["base_url"] = settings["host"]
         
         return lm_config
