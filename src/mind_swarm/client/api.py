@@ -69,13 +69,13 @@ class MindSwarmClient:
             response.raise_for_status()
             return ServerStatus(**response.json())
     
-    async def spawn_agent(
+    async def create_agent(
         self, 
         name: Optional[str] = None,
         use_premium: bool = False,
         config: Optional[Dict[str, Any]] = None
     ) -> str:
-        """Spawn a new agent.
+        """Create a new agent.
         
         Args:
             name: Optional agent name
@@ -93,17 +93,19 @@ class MindSwarmClient:
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{self.base_url}/agents/spawn",
+                f"{self.base_url}/agents/create",
                 json=payload
             )
             response.raise_for_status()
-            return response.json()["agent_id"]
+            data = response.json()
+            # Server returns 'name' not 'agent_id' now
+            return data.get("name", data.get("agent_id", "unknown"))
     
     async def terminate_agent(self, agent_id: str):
         """Terminate an agent.
         
         Args:
-            agent_id: ID of agent to terminate
+            agent_id: Name of agent to terminate
         """
         async with httpx.AsyncClient() as client:
             response = await client.delete(f"{self.base_url}/agents/{agent_id}")
@@ -118,7 +120,7 @@ class MindSwarmClient:
         """Send a command to an agent.
         
         Args:
-            agent_id: Target agent ID
+            agent_id: Target agent name
             command: Command to send
             params: Optional command parameters
         """

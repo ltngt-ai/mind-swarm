@@ -46,7 +46,7 @@ show_usage() {
     echo "  stop      - Stop the server"
     echo "  restart   - Restart the server"
     echo "  logs      - View server logs"
-    echo "  demo      - Start server and spawn 3 agents"
+    echo "  demo      - Start server and create 3 agents"
     echo ""
     echo "Example workflow:"
     echo "  1. ./run.sh server    # Start the server"
@@ -94,8 +94,8 @@ case $COMMAND in
         echo "1. Starting server..."
         mind-swarm server start
         sleep 3
-        echo "2. Spawning 3 agents..."
-        mind-swarm connect --spawn 3 --no-interactive
+        echo "2. Creating 3 agents..."
+        mind-swarm connect --create 3 --no-interactive
         echo ""
         echo -e "${GREEN}Demo ready!${NC}"
         echo "Connect with: ./run.sh client"

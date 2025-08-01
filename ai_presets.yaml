@@ -14,17 +14,19 @@
 
 ai_presets:
   # Local models (via OpenAI-compatible server)
+  # NOTE: Local server typically has one model loaded at a time
+  # The model field is informational - actual model depends on server config
   - name: local_explorer
     provider: local
-    model: llama3.2:3b
+    model: qwen/qwen3-coder-30b  # Current model on server
     temperature: 0.7
-    max_tokens: 2048
+    max_tokens: 4096
     api_settings:
       host: http://192.168.1.147:1234
     
   - name: local_smart
     provider: local
-    model: llama3.2:8b
+    model: qwen/qwen3-coder-30b  # Same model, different settings
     temperature: 0.5
     max_tokens: 4096
     api_settings:
@@ -32,7 +34,7 @@ ai_presets:
     
   - name: local_code
     provider: local
-    model: qwen2.5-coder:3b
+    model: qwen/qwen3-coder-30b  # Same model, code-focused settings
     temperature: 0.2
     max_tokens: 4096
     api_settings:
@@ -63,11 +65,11 @@ ai_presets:
     temperature: 0.7
     max_tokens: 8192
     
-  # Default preset
+  # Default preset (uses local server)
   - name: default
     provider: local
-    model: llama3.2:3b
+    model: qwen/qwen3-coder-30b  # Uses whatever model is on local server
     temperature: 0.7
-    max_tokens: 2048
+    max_tokens: 4096
     api_settings:
       host: http://192.168.1.147:1234

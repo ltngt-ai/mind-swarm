@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Agent process that runs inside a bubblewrap sandbox.
 
-This is NOT a standalone program - it's a process spawned by the Mind-Swarm
+This is NOT a standalone program - it's a process started by the Mind-Swarm
 subspace and can only function within that environment. The subspace provides
 the sandbox, filesystem bindings, and the entire context for the agent to exist.
 

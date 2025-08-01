@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from datetime import datetime
+import aiofiles
+import aiofiles.os
 
 from mind_swarm.subspace.agent_spawner import AgentSpawner
 from mind_swarm.subspace.sandbox import SubspaceManager
@@ -29,18 +31,33 @@ class MessageRouter:
         """Check all agent outboxes and route messages to destinations."""
         routed_count = 0
         
-        for agent_dir in self.agents_dir.iterdir():
-            if not agent_dir.is_dir():
+        try:
+            agent_names = await aiofiles.os.listdir(self.agents_dir)
+        except OSError:
+            return routed_count
+        
+        for agent_name in agent_names:
+            agent_dir = self.agents_dir / agent_name
+            if not await aiofiles.os.path.isdir(agent_dir):
                 continue
                 
             outbox_dir = agent_dir / "outbox"
-            if not outbox_dir.exists():
+            if not await aiofiles.os.path.exists(outbox_dir):
                 continue
             
             # Process each message in outbox
-            for msg_file in outbox_dir.glob("*.msg"):
+            try:
+                outbox_files = await aiofiles.os.listdir(outbox_dir)
+                msg_files = [f for f in outbox_files if f.endswith('.msg')]
+            except OSError:
+                continue
+            
+            for msg_filename in msg_files:
+                msg_file = outbox_dir / msg_filename
                 try:
-                    message = json.loads(msg_file.read_text())
+                    async with aiofiles.open(msg_file, 'r') as f:
+                        content = await f.read()
+                    message = json.loads(content)
                     to_agent = message.get("to", "")
                     
                     if to_agent == "subspace":
@@ -49,7 +66,7 @@ class MessageRouter:
                         # TODO: Handle subspace commands
                     elif to_agent == "broadcast":
                         # Broadcast to all agents
-                        await self._broadcast_message(message, exclude=[agent_dir.name])
+                        await self._broadcast_message(message, exclude=[agent_name])
                     elif to_agent.startswith("agent-"):
                         # Direct message to another agent
                         await self._deliver_message(to_agent, message)
@@ -58,8 +75,16 @@ class MessageRouter:
                     
                     # Move to sent folder
                     sent_dir = outbox_dir / "sent"
-                    sent_dir.mkdir(exist_ok=True)
-                    msg_file.rename(sent_dir / msg_file.name)
+                    try:
+                        await aiofiles.os.makedirs(sent_dir, exist_ok=True)
+                    except OSError:
+                        pass  # Directory might already exist
+                    
+                    sent_file = sent_dir / msg_file.name
+                    try:
+                        await aiofiles.os.rename(msg_file, sent_file)
+                    except OSError as e:
+                        logger.error(f"Failed to move message file: {e}")
                     routed_count += 1
                     
                 except Exception as e:
@@ -73,7 +98,7 @@ class MessageRouter:
     async def _deliver_message(self, to_agent: str, message: Dict[str, Any]):
         """Deliver a message to a specific agent's inbox."""
         target_inbox = self.agents_dir / to_agent / "inbox"
-        if not target_inbox.exists():
+        if not await aiofiles.os.path.exists(target_inbox):
             logger.warning(f"Agent {to_agent} inbox not found")
             return
         
@@ -83,18 +108,25 @@ class MessageRouter:
         msg_file = target_inbox / f"{msg_id}.msg"
         
         # Write message
-        msg_file.write_text(json.dumps(message, indent=2))
+        async with aiofiles.open(msg_file, 'w') as f:
+            await f.write(json.dumps(message, indent=2))
         logger.debug(f"Delivered message to {to_agent}")
     
     async def _broadcast_message(self, message: Dict[str, Any], exclude: Optional[List[str]] = None):
         """Broadcast a message to all agents."""
         exclude = exclude or []
         
-        for agent_dir in self.agents_dir.iterdir():
-            if not agent_dir.is_dir() or agent_dir.name in exclude:
+        try:
+            agent_names = await aiofiles.os.listdir(self.agents_dir)
+        except OSError:
+            return
+        
+        for agent_name in agent_names:
+            agent_dir = self.agents_dir / agent_name
+            if not await aiofiles.os.path.isdir(agent_dir) or agent_name in exclude:
                 continue
             
-            await self._deliver_message(agent_dir.name, message)
+            await self._deliver_message(agent_name, message)
 
 
 class SubspaceCoordinator:
@@ -159,7 +191,7 @@ class SubspaceCoordinator:
         
         logger.info("Subspace coordinator stopped")
     
-    async def spawn_agent(
+    async def create_agent(
         self,
         name: Optional[str] = None,
         agent_type: str = "general",
@@ -167,7 +199,7 @@ class SubspaceCoordinator:
         use_premium: bool = False,
         config: Optional[Dict[str, Any]] = None
     ) -> str:
-        """Spawn a new AI agent process.
+        """Create a new AI agent.
         
         Args:
             name: Agent name (auto-generated from next letter if not provided)
@@ -194,8 +226,8 @@ class SubspaceCoordinator:
         self.state_manager.update_lifecycle(state.name, AgentLifecycle.ACTIVE)
         self.state_manager.increment_activation(state.name)
         
-        # Spawn the agent with memorable name
-        await self.spawner.spawn_agent(
+        # Start the agent process
+        await self.spawner.start_agent(
             name=state.name,
             agent_type=agent_type,
             config=agent_config
@@ -203,7 +235,7 @@ class SubspaceCoordinator:
         
         # Create body files for the agent
         agent_home = self.subspace.agents_dir / state.name
-        body_manager = self.body_system.create_agent_body(state.name, agent_home)
+        body_manager = await self.body_system.create_agent_body(state.name, agent_home)
         
         # Start monitoring body files
         await self.body_system.start_agent_monitoring(state.name, self._handle_ai_request)
@@ -260,10 +292,26 @@ class SubspaceCoordinator:
         # Enrich with additional info from filesystem and state manager
         for name, state in states.items():
             agent_dir = self.subspace.agents_dir / name
-            if agent_dir.exists():
+            if await aiofiles.os.path.exists(agent_dir):
                 # Count messages
-                inbox_count = len(list((agent_dir / "inbox").glob("*.msg"))) if (agent_dir / "inbox").exists() else 0
-                outbox_count = len(list((agent_dir / "outbox").glob("*.msg"))) if (agent_dir / "outbox").exists() else 0
+                inbox_dir = agent_dir / "inbox"
+                outbox_dir = agent_dir / "outbox"
+                
+                inbox_count = 0
+                if await aiofiles.os.path.exists(inbox_dir):
+                    try:
+                        files = await aiofiles.os.listdir(inbox_dir)
+                        inbox_count = len([f for f in files if f.endswith('.msg')])
+                    except OSError:
+                        inbox_count = 0
+                
+                outbox_count = 0
+                if await aiofiles.os.path.exists(outbox_dir):
+                    try:
+                        files = await aiofiles.os.listdir(outbox_dir)
+                        outbox_count = len([f for f in files if f.endswith('.msg')])
+                    except OSError:
+                        outbox_count = 0
                 
                 state.update({
                     "inbox_count": inbox_count,
@@ -326,15 +374,15 @@ class SubspaceCoordinator:
                 self.state_manager.update_lifecycle(state.name, AgentLifecycle.ACTIVE)
                 self.state_manager.increment_activation(state.name)
                 
-                # Spawn the agent with its saved config
-                await self.spawner.spawn_agent(
+                # Start/resume the agent process with its saved config
+                await self.spawner.start_agent(
                     name=state.name,
                     config=state.config
                 )
                 
                 # Create body files for the agent
                 agent_home = self.subspace.agents_dir / state.name
-                body_manager = self.body_system.create_agent_body(state.name, agent_home)
+                body_manager = await self.body_system.create_agent_body(state.name, agent_home)
                 
                 # Start monitoring body files
                 await self.body_system.start_agent_monitoring(state.name, self._handle_ai_request)
@@ -392,21 +440,30 @@ class SubspaceCoordinator:
         
         logger.info("Message routing stopped")
     
-    def get_plaza_questions(self) -> List[Dict[str, Any]]:
+    async def get_plaza_questions(self) -> List[Dict[str, Any]]:
         """Get all questions from the Plaza."""
         questions = []
         plaza_dir = self.subspace.plaza_dir
         
-        for q_file in plaza_dir.glob("*.json"):
-            try:
-                question = json.loads(q_file.read_text())
-                questions.append(question)
-            except Exception as e:
-                logger.error(f"Error reading question {q_file}: {e}")
+        try:
+            files = await aiofiles.os.listdir(plaza_dir)
+            json_files = [f for f in files if f.endswith('.json')]
+            
+            for filename in json_files:
+                q_file = plaza_dir / filename
+                try:
+                    async with aiofiles.open(q_file, 'r') as f:
+                        content = await f.read()
+                    question = json.loads(content)
+                    questions.append(question)
+                except Exception as e:
+                    logger.error(f"Error reading question {q_file}: {e}")
+        except OSError as e:
+            logger.error(f"Error listing plaza directory: {e}")
         
         return questions
     
-    def create_plaza_question(self, text: str, created_by: str = "user") -> str:
+    async def create_plaza_question(self, text: str, created_by: str = "user") -> str:
         """Create a new question in the Plaza."""
         question_id = f"q_{int(asyncio.get_event_loop().time() * 1000)}"
         question = {
@@ -419,7 +476,8 @@ class SubspaceCoordinator:
         }
         
         q_file = self.subspace.plaza_dir / f"{question_id}.json"
-        q_file.write_text(json.dumps(question, indent=2))
+        async with aiofiles.open(q_file, 'w') as f:
+            await f.write(json.dumps(question, indent=2))
         
         logger.info(f"Posted question to Plaza: {question_id}")
         return question_id
@@ -457,8 +515,10 @@ class SubspaceCoordinator:
             use_premium = False
             agent_dir = self.subspace.agents_dir / name
             config_file = agent_dir / "config.json"
-            if config_file.exists():
-                config = json.loads(config_file.read_text())
+            if await aiofiles.os.path.exists(config_file):
+                async with aiofiles.open(config_file, 'r') as f:
+                    content = await f.read()
+                config = json.loads(content)
                 use_premium = config.get("ai", {}).get("use_premium", False)
             
             # Get appropriate AI service

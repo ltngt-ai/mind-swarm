@@ -1,4 +1,4 @@
-"""Agent spawner that launches agents as separate processes in sandboxes."""
+"""Agent process manager that starts and manages agent processes in sandboxes."""
 
 import asyncio
 import json
@@ -65,8 +65,8 @@ class AgentProcess:
                     pass
 
 
-class AgentSpawner:
-    """Manages spawning agents as separate processes."""
+class AgentProcessManager:
+    """Manages starting and stopping agent processes."""
     
     def __init__(self, subspace_manager: SubspaceManager):
         self.subspace = subspace_manager
@@ -80,13 +80,13 @@ class AgentSpawner:
         logs_base_dir = self.subspace.root_path / "logs" / "agents"
         self.log_rotator = AgentLogRotator(logs_base_dir, max_size_mb=10, max_files=5)
         
-    async def spawn_agent(
+    async def start_agent(
         self,
         name: str,  # Required now
         agent_type: str = "general",
         config: Optional[Dict[str, Any]] = None
     ) -> str:
-        """Spawn a new AI agent process.
+        """Start an agent process.
         
         Args:
             name: Agent name (required, must be unique)
@@ -116,7 +116,7 @@ class AgentSpawner:
         }
         
         # Launch agent process in sandbox
-        logger.info(f"Spawning agent {name}")
+        logger.info(f"Starting agent process for {name}")
         
         # Build command to run agent from its base_code directory
         # The agent code is in /home/base_code when viewed from inside sandbox
@@ -143,7 +143,7 @@ class AgentSpawner:
         if not self._monitor_task or self._monitor_task.done():
             self._monitor_task = asyncio.create_task(self._monitor_agents())
         
-        logger.info(f"Agent {name} spawned with PID {process.pid}")
+        logger.info(f"Agent {name} process started with PID {process.pid}")
         return name
     
     async def terminate_agent(self, name: str, timeout: float = 5.0):
@@ -316,3 +316,7 @@ class AgentSpawner:
                         
         except Exception as e:
             logger.error(f"Error reading {stream_name} for agent {name}: {e}")
+
+
+# Keep AgentSpawner as an alias for backward compatibility during transition
+AgentSpawner = AgentProcessManager

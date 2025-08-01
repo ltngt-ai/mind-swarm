@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 from typing import Dict, Set, Callable, Optional
 from datetime import datetime
+import aiofiles
 
 try:
     # Try to use watchdog which provides cross-platform file monitoring
@@ -111,7 +112,9 @@ class BodyFileHandler(FileSystemEventHandler):
             return
             
         try:
-            content = file_path.read_text()
+            # Use async file I/O
+            async with aiofiles.open(file_path, 'r') as f:
+                content = await f.read()
             
             # Check for end marker
             if "<<<END_THOUGHT>>>" in content:
@@ -125,7 +128,8 @@ class BodyFileHandler(FileSystemEventHandler):
                 response = await self.ai_handler(self.agent_id, prompt)
                 
                 # Write response with completion marker
-                file_path.write_text(f"{response}\n<<<THOUGHT_COMPLETE>>>")
+                async with aiofiles.open(file_path, 'w') as f:
+                    await f.write(f"{response}\n<<<THOUGHT_COMPLETE>>>")
                 
             elif content.startswith("This is your brain"):
                 # File was reset, ready for next thought
@@ -181,18 +185,22 @@ class EpollBodyMonitor:
                     
                     # Check file modification time
                     # (In production, would use actual epoll or inotify)
-                    content = brain_path.read_text()
-                    
-                    if "<<<END_THOUGHT>>>" in content and not agent_info['processing']:
-                        agent_info['processing'] = True
+                    try:
+                        async with aiofiles.open(brain_path, 'r') as f:
+                            content = await f.read()
                         
-                        # Process asynchronously
-                        asyncio.create_task(
-                            self._process_thought(agent_id, content)
-                        )
-                        
-                    elif content.startswith("This is your brain"):
-                        agent_info['processing'] = False
+                        if "<<<END_THOUGHT>>>" in content and not agent_info['processing']:
+                            agent_info['processing'] = True
+                            
+                            # Process asynchronously
+                            asyncio.create_task(
+                                self._process_thought(agent_id, content)
+                            )
+                            
+                        elif content.startswith("This is your brain"):
+                            agent_info['processing'] = False
+                    except FileNotFoundError:
+                        pass
                         
                 except Exception as e:
                     logger.error(f"Error monitoring {agent_id}: {e}")
@@ -212,7 +220,8 @@ class EpollBodyMonitor:
             response = await agent_info['ai_handler'](agent_id, prompt)
             
             # Write response
-            agent_info['brain_path'].write_text(f"{response}\n<<<THOUGHT_COMPLETE>>>")
+            async with aiofiles.open(agent_info['brain_path'], 'w') as f:
+                await f.write(f"{response}\n<<<THOUGHT_COMPLETE>>>")
             
         except Exception as e:
             logger.error(f"Error processing thought for {agent_id}: {e}")

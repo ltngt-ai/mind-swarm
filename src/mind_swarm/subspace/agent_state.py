@@ -112,7 +112,7 @@ class AgentStateManager:
                 if state.name:
                     self.name_generator.used_names.add(state.name)
                     
-                logger.info(f"Loaded agent state: {state.name} ({state.agent_id})")
+                logger.info(f"Loaded agent state: {state.name}")
             except Exception as e:
                 logger.error(f"Failed to load agent state from {state_file}: {e}")
     

@@ -10,6 +10,8 @@ import json
 from pathlib import Path
 from typing import Dict, Any, Optional, Callable
 from datetime import datetime
+import aiofiles
+import aiofiles.os
 
 from mind_swarm.utils.logging import logger
 
@@ -45,7 +47,7 @@ class BodyManager:
         self.body_files: Dict[str, BodyFile] = {}
         self._watch_task: Optional[asyncio.Task] = None
         
-    def create_body_files(self):
+    async def create_body_files(self):
         """Create the standard body files for an agent."""
         # Brain - for thinking
         brain = BodyFile(
@@ -67,7 +69,8 @@ class BodyManager:
         # Create the actual files
         for name, body_file in self.body_files.items():
             file_path = self.agent_home / name
-            file_path.write_text(body_file.help_text)
+            async with aiofiles.open(file_path, 'w') as f:
+                await f.write(body_file.help_text)
             # Set read-only from agent's perspective
             file_path.chmod(0o644)
             
@@ -112,12 +115,13 @@ class BodyManager:
                 for name, body_file in self.body_files.items():
                     file_path = self.agent_home / name
                     
-                    if not file_path.exists():
+                    if not await aiofiles.os.path.exists(file_path):
                         if loop_count % 1000 == 0:
                             logger.info(f"MONITOR: File {name} does not exist for {self.name}")
                         continue
                     
-                    content = file_path.read_text()
+                    async with aiofiles.open(file_path, 'r') as f:
+                        content = await f.read()
                     
                     # Log brain file content checks more frequently
                     if name == "brain" and loop_count % 500 == 0:
@@ -156,7 +160,8 @@ class BodyManager:
                                     final_response = response
                                 
                                 logger.info(f"BODY: Writing response to brain file for {self.name}")
-                                file_path.write_text(final_response)
+                                async with aiofiles.open(file_path, 'w') as f:
+                                    await f.write(final_response)
                                 logger.info(f"BODY: Successfully wrote response to brain file")
                                 
                                 # After writing response, reset processing flag so we can handle the next request
@@ -190,7 +195,7 @@ class BodySystemManager:
         """Initialize the body system manager."""
         self.body_managers: Dict[str, BodyManager] = {}
         
-    def create_agent_body(self, name: str, agent_home: Path) -> BodyManager:
+    async def create_agent_body(self, name: str, agent_home: Path) -> BodyManager:
         """Create body files for a new agent.
         
         Args:
@@ -201,7 +206,7 @@ class BodySystemManager:
             BodyManager instance for the agent
         """
         manager = BodyManager(name, agent_home)
-        manager.create_body_files()
+        await manager.create_body_files()
         self.body_managers[name] = manager
         return manager
     

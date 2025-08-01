@@ -44,8 +44,8 @@ class MindSwarmCLI:
         
         # Display certain events immediately
         event_type = event.get("type", "")
-        if event_type == "agent_spawned":
-            console.print(f"[green]Agent spawned: {event.get('agent_name')}[/green]")
+        if event_type == "agent_created":
+            console.print(f"[green]Agent created: {event.get('agent_name')}[/green]")
         elif event_type == "agent_terminated":
             console.print(f"[yellow]Agent terminated: {event.get('agent_name')}[/yellow]")
         elif event_type == "agent_state_change":
@@ -84,22 +84,22 @@ class MindSwarmCLI:
         
         console.print("[bold green]Mind-Swarm initialized successfully![/bold green]")
     
-    async def spawn_initial_agents(self, count: int = 3):
-        """Spawn initial set of agents."""
-        console.print(f"[cyan]Spawning {count} initial agents...[/cyan]")
+    async def create_initial_agents(self, count: int = 3):
+        """Create initial set of agents."""
+        console.print(f"[cyan]Creating {count} initial agents...[/cyan]")
         
         for i in range(count):
             try:
                 # First agent uses premium AI, others use local
                 use_premium = (i == 0)
-                agent_id = await self.coordinator.spawn_agent(
+                agent_id = await self.coordinator.create_agent(
                     name=f"Explorer-{i+1}",
                     use_premium=use_premium,
                 )
                 ai_type = "Premium" if use_premium else "Local"
-                console.print(f"  ✓ Spawned Explorer-{i+1} ({agent_id}) [AI: {ai_type}]")
+                console.print(f"  ✓ Created Explorer-{i+1} ({agent_id}) [AI: {ai_type}]")
             except Exception as e:
-                console.print(f"  ✗ Failed to spawn agent: {e}", style="red")
+                console.print(f"  ✗ Failed to create agent: {e}", style="red")
     
     async def show_status(self):
         """Display current system status."""
@@ -179,9 +179,9 @@ class MindSwarmCLI:
         console.print("[bold]Mind-Swarm Interactive Mode[/bold]")
         console.print("Commands:")
         console.print("  [cyan]status[/cyan] - Show agent status")
-        console.print("  [cyan]spawn [--premium] [name][/cyan] - Spawn an AI agent")
-        console.print("  [cyan]terminate <id>[/cyan] - Terminate an agent")
-        console.print("  [cyan]command <agent_id> <command> [params][/cyan] - Send command to agent")
+        console.print("  [cyan]create [--premium] [name][/cyan] - Create a new AI agent")
+        console.print("  [cyan]terminate <name>[/cyan] - Terminate an agent")
+        console.print("  [cyan]command <name> <command> [params][/cyan] - Send command to agent")
         console.print("  [cyan]question <text>[/cyan] - Create a shared question")
         console.print("  [cyan]presets[/cyan] - List available AI presets")
         console.print("  [cyan]quit[/cyan] - Exit the system")
@@ -210,8 +210,8 @@ class MindSwarmCLI:
                 elif cmd == "status":
                     await self.show_status()
                 
-                elif cmd == "spawn":
-                    # Parse spawn options: spawn [--premium] [name]
+                elif cmd == "create":
+                    # Parse create options: create [--premium] [name]
                     use_premium = False
                     agent_name = None
                     
@@ -221,26 +221,26 @@ class MindSwarmCLI:
                         else:
                             agent_name = part
                     
-                    agent_id = await self.client.spawn_agent(
+                    agent_name_result = await self.client.create_agent(
                         name=agent_name,
                         use_premium=use_premium,
                     )
                     ai_type = "Premium" if use_premium else "Local"
-                    console.print(f"Spawned {agent_name or 'Agent'} ({agent_id}) [AI: {ai_type}]")
+                    console.print(f"Created {agent_name_result} [AI: {ai_type}]")
                 
                 elif cmd == "terminate" and len(parts) > 1:
-                    agent_id = parts[1]
-                    await self.client.terminate_agent(agent_id)
-                    console.print(f"Terminated agent {agent_id}")
+                    agent_name = parts[1]
+                    await self.client.terminate_agent(agent_name)
+                    console.print(f"Terminated agent {agent_name}")
                 
                 elif cmd == "command" and len(parts) >= 3:
-                    # command <agent_id> <command> [params]
-                    agent_id = parts[1]
+                    # command <agent_name> <command> [params]
+                    agent_name = parts[1]
                     command = parts[2]
                     params = {"input": " ".join(parts[3:])} if len(parts) > 3 else {}
                     
-                    await self.client.send_command(agent_id, command, params)
-                    console.print(f"Command '{command}' sent to {agent_id}")
+                    await self.client.send_command(agent_name, command, params)
+                    console.print(f"Command '{command}' sent to {agent_name}")
                 
                 elif cmd == "question" and len(parts) > 1:
                     # Post a question to the Plaza
@@ -275,7 +275,7 @@ class MindSwarmCLI:
 
 @app.command()
 def connect(
-    spawn_agents: int = typer.Option(0, "--spawn", "-s", help="Number of agents to spawn on connect"),
+    create_agents: int = typer.Option(0, "--create", "-c", help="Number of agents to create on connect"),
     interactive: bool = typer.Option(True, "--interactive/--no-interactive", "-i/-n", help="Run in interactive mode"),
     debug: bool = typer.Option(False, "--debug", "-d", help="Enable debug logging"),
 ):
@@ -309,9 +309,9 @@ def connect(
             # Connect WebSocket for real-time updates
             await cli.client.connect_websocket(cli.handle_ws_event)
             
-            # Spawn initial agents if requested
-            if spawn_agents > 0:
-                await cli.spawn_initial_agents(spawn_agents)
+            # Create initial agents if requested
+            if create_agents > 0:
+                await cli.create_initial_agents(create_agents)
             
             if interactive:
                 await cli.run_interactive()

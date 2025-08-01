@@ -15,8 +15,8 @@ from mind_swarm.utils.logging import logger
 
 
 # API Models
-class SpawnAgentRequest(BaseModel):
-    """Request to spawn a new agent."""
+class CreateAgentRequest(BaseModel):
+    """Request to create a new agent."""
     name: Optional[str] = None
     use_premium: bool = False
     config: Optional[Dict[str, Any]] = None
@@ -167,14 +167,14 @@ class MindSwarmServer:
                 local_llm_status=local_llm_status
             )
         
-        @self.app.post("/agents/spawn")
-        async def spawn_agent(request: SpawnAgentRequest):
-            """Spawn a new agent."""
+        @self.app.post("/agents/create")
+        async def create_agent(request: CreateAgentRequest):
+            """Create a new agent."""
             if not self.coordinator:
                 raise HTTPException(status_code=503, detail="Server not initialized")
             
             try:
-                name = await self.coordinator.spawn_agent(
+                name = await self.coordinator.create_agent(
                     name=request.name,
                     use_premium=request.use_premium,
                     config=request.config
@@ -182,7 +182,7 @@ class MindSwarmServer:
                 
                 # Notify websocket clients
                 await self._broadcast_event({
-                    "type": "agent_spawned",
+                    "type": "agent_created",
                     "name": name,
                     "use_premium": request.use_premium,
                     "timestamp": datetime.now().isoformat()
@@ -191,7 +191,7 @@ class MindSwarmServer:
                 return {"name": name}
             except Exception as e:
                 import traceback
-                logger.error(f"Failed to spawn agent: {e}")
+                logger.error(f"Failed to create agent: {e}")
                 logger.error(f"Traceback: {traceback.format_exc()}")
                 raise HTTPException(status_code=500, detail=str(e))
         
