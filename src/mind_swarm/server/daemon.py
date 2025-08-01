@@ -39,23 +39,32 @@ class ServerDaemon:
         pid_file.write_text(str(os.getpid()))
         
         try:
-            # Run server until shutdown
+            # Start the server in a separate task
             server_task = asyncio.create_task(self.server.run())
-            shutdown_task = asyncio.create_task(self._shutdown_event.wait())
             
-            # Wait for either server error or shutdown signal
-            done, pending = await asyncio.wait(
-                [server_task, shutdown_task],
-                return_when=asyncio.FIRST_COMPLETED
-            )
+            # Wait for shutdown signal
+            await self._shutdown_event.wait()
             
-            # Cancel remaining tasks
-            for task in pending:
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
+            logger.info("Shutdown signal received, stopping server gracefully...")
+            
+            # Call the server's shutdown method to properly close everything
+            try:
+                await self.server.shutdown()
+                logger.info("Server shutdown complete")
+            except Exception as e:
+                logger.error(f"Error during server shutdown: {e}")
+            
+            # Stop the uvicorn server if it has one
+            if hasattr(self.server, 'server') and hasattr(self.server.server, 'shutdown'):
+                logger.info("Shutting down uvicorn server...")
+                await self.server.server.shutdown()
+            
+            # Cancel the server task
+            server_task.cancel()
+            try:
+                await asyncio.wait_for(server_task, timeout=2.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
+                pass
                     
         finally:
             # Clean up PID file

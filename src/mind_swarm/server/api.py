@@ -330,6 +330,20 @@ class MindSwarmServer:
         for client in disconnected:
             self.clients.remove(client)
     
+    async def shutdown(self):
+        """Shutdown the server and coordinator gracefully."""
+        logger.info("Shutting down Mind-Swarm server")
+        if self.coordinator:
+            await self.coordinator.stop()
+        
+        # Close all websocket connections
+        for client in self.clients:
+            try:
+                await client.close()
+            except:
+                pass
+        self.clients.clear()
+    
     async def run(self):
         """Run the server."""
         import uvicorn
@@ -340,8 +354,8 @@ class MindSwarmServer:
             port=self.port,
             log_level="info"
         )
-        server = uvicorn.Server(config)
-        await server.serve()
+        self.server = uvicorn.Server(config)
+        await self.server.serve()
 
 
 if __name__ == "__main__":
