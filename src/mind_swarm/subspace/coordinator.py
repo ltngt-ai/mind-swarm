@@ -8,6 +8,7 @@ from datetime import datetime
 
 from mind_swarm.subspace.agent_spawner import AgentSpawner
 from mind_swarm.subspace.sandbox import SubspaceManager
+from mind_swarm.subspace.agent_state import AgentStateManager, AgentLifecycle
 from mind_swarm.subspace.body_manager import BodySystemManager
 from mind_swarm.subspace.body_monitor import create_body_monitor
 from mind_swarm.subspace.brain_handler import BrainHandler
@@ -105,6 +106,7 @@ class SubspaceCoordinator:
         self.spawner = AgentSpawner(self.subspace)
         self.router = MessageRouter(self.subspace.root_path)
         self.body_system = BodySystemManager()
+        self.state_manager = AgentStateManager(self.subspace.root_path)
         
         self._running = False
         self._router_task: Optional[asyncio.Task] = None
@@ -123,6 +125,9 @@ class SubspaceCoordinator:
         """Start the subspace coordinator."""
         self._running = True
         
+        # Restore sleeping agents
+        await self._restore_sleeping_agents()
+        
         # Start message routing
         self._router_task = asyncio.create_task(self._message_routing_loop())
         
@@ -131,6 +136,9 @@ class SubspaceCoordinator:
     async def stop(self):
         """Stop the subspace coordinator."""
         self._running = False
+        
+        # Prepare agents for shutdown
+        await self._prepare_agents_for_shutdown()
         
         # Stop routing
         if self._router_task and not self._router_task.done():
@@ -143,8 +151,11 @@ class SubspaceCoordinator:
         # Shutdown body system
         await self.body_system.shutdown()
         
-        # Shutdown all agents
+        # Shutdown all agents gracefully
         await self.spawner.shutdown_all()
+        
+        # Mark all agents as sleeping
+        self.state_manager.mark_all_sleeping()
         
         logger.info("Subspace coordinator stopped")
     
@@ -159,7 +170,7 @@ class SubspaceCoordinator:
         """Spawn a new AI agent process.
         
         Args:
-            name: Agent name
+            name: Agent name (auto-generated from next letter if not provided)
             agent_type: Type of agent (kept for compatibility, ignored)
             use_ai: Whether to enable AI (kept for compatibility, always True)
             use_premium: Whether to use premium AI model
@@ -176,31 +187,49 @@ class SubspaceCoordinator:
             "curiosity_level": agent_config.get("curiosity_level", 0.7)
         }
         
-        # Spawn the agent
-        agent_id = await self.spawner.spawn_agent(
-            name=name,
+        # Create agent state (name will be auto-generated if not provided)
+        state = self.state_manager.create_agent(name, agent_config)
+        
+        # Update lifecycle
+        self.state_manager.update_lifecycle(state.name, AgentLifecycle.ACTIVE)
+        self.state_manager.increment_activation(state.name)
+        
+        # Spawn the agent with memorable name
+        await self.spawner.spawn_agent(
+            name=state.name,
             agent_type=agent_type,
             config=agent_config
         )
         
         # Create body files for the agent
-        agent_home = self.subspace.agents_dir / agent_id
-        body_manager = self.body_system.create_agent_body(agent_id, agent_home)
+        agent_home = self.subspace.agents_dir / state.name
+        body_manager = self.body_system.create_agent_body(state.name, agent_home)
         
         # Start monitoring body files
-        await self.body_system.start_agent_monitoring(agent_id, self._handle_ai_request)
+        await self.body_system.start_agent_monitoring(state.name, self._handle_ai_request)
         
-        return agent_id
+        return state.name
     
-    async def terminate_agent(self, agent_id: str):
-        """Terminate an agent."""
+    async def terminate_agent(self, name: str):
+        """Terminate an agent (only in development/emergency)."""
+        logger.warning(f"Terminating agent {name} - this should be rare!")
+        
+        # Get agent uptime before termination
+        agent_states = await self.spawner.get_agent_states()
+        if name in agent_states:
+            uptime = agent_states[name].get("uptime", 0)
+            self.state_manager.update_uptime(name, uptime)
+        
+        # Mark as hibernating (terminated agents can be restored later)
+        self.state_manager.update_lifecycle(name, AgentLifecycle.HIBERNATING)
+        
         # Stop body file monitoring
-        await self.body_system.stop_agent_monitoring(agent_id)
+        await self.body_system.stop_agent_monitoring(name)
         
         # Terminate the agent process
-        await self.spawner.terminate_agent(agent_id)
+        await self.spawner.terminate_agent(name)
     
-    async def send_command(self, agent_id: str, command: str, params: Optional[Dict[str, Any]] = None):
+    async def send_command(self, name: str, command: str, params: Optional[Dict[str, Any]] = None):
         """Send a command to an agent."""
         message = {
             "type": "COMMAND",
@@ -210,7 +239,7 @@ class SubspaceCoordinator:
             "timestamp": datetime.now().isoformat()
         }
         
-        await self.spawner.send_message_to_agent(agent_id, message)
+        await self.spawner.send_message_to_agent(name, message)
     
     async def broadcast_command(self, command: str, params: Optional[Dict[str, Any]] = None):
         """Broadcast a command to all agents."""
@@ -228,9 +257,9 @@ class SubspaceCoordinator:
         """Get current state of all agents."""
         states = await self.spawner.get_agent_states()
         
-        # Enrich with additional info from filesystem
-        for agent_id, state in states.items():
-            agent_dir = self.subspace.agents_dir / agent_id
+        # Enrich with additional info from filesystem and state manager
+        for name, state in states.items():
+            agent_dir = self.subspace.agents_dir / name
             if agent_dir.exists():
                 # Count messages
                 inbox_count = len(list((agent_dir / "inbox").glob("*.msg"))) if (agent_dir / "inbox").exists() else 0
@@ -240,8 +269,110 @@ class SubspaceCoordinator:
                     "inbox_count": inbox_count,
                     "outbox_count": outbox_count,
                 })
+            
+            # Add persistent state info
+            agent_state = self.state_manager.get_state(name)
+            if agent_state:
+                state.update({
+                    "created_at": agent_state.created_at,
+                    "total_uptime": agent_state.total_uptime + state.get("uptime", 0),
+                    "activation_count": agent_state.activation_count,
+                    "agent_number": self.state_manager.name_generator.get_agent_number(agent_state.name)
+                })
         
         return states
+    
+    def list_all_agents(self) -> List[Dict[str, Any]]:
+        """List all known agents including hibernating ones."""
+        all_agents = []
+        
+        for state in self.state_manager.list_agents():
+            agent_info = {
+                "name": state.name,
+                "agent_number": self.state_manager.name_generator.get_agent_number(state.name),
+                "lifecycle": state.lifecycle.value,
+                "created_at": state.created_at,
+                "last_active": state.last_active,
+                "total_uptime": state.total_uptime,
+                "activation_count": state.activation_count
+            }
+            all_agents.append(agent_info)
+        
+        # Sort by agent number
+        all_agents.sort(key=lambda x: x["agent_number"])
+        
+        return all_agents
+    
+    async def _restore_sleeping_agents(self):
+        """Restore agents that were sleeping when server stopped."""
+        logger.info("Checking for sleeping agents to restore...")
+        
+        sleeping_agents = [
+            state for state in self.state_manager.list_agents()
+            if state.lifecycle == AgentLifecycle.SLEEPING
+        ]
+        
+        if not sleeping_agents:
+            logger.info("No sleeping agents to restore")
+            return
+        
+        logger.info(f"Found {len(sleeping_agents)} sleeping agents to restore")
+        
+        for state in sleeping_agents:
+            try:
+                logger.info(f"Restoring agent {state.name}")
+                
+                # Update lifecycle to active
+                self.state_manager.update_lifecycle(state.name, AgentLifecycle.ACTIVE)
+                self.state_manager.increment_activation(state.name)
+                
+                # Spawn the agent with its saved config
+                await self.spawner.spawn_agent(
+                    name=state.name,
+                    config=state.config
+                )
+                
+                # Create body files for the agent
+                agent_home = self.subspace.agents_dir / state.name
+                body_manager = self.body_system.create_agent_body(state.name, agent_home)
+                
+                # Start monitoring body files
+                await self.body_system.start_agent_monitoring(state.name, self._handle_ai_request)
+                
+                # The agent will restore its own memory from disk
+                logger.info(f"Agent {state.name} restored successfully")
+                
+            except Exception as e:
+                logger.error(f"Failed to restore agent {state.name}: {e}")
+                # Mark as hibernating if restore fails
+                self.state_manager.update_lifecycle(state.name, AgentLifecycle.HIBERNATING)
+    
+    async def _prepare_agents_for_shutdown(self):
+        """Prepare all agents for shutdown."""
+        logger.info("Preparing agents for shutdown...")
+        
+        # Get list of active agents
+        active_agents = self.state_manager.prepare_shutdown()
+        
+        if not active_agents:
+            logger.info("No active agents to notify")
+            return
+        
+        logger.info(f"Notifying {len(active_agents)} agents of shutdown")
+        
+        # Send shutdown message to all active agents
+        shutdown_message = {
+            "type": "SHUTDOWN",
+            "from": "subspace",
+            "reason": "Server shutting down",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        await self.spawner.broadcast_message(shutdown_message, exclude=[])
+        
+        # Give agents time to save state
+        logger.info("Waiting for agents to save state...")
+        await asyncio.sleep(3)  # Give agents 3 seconds to save state
     
     async def _message_routing_loop(self):
         """Main loop for routing messages between agents."""
@@ -293,11 +424,11 @@ class SubspaceCoordinator:
         logger.info(f"Posted question to Plaza: {question_id}")
         return question_id
     
-    async def _handle_ai_request(self, agent_id: str, prompt: str) -> str:
+    async def _handle_ai_request(self, name: str, prompt: str) -> str:
         """Handle an AI request from an agent's brain file.
         
         Args:
-            agent_id: The agent making the request
+            name: The agent making the request
             prompt: The thought to process (may be JSON ThinkingRequest)
             
         Returns:
@@ -309,22 +440,22 @@ class SubspaceCoordinator:
             try:
                 import json
                 request_data = json.loads(prompt.strip())
-                logger.info(f"Processing thought for {agent_id}: {json.dumps(request_data, indent=2)}")
+                logger.info(f"Processing thought for {name}: {json.dumps(request_data, indent=2)}")
             except json.JSONDecodeError:
-                logger.error(f"Failed to parse thinking request from {agent_id}")
+                logger.error(f"Failed to parse thinking request from {name}")
                 return "Error: Invalid thinking request format"
         else:
             # Plain text prompt - log it
-            logger.info(f"Processing thought for {agent_id}: {prompt}")
+            logger.info(f"Processing thought for {name}: {prompt}")
         
         try:
             # Get agent configuration to determine which model to use
             agent_states = await self.spawner.get_agent_states()
-            agent_info = agent_states.get(agent_id, {})
+            agent_info = agent_states.get(name, {})
             
             # Check if agent uses premium model
             use_premium = False
-            agent_dir = self.subspace.agents_dir / agent_id
+            agent_dir = self.subspace.agents_dir / name
             config_file = agent_dir / "config.json"
             if config_file.exists():
                 config = json.loads(config_file.read_text())
@@ -367,7 +498,7 @@ class SubspaceCoordinator:
             # Process the thinking request based on format
             if self.use_v2_brain and 'request_data' in locals():
                 # Structured thinking request for V2 brain
-                response = await brain_handler.process_structured_thinking(agent_id, request_data)
+                response = await brain_handler.process_structured_thinking(name, request_data)
                 
                 # Format response for brain file protocol
                 if isinstance(response, dict):
@@ -375,16 +506,16 @@ class SubspaceCoordinator:
                 else:
                     response_text = str(response)
                     
-                logger.info(f"Thought processed for {agent_id}")
+                logger.info(f"Thought processed for {name}")
                 return response_text + "\n<<<THOUGHT_COMPLETE>>>"
             else:
                 # Original plain text processing
-                response = await brain_handler.process_thinking_request(agent_id, prompt)
-                logger.info(f"Thought processed for {agent_id}")
+                response = await brain_handler.process_thinking_request(name, prompt)
+                logger.info(f"Thought processed for {name}")
                 return response
             
         except Exception as e:
-            logger.error(f"Error processing AI request for {agent_id}: {e}")
+            logger.error(f"Error processing AI request for {name}: {e}")
             return f"My thinking was interrupted: {str(e)}"
     
     def _get_lm_config_from_ai_service(self, ai_service: Any, ai_config: Dict[str, Any]) -> Dict[str, Any]:

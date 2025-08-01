@@ -14,8 +14,8 @@ from mind_swarm.utils.logging import logger
 class AgentProcess:
     """Represents a running agent process."""
     
-    def __init__(self, agent_id: str, process: asyncio.subprocess.Process, sandbox: BubblewrapSandbox):
-        self.agent_id = agent_id
+    def __init__(self, name: str, process: asyncio.subprocess.Process, sandbox: BubblewrapSandbox):
+        self.name = name
         self.process = process
         self.sandbox = sandbox
         self.log_tasks = []  # Tasks for reading stdout/stderr
@@ -34,7 +34,7 @@ class AgentProcess:
         msg_file = inbox_dir / f"{msg_id}.msg"
         msg_file.write_text(json.dumps(message, indent=2))
         
-        logger.debug(f"Sent message {msg_id} to agent {self.agent_id}")
+        logger.debug(f"Sent message {msg_id} to agent {self.name}")
     
     async def terminate(self, timeout: float = 5.0):
         """Gracefully terminate the agent."""
@@ -48,9 +48,9 @@ class AgentProcess:
         # Wait for graceful shutdown
         try:
             await asyncio.wait_for(self.process.wait(), timeout=timeout)
-            logger.info(f"Agent {self.agent_id} terminated gracefully")
+            logger.info(f"Agent {self.name} terminated gracefully")
         except asyncio.TimeoutError:
-            logger.warning(f"Agent {self.agent_id} didn't shutdown gracefully, forcing...")
+            logger.warning(f"Agent {self.name} didn't shutdown gracefully, forcing...")
             self.process.terminate()
             await self.process.wait()
         
@@ -77,30 +77,26 @@ class AgentSpawner:
         
     async def spawn_agent(
         self,
-        name: Optional[str] = None,
+        name: str,  # Required now
         agent_type: str = "general",
         config: Optional[Dict[str, Any]] = None
     ) -> str:
         """Spawn a new AI agent process.
         
         Args:
-            name: Agent name (auto-generated if not provided)
+            name: Agent name (required, must be unique)
             agent_type: Ignored, kept for compatibility
             config: Agent configuration including AI settings
             
         Returns:
-            Agent ID
+            Agent name
         """
-        # Generate agent ID
-        agent_id = f"agent-{uuid4().hex[:8]}"
-        
-        # Create sandbox
-        sandbox = self.subspace.create_sandbox(agent_id)
+        # Create sandbox using name
+        sandbox = self.subspace.create_sandbox(name)
         
         # Write agent configuration
         agent_config = {
-            "id": agent_id,
-            "name": name or f"Agent-{agent_id[-4:]}",
+            "name": name,
             "type": agent_type,
             **(config or {})
         }
@@ -109,13 +105,13 @@ class AgentSpawner:
         
         # Prepare environment
         env = {
-            "AGENT_ID": agent_id,
+            "AGENT_NAME": name,
             "AGENT_TYPE": agent_type,
             "PYTHONPATH": str(Path(__file__).parent.parent.parent),
         }
         
         # Launch agent process in sandbox
-        logger.info(f"Spawning agent {agent_id} ({name or 'unnamed'})")
+        logger.info(f"Spawning agent {name}")
         
         # Build command to run agent from its base_code directory
         # The agent code is in /home/base_code when viewed from inside sandbox
@@ -132,8 +128,8 @@ class AgentSpawner:
         )
         
         # Track the agent
-        agent_process = AgentProcess(agent_id, process, sandbox)
-        self.agents[agent_id] = agent_process
+        agent_process = AgentProcess(name, process, sandbox)
+        self.agents[name] = agent_process
         
         # Set up logging for the agent
         await self._setup_agent_logging(agent_process)
@@ -142,49 +138,49 @@ class AgentSpawner:
         if not self._monitor_task or self._monitor_task.done():
             self._monitor_task = asyncio.create_task(self._monitor_agents())
         
-        logger.info(f"Agent {agent_id} spawned with PID {process.pid}")
-        return agent_id
+        logger.info(f"Agent {name} spawned with PID {process.pid}")
+        return name
     
-    async def terminate_agent(self, agent_id: str, timeout: float = 5.0):
+    async def terminate_agent(self, name: str, timeout: float = 5.0):
         """Terminate an agent process."""
-        if agent_id not in self.agents:
-            logger.warning(f"Agent {agent_id} not found")
+        if name not in self.agents:
+            logger.warning(f"Agent {name} not found")
             return
         
-        agent = self.agents[agent_id]
+        agent = self.agents[name]
         await agent.terminate(timeout)
         
         # Clean up
-        del self.agents[agent_id]
-        self.subspace.remove_sandbox(agent_id)
+        del self.agents[name]
+        self.subspace.remove_sandbox(name)
     
-    async def send_message_to_agent(self, agent_id: str, message: Dict[str, Any]):
+    async def send_message_to_agent(self, name: str, message: Dict[str, Any]):
         """Send a message to a specific agent."""
-        if agent_id not in self.agents:
-            logger.error(f"Agent {agent_id} not found")
+        if name not in self.agents:
+            logger.error(f"Agent {name} not found")
             return
         
-        await self.agents[agent_id].send_message(message)
+        await self.agents[name].send_message(message)
     
     async def broadcast_message(self, message: Dict[str, Any], exclude: Optional[list] = None):
         """Broadcast a message to all agents."""
         exclude = exclude or []
-        for agent_id, agent in self.agents.items():
-            if agent_id not in exclude:
+        for name, agent in self.agents.items():
+            if name not in exclude:
                 await agent.send_message(message)
     
     async def get_agent_states(self) -> Dict[str, Dict[str, Any]]:
         """Get the current state of all agents."""
         states = {}
         
-        for agent_id, agent in self.agents.items():
+        for name, agent in self.agents.items():
             # Check heartbeat file
             heartbeat_file = agent.sandbox.agent_home / "heartbeat.json"
             if heartbeat_file.exists():
                 try:
                     heartbeat = json.loads(heartbeat_file.read_text())
-                    states[agent_id] = {
-                        "id": agent_id,
+                    states[name] = {
+                        "name": name,
                         "alive": await agent.is_alive(),
                         "state": heartbeat.get("state", "UNKNOWN"),
                         "last_heartbeat": heartbeat.get("timestamp", 0),
@@ -192,10 +188,10 @@ class AgentSpawner:
                         "uptime": asyncio.get_event_loop().time() - agent.start_time
                     }
                 except Exception as e:
-                    logger.error(f"Error reading heartbeat for {agent_id}: {e}")
+                    logger.error(f"Error reading heartbeat for {name}: {e}")
             else:
-                states[agent_id] = {
-                    "id": agent_id,
+                states[name] = {
+                    "name": name,
                     "alive": await agent.is_alive(),
                     "state": "NO_HEARTBEAT",
                     "uptime": asyncio.get_event_loop().time() - agent.start_time
@@ -209,24 +205,24 @@ class AgentSpawner:
             try:
                 # Check each agent
                 dead_agents = []
-                for agent_id, agent in self.agents.items():
+                for name, agent in self.agents.items():
                     if not await agent.is_alive():
-                        logger.warning(f"Agent {agent_id} died (exit code: {agent.process.returncode})")
+                        logger.warning(f"Agent {name} died (exit code: {agent.process.returncode})")
                         
                         # Try to get stderr output
                         if agent.process.stderr:
                             try:
                                 stderr_output = await agent.process.stderr.read()
                                 if stderr_output:
-                                    logger.error(f"Agent {agent_id} stderr:\n{stderr_output.decode('utf-8', errors='replace')}")
+                                    logger.error(f"Agent {name} stderr:\n{stderr_output.decode('utf-8', errors='replace')}")
                             except:
                                 pass
                         
-                        dead_agents.append(agent_id)
+                        dead_agents.append(name)
                 
                 # Clean up dead agents
-                for agent_id in dead_agents:
-                    del self.agents[agent_id]
+                for name in dead_agents:
+                    del self.agents[name]
                     # TODO: Optionally restart agents based on configuration
                 
                 await asyncio.sleep(5)  # Check every 5 seconds
@@ -241,8 +237,8 @@ class AgentSpawner:
         
         # Send shutdown to all agents
         shutdown_tasks = []
-        for agent_id in list(self.agents.keys()):
-            shutdown_tasks.append(self.terminate_agent(agent_id, timeout))
+        for name in list(self.agents.keys()):
+            shutdown_tasks.append(self.terminate_agent(name, timeout))
         
         # Wait for all to complete
         if shutdown_tasks:
@@ -261,7 +257,7 @@ class AgentSpawner:
         logs_dir.mkdir(parents=True, exist_ok=True)
         
         # Log file path
-        log_file = logs_dir / f"{agent_process.agent_id}.log"
+        log_file = logs_dir / f"{agent_process.name}.log"
         
         # Create tasks to read stdout and stderr
         if agent_process.process.stdout:
@@ -269,7 +265,7 @@ class AgentSpawner:
                 self._read_and_log_stream(
                     agent_process.process.stdout,
                     log_file,
-                    agent_process.agent_id,
+                    agent_process.name,
                     "stdout"
                 )
             )
@@ -280,13 +276,13 @@ class AgentSpawner:
                 self._read_and_log_stream(
                     agent_process.process.stderr,
                     log_file,
-                    agent_process.agent_id,
+                    agent_process.name,
                     "stderr"
                 )
             )
             agent_process.log_tasks.append(stderr_task)
     
-    async def _read_and_log_stream(self, stream, log_file: Path, agent_id: str, stream_name: str):
+    async def _read_and_log_stream(self, stream, log_file: Path, name: str, stream_name: str):
         """Read from a stream and write to log file."""
         try:
             with open(log_file, 'a') as f:
@@ -302,7 +298,7 @@ class AgentSpawner:
                     
                     # Also log important messages to server log
                     if stream_name == "stderr" or "ERROR" in text or "WARNING" in text:
-                        logger.info(f"Agent {agent_id} {stream_name}: {text.strip()}")
+                        logger.info(f"Agent {name} {stream_name}: {text.strip()}")
                         
         except Exception as e:
-            logger.error(f"Error reading {stream_name} for agent {agent_id}: {e}")
+            logger.error(f"Error reading {stream_name} for agent {name}: {e}")

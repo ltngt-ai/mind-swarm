@@ -22,7 +22,7 @@ from .mind import AgentMind
 async def main():
     """Main entry point for the agent."""
     # Verify we're in a sandbox
-    if not os.environ.get("AGENT_ID"):
+    if not os.environ.get("AGENT_NAME"):
         print("ERROR: This must be run inside a Mind-Swarm sandbox")
         sys.exit(1)
     

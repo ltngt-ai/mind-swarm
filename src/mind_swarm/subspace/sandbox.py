@@ -11,16 +11,16 @@ from mind_swarm.utils.logging import logger
 class BubblewrapSandbox:
     """Manages sandboxed agent execution using bubblewrap."""
     
-    def __init__(self, agent_id: str, subspace_root: Path):
+    def __init__(self, name: str, subspace_root: Path):
         """Initialize sandbox for an agent.
         
         Args:
-            agent_id: Unique identifier for the agent
+            name: Unique name for the agent
             subspace_root: Root directory of the subspace
         """
-        self.agent_id = agent_id
+        self.name = name
         self.subspace_root = subspace_root
-        self.agent_home = subspace_root / "agents" / agent_id
+        self.agent_home = subspace_root / "agents" / name
         self.grid_root = subspace_root / "grid"
         self.tools_dir = subspace_root / "grid" / "workshop"
         
@@ -90,7 +90,7 @@ class BubblewrapSandbox:
             "--chdir", "/home",
             
             # Clean environment
-            "--setenv", "AGENT_ID", self.agent_id,
+            "--setenv", "AGENT_NAME", self.name,
             "--setenv", "HOME", "/home",
             "--setenv", "PATH", "/grid/workshop:/usr/bin:/bin",
             "--setenv", "PYTHONPATH", "/home",
@@ -234,20 +234,20 @@ class SubspaceManager:
         
         logger.info(f"Initialized subspace at {self.root_path}")
     
-    def create_sandbox(self, agent_id: str) -> BubblewrapSandbox:
+    def create_sandbox(self, name: str) -> BubblewrapSandbox:
         """Create a sandbox for an agent.
         
         Args:
-            agent_id: Unique agent identifier
+            name: Unique agent name
             
         Returns:
             Configured sandbox instance
         """
-        if agent_id in self.sandboxes:
-            return self.sandboxes[agent_id]
+        if name in self.sandboxes:
+            return self.sandboxes[name]
         
-        sandbox = BubblewrapSandbox(agent_id, self.root_path)
-        self.sandboxes[agent_id] = sandbox
+        sandbox = BubblewrapSandbox(name, self.root_path)
+        self.sandboxes[name] = sandbox
         
         # Initialize agent directories
         inbox = sandbox.agent_home / "inbox"
@@ -262,19 +262,19 @@ class SubspaceManager:
         # Copy agent code to base_code directory
         self._copy_agent_base_code(base_code)
         
-        logger.info(f"Created sandbox for agent {agent_id}")
+        logger.info(f"Created sandbox for agent {name}")
         return sandbox
     
-    def remove_sandbox(self, agent_id: str):
+    def remove_sandbox(self, name: str):
         """Remove a sandbox and clean up resources.
         
         Args:
-            agent_id: Agent identifier
+            name: Agent name
         """
-        if agent_id in self.sandboxes:
-            self.sandboxes[agent_id].cleanup()
-            del self.sandboxes[agent_id]
-            logger.info(f"Removed sandbox for agent {agent_id}")
+        if name in self.sandboxes:
+            self.sandboxes[name].cleanup()
+            del self.sandboxes[name]
+            logger.info(f"Removed sandbox for agent {name}")
     
     def _copy_agent_base_code(self, base_code_dir: Path):
         """Copy agent base code to the agent's home directory.

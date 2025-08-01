@@ -42,6 +42,20 @@ ps aux | grep "mind_swarm.*daemon" | grep -v grep
 kill $(ps aux | grep "mind_swarm.*daemon" | grep -v grep | awk '{print $2}')
 ```
 
+#### Local LLM Health Check
+```bash
+# Check local LLM server status
+mind-swarm check-llm
+
+# Check specific URL
+mind-swarm check-llm --url http://192.168.1.147:1234
+
+# Show detailed model information
+mind-swarm check-llm --detailed
+```
+
+The server automatically checks local LLM availability on startup if any presets use local models.
+
 #### Client Commands
 ```bash
 # Connect to running server (interactive mode)

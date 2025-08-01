@@ -40,6 +40,7 @@ class StatusResponse(BaseModel):
     plaza_questions: int
     server_uptime: float
     server_start_time: str
+    local_llm_status: Optional[Dict[str, Any]] = None
 
 
 class MindSwarmServer:
@@ -76,6 +77,35 @@ class MindSwarmServer:
                 logger.error("Bubblewrap not available!")
                 raise RuntimeError("Bubblewrap (bwrap) is required but not found")
             
+            # Check local LLM server if using local models
+            from mind_swarm.ai.providers.local_llm_check import check_local_llm_server, format_server_status
+            from mind_swarm.core.config import settings
+            
+            # Check if any preset uses local model
+            using_local = False
+            local_url = None
+            try:
+                from mind_swarm.ai.presets import preset_manager
+                for preset_name in ["local_explorer", "local_smart", "local_code"]:
+                    preset = preset_manager.get_preset(preset_name)
+                    if preset and preset.provider in ["openai_compatible", "local", "ollama"]:
+                        # Get URL from api_settings
+                        if preset.api_settings and "host" in preset.api_settings:
+                            url = preset.api_settings["host"]
+                            using_local = True
+                            local_url = url
+                            break
+            except:
+                pass
+            
+            if using_local and local_url:
+                is_healthy, model_info = await check_local_llm_server(local_url)
+                status = format_server_status(is_healthy, model_info)
+                logger.info(f"Local LLM check: {status}")
+                
+                if not is_healthy:
+                    logger.warning("Local LLM server not available - agents using local models may not function properly")
+            
             await self.coordinator.start()
             logger.info("Server initialized successfully")
         
@@ -106,11 +136,35 @@ class MindSwarmServer:
             
             uptime = (datetime.now() - self.start_time).total_seconds()
             
+            # Check local LLM status
+            local_llm_status = None
+            try:
+                from mind_swarm.ai.providers.local_llm_check import check_local_llm_server
+                from mind_swarm.ai.presets import preset_manager
+                
+                # Check if using local models
+                for preset_name in ["local_explorer", "local_smart", "local_code"]:
+                    preset = preset_manager.get_preset(preset_name)
+                    if preset and preset.provider in ["openai_compatible", "local", "ollama"]:
+                        # Get URL from api_settings
+                        if preset.api_settings and "host" in preset.api_settings:
+                            url = preset.api_settings["host"]
+                            is_healthy, model_info = await check_local_llm_server(url)
+                            local_llm_status = {
+                                "healthy": is_healthy,
+                                "url": url,
+                                **model_info
+                            } if model_info else {"healthy": is_healthy, "url": url}
+                            break
+            except Exception as e:
+                logger.debug(f"Could not check local LLM status: {e}")
+            
             return StatusResponse(
                 agents=agent_states,
                 plaza_questions=len(questions),
                 server_uptime=uptime,
-                server_start_time=self.start_time.isoformat()
+                server_start_time=self.start_time.isoformat(),
+                local_llm_status=local_llm_status
             )
         
         @self.app.post("/agents/spawn")
@@ -120,7 +174,7 @@ class MindSwarmServer:
                 raise HTTPException(status_code=503, detail="Server not initialized")
             
             try:
-                agent_id = await self.coordinator.spawn_agent(
+                name = await self.coordinator.spawn_agent(
                     name=request.name,
                     use_premium=request.use_premium,
                     config=request.config
@@ -129,51 +183,52 @@ class MindSwarmServer:
                 # Notify websocket clients
                 await self._broadcast_event({
                     "type": "agent_spawned",
-                    "agent_id": agent_id,
-                    "name": request.name,
+                    "name": name,
                     "use_premium": request.use_premium,
                     "timestamp": datetime.now().isoformat()
                 })
                 
-                return {"agent_id": agent_id}
+                return {"name": name}
             except Exception as e:
+                import traceback
                 logger.error(f"Failed to spawn agent: {e}")
+                logger.error(f"Traceback: {traceback.format_exc()}")
                 raise HTTPException(status_code=500, detail=str(e))
         
-        @self.app.delete("/agents/{agent_id}")
-        async def terminate_agent(agent_id: str):
+        @self.app.delete("/agents/{name}")
+        async def terminate_agent(name: str):
             """Terminate an agent."""
             if not self.coordinator:
                 raise HTTPException(status_code=503, detail="Server not initialized")
             
             try:
-                await self.coordinator.terminate_agent(agent_id)
+                await self.coordinator.terminate_agent(name)
                 
                 # Notify websocket clients
                 await self._broadcast_event({
                     "type": "agent_terminated",
-                    "agent_id": agent_id,
+                    "name": name,
                     "timestamp": datetime.now().isoformat()
                 })
                 
-                return {"message": f"Agent {agent_id} terminated"}
+                return {"message": f"Agent {name} terminated"}
             except Exception as e:
-                logger.error(f"Failed to terminate agent {agent_id}: {e}")
+                logger.error(f"Failed to terminate agent {name}: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
-        @self.app.post("/agents/{agent_id}/command")
-        async def send_command(agent_id: str, request: CommandRequest):
+        @self.app.post("/agents/{name}/command")
+        async def send_command(name: str, request: CommandRequest):
             """Send a command to an agent."""
             if not self.coordinator:
                 raise HTTPException(status_code=503, detail="Server not initialized")
             
             try:
                 await self.coordinator.send_command(
-                    agent_id, 
+                    name, 
                     request.command, 
                     request.params
                 )
-                return {"message": f"Command sent to {agent_id}"}
+                return {"message": f"Command sent to {name}"}
             except Exception as e:
                 logger.error(f"Failed to send command: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
@@ -212,6 +267,15 @@ class MindSwarmServer:
             
             questions = self.coordinator.get_plaza_questions()
             return {"questions": questions}
+        
+        @self.app.get("/agents/all")
+        async def list_all_agents():
+            """List all known agents including hibernating ones."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            
+            agents = self.coordinator.list_all_agents()
+            return {"agents": agents}
         
         @self.app.websocket("/ws")
         async def websocket_endpoint(websocket: WebSocket):

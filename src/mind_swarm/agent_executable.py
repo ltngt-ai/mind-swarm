@@ -34,8 +34,8 @@ class SubspaceAgent:
     
     def __init__(self):
         """Initialize the AI agent within the subspace environment."""
-        # Get agent ID from environment
-        self.agent_id = os.environ.get("AGENT_ID", "unknown")
+        # Get agent name from environment
+        self.name = os.environ.get("AGENT_NAME", "unknown")
         self.home = Path("/home")  # My home, my mind
         self.grid_dir = Path("/grid")  # The Grid - shared reality
         
@@ -59,7 +59,10 @@ class SubspaceAgent:
         # Activity tracking
         self.last_activity = 0
         
-        logger.info(f"Initialized AI agent {self.agent_id} (premium: {self.use_premium})")
+        # Memory for persistence
+        self.working_memory = self._load_memory()
+        
+        logger.info(f"Initialized AI agent {self.name} (premium: {self.use_premium})")
     
     def _load_config(self) -> Dict[str, Any]:
         """Load agent configuration from file."""
@@ -78,10 +81,21 @@ class SubspaceAgent:
     async def check_inbox(self):
         """Check for new messages in inbox."""
         try:
+            messages_found = False
             for msg_file in self.inbox_dir.glob("*.msg"):
+                messages_found = True
+                
+                # Wake up if sleeping
+                if self.state == "SLEEPING":
+                    self.state = "IDLE"
+                    logger.info("Waking up from sleep - new message received!")
+                
                 # Read and process message
                 message = json.loads(msg_file.read_text())
                 logger.info(f"Processing message: {message.get('subject', 'No subject')}")
+                
+                # Update activity timestamp
+                self.last_activity = asyncio.get_event_loop().time()
                 
                 # Handle the message
                 await self.handle_message(message)
@@ -103,7 +117,8 @@ class SubspaceAgent:
         elif msg_type == "QUERY":
             await self.handle_query(message)
         elif msg_type == "SHUTDOWN":
-            logger.info("Received shutdown command")
+            logger.info("Received shutdown command - preparing to hibernate")
+            await self.prepare_for_shutdown()
             self.running = False
         else:
             logger.warning(f"Unknown message type: {msg_type}")
@@ -136,7 +151,7 @@ class SubspaceAgent:
     async def send_response(self, original_message: Dict[str, Any], response: Any):
         """Send a response back through the outbox."""
         response_msg = {
-            "from": self.agent_id,
+            "from": self.name,
             "to": original_message.get("from", "subspace"),
             "in_reply_to": original_message.get("id"),
             "type": "RESPONSE",
@@ -145,7 +160,7 @@ class SubspaceAgent:
         }
         
         # Write to outbox
-        msg_id = f"{self.agent_id}_{int(asyncio.get_event_loop().time() * 1000)}"
+        msg_id = f"{self.name}_{int(asyncio.get_event_loop().time() * 1000)}"
         outbox_file = self.outbox_dir / f"{msg_id}.msg"
         outbox_file.write_text(json.dumps(response_msg, indent=2))
         
@@ -201,6 +216,56 @@ Choose based on what would be most valuable for our collective intelligence."""
         # Take action based on decision (simplified for now)
         await self.explore_shared_memory()
     
+    def _load_memory(self) -> Dict[str, Any]:
+        """Load persistent memory from disk."""
+        memory_file = self.memory_dir / "working_memory.json"
+        if memory_file.exists():
+            try:
+                return json.loads(memory_file.read_text())
+            except Exception as e:
+                logger.error(f"Failed to load memory: {e}")
+        return {
+            "thoughts": [],
+            "learned_facts": [],
+            "conversation_history": [],
+            "personal_notes": []
+        }
+    
+    def _save_memory(self):
+        """Save working memory to disk."""
+        memory_file = self.memory_dir / "working_memory.json"
+        try:
+            memory_file.write_text(json.dumps(self.working_memory, indent=2))
+        except Exception as e:
+            logger.error(f"Failed to save memory: {e}")
+    
+    async def prepare_for_shutdown(self):
+        """Prepare for graceful shutdown."""
+        logger.info("Preparing for hibernation...")
+        
+        # Save current state
+        self._save_memory()
+        
+        # Write hibernation marker
+        hibernation_file = self.home / "hibernation_state.json"
+        hibernation_state = {
+            "name": self.name,
+            "last_state": self.state,
+            "last_activity": self.last_activity,
+            "hibernated_at": asyncio.get_event_loop().time(),
+            "ai_config": self.ai_config,
+            "message": "I'll be back..."
+        }
+        hibernation_file.write_text(json.dumps(hibernation_state, indent=2))
+        
+        # Send acknowledgment
+        await self.send_response(
+            {"from": "subspace", "type": "SHUTDOWN"},
+            "Acknowledged shutdown. State saved. Going to sleep now..."
+        )
+        
+        logger.info("Hibernation preparation complete")
+    
     async def explore_shared_memory(self):
         """Explore the Grid - the shared reality."""
         logger.info("Exploring the Grid...")
@@ -215,7 +280,7 @@ Choose based on what would be most valuable for our collective intelligence."""
                         logger.info(f"Found unclaimed question: {question.get('text', '')}")
                         
                         # Claim and think about the question
-                        question["claimed_by"] = self.agent_id
+                        question["claimed_by"] = self.name
                         q_file.write_text(json.dumps(question, indent=2))
                         
                         # Think about it
@@ -224,7 +289,7 @@ Choose based on what would be most valuable for our collective intelligence."""
                         # Save answer
                         question["answer"] = {
                             "text": answer,
-                            "answered_by": self.agent_id,
+                            "answered_by": self.name,
                             "timestamp": asyncio.get_event_loop().time()
                         }
                         q_file.write_text(json.dumps(question, indent=2))
@@ -240,7 +305,7 @@ Choose based on what would be most valuable for our collective intelligence."""
         while self.running:
             try:
                 heartbeat = {
-                    "agent_id": self.agent_id,
+                    "name": self.name,
                     "state": self.state,
                     "timestamp": asyncio.get_event_loop().time(),
                     "pid": os.getpid()
@@ -253,7 +318,7 @@ Choose based on what would be most valuable for our collective intelligence."""
     
     async def run(self):
         """Main agent loop."""
-        logger.info(f"Agent {self.agent_id} starting main loop")
+        logger.info(f"Agent {self.name} starting main loop")
         
         # Start heartbeat task
         heartbeat_task = asyncio.create_task(self.heartbeat())
@@ -273,9 +338,15 @@ Choose based on what would be most valuable for our collective intelligence."""
                     if idle_time > 10:  # After 10 seconds of idle
                         # Decide what to do next
                         await self.autonomous_action()
-                    
-                    if idle_time > 30:  # Every 30 seconds
-                        await self.explore_shared_memory()
+                    elif idle_time > 60:  # After 1 minute of no activity
+                        # Enter light sleep - reduce CPU usage but stay alert
+                        self.state = "SLEEPING"
+                        logger.info("Entering light sleep mode...")
+                
+                elif self.state == "SLEEPING":
+                    # In sleep mode, check less frequently
+                    await asyncio.sleep(5)  # Sleep for 5 seconds
+                    # Any new message will wake us up
                 
                 # Small delay to prevent busy waiting
                 await asyncio.sleep(1)
@@ -294,8 +365,8 @@ async def main():
     import os
     
     # Verify we're running in a sandbox
-    if not os.environ.get("AGENT_ID"):
-        print("ERROR: This program must be run inside a sandbox with AGENT_ID set")
+    if not os.environ.get("AGENT_NAME"):
+        print("ERROR: This program must be run inside a sandbox with AGENT_NAME set")
         sys.exit(1)
     
     # Create and run agent

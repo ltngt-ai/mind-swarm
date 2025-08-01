@@ -33,14 +33,14 @@ class BodyFile:
 class BodyManager:
     """Manages body files for an agent."""
     
-    def __init__(self, agent_id: str, agent_home: Path):
+    def __init__(self, name: str, agent_home: Path):
         """Initialize body manager for an agent.
         
         Args:
-            agent_id: Agent's unique identifier
+            name: Agent's unique name
             agent_home: Agent's home directory path
         """
-        self.agent_id = agent_id
+        self.name = name
         self.agent_home = agent_home
         self.body_files: Dict[str, BodyFile] = {}
         self._watch_task: Optional[asyncio.Task] = None
@@ -71,7 +71,7 @@ class BodyManager:
             # Set read-only from agent's perspective
             file_path.chmod(0o644)
             
-        logger.info(f"Created body files for agent {self.agent_id}")
+        logger.info(f"Created body files for agent {self.name}")
     
     async def start_monitoring(self, ai_handler: Callable):
         """Start monitoring body files for changes.
@@ -81,7 +81,7 @@ class BodyManager:
         """
         self.body_files["brain"].handler = ai_handler
         self._watch_task = asyncio.create_task(self._monitor_loop())
-        logger.info(f"Started body file monitoring for {self.agent_id}")
+        logger.info(f"Started body file monitoring for {self.name}")
     
     async def stop_monitoring(self):
         """Stop monitoring body files."""
@@ -91,7 +91,7 @@ class BodyManager:
                 await self._watch_task
             except asyncio.CancelledError:
                 pass
-        logger.info(f"Stopped body file monitoring for {self.agent_id}")
+        logger.info(f"Stopped body file monitoring for {self.name}")
     
     async def _monitor_loop(self):
         """Main loop for monitoring body files."""
@@ -99,7 +99,7 @@ class BodyManager:
         processing: Dict[str, bool] = {}
         loop_count = 0
         
-        logger.info(f"MONITOR: Starting monitor loop for {self.agent_id}")
+        logger.info(f"MONITOR: Starting monitor loop for {self.name}")
         
         while True:
             try:
@@ -107,21 +107,21 @@ class BodyManager:
                 
                 # Log periodically to prove the loop is running
                 if loop_count % 1000 == 0:
-                    logger.info(f"MONITOR: Loop #{loop_count} for {self.agent_id}, processing state: {processing}")
+                    logger.info(f"MONITOR: Loop #{loop_count} for {self.name}, processing state: {processing}")
                 
                 for name, body_file in self.body_files.items():
                     file_path = self.agent_home / name
                     
                     if not file_path.exists():
                         if loop_count % 1000 == 0:
-                            logger.info(f"MONITOR: File {name} does not exist for {self.agent_id}")
+                            logger.info(f"MONITOR: File {name} does not exist for {self.name}")
                         continue
                     
                     content = file_path.read_text()
                     
                     # Log brain file content checks more frequently
                     if name == "brain" and loop_count % 500 == 0:
-                        logger.info(f"MONITOR: Brain file check #{loop_count} for {self.agent_id}")
+                        logger.info(f"MONITOR: Brain file check #{loop_count} for {self.name}")
                         logger.info(f"MONITOR: Content length: {len(content)}, has END marker: {'<<<END_THOUGHT>>>' in content}")
                         logger.info(f"MONITOR: Processing state for brain: {processing.get('brain', False)}")
                         logger.info(f"MONITOR: FULL CONTENT: {repr(content)}")
@@ -136,13 +136,13 @@ class BodyManager:
                             
                             # Extract the prompt
                             prompt = content.split("<<<END_THOUGHT>>>")[0].strip()
-                            logger.info(f"BODY: Brain activated by {self.agent_id}, prompt length: {len(prompt)}")
+                            logger.info(f"BODY: Brain activated by {self.name}, prompt length: {len(prompt)}")
                             logger.info(f"BODY: Prompt preview: {prompt}")
                             
                             if body_file.handler:
-                                logger.info(f"BODY: Calling brain handler for {self.agent_id}")
+                                logger.info(f"BODY: Calling brain handler for {self.name}")
                                 # Process the thought
-                                response = await body_file.handler(self.agent_id, prompt)
+                                response = await body_file.handler(self.name, prompt)
                                 
                                 logger.info(f"BODY: Got response from handler, length: {len(response)}")
                                 logger.info(f"BODY: Response preview: {response}")
@@ -155,19 +155,19 @@ class BodyManager:
                                 else:
                                     final_response = response
                                 
-                                logger.info(f"BODY: Writing response to brain file for {self.agent_id}")
+                                logger.info(f"BODY: Writing response to brain file for {self.name}")
                                 file_path.write_text(final_response)
                                 logger.info(f"BODY: Successfully wrote response to brain file")
                                 
                                 # After writing response, reset processing flag so we can handle the next request
-                                logger.info(f"MONITOR: Request processed, resetting processing flag for {self.agent_id}")
+                                logger.info(f"MONITOR: Request processed, resetting processing flag for {self.name}")
                                 processing[name] = False
                             else:
-                                logger.error(f"BODY: No handler for brain file of {self.agent_id}")
+                                logger.error(f"BODY: No handler for brain file of {self.name}")
                         
                         elif content.strip() == body_file.help_text.strip():
                             # Agent has reset the file, we can process again
-                            logger.info(f"MONITOR: Agent {self.agent_id} reset brain file, enabling processing")
+                            logger.info(f"MONITOR: Agent {self.name} reset brain file, enabling processing")
                             processing[name] = False
                 
                 # Adaptive delay - longer when nothing is happening
@@ -179,7 +179,7 @@ class BodyManager:
                     await asyncio.sleep(0.2)
                 
             except Exception as e:
-                logger.error(f"Error in body file monitor for {self.agent_id}: {e}")
+                logger.error(f"Error in body file monitor for {self.name}: {e}")
                 await asyncio.sleep(1)
 
 
@@ -190,42 +190,42 @@ class BodySystemManager:
         """Initialize the body system manager."""
         self.body_managers: Dict[str, BodyManager] = {}
         
-    def create_agent_body(self, agent_id: str, agent_home: Path) -> BodyManager:
+    def create_agent_body(self, name: str, agent_home: Path) -> BodyManager:
         """Create body files for a new agent.
         
         Args:
-            agent_id: Agent's unique identifier  
+            name: Agent's unique name  
             agent_home: Agent's home directory path
             
         Returns:
             BodyManager instance for the agent
         """
-        manager = BodyManager(agent_id, agent_home)
+        manager = BodyManager(name, agent_home)
         manager.create_body_files()
-        self.body_managers[agent_id] = manager
+        self.body_managers[name] = manager
         return manager
     
-    async def start_agent_monitoring(self, agent_id: str, ai_handler: Callable):
+    async def start_agent_monitoring(self, name: str, ai_handler: Callable):
         """Start monitoring body files for an agent.
         
         Args:
-            agent_id: Agent's unique identifier
+            name: Agent's unique name
             ai_handler: Async function to handle AI requests
         """
-        if agent_id in self.body_managers:
-            await self.body_managers[agent_id].start_monitoring(ai_handler)
+        if name in self.body_managers:
+            await self.body_managers[name].start_monitoring(ai_handler)
     
-    async def stop_agent_monitoring(self, agent_id: str):
+    async def stop_agent_monitoring(self, name: str):
         """Stop monitoring body files for an agent.
         
         Args:
-            agent_id: Agent's unique identifier
+            name: Agent's unique name
         """
-        if agent_id in self.body_managers:
-            await self.body_managers[agent_id].stop_monitoring()
-            del self.body_managers[agent_id]
+        if name in self.body_managers:
+            await self.body_managers[name].stop_monitoring()
+            del self.body_managers[name]
     
     async def shutdown(self):
         """Shutdown all body file monitoring."""
-        for agent_id in list(self.body_managers.keys()):
-            await self.stop_agent_monitoring(agent_id)
+        for name in list(self.body_managers.keys()):
+            await self.stop_agent_monitoring(name)

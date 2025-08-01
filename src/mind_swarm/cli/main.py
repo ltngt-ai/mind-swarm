@@ -19,6 +19,10 @@ from mind_swarm.utils.logging import logger, setup_logging
 app = typer.Typer(name="mind-swarm", help="Mind-Swarm: Multi-agent AI system")
 console = Console()
 
+# Import subcommands
+from mind_swarm.cli.check_llm import app as check_llm_app
+app.add_typer(check_llm_app, name="check-llm", help="Check local LLM server status")
+
 
 class MindSwarmCLI:
     """Main CLI application class."""
@@ -298,6 +302,19 @@ def status():
                     console.print(f"  Agents: {len(status.agents)}")
                     console.print(f"  Plaza questions: {status.plaza_questions}")
                     console.print(f"  Server uptime: {status.server_uptime:.1f}s")
+                    
+                    # Show local LLM status if available
+                    if hasattr(status, 'local_llm_status') and status.local_llm_status:
+                        llm_status = status.local_llm_status
+                        if llm_status.get('healthy'):
+                            models = llm_status.get('models', [])
+                            if models:
+                                primary = llm_status.get('primary_model', 'unknown')
+                                console.print(f"  [green]✓ Local LLM: {primary} at {llm_status.get('url')}[/green]")
+                            else:
+                                console.print(f"  [yellow]⚠ Local LLM: Running but no models loaded[/yellow]")
+                        else:
+                            console.print(f"  [red]✗ Local LLM: Not available[/red]")
                 except Exception as e:
                     console.print(f"[red]✗ Failed to get status: {e}[/red]")
             else:

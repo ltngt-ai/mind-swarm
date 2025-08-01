@@ -76,9 +76,14 @@ def main():
     
     args = parser.parse_args()
     
+    # Clear the log file when starting fresh
+    log_path = Path(args.log_file)
+    if log_path.exists():
+        log_path.write_text("")  # Clear the file
+    
     # Set up logging
     level = "DEBUG" if args.debug else "INFO"
-    setup_logging(level=level, log_file=Path(args.log_file))
+    setup_logging(level=level, log_file=log_path)
     
     logger.info(f"Starting Mind-Swarm server daemon on {args.host}:{args.port}")
     logger.info(f"Logging to: {args.log_file}")

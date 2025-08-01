@@ -33,7 +33,7 @@ class AgentMind:
     def __init__(self):
         """Initialize the agent mind."""
         # Get identity from environment
-        self.agent_id = os.environ.get("AGENT_ID", "unknown")
+        self.name = os.environ.get("AGENT_NAME", "unknown")
         self.agent_type = os.environ.get("AGENT_TYPE", "general")
         
         # Set up paths
@@ -45,7 +45,7 @@ class AgentMind:
         
         # Initialize cognitive components
         self.boot_rom = BootROM()
-        self.cognitive_loop = CognitiveLoop(self.agent_id, self.home)
+        self.cognitive_loop = CognitiveLoop(self.name, self.home)
         
         # State
         self.running = False
@@ -53,7 +53,7 @@ class AgentMind:
         self.state = "INITIALIZING"
         
         # Log startup
-        logger.info(f"Agent mind initializing: {self.agent_id}")
+        logger.info(f"Agent mind initializing: {self.name}")
         for line in self.boot_rom.get_boot_sequence():
             logger.info(f"  {line}")
     
@@ -68,14 +68,13 @@ class AgentMind:
         
         # Default config
         return {
-            "id": self.agent_id,
-            "type": self.agent_type,
-            "name": f"Agent-{self.agent_id[-4:]}"
+            "name": self.name,
+            "type": self.agent_type
         }
     
     async def run(self):
         """Main agent execution loop."""
-        logger.info(f"Agent {self.agent_id} starting main loop")
+        logger.info(f"Agent {self.name} starting main loop")
         self.running = True
         self.state = "RUNNING"
         
@@ -124,7 +123,7 @@ class AgentMind:
             except asyncio.CancelledError:
                 pass
             
-            logger.info(f"Agent {self.agent_id} shutting down")
+            logger.info(f"Agent {self.name} shutting down")
     
     async def _heartbeat_loop(self):
         """Maintain heartbeat file for monitoring."""
@@ -133,8 +132,7 @@ class AgentMind:
         while self.running:
             try:
                 heartbeat = {
-                    "agent_id": self.agent_id,
-                    "name": self.config.get("name", "Unknown"),
+                    "name": self.name,
                     "state": self.state,
                     "timestamp": datetime.now().isoformat(),
                     "uptime": (datetime.now() - self.start_time).total_seconds(),
@@ -160,8 +158,7 @@ class AgentMind:
                 wm_summary = self.cognitive_loop.working_memory.get_summary()
                 
                 status = {
-                    "agent_id": self.agent_id,
-                    "name": self.config.get("name", "Unknown"),
+                    "name": self.name,
                     "type": self.agent_type,
                     "state": self.state,
                     "timestamp": datetime.now().isoformat(),

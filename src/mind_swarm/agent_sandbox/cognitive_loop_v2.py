@@ -25,14 +25,14 @@ logger = logging.getLogger("agent.cognitive_v2")
 class CognitiveLoopV2:
     """Cognitive loop that thinks at every step."""
     
-    def __init__(self, agent_id: str, home: Path):
+    def __init__(self, name: str, home: Path):
         """Initialize the cognitive loop.
         
         Args:
-            agent_id: The agent's identifier
+            name: The agent's name
             home: Path to agent's home directory
         """
-        self.agent_id = agent_id
+        self.name = name
         self.home = home
         
         # Core components
@@ -211,7 +211,7 @@ class CognitiveLoopV2:
     
     async def _think(self, request: ThinkingRequest) -> ThinkingResponse:
         """Send a thinking request through the brain interface."""
-        logger.info(f"AGENT: Starting _think for {self.agent_id}")
+        logger.info(f"AGENT: Starting _think for {self.name}")
         
         # Write request to brain file
         request_text = request.to_brain_format()
@@ -355,14 +355,14 @@ class CognitiveLoopV2:
         # Get original message from working memory context
         # For now, respond to "subspace"
         response_msg = {
-            "from": self.agent_id,
+            "from": self.name,
             "to": self.working_memory.task_source or "subspace",
             "type": "RESPONSE",
             "content": content,
             "timestamp": datetime.now().isoformat()
         }
         
-        msg_id = f"{self.agent_id}_{int(datetime.now().timestamp() * 1000)}"
+        msg_id = f"{self.name}_{int(datetime.now().timestamp() * 1000)}"
         msg_file = self.outbox_dir / f"{msg_id}.msg"
         msg_file.write_text(json.dumps(response_msg, indent=2))
         
