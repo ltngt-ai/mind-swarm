@@ -560,14 +560,9 @@ class SubspaceCoordinator:
                 # Structured thinking request for V2 brain
                 response = await brain_handler.process_structured_thinking(name, request_data)
                 
-                # Format response for brain file protocol
-                if isinstance(response, dict):
-                    response_text = json.dumps(response, indent=2)
-                else:
-                    response_text = str(response)
-                    
+                # Response already includes <<<THOUGHT_COMPLETE>>> from brain handler
                 logger.info(f"Thought processed for {name}")
-                return response_text + "\n<<<THOUGHT_COMPLETE>>>"
+                return response
             else:
                 # Original plain text processing
                 response = await brain_handler.process_thinking_request(name, prompt)
