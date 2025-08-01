@@ -116,7 +116,7 @@ class OpenAICompatibleService(AIService):
                     f"{self.api_url}/chat/completions",
                     headers=headers,
                     json=payload,
-                    timeout=60.0
+                    timeout=600.0
                 )
                 
                 if response.status_code >= 400:
@@ -155,7 +155,7 @@ class OpenAICompatibleService(AIService):
                     f"{self.api_url}/chat/completions",
                     headers=headers,
                     json=payload,
-                    timeout=60.0
+                    timeout=600.0
                 ) as response:
                     if response.status_code >= 400:
                         self._handle_error_response(response)
@@ -197,7 +197,7 @@ class OpenAICompatibleService(AIService):
                 response = await client.get(
                     f"{self.api_url}/models",
                     headers=headers,
-                    timeout=30.0
+                    timeout=300.0
                 )
                 
                 if response.status_code >= 400:

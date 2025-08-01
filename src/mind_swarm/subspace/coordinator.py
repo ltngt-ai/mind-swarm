@@ -147,6 +147,7 @@ class SubspaceCoordinator:
         self._ai_services: Dict[str, Any] = {}
         self._brain_handlers: Dict[str, BrainHandler] = {}
         self._brain_handlers_v2: Dict[str, BrainHandlerV2] = {}
+        self._brain_handler_lock = asyncio.Lock()  # Protect brain handler creation
         
         # Flag to use new brain handler
         self.use_v2_brain = True
@@ -157,11 +158,11 @@ class SubspaceCoordinator:
         """Start the subspace coordinator."""
         self._running = True
         
-        # Restore sleeping agents
-        await self._restore_sleeping_agents()
-        
         # Start message routing
         self._router_task = asyncio.create_task(self._message_routing_loop())
+        
+        # Restore sleeping agents in background to not block
+        asyncio.create_task(self._restore_sleeping_agents_background())
         
         logger.info("Subspace coordinator started")
     
@@ -187,7 +188,7 @@ class SubspaceCoordinator:
         await self.spawner.shutdown_all()
         
         # Mark all agents as sleeping
-        self.state_manager.mark_all_sleeping()
+        await self.state_manager.mark_all_sleeping()
         
         logger.info("Subspace coordinator stopped")
     
@@ -220,11 +221,11 @@ class SubspaceCoordinator:
         }
         
         # Create agent state (name will be auto-generated if not provided)
-        state = self.state_manager.create_agent(name, agent_config)
+        state = await self.state_manager.create_agent(name, agent_config)
         
         # Update lifecycle
-        self.state_manager.update_lifecycle(state.name, AgentLifecycle.ACTIVE)
-        self.state_manager.increment_activation(state.name)
+        await self.state_manager.update_lifecycle(state.name, AgentLifecycle.ACTIVE)
+        await self.state_manager.increment_activation(state.name)
         
         # Start the agent process
         await self.spawner.start_agent(
@@ -250,10 +251,10 @@ class SubspaceCoordinator:
         agent_states = await self.spawner.get_agent_states()
         if name in agent_states:
             uptime = agent_states[name].get("uptime", 0)
-            self.state_manager.update_uptime(name, uptime)
+            await self.state_manager.update_uptime(name, uptime)
         
         # Mark as hibernating (terminated agents can be restored later)
-        self.state_manager.update_lifecycle(name, AgentLifecycle.HIBERNATING)
+        await self.state_manager.update_lifecycle(name, AgentLifecycle.HIBERNATING)
         
         # Stop body file monitoring
         await self.body_system.stop_agent_monitoring(name)
@@ -319,7 +320,7 @@ class SubspaceCoordinator:
                 })
             
             # Add persistent state info
-            agent_state = self.state_manager.get_state(name)
+            agent_state = await self.state_manager.get_state(name)
             if agent_state:
                 state.update({
                     "created_at": agent_state.created_at,
@@ -330,11 +331,12 @@ class SubspaceCoordinator:
         
         return states
     
-    def list_all_agents(self) -> List[Dict[str, Any]]:
+    async def list_all_agents(self) -> List[Dict[str, Any]]:
         """List all known agents including hibernating ones."""
         all_agents = []
         
-        for state in self.state_manager.list_agents():
+        all_states = await self.state_manager.list_agents()
+        for state in all_states:
             agent_info = {
                 "name": state.name,
                 "agent_number": self.state_manager.name_generator.get_agent_number(state.name),
@@ -351,12 +353,20 @@ class SubspaceCoordinator:
         
         return all_agents
     
+    async def _restore_sleeping_agents_background(self):
+        """Background task to restore sleeping agents without blocking."""
+        try:
+            await self._restore_sleeping_agents()
+        except Exception as e:
+            logger.error(f"Failed to restore sleeping agents: {e}")
+    
     async def _restore_sleeping_agents(self):
         """Restore agents that were sleeping when server stopped."""
         logger.info("Checking for sleeping agents to restore...")
         
+        all_states = await self.state_manager.list_agents()
         sleeping_agents = [
-            state for state in self.state_manager.list_agents()
+            state for state in all_states
             if state.lifecycle == AgentLifecycle.SLEEPING
         ]
         
@@ -371,8 +381,8 @@ class SubspaceCoordinator:
                 logger.info(f"Restoring agent {state.name}")
                 
                 # Update lifecycle to active
-                self.state_manager.update_lifecycle(state.name, AgentLifecycle.ACTIVE)
-                self.state_manager.increment_activation(state.name)
+                await self.state_manager.update_lifecycle(state.name, AgentLifecycle.ACTIVE)
+                await self.state_manager.increment_activation(state.name)
                 
                 # Start/resume the agent process with its saved config
                 await self.spawner.start_agent(
@@ -393,14 +403,14 @@ class SubspaceCoordinator:
             except Exception as e:
                 logger.error(f"Failed to restore agent {state.name}: {e}")
                 # Mark as hibernating if restore fails
-                self.state_manager.update_lifecycle(state.name, AgentLifecycle.HIBERNATING)
+                await self.state_manager.update_lifecycle(state.name, AgentLifecycle.HIBERNATING)
     
     async def _prepare_agents_for_shutdown(self):
         """Prepare all agents for shutdown."""
         logger.info("Preparing agents for shutdown...")
         
         # Get list of active agents
-        active_agents = self.state_manager.prepare_shutdown()
+        active_agents = await self.state_manager.prepare_shutdown()
         
         if not active_agents:
             logger.info("No active agents to notify")
@@ -524,36 +534,38 @@ class SubspaceCoordinator:
             # Get appropriate AI service
             preset_name = "smart_balanced" if use_premium else "local_explorer"
             
-            if preset_name not in self._ai_services:
-                # Create AI service on demand
-                ai_config = preset_manager.get_config(preset_name)
-                if ai_config:
-                    self._ai_services[preset_name] = create_ai_service(ai_config)
+            # Use lock to protect brain handler creation
+            async with self._brain_handler_lock:
+                if preset_name not in self._ai_services:
+                    # Create AI service on demand
+                    ai_config = preset_manager.get_config(preset_name)
+                    if ai_config:
+                        self._ai_services[preset_name] = create_ai_service(ai_config)
+                    else:
+                        logger.error(f"AI preset {preset_name} not found")
+                        return "I cannot access my thinking capabilities right now."
+                
+                ai_service = self._ai_services.get(preset_name)
+                if not ai_service:
+                    return "My thinking process is temporarily unavailable."
+                
+                # Get or create brain handler for this preset
+                if self.use_v2_brain:
+                    # Use V2 brain handler with DSPy
+                    if preset_name not in self._brain_handlers_v2:
+                        # Get LM config from AI service
+                        # Convert ai_config to dict if it's an object
+                        config_dict = ai_config.__dict__ if hasattr(ai_config, '__dict__') else ai_config
+                        lm_config = self._get_lm_config_from_ai_service(ai_service, config_dict)
+                        self._brain_handlers_v2[preset_name] = BrainHandlerV2(lm_config)
+                    
+                    brain_handler = self._brain_handlers_v2[preset_name]
                 else:
-                    logger.error(f"AI preset {preset_name} not found")
-                    return "I cannot access my thinking capabilities right now."
-            
-            ai_service = self._ai_services.get(preset_name)
-            if not ai_service:
-                return "My thinking process is temporarily unavailable."
-            
-            # Get or create brain handler for this preset
-            if self.use_v2_brain:
-                # Use V2 brain handler with DSPy
-                if preset_name not in self._brain_handlers_v2:
-                    # Get LM config from AI service
-                    # Convert ai_config to dict if it's an object
-                    config_dict = ai_config.__dict__ if hasattr(ai_config, '__dict__') else ai_config
-                    lm_config = self._get_lm_config_from_ai_service(ai_service, config_dict)
-                    self._brain_handlers_v2[preset_name] = BrainHandlerV2(lm_config)
-                
-                brain_handler = self._brain_handlers_v2[preset_name]
-            else:
-                # Use original brain handler
-                if preset_name not in self._brain_handlers:
-                    self._brain_handlers[preset_name] = BrainHandler(ai_service)
-                
-                brain_handler = self._brain_handlers[preset_name]
+                    # Use original brain handler
+                    if preset_name not in self._brain_handlers:
+                        self._brain_handlers[preset_name] = BrainHandler(ai_service)
+                    
+                    brain_handler = self._brain_handlers[preset_name]
             
             # Process the thinking request based on format
             if self.use_v2_brain and 'request_data' in locals():
@@ -571,7 +583,15 @@ class SubspaceCoordinator:
             
         except Exception as e:
             logger.error(f"Error processing AI request for {name}: {e}")
-            return f"My thinking was interrupted: {str(e)}"
+            # Return a properly formatted error response for V2 brain
+            if self.use_v2_brain:
+                error_response = {
+                    "output_values": {"error": str(e), "response": f"My thinking was interrupted: {str(e)}"},
+                    "metadata": {"error": True, "agent_id": name}
+                }
+                return json.dumps(error_response) + "\n<<<THOUGHT_COMPLETE>>>"
+            else:
+                return f"My thinking was interrupted: {str(e)}"
     
     def _get_lm_config_from_ai_service(self, ai_service: Any, ai_config: Dict[str, Any]) -> Dict[str, Any]:
         """Extract language model configuration from AI service."""

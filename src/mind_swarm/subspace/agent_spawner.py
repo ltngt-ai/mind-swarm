@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Dict, Optional, Any
 from uuid import uuid4
 
+import aiofiles
+
 from mind_swarm.subspace.sandbox import BubblewrapSandbox, SubspaceManager
 from mind_swarm.utils.logging import logger
 from mind_swarm.utils.log_rotation import AgentLogRotator
@@ -37,7 +39,7 @@ class AgentProcess:
         
         logger.debug(f"Sent message {msg_id} to agent {self.name}")
     
-    async def terminate(self, timeout: float = 5.0):
+    async def terminate(self, timeout: float = 30.0):
         """Gracefully terminate the agent."""
         # Send shutdown message
         await self.send_message({
@@ -146,7 +148,7 @@ class AgentProcessManager:
         logger.info(f"Agent {name} process started with PID {process.pid}")
         return name
     
-    async def terminate_agent(self, name: str, timeout: float = 5.0):
+    async def terminate_agent(self, name: str, timeout: float = 30.0):
         """Terminate an agent process."""
         if name not in self.agents:
             logger.warning(f"Agent {name} not found")
@@ -183,7 +185,9 @@ class AgentProcessManager:
             heartbeat_file = agent.sandbox.agent_home / "heartbeat.json"
             if heartbeat_file.exists():
                 try:
-                    heartbeat = json.loads(heartbeat_file.read_text())
+                    async with aiofiles.open(heartbeat_file, 'r') as f:
+                        content = await f.read()
+                    heartbeat = json.loads(content)
                     states[name] = {
                         "name": name,
                         "alive": await agent.is_alive(),
@@ -236,7 +240,7 @@ class AgentProcessManager:
                 logger.error(f"Error in agent monitor: {e}")
                 await asyncio.sleep(5)
     
-    async def shutdown_all(self, timeout: float = 10.0):
+    async def shutdown_all(self, timeout: float = 60.0):
         """Shutdown all agents gracefully."""
         logger.info("Shutting down all agents...")
         

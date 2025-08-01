@@ -66,6 +66,11 @@ class CognitiveLoopV2:
         # OBSERVE - What's changed?
         observations = await self._observe()
         
+        # Check for shutdown
+        if observations.output_values.get("aborted") or observations.metadata.get("shutdown"):
+            logger.info("Shutdown detected during observe phase")
+            return False
+        
         if not observations.get("observations"):
             # Nothing new observed
             return False
@@ -73,8 +78,18 @@ class CognitiveLoopV2:
         # ORIENT - What does this mean?
         orientation = await self._orient(observations)
         
+        # Check for shutdown
+        if orientation.output_values.get("aborted") or orientation.metadata.get("shutdown"):
+            logger.info("Shutdown detected during orient phase")
+            return False
+        
         # DECIDE - What should I do?
         decision = await self._decide(orientation)
+        
+        # Check for shutdown
+        if decision.output_values.get("aborted") or decision.metadata.get("shutdown"):
+            logger.info("Shutdown detected during decide phase")
+            return False
         
         # ACT - Execute the decision
         result = await self._act(decision)
@@ -239,8 +254,27 @@ class CognitiveLoopV2:
                 
                 return response
             
-            if wait_count % 100 == 0:  # Log every 100 checks (1 second)
+            # Check for shutdown every 100 checks (1 second)
+            if wait_count % 100 == 0:
                 logger.info(f"AGENT: Still waiting for response, check #{wait_count}")
+                
+                # Check if there's a shutdown message in inbox
+                shutdown_files = list(self.inbox_dir.glob("*.msg"))
+                for msg_file in shutdown_files:
+                    try:
+                        content = msg_file.read_text()
+                        import json
+                        msg = json.loads(content)
+                        if msg.get("type") == "SHUTDOWN":
+                            logger.info("AGENT: Received SHUTDOWN during thinking, aborting")
+                            # Create a minimal response to exit gracefully
+                            abort_response = ThinkingResponse(
+                                output_values={"aborted": "Shutdown requested"},
+                                metadata={"shutdown": True}
+                            )
+                            return abort_response
+                    except:
+                        pass
             
             await asyncio.sleep(0.01)
     

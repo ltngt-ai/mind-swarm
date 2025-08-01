@@ -23,16 +23,17 @@ class ServerDaemon:
         self.server = MindSwarmServer(host, port)
         self._shutdown_event = asyncio.Event()
         
-    def handle_signal(self, sig, frame):
+    def handle_signal(self):
         """Handle shutdown signals."""
-        logger.info(f"Received signal {sig}")
+        logger.info("Received shutdown signal")
         self._shutdown_event.set()
     
     async def run(self):
         """Run the server daemon."""
-        # Set up signal handlers
-        signal.signal(signal.SIGINT, self.handle_signal)
-        signal.signal(signal.SIGTERM, self.handle_signal)
+        # Set up signal handlers using asyncio
+        loop = asyncio.get_event_loop()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(sig, self.handle_signal)
         
         # Create PID file
         pid_file = Path("/tmp/mind-swarm-server.pid")
@@ -67,6 +68,11 @@ class ServerDaemon:
                 pass
                     
         finally:
+            # Remove signal handlers
+            loop = asyncio.get_event_loop()
+            for sig in (signal.SIGTERM, signal.SIGINT):
+                loop.remove_signal_handler(sig)
+            
             # Clean up PID file
             if pid_file.exists():
                 pid_file.unlink()

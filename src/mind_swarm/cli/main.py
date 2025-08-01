@@ -93,7 +93,7 @@ class MindSwarmCLI:
             try:
                 # First agent uses premium AI, others use local
                 use_premium = (i == 0)
-                agent_id = await self.coordinator.create_agent(
+                agent_id = await self.client.create_agent(
                     name=f"Explorer-{i+1}",
                     use_premium=use_premium,
                 )
@@ -477,16 +477,19 @@ def server(
             os.kill(pid, signal.SIGTERM)
             console.print(f"[green]Sent shutdown signal to server (PID: {pid})[/green]")
             
-            # Wait for shutdown
-            for _ in range(10):
+            # Wait for shutdown (up to 30 seconds)
+            for i in range(60):
                 time.sleep(0.5)
                 try:
                     os.kill(pid, 0)
+                    # Show progress every 5 seconds
+                    if i > 0 and i % 10 == 0:
+                        console.print(f"[yellow]Waiting for graceful shutdown... ({i//2}s)[/yellow]")
                 except ProcessLookupError:
-                    console.print("[green]Server stopped[/green]")
+                    console.print("[green]Server stopped gracefully[/green]")
                     return
             
-            console.print("[yellow]Server still running, sending SIGKILL[/yellow]")
+            console.print("[red]Server still running after 30s, sending SIGKILL[/red]")
             os.kill(pid, signal.SIGKILL)
             
         except (ValueError, ProcessLookupError):

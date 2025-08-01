@@ -96,15 +96,21 @@ class AgentStateManager:
         
         self.states: Dict[str, AgentState] = {}
         self.name_generator = AgentNameGenerator()
+        self._states_loaded = False
         
-        # Load existing states
-        self._load_states()
+        # Don't load states in __init__ - will be done on first access
     
-    def _load_states(self):
+    async def load_states(self):
         """Load all agent states from disk."""
+        if self._states_loaded:
+            return
+            
+        import aiofiles
         for state_file in self.state_dir.glob("*.json"):
             try:
-                data = json.loads(state_file.read_text())
+                async with aiofiles.open(state_file, 'r') as f:
+                    content = await f.read()
+                data = json.loads(content)
                 state = AgentState.from_dict(data)
                 self.states[state.name] = state
                 
@@ -115,8 +121,10 @@ class AgentStateManager:
                 logger.info(f"Loaded agent state: {state.name}")
             except Exception as e:
                 logger.error(f"Failed to load agent state from {state_file}: {e}")
+        
+        self._states_loaded = True
     
-    def create_agent(self, name: Optional[str] = None, config: Optional[Dict[str, Any]] = None) -> AgentState:
+    async def create_agent(self, name: Optional[str] = None, config: Optional[Dict[str, Any]] = None) -> AgentState:
         """Create a new agent state."""
         # Use provided name or generate memorable name
         if name:
@@ -140,64 +148,74 @@ class AgentStateManager:
         )
         
         self.states[name] = state
-        self._save_state(state)
+        await self._save_state(state)
         
         agent_num = self.name_generator.get_agent_number(name)
         logger.info(f"Created agent #{agent_num}: {name}")
         
         return state
     
-    def get_state(self, name: str) -> Optional[AgentState]:
+    async def get_state(self, name: str) -> Optional[AgentState]:
         """Get agent state by name."""
+        await self.load_states()  # Ensure states are loaded
         return self.states.get(name)
     
     # Removed get_state_by_name - no longer needed since name is the key
     
-    def list_agents(self) -> List[AgentState]:
+    async def list_agents(self) -> List[AgentState]:
         """List all known agents."""
+        await self.load_states()  # Ensure states are loaded
         return list(self.states.values())
     
-    def update_lifecycle(self, name: str, lifecycle: AgentLifecycle):
+    async def update_lifecycle(self, name: str, lifecycle: AgentLifecycle):
         """Update agent lifecycle state."""
+        await self.load_states()  # Ensure states are loaded
         if name in self.states:
             self.states[name].lifecycle = lifecycle
             self.states[name].last_active = datetime.now().isoformat()
-            self._save_state(self.states[name])
+            await self._save_state(self.states[name])
     
-    def save_memory_snapshot(self, name: str, memory: Dict[str, Any]):
+    async def save_memory_snapshot(self, name: str, memory: Dict[str, Any]):
         """Save agent memory snapshot."""
+        await self.load_states()  # Ensure states are loaded
         if name in self.states:
             self.states[name].memory_snapshot = memory
-            self._save_state(self.states[name])
+            await self._save_state(self.states[name])
     
-    def increment_activation(self, name: str):
+    async def increment_activation(self, name: str):
         """Increment activation count when agent is started."""
+        await self.load_states()  # Ensure states are loaded
         if name in self.states:
             self.states[name].activation_count += 1
-            self._save_state(self.states[name])
+            await self._save_state(self.states[name])
     
-    def update_uptime(self, name: str, session_uptime: float):
+    async def update_uptime(self, name: str, session_uptime: float):
         """Update total uptime when agent stops."""
+        await self.load_states()  # Ensure states are loaded
         if name in self.states:
             self.states[name].total_uptime += session_uptime
-            self._save_state(self.states[name])
+            await self._save_state(self.states[name])
     
-    def _save_state(self, state: AgentState):
+    async def _save_state(self, state: AgentState):
         """Save agent state to disk."""
+        import aiofiles
         state_file = self.state_dir / f"{state.name}.json"
-        state_file.write_text(json.dumps(state.to_dict(), indent=2))
+        async with aiofiles.open(state_file, 'w') as f:
+            await f.write(json.dumps(state.to_dict(), indent=2))
     
-    def prepare_shutdown(self) -> List[str]:
+    async def prepare_shutdown(self) -> List[str]:
         """Prepare for shutdown, return list of active agents to notify."""
+        await self.load_states()  # Ensure states are loaded
         active_agents = []
         for name, state in self.states.items():
             if state.lifecycle == AgentLifecycle.ACTIVE:
                 active_agents.append(name)
         return active_agents
     
-    def mark_all_sleeping(self):
+    async def mark_all_sleeping(self):
         """Mark all active agents as sleeping (for shutdown)."""
+        await self.load_states()  # Ensure states are loaded
         for name, state in self.states.items():
             if state.lifecycle == AgentLifecycle.ACTIVE:
                 state.lifecycle = AgentLifecycle.SLEEPING
-                self._save_state(state)
+                await self._save_state(state)

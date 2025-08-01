@@ -71,43 +71,57 @@ class MindSwarmServer:
             """Initialize the coordinator on startup."""
             logger.info(f"Starting Mind-Swarm server on {self.host}:{self.port}")
             self.coordinator = SubspaceCoordinator()
+            self._coordinator_ready = False
             
-            # Check bubblewrap
-            if not await self.coordinator.subspace.check_bubblewrap():
-                logger.error("Bubblewrap not available!")
-                raise RuntimeError("Bubblewrap (bwrap) is required but not found")
-            
-            # Check local LLM server if using local models
-            from mind_swarm.ai.providers.local_llm_check import check_local_llm_server, format_server_status
-            from mind_swarm.core.config import settings
-            
-            # Check if any preset uses local model
-            using_local = False
-            local_url = None
+            # Start the coordinator initialization in background
+            # This prevents blocking the HTTP server startup
+            asyncio.create_task(_initialize_coordinator())
+            logger.info("Server startup initiated, coordinator initializing in background")
+        
+        async def _initialize_coordinator():
+            """Initialize coordinator in background to not block HTTP server."""
             try:
-                from mind_swarm.ai.presets import preset_manager
-                for preset_name in ["local_explorer", "local_smart", "local_code"]:
-                    preset = preset_manager.get_preset(preset_name)
-                    if preset and preset.provider in ["openai_compatible", "local", "ollama"]:
-                        # Get URL from api_settings
-                        if preset.api_settings and "host" in preset.api_settings:
-                            url = preset.api_settings["host"]
-                            using_local = True
-                            local_url = url
-                            break
-            except:
-                pass
-            
-            if using_local and local_url:
-                is_healthy, model_info = await check_local_llm_server(local_url)
-                status = format_server_status(is_healthy, model_info)
-                logger.info(f"Local LLM check: {status}")
+                # Check bubblewrap
+                if not await self.coordinator.subspace.check_bubblewrap():
+                    logger.error("Bubblewrap not available!")
+                    raise RuntimeError("Bubblewrap (bwrap) is required but not found")
                 
-                if not is_healthy:
-                    logger.warning("Local LLM server not available - agents using local models may not function properly")
-            
-            await self.coordinator.start()
-            logger.info("Server initialized successfully")
+                # Check local LLM server if using local models
+                from mind_swarm.ai.providers.local_llm_check import check_local_llm_server, format_server_status
+                from mind_swarm.core.config import settings
+                
+                # Check if any preset uses local model
+                using_local = False
+                local_url = None
+                try:
+                    from mind_swarm.ai.presets import preset_manager
+                    for preset_name in ["local_explorer", "local_smart", "local_code"]:
+                        preset = preset_manager.get_preset(preset_name)
+                        if preset and preset.provider in ["openai_compatible", "local", "ollama"]:
+                            # Get URL from api_settings
+                            if preset.api_settings and "host" in preset.api_settings:
+                                url = preset.api_settings["host"]
+                                using_local = True
+                                local_url = url
+                                break
+                except:
+                    pass
+                
+                if using_local and local_url:
+                    is_healthy, model_info = await check_local_llm_server(local_url)
+                    status = format_server_status(is_healthy, model_info)
+                    logger.info(f"Local LLM check: {status}")
+                    
+                    if not is_healthy:
+                        logger.warning("Local LLM server not available - agents using local models may not function properly")
+                
+                await self.coordinator.start()
+                self._coordinator_ready = True
+                logger.info("Server initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to initialize coordinator: {e}", exc_info=True)
+                # Store the error so we can report it in status
+                self._initialization_error = str(e)
         
         @self.app.on_event("shutdown")
         async def shutdown():
@@ -126,52 +140,89 @@ class MindSwarmServer:
             return {"name": "Mind-Swarm Server", "version": "0.1.0", "status": "running"}
         
         @self.app.get("/status", response_model=StatusResponse)
-        async def get_status():
-            """Get server and agent status."""
+        async def get_status(check_llm: bool = True):
+            """Get server and agent status.
+            
+            Args:
+                check_llm: Whether to check local LLM status (can be slow)
+            """
+            import time
+            endpoint_start = time.time()
+            logger.info(f"STATUS: /status endpoint called (check_llm={check_llm})")
             if not self.coordinator:
                 raise HTTPException(status_code=503, detail="Server not initialized")
+            
+            # If coordinator is not ready yet, return minimal status
+            if not getattr(self, '_coordinator_ready', False):
+                return StatusResponse(
+                    agents={},
+                    plaza_questions=0,
+                    server_uptime=(datetime.now() - self.start_time).total_seconds(),
+                    server_start_time=self.start_time.isoformat(),
+                    local_llm_status=None
+                )
             
             agent_states = await self.coordinator.get_agent_states()
             questions = await self.coordinator.get_plaza_questions()
             
             uptime = (datetime.now() - self.start_time).total_seconds()
             
-            # Check local LLM status
+            # Check local LLM status with timeout
             local_llm_status = None
-            try:
-                from mind_swarm.ai.providers.local_llm_check import check_local_llm_server
-                from mind_swarm.ai.presets import preset_manager
-                
-                # Check if using local models
-                for preset_name in ["local_explorer", "local_smart", "local_code"]:
-                    preset = preset_manager.get_preset(preset_name)
-                    if preset and preset.provider in ["openai_compatible", "local", "ollama"]:
-                        # Get URL from api_settings
-                        if preset.api_settings and "host" in preset.api_settings:
-                            url = preset.api_settings["host"]
-                            is_healthy, model_info = await check_local_llm_server(url)
-                            local_llm_status = {
-                                "healthy": is_healthy,
-                                "url": url,
-                                **model_info
-                            } if model_info else {"healthy": is_healthy, "url": url}
-                            break
-            except Exception as e:
-                logger.debug(f"Could not check local LLM status: {e}")
+            if check_llm:
+                try:
+                    from mind_swarm.ai.providers.local_llm_check import check_local_llm_server
+                    from mind_swarm.ai.presets import preset_manager
+                    import asyncio
+                    
+                    # Check if using local models
+                    for preset_name in ["local_explorer", "local_smart", "local_code"]:
+                        preset = preset_manager.get_preset(preset_name)
+                        if preset and preset.provider in ["openai_compatible", "local", "ollama"]:
+                            # Get URL from api_settings
+                            if preset.api_settings and "host" in preset.api_settings:
+                                url = preset.api_settings["host"]
+                                logger.info(f"STATUS: Checking local LLM server at {url}")
+                                start_time = time.time()
+                                
+                                # Add timeout to prevent hanging
+                                try:
+                                    is_healthy, model_info = await asyncio.wait_for(
+                                        check_local_llm_server(url),
+                                        timeout=2.0  # 2 second timeout for status checks
+                                    )
+                                    elapsed = time.time() - start_time
+                                    logger.info(f"STATUS: Local LLM check completed in {elapsed:.2f}s - healthy={is_healthy}")
+                                    local_llm_status = {
+                                        "healthy": is_healthy,
+                                        "url": url,
+                                        **model_info
+                                    } if model_info else {"healthy": is_healthy, "url": url}
+                                except asyncio.TimeoutError:
+                                    elapsed = time.time() - start_time
+                                    logger.warning(f"STATUS: Local LLM check timed out after {elapsed:.2f}s")
+                                    local_llm_status = {"healthy": False, "url": url, "error": "Timeout checking LLM server"}
+                                break
+                except Exception as e:
+                    logger.warning(f"STATUS: Local LLM check failed with exception: {e}")
             
-            return StatusResponse(
+            response = StatusResponse(
                 agents=agent_states,
                 plaza_questions=len(questions),
                 server_uptime=uptime,
                 server_start_time=self.start_time.isoformat(),
                 local_llm_status=local_llm_status
             )
+            logger.info(f"STATUS: /status endpoint completed in {time.time() - endpoint_start:.2f}s total")
+            return response
         
         @self.app.post("/agents/create")
         async def create_agent(request: CreateAgentRequest):
             """Create a new agent."""
             if not self.coordinator:
                 raise HTTPException(status_code=503, detail="Server not initialized")
+            if not getattr(self, '_coordinator_ready', False):
+                raise HTTPException(status_code=503, detail="Server still initializing, please wait")
             
             try:
                 name = await self.coordinator.create_agent(
@@ -200,6 +251,8 @@ class MindSwarmServer:
             """Terminate an agent."""
             if not self.coordinator:
                 raise HTTPException(status_code=503, detail="Server not initialized")
+            if not getattr(self, '_coordinator_ready', False):
+                raise HTTPException(status_code=503, detail="Server still initializing, please wait")
             
             try:
                 await self.coordinator.terminate_agent(name)
@@ -221,6 +274,8 @@ class MindSwarmServer:
             """Send a command to an agent."""
             if not self.coordinator:
                 raise HTTPException(status_code=503, detail="Server not initialized")
+            if not getattr(self, '_coordinator_ready', False):
+                raise HTTPException(status_code=503, detail="Server still initializing, please wait")
             
             try:
                 await self.coordinator.send_command(
@@ -238,6 +293,8 @@ class MindSwarmServer:
             """Create a new plaza question."""
             if not self.coordinator:
                 raise HTTPException(status_code=503, detail="Server not initialized")
+            if not getattr(self, '_coordinator_ready', False):
+                raise HTTPException(status_code=503, detail="Server still initializing, please wait")
             
             try:
                 question_id = await self.coordinator.create_plaza_question(
@@ -264,6 +321,8 @@ class MindSwarmServer:
             """Get all plaza questions."""
             if not self.coordinator:
                 raise HTTPException(status_code=503, detail="Server not initialized")
+            if not getattr(self, '_coordinator_ready', False):
+                return {"questions": []}
             
             questions = await self.coordinator.get_plaza_questions()
             return {"questions": questions}
@@ -273,8 +332,10 @@ class MindSwarmServer:
             """List all known agents including hibernating ones."""
             if not self.coordinator:
                 raise HTTPException(status_code=503, detail="Server not initialized")
+            if not getattr(self, '_coordinator_ready', False):
+                return {"agents": []}
             
-            agents = self.coordinator.list_all_agents()
+            agents = await self.coordinator.list_all_agents()
             return {"agents": agents}
         
         @self.app.websocket("/ws")
@@ -296,7 +357,7 @@ class MindSwarmServer:
                         # Wait for client messages with timeout
                         data = await asyncio.wait_for(
                             websocket.receive_text(),
-                            timeout=30.0  # 30 second timeout
+                            timeout=300.0  # 5 minute timeout
                         )
                         # Handle ping messages
                         if data == "ping":

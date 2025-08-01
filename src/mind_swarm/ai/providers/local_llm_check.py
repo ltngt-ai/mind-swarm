@@ -23,7 +23,7 @@ async def check_local_llm_server(base_url: str = "http://192.168.1.147:1234") ->
             # Try to get model info from OpenAI-compatible endpoint
             models_url = f"{base_url}/v1/models"
             
-            async with session.get(models_url, timeout=aiohttp.ClientTimeout(total=5)) as response:
+            async with session.get(models_url, timeout=aiohttp.ClientTimeout(total=5.0)) as response:
                 if response.status == 200:
                     data = await response.json()
                     
@@ -62,7 +62,7 @@ async def check_local_llm_server(base_url: str = "http://192.168.1.147:1234") ->
                     return False, None
                     
     except asyncio.TimeoutError:
-        logger.warning(f"Timeout connecting to local LLM server at {base_url}")
+        logger.warning(f"TIMEOUT: Local LLM health check timed out after 30s for {base_url}")
         return False, {"error": "Connection timeout", "server_url": base_url}
         
     except aiohttp.ClientError as e:
@@ -98,7 +98,7 @@ async def get_model_capabilities(base_url: str, model_id: str) -> Optional[Dict[
             async with session.post(
                 test_url, 
                 json=test_payload,
-                timeout=aiohttp.ClientTimeout(total=10)
+                timeout=aiohttp.ClientTimeout(total=60)
             ) as response:
                 if response.status == 200:
                     # Model works
