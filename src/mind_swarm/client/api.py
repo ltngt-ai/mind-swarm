@@ -198,15 +198,34 @@ class MindSwarmClient:
         """
         async def _ws_handler():
             try:
-                async with websockets.connect(self.ws_url) as websocket:
+                # Configure WebSocket with longer timeouts and ping interval
+                async with websockets.connect(
+                    self.ws_url,
+                    ping_interval=20,  # Send ping every 20 seconds
+                    ping_timeout=10,   # Wait 10 seconds for pong
+                    close_timeout=10   # Wait 10 seconds for close
+                ) as websocket:
                     self._ws_connection = websocket
                     logger.info("Connected to server WebSocket")
                     
                     async for message in websocket:
                         try:
-                            event = json.loads(message)
-                            if on_event:
-                                await on_event(event)
+                            # Handle ping/pong messages
+                            if message == "ping":
+                                await websocket.send("pong")
+                                continue
+                            elif message == "pong":
+                                # Server acknowledged our ping
+                                continue
+                                
+                            # Try to parse as JSON
+                            try:
+                                event = json.loads(message)
+                                if on_event:
+                                    await on_event(event)
+                            except json.JSONDecodeError:
+                                # Not JSON, might be echo or other text message
+                                logger.debug(f"Received non-JSON message: {message}")
                         except Exception as e:
                             logger.error(f"Error handling WebSocket message: {e}")
                             

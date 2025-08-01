@@ -5,6 +5,7 @@ import signal
 import subprocess
 import sys
 import time
+import shlex
 from pathlib import Path
 from typing import Optional, Dict, Any
 
@@ -198,7 +199,13 @@ class MindSwarmCLI:
                 if not command:
                     continue
                 
-                parts = command.strip().split()
+                # Use shlex to properly handle quoted strings
+                try:
+                    parts = shlex.split(command.strip())
+                except ValueError as e:
+                    console.print(f"Invalid command syntax: {e}", style="red")
+                    continue
+                    
                 if not parts:
                     continue
                 

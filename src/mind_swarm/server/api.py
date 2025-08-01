@@ -284,19 +284,32 @@ class MindSwarmServer:
             self.clients.append(websocket)
             
             try:
-                # Send initial status
-                status = await get_status()
+                # Send a simple connection confirmation instead of full status
                 await websocket.send_json({
-                    "type": "status",
-                    "data": status.dict()
+                    "type": "connected",
+                    "timestamp": datetime.now().isoformat()
                 })
                 
                 # Keep connection alive
                 while True:
-                    # Could handle incoming messages here
-                    data = await websocket.receive_text()
-                    # For now, just echo
-                    await websocket.send_text(f"Echo: {data}")
+                    try:
+                        # Wait for client messages with timeout
+                        data = await asyncio.wait_for(
+                            websocket.receive_text(),
+                            timeout=30.0  # 30 second timeout
+                        )
+                        # Handle ping messages
+                        if data == "ping":
+                            await websocket.send_text("pong")
+                        else:
+                            # Echo other messages
+                            await websocket.send_text(f"Echo: {data}")
+                    except asyncio.TimeoutError:
+                        # Send periodic ping to keep connection alive
+                        try:
+                            await websocket.send_text("ping")
+                        except:
+                            break  # Connection is dead
                     
             except WebSocketDisconnect:
                 self.clients.remove(websocket)
