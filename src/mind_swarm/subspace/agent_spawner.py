@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from mind_swarm.subspace.sandbox import BubblewrapSandbox, SubspaceManager
 from mind_swarm.utils.logging import logger
+from mind_swarm.utils.log_rotation import AgentLogRotator
 
 
 class AgentProcess:
@@ -74,6 +75,10 @@ class AgentSpawner:
         
         # Agent will be launched from the runtime directory
         self.runtime_launcher = None
+        
+        # Initialize log rotator
+        logs_base_dir = self.subspace.root_path / "logs" / "agents"
+        self.log_rotator = AgentLogRotator(logs_base_dir, max_size_mb=10, max_files=5)
         
     async def spawn_agent(
         self,
@@ -252,12 +257,8 @@ class AgentSpawner:
     
     async def _setup_agent_logging(self, agent_process: AgentProcess):
         """Set up logging tasks for an agent process."""
-        # Create logs directory outside the sandbox
-        logs_dir = self.subspace.root_path / "logs" / "agents"
-        logs_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Log file path
-        log_file = logs_dir / f"{agent_process.name}.log"
+        # Get the current log path for this agent
+        log_file = self.log_rotator.get_current_log_path(agent_process.name)
         
         # Create tasks to read stdout and stderr
         if agent_process.process.stdout:
@@ -283,14 +284,27 @@ class AgentSpawner:
             agent_process.log_tasks.append(stderr_task)
     
     async def _read_and_log_stream(self, stream, log_file: Path, name: str, stream_name: str):
-        """Read from a stream and write to log file."""
+        """Read from a stream and write to log file with rotation support."""
         try:
-            with open(log_file, 'a') as f:
-                while True:
-                    line = await stream.readline()
-                    if not line:
-                        break
+            current_log_file = log_file
+            
+            while True:
+                line = await stream.readline()
+                if not line:
+                    break
+                
+                # Check if we need to rotate the log
+                if self.log_rotator.should_rotate(name):
+                    # Close current file handle
+                    if 'f' in locals():
+                        f.close()
                     
+                    # Rotate the log
+                    current_log_file = self.log_rotator.rotate_log(name)
+                    logger.info(f"Rotated log for agent {name} due to size limit")
+                
+                # Open file in append mode (or create if it doesn't exist after rotation)
+                with open(current_log_file, 'a') as f:
                     # Decode and write to file
                     text = line.decode('utf-8', errors='replace')
                     f.write(text)

@@ -19,6 +19,14 @@ fi
 # Activate virtual environment
 source .venv/bin/activate
 
+# Load environment variables from .env if it exists
+if [ -f ".env" ]; then
+    # Use a more robust method to load .env
+    set -a  # Mark variables for export
+    source .env
+    set +a  # Stop marking for export
+fi
+
 # Check if package is installed in dev mode
 if ! pip show mind-swarm > /dev/null 2>&1; then
     echo -e "${YELLOW}Installing Mind-Swarm in development mode...${NC}"

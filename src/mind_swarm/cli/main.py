@@ -6,7 +6,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any
 
 import typer
 from rich.console import Console
@@ -23,6 +23,10 @@ console = Console()
 from mind_swarm.cli.check_llm import app as check_llm_app
 app.add_typer(check_llm_app, name="check-llm", help="Check local LLM server status")
 
+# Import logs command
+from mind_swarm.cli.commands.logs import logs
+app.command()(logs)
+
 
 class MindSwarmCLI:
     """Main CLI application class."""
@@ -31,6 +35,37 @@ class MindSwarmCLI:
         self.client = MindSwarmClient()
         self._running = False
         self._ws_events = []
+        self.coordinator = None  # Only used for local mode
+    
+    async def handle_ws_event(self, event: Dict[str, Any]):
+        """Handle WebSocket events from server."""
+        # Store event for later display
+        self._ws_events.append(event)
+        
+        # Display certain events immediately
+        event_type = event.get("type", "")
+        if event_type == "agent_spawned":
+            console.print(f"[green]Agent spawned: {event.get('agent_name')}[/green]")
+        elif event_type == "agent_terminated":
+            console.print(f"[yellow]Agent terminated: {event.get('agent_name')}[/yellow]")
+        elif event_type == "agent_state_change":
+            console.print(f"[blue]Agent {event.get('agent_name')} state: {event.get('new_state')}[/blue]")
+    
+    async def check_server(self) -> bool:
+        """Check if the server is running and accessible."""
+        try:
+            if await self.client.check_server():
+                return True
+            else:
+                console.print("[bold red]Cannot connect to Mind-Swarm server![/bold red]")
+                console.print("Start the server with: [cyan]mind-swarm server start[/cyan]")
+                console.print("or: [cyan]./run.sh server[/cyan]")
+                return False
+        except Exception as e:
+            console.print(f"[bold red]Cannot connect to Mind-Swarm server: {e}[/bold red]")
+            console.print("Start the server with: [cyan]mind-swarm server start[/cyan]")
+            console.print("or: [cyan]./run.sh server[/cyan]")
+            return False
     
     async def initialize(self):
         """Initialize the Mind-Swarm system."""
@@ -68,36 +103,38 @@ class MindSwarmCLI:
     
     async def show_status(self):
         """Display current system status."""
-        if not self.coordinator:
-            console.print("[red]System not initialized[/red]")
-            return
-        
-        # Create status table
-        table = Table(title="Mind-Swarm Status")
-        table.add_column("Agent ID", style="cyan")
-        table.add_column("Alive", style="green")
-        table.add_column("State")
-        table.add_column("Uptime", justify="right")
-        table.add_column("Inbox", justify="right")
-        table.add_column("Outbox", justify="right")
-        
-        states = await self.coordinator.get_agent_states()
-        for agent_id, info in states.items():
-            table.add_row(
-                agent_id,
-                "✓" if info.get("alive", False) else "✗",
-                info.get("state", "UNKNOWN"),
-                f"{info.get('uptime', 0):.1f}s",
-                str(info.get("inbox_count", 0)),
-                str(info.get("outbox_count", 0)),
-            )
-        
-        console.print(table)
-        
-        # Show shared questions
-        questions = self.coordinator.get_plaza_questions()
-        if questions:
-            console.print(f"\n[bold]Plaza Questions:[/bold] {len(questions)}")
+        try:
+            # Get agent states from server
+            states = await self.client.get_agent_states()
+            
+            # Create status table
+            table = Table(title="Mind-Swarm Status")
+            table.add_column("Agent Name", style="cyan")
+            table.add_column("Alive", style="green")
+            table.add_column("State")
+            table.add_column("Uptime", justify="right")
+            table.add_column("Inbox", justify="right")
+            table.add_column("Outbox", justify="right")
+            
+            for agent_name, info in states.items():
+                table.add_row(
+                    agent_name,
+                    "✓" if info.get("alive", False) else "✗",
+                    info.get("state", "UNKNOWN"),
+                    f"{info.get('uptime', 0):.1f}s",
+                    str(info.get("inbox_count", 0)),
+                    str(info.get("outbox_count", 0)),
+                )
+            
+            console.print(table)
+            
+            # Show shared questions
+            questions = await self.client.get_plaza_questions()
+            if questions:
+                console.print(f"\n[bold]Plaza Questions:[/bold] {len(questions)}")
+                
+        except Exception as e:
+            console.print(f"[red]Error getting status: {e}[/red]")
     
     def show_presets(self):
         """Display available AI presets."""
@@ -139,14 +176,6 @@ class MindSwarmCLI:
         """Run interactive mode."""
         self._running = True
         
-        # Set up signal handlers
-        def signal_handler(sig, frame):
-            self._running = False
-            console.print("\n[yellow]Shutting down...[/yellow]")
-        
-        signal.signal(signal.SIGINT, signal_handler)
-        signal.signal(signal.SIGTERM, signal_handler)
-        
         console.print("[bold]Mind-Swarm Interactive Mode[/bold]")
         console.print("Commands:")
         console.print("  [cyan]status[/cyan] - Show agent status")
@@ -156,6 +185,7 @@ class MindSwarmCLI:
         console.print("  [cyan]question <text>[/cyan] - Create a shared question")
         console.print("  [cyan]presets[/cyan] - List available AI presets")
         console.print("  [cyan]quit[/cyan] - Exit the system")
+        console.print("\n[dim]Tip: Use 'quit' or Ctrl+C to exit[/dim]")
         
         while self._running:
             try:
@@ -224,8 +254,11 @@ class MindSwarmCLI:
                 else:
                     console.print(f"Unknown command: {command}", style="red")
                 
-            except EOFError:
+            except (EOFError, KeyboardInterrupt):
+                # Handle Ctrl+C or Ctrl+D gracefully
                 self._running = False
+                console.print("\n[yellow]Exiting...[/yellow]")
+                break
             except Exception as e:
                 console.print(f"Error: {e}", style="red")
                 logger.error(f"Command error: {e}", exc_info=True)
@@ -250,6 +283,17 @@ def connect(
     # Set up logging
     level = "DEBUG" if debug else "INFO"
     setup_logging(level=level)
+    
+    # In interactive mode, remove console handlers for clean CLI
+    if interactive and not debug:
+        import logging
+        # Remove console handlers from all loggers
+        for logger_name in ['mind_swarm', 'httpx', 'websockets', 'uvicorn', '']:
+            logger = logging.getLogger(logger_name)
+            logger.handlers = [h for h in logger.handlers if not hasattr(h, 'stream')]
+            # Set higher level to prevent propagation
+            if logger_name:
+                logger.setLevel(logging.WARNING)
     
     # Create CLI client
     cli = MindSwarmCLI()
@@ -276,11 +320,22 @@ def connect(
                 await cli.show_status()
         
         except KeyboardInterrupt:
-            pass
+            console.print("\n[yellow]Interrupted by user[/yellow]")
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+            logger.error(f"Connection error: {e}", exc_info=True)
         finally:
+            # Disconnect websocket if connected
+            if cli.client._ws_connection:
+                await cli.client.disconnect_websocket()
+            
             await cli.shutdown()
     
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        # This catches any keyboard interrupt during asyncio.run
+        console.print("\n[yellow]Exiting...[/yellow]")
 
 
 @app.command()
@@ -328,8 +383,8 @@ def status():
     # Check configuration
     console.print(f"\nSubspace root: {settings.subspace.root_path}")
     console.print(f"Max agents: {settings.subspace.max_agents}")
-    console.print(f"Local model: {settings.ai_models.local_model}")
-    console.print(f"Premium model: {settings.ai_models.premium_model}")
+    console.print(f"Local AI preset: {settings.ai_models.local_preset}")
+    console.print(f"Premium AI preset: {settings.ai_models.premium_preset}")
     
     # Check bubblewrap
     try:

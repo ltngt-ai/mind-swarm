@@ -157,6 +157,26 @@ class MindSwarmClient:
             response.raise_for_status()
             return response.json()["question_id"]
     
+    async def get_agent_states(self) -> Dict[str, Dict[str, Any]]:
+        """Get states of all agents.
+        
+        Returns:
+            Dictionary of agent states keyed by agent name
+        """
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{self.base_url}/agents/all")
+            response.raise_for_status()
+            data = response.json()
+            
+            # Convert list of agents to dict keyed by name
+            agents = data.get("agents", [])
+            agent_dict = {}
+            for agent in agents:
+                name = agent.get("name", agent.get("agent_id", "unknown"))
+                agent_dict[name] = agent
+            
+            return agent_dict
+    
     async def get_plaza_questions(self) -> List[Dict[str, Any]]:
         """Get all plaza questions.
         
