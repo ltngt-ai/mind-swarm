@@ -132,7 +132,7 @@ class MindSwarmServer:
                 raise HTTPException(status_code=503, detail="Server not initialized")
             
             agent_states = await self.coordinator.get_agent_states()
-            questions = self.coordinator.get_plaza_questions()
+            questions = await self.coordinator.get_plaza_questions()
             
             uptime = (datetime.now() - self.start_time).total_seconds()
             
@@ -240,7 +240,7 @@ class MindSwarmServer:
                 raise HTTPException(status_code=503, detail="Server not initialized")
             
             try:
-                question_id = self.coordinator.create_plaza_question(
+                question_id = await self.coordinator.create_plaza_question(
                     request.text, 
                     request.created_by
                 )
@@ -265,7 +265,7 @@ class MindSwarmServer:
             if not self.coordinator:
                 raise HTTPException(status_code=503, detail="Server not initialized")
             
-            questions = self.coordinator.get_plaza_questions()
+            questions = await self.coordinator.get_plaza_questions()
             return {"questions": questions}
         
         @self.app.get("/agents/all")
