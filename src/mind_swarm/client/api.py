@@ -52,7 +52,7 @@ class MindSwarmClient:
             True if server is accessible
         """
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
                 response = await client.get(f"{self.base_url}/")
                 return response.status_code == 200
         except Exception:
@@ -64,7 +64,7 @@ class MindSwarmClient:
         Returns:
             Server status information
         """
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
             response = await client.get(f"{self.base_url}/status")
             response.raise_for_status()
             return ServerStatus(**response.json())
@@ -91,7 +91,7 @@ class MindSwarmClient:
             "config": config or {}
         }
         
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
             response = await client.post(
                 f"{self.base_url}/agents/create",
                 json=payload
@@ -107,7 +107,7 @@ class MindSwarmClient:
         Args:
             agent_id: Name of agent to terminate
         """
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
             response = await client.delete(f"{self.base_url}/agents/{agent_id}")
             response.raise_for_status()
     
@@ -129,7 +129,7 @@ class MindSwarmClient:
             "params": params or {}
         }
         
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
             response = await client.post(
                 f"{self.base_url}/agents/{agent_id}/command",
                 json=payload
@@ -151,7 +151,7 @@ class MindSwarmClient:
             "created_by": created_by
         }
         
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
             response = await client.post(
                 f"{self.base_url}/plaza/questions",
                 json=payload
@@ -165,7 +165,7 @@ class MindSwarmClient:
         Returns:
             Dictionary of agent states keyed by agent name
         """
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
             response = await client.get(f"{self.base_url}/agents/all")
             response.raise_for_status()
             data = response.json()
@@ -185,7 +185,7 @@ class MindSwarmClient:
         Returns:
             List of questions
         """
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
             response = await client.get(f"{self.base_url}/plaza/questions")
             response.raise_for_status()
             return response.json()["questions"]
