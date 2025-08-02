@@ -21,10 +21,10 @@ from .memory import (
 )
 from .perception import EnvironmentScanner
 
-logger = logging.getLogger("agent.cognitive.v2")
+logger = logging.getLogger("agent.cognitive")
 
 
-class CognitiveLoopV2:
+class CognitiveLoop:
     """Enhanced cognitive loop with full memory system."""
     
     def __init__(self, agent_id: str, home: Path, 

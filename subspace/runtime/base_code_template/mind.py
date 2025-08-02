@@ -16,7 +16,7 @@ from typing import Optional
 
 from .boot_rom import BootROM
 
-from .cognitive_loop_v2 import CognitiveLoopV2 as CognitiveLoop
+from .cognitive_loop import CognitiveLoop
 
 logger = logging.getLogger("agent.mind")
 
