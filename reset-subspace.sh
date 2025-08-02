@@ -75,14 +75,13 @@ reset_subspace() {
         done
     fi
     
-    # Clean shared areas
+    # Clean grid areas
     echo ""
-    echo "Cleaning shared areas..."
-    clean_directory "$SUBSPACE_ROOT/shared/plaza"
-    clean_directory "$SUBSPACE_ROOT/shared/library"
-    clean_directory "$SUBSPACE_ROOT/shared/bulletin"
-    clean_directory "$SUBSPACE_ROOT/shared/questions"
-    clean_directory "$SUBSPACE_ROOT/shared/knowledge"
+    echo "Cleaning grid areas..."
+    clean_directory "$SUBSPACE_ROOT/grid/plaza"
+    clean_directory "$SUBSPACE_ROOT/grid/library"
+    clean_directory "$SUBSPACE_ROOT/grid/bulletin"
+    clean_directory "$SUBSPACE_ROOT/grid/workshop"
     
     # Clean logs
     echo ""
@@ -107,26 +106,25 @@ reset_subspace() {
     echo ""
     echo "Recreating directory structure..."
     mkdir -p "$SUBSPACE_ROOT/agents"
-    mkdir -p "$SUBSPACE_ROOT/shared/plaza"
-    mkdir -p "$SUBSPACE_ROOT/shared/library"
-    mkdir -p "$SUBSPACE_ROOT/shared/bulletin"
-    mkdir -p "$SUBSPACE_ROOT/shared/questions"
-    mkdir -p "$SUBSPACE_ROOT/shared/knowledge"
+    mkdir -p "$SUBSPACE_ROOT/grid/plaza"
+    mkdir -p "$SUBSPACE_ROOT/grid/library"
+    mkdir -p "$SUBSPACE_ROOT/grid/bulletin"
+    mkdir -p "$SUBSPACE_ROOT/grid/workshop"
     mkdir -p "$SUBSPACE_ROOT/logs/agents"
-    mkdir -p "$SUBSPACE_ROOT/state"
     mkdir -p "$SUBSPACE_ROOT/agent_states"
     
     # Create placeholder files
-    echo "# Plaza Bulletin Board" > "$SUBSPACE_ROOT/shared/plaza/README.md"
-    echo "# Shared Library" > "$SUBSPACE_ROOT/shared/library/README.md"
-    echo "# Announcements" > "$SUBSPACE_ROOT/shared/bulletin/README.md"
+    echo "# Plaza - Community Discussions" > "$SUBSPACE_ROOT/grid/plaza/README.md"
+    echo "# Library - Shared Knowledge" > "$SUBSPACE_ROOT/grid/library/README.md"
+    echo "# Bulletin - Announcements" > "$SUBSPACE_ROOT/grid/bulletin/README.md"
+    echo "# Workshop - Tools and Scripts" > "$SUBSPACE_ROOT/grid/workshop/README.md"
     
     echo ""
     echo -e "${GREEN}Subspace reset complete!${NC}"
     echo ""
     echo "Summary:"
     echo "  - All agents removed"
-    echo "  - Shared areas cleaned"
+    echo "  - Grid areas cleaned"
     echo "  - Logs cleared"
     echo "  - State files removed"
     echo "  - Directory structure recreated"

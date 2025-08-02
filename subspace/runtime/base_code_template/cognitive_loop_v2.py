@@ -49,12 +49,10 @@ class CognitiveLoopV2:
         self.memory_selector = MemorySelector(self.context_builder)
         
         # Perception system
-        shared_path = home.parent.parent / "shared"
-        tools_path = home.parent.parent / "tools"
+        grid_path = home.parent.parent / "grid"
         self.environment_scanner = EnvironmentScanner(
             home_path=home,
-            shared_path=shared_path,
-            tools_path=tools_path if tools_path.exists() else None
+            grid_path=grid_path
         )
         
         # File interfaces

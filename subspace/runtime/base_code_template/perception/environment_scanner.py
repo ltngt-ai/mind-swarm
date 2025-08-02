@@ -58,24 +58,23 @@ class FileState:
 class EnvironmentScanner:
     """Scans filesystem environment and creates memory blocks."""
     
-    def __init__(self, home_path: Path, shared_path: Path, tools_path: Optional[Path] = None):
+    def __init__(self, home_path: Path, grid_path: Path):
         """Initialize scanner.
         
         Args:
             home_path: Agent's home directory
-            shared_path: Shared memory directory
-            tools_path: Optional tools directory
+            grid_path: Grid directory containing shared spaces
         """
         self.home_path = Path(home_path)
-        self.shared_path = Path(shared_path)
-        self.tools_path = Path(tools_path) if tools_path else None
+        self.grid_path = Path(grid_path)
         
         # Directories to monitor
         self.inbox_path = self.home_path / "inbox"
         self.memory_path = self.home_path / "memory"
-        self.plaza_path = self.shared_path / "plaza"
-        self.questions_path = self.shared_path / "questions"
-        self.knowledge_path = self.shared_path / "knowledge"
+        self.plaza_path = self.grid_path / "plaza"
+        self.library_path = self.grid_path / "library"
+        self.bulletin_path = self.grid_path / "bulletin"
+        self.workshop_path = self.grid_path / "workshop"
         
         # Track file states for change detection
         self.file_states: Dict[str, FileState] = {}
@@ -100,11 +99,9 @@ class EnvironmentScanner:
         
         # Scan different areas
         memories.extend(self._scan_inbox())
-        memories.extend(self._scan_shared_areas())
+        memories.extend(self._scan_grid_areas())
         memories.extend(self._scan_memory_dir())
-        
-        if self.tools_path:
-            memories.extend(self._scan_tools())
+        memories.extend(self._scan_workshop())
         
         # Add status memories
         memories.extend(self._create_status_memories())
@@ -171,33 +168,25 @@ class EnvironmentScanner:
         
         return memories
     
-    def _scan_shared_areas(self) -> List[MemoryBlock]:
-        """Scan shared areas for updates."""
+    def _scan_grid_areas(self) -> List[MemoryBlock]:
+        """Scan grid areas for updates."""
         memories = []
         
-        # Scan plaza bulletin board
+        # Scan plaza (community discussions)
         if self.plaza_path and self.plaza_path.exists():
             memories.extend(self._scan_directory(
                 self.plaza_path,
-                "plaza_bulletin",
-                "Plaza bulletin board"
+                "plaza_discussion",
+                "Plaza discussion"
             ))
         
-        # Scan questions board
-        if self.questions_path and self.questions_path.exists():
-            memories.extend(self._scan_directory(
-                self.questions_path,
-                "shared_question",
-                "Shared questions"
-            ))
-        
-        # Scan knowledge base
-        if self.knowledge_path and self.knowledge_path.exists():
-            for knowledge_file in self.knowledge_path.rglob("*.md"):
+        # Scan library (shared knowledge)
+        if self.library_path and self.library_path.exists():
+            for knowledge_file in self.library_path.rglob("*.md"):
                 state = self._check_file_state(knowledge_file)
                 if state:  # New or changed
                     # Extract topic from path
-                    rel_path = knowledge_file.relative_to(self.knowledge_path)
+                    rel_path = knowledge_file.relative_to(self.library_path)
                     topic = rel_path.parts[0] if rel_path.parts else "general"
                     subtopic = rel_path.stem if len(rel_path.parts) > 1 else None
                     
@@ -211,11 +200,19 @@ class EnvironmentScanner:
                     memories.append(knowledge_memory)
                     
                     memories.append(ObservationMemoryBlock(
-                        observation_type="knowledge_updated",
+                        observation_type="library_updated",
                         path=str(knowledge_file),
-                        description=f"Knowledge base updated: {topic}" + (f"/{subtopic}" if subtopic else ""),
+                        description=f"Library updated: {topic}" + (f"/{subtopic}" if subtopic else ""),
                         priority=Priority.MEDIUM
                     ))
+        
+        # Scan bulletin (announcements)
+        if self.bulletin_path and self.bulletin_path.exists():
+            memories.extend(self._scan_directory(
+                self.bulletin_path,
+                "announcement",
+                "Bulletin announcement"
+            ))
         
         return memories
     
@@ -284,16 +281,16 @@ class EnvironmentScanner:
         
         return memories
     
-    def _scan_tools(self) -> List[MemoryBlock]:
-        """Scan tools directory for available tools."""
+    def _scan_workshop(self) -> List[MemoryBlock]:
+        """Scan workshop for available tools."""
         memories = []
         
-        if not self.tools_path or not self.tools_path.exists():
+        if not self.workshop_path or not self.workshop_path.exists():
             return memories
         
         try:
             # Look for executable scripts
-            for tool_file in self.tools_path.iterdir():
+            for tool_file in self.workshop_path.iterdir():
                 if tool_file.is_file() and os.access(tool_file, os.X_OK):
                     state = self._check_file_state(tool_file)
                     if state:  # New tool
@@ -305,7 +302,7 @@ class EnvironmentScanner:
                         ))
         
         except Exception as e:
-            logger.error(f"Error scanning tools: {e}")
+            logger.error(f"Error scanning workshop: {e}")
         
         return memories
     

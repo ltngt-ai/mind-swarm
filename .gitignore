@@ -50,8 +50,6 @@ htmlcov/
 /subspace/agents/
 /subspace/agent_states/
 /subspace/logs/
-/subspace/state/
-/subspace/shared/
 /subspace/grid/
 # Keep runtime folder in git
 !/subspace/runtime/
