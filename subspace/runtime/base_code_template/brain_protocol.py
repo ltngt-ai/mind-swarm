@@ -1,225 +1,189 @@
-"""Brain Protocol - Defines how agents communicate thinking requests across the sandbox boundary.
+"""Generic Brain Protocol - Agent-defined thinking signatures.
 
-The brain interface uses a DSPy-inspired signature approach where each thinking
-operation has:
-- A clear question or task
-- Defined inputs with their descriptions
-- Expected outputs with their descriptions
+This protocol allows agents to define their own thinking operations by specifying
+signatures (task, inputs, outputs). The server dynamically creates DSPy signatures
+from these specifications, with no knowledge of what specific thinking patterns mean.
 
-This allows the server-side brain to use DSPy or other LLM frameworks while
-the agent side remains simple and sandbox-contained.
+Key points:
+- Agents define what thinking operations they need
+- Server just executes whatever signature specification it receives
+- Adding new thinking modes only requires agent-side changes
+- No fixed "types" or enums on the server
 """
 
 import json
-from typing import Dict, List, Any, Optional
+import hashlib
+from typing import Dict, List, Any, Optional, Union
 from datetime import datetime
+from dataclasses import dataclass, asdict
 
 
-class ThinkingSignature:
-    """Represents a thinking operation signature."""
+@dataclass
+class SignatureSpec:
+    """Specification for a DSPy signature that can be created dynamically."""
     
-    def __init__(self, 
-                 task: str,
-                 description: str,
-                 inputs: Dict[str, str],
-                 outputs: Dict[str, str]):
-        """Initialize a thinking signature.
-        
-        Args:
-            task: The question or task to perform
-            description: Longer description of what this thinking step does
-            inputs: Dict of input_name -> description
-            outputs: Dict of output_name -> description
-        """
-        self.task = task
-        self.description = description
-        self.inputs = inputs
-        self.outputs = outputs
+    task: str  # The main task or question
+    description: str  # Detailed description of what this signature does
+    inputs: Dict[str, str]  # input_name -> description
+    outputs: Dict[str, str]  # output_name -> description
     
-    def to_dict(self) -> dict:
+    def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
-        return {
-            "task": self.task,
-            "description": self.description,
-            "inputs": self.inputs,
-            "outputs": self.outputs
-        }
-
-
-class ThinkingRequest:
-    """A request to think about something."""
+        return asdict(self)
     
-    def __init__(self, 
-                 signature: ThinkingSignature,
-                 input_values: Dict[str, Any],
-                 context: Optional[Dict[str, Any]] = None):
-        """Initialize a thinking request.
-        
-        Args:
-            signature: The thinking operation signature
-            input_values: Actual values for the inputs
-            context: Optional additional context
-        """
-        self.signature = signature
-        self.input_values = input_values
-        self.context = context or {}
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'SignatureSpec':
+        """Create from dictionary."""
+        return cls(**data)
+    
+    def get_hash(self) -> str:
+        """Generate a stable hash for caching purposes."""
+        # Create canonical representation for consistent hashing
+        canonical = json.dumps(self.to_dict(), sort_keys=True)
+        return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+@dataclass
+class GenericThinkingRequest:
+    """A generic thinking request with dynamic signature specification."""
+    
+    signature: SignatureSpec
+    input_values: Dict[str, Any]
+    context: Optional[Dict[str, Any]] = None
+    request_id: Optional[str] = None
+    
+    def __post_init__(self):
+        """Initialize computed fields."""
+        if self.context is None:
+            self.context = {}
+        if self.request_id is None:
+            self.request_id = f"req_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
         self.timestamp = datetime.now().isoformat()
+    
+    def validate(self) -> List[str]:
+        """Validate the request and return any errors."""
+        errors = []
         
+        # Check that all required signature inputs have values
+        for input_name in self.signature.inputs.keys():
+            if input_name not in self.input_values:
+                errors.append(f"Missing input value for '{input_name}'")
+        
+        # Check for extra input values
+        for input_name in self.input_values.keys():
+            if input_name not in self.signature.inputs:
+                errors.append(f"Unexpected input value '{input_name}' not in signature")
+        
+        # Basic validation of signature structure
+        if not self.signature.task.strip():
+            errors.append("Signature task cannot be empty")
+        
+        if not self.signature.inputs:
+            errors.append("Signature must have at least one input")
+            
+        if not self.signature.outputs:
+            errors.append("Signature must have at least one output")
+        
+        return errors
+    
     def to_brain_format(self) -> str:
-        """Format for writing to brain file."""
-        # Create a structured format that the server can parse
-        request = {
-            "type": "thinking_request",
+        """Format for writing to brain communication file."""
+        request_data = {
+            "request_id": self.request_id,
             "signature": self.signature.to_dict(),
             "input_values": self.input_values,
             "context": self.context,
             "timestamp": self.timestamp
         }
         
-        # Convert to JSON for transport
-        return json.dumps(request, indent=2) + "\n<<<END_THOUGHT>>>"
-
-
-class ThinkingResponse:
-    """A response from thinking."""
+        return json.dumps(request_data, indent=2) + "\n<<<END_THOUGHT>>>"
     
-    def __init__(self, output_values: Dict[str, Any], metadata: Optional[Dict] = None):
-        """Initialize thinking response.
-        
-        Args:
-            output_values: The outputs produced
-            metadata: Optional metadata about the thinking
-        """
-        self.output_values = output_values
-        self.metadata = metadata or {}
-        
     @classmethod
-    def from_brain_format(cls, content: str) -> 'ThinkingResponse':
-        """Parse response from brain file format."""
+    def from_brain_format(cls, content: str) -> 'GenericThinkingRequest':
+        """Parse request from brain communication format."""
+        # Remove the end marker if present
+        request_text = content.split("<<<END_THOUGHT>>>")[0].strip()
+        
+        try:
+            data = json.loads(request_text)
+            
+            # Create signature spec
+            signature = SignatureSpec.from_dict(data["signature"])
+            
+            # Create request
+            return cls(
+                signature=signature,
+                input_values=data["input_values"],
+                context=data.get("context"),
+                request_id=data.get("request_id")
+            )
+            
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            raise ValueError(f"Invalid brain format: {e}")
+
+
+@dataclass
+class GenericThinkingResponse:
+    """Response from a generic thinking operation."""
+    
+    output_values: Dict[str, Any]
+    request_id: str
+    signature_hash: str
+    metadata: Optional[Dict[str, Any]] = None
+    
+    def __post_init__(self):
+        """Initialize computed fields."""
+        if self.metadata is None:
+            self.metadata = {}
+        self.timestamp = datetime.now().isoformat()
+    
+    def to_brain_format(self) -> str:
+        """Format for writing to brain communication file."""
+        response_data = {
+            "request_id": self.request_id,
+            "signature_hash": self.signature_hash,
+            "output_values": self.output_values,
+            "metadata": self.metadata,
+            "timestamp": self.timestamp
+        }
+        
+        return json.dumps(response_data, indent=2) + "\n<<<THOUGHT_COMPLETE>>>"
+    
+    @classmethod
+    def from_brain_format(cls, content: str) -> 'GenericThinkingResponse':
+        """Parse response from brain communication format."""
         # Remove the completion marker
         response_text = content.split("<<<THOUGHT_COMPLETE>>>")[0].strip()
         
         try:
-            # Try to parse as JSON first
-            response_data = json.loads(response_text)
-            if isinstance(response_data, dict) and "output_values" in response_data:
-                return cls(
-                    output_values=response_data["output_values"],
-                    metadata=response_data.get("metadata", {})
-                )
-        except json.JSONDecodeError:
-            pass
-        
-        # Fallback: treat as single text output
-        return cls(output_values={"response": response_text})
+            data = json.loads(response_text)
+            
+            return cls(
+                output_values=data["output_values"],
+                request_id=data["request_id"],
+                signature_hash=data["signature_hash"],
+                metadata=data.get("metadata")
+            )
+            
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            raise ValueError(f"Invalid brain format: {e}")
 
 
-# Pre-defined signatures for common cognitive operations
-class CognitiveSignatures:
-    """Standard thinking signatures for the OODA loop."""
-    
-    OBSERVE = ThinkingSignature(
-        task="What has changed or needs attention?",
-        description="Observe the environment and identify what's new or important",
-        inputs={
-            "working_memory": "Current contents of working memory",
-            "new_messages": "Any new messages in inbox",
-            "environment_state": "Current state of my environment"
-        },
-        outputs={
-            "observations": "List of things that are new or need attention",
-            "priority": "Which observation is most important"
-        }
+
+
+# Convenience functions for common operations
+def create_request(signature: SignatureSpec, input_values: Dict[str, Any], 
+                  context: Optional[Dict[str, Any]] = None) -> GenericThinkingRequest:
+    """Create a generic thinking request."""
+    return GenericThinkingRequest(
+        signature=signature,
+        input_values=input_values,
+        context=context
     )
-    
-    ORIENT = ThinkingSignature(
-        task="What does this mean and what kind of situation am I in?",
-        description="Understand the context and meaning of observations",
-        inputs={
-            "observations": "What was observed",
-            "current_task": "Any task I'm currently working on",
-            "recent_history": "Recent actions and their outcomes"
-        },
-        outputs={
-            "situation_type": "What kind of situation this is",
-            "understanding": "What I understand about the situation",
-            "relevant_knowledge": "What knowledge or skills apply here"
-        }
-    )
-    
-    DECIDE = ThinkingSignature(
-        task="What should I do about this?",
-        description="Decide on the best approach or action to take",
-        inputs={
-            "understanding": "My understanding of the situation",
-            "available_actions": "What actions I can take",
-            "goals": "My current goals or objectives",
-            "constraints": "Any constraints or limitations"
-        },
-        outputs={
-            "decision": "What I've decided to do",
-            "approach": "How I'll approach it",
-            "reasoning": "Why this is the best choice"
-        }
-    )
-    
-    ACT_PLANNING = ThinkingSignature(
-        task="How exactly should I execute this decision?",
-        description="Plan the specific steps to implement the decision",
-        inputs={
-            "decision": "What was decided",
-            "approach": "The chosen approach",
-            "available_tools": "Tools and interfaces available",
-            "current_state": "Current state to work from"
-        },
-        outputs={
-            "steps": "Ordered list of steps to take",
-            "first_action": "The immediate next action"
-        }
-    )
-    
-    REFLECT = ThinkingSignature(
-        task="What happened and what did I learn?",
-        description="Reflect on actions taken and results achieved",
-        inputs={
-            "action_taken": "What action was performed",
-            "expected_outcome": "What was expected to happen",
-            "actual_outcome": "What actually happened",
-            "surprises": "Anything unexpected"
-        },
-        outputs={
-            "assessment": "How well did it go",
-            "lessons": "What was learned",
-            "next_time": "What to do differently next time"
-        }
-    )
-    
-    # Specific thinking operations
-    SOLVE_ARITHMETIC = ThinkingSignature(
-        task="Solve this arithmetic problem step by step",
-        description="Perform mathematical calculations",
-        inputs={
-            "problem": "The math problem to solve",
-            "context": "Any context about the problem"
-        },
-        outputs={
-            "steps": "Step by step solution",
-            "answer": "The final answer",
-            "verification": "How to check the answer is correct"
-        }
-    )
-    
-    ANSWER_QUESTION = ThinkingSignature(
-        task="Answer this question based on available knowledge",
-        description="Provide a thoughtful answer to a question",
-        inputs={
-            "question": "The question to answer",
-            "context": "Context about the question",
-            "relevant_knowledge": "Any relevant facts or information"
-        },
-        outputs={
-            "answer": "The answer to the question",
-            "confidence": "How confident in the answer",
-            "reasoning": "The reasoning behind the answer"
-        }
-    )
+
+
+def quick_request(task: str, inputs: Dict[str, str], outputs: Dict[str, str],
+                 input_values: Dict[str, Any], description: Optional[str] = None) -> GenericThinkingRequest:
+    """Quickly create a request with inline signature definition."""
+    signature = SignatureBuilder.custom(task, inputs, outputs, description)
+    return create_request(signature, input_values)

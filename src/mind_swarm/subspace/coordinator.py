@@ -13,8 +13,7 @@ from mind_swarm.subspace.sandbox import SubspaceManager
 from mind_swarm.subspace.agent_state import AgentStateManager, AgentLifecycle
 from mind_swarm.subspace.body_manager import BodySystemManager
 from mind_swarm.subspace.body_monitor import create_body_monitor
-from mind_swarm.subspace.brain_handler import BrainHandler
-from mind_swarm.subspace.brain_handler_v2 import BrainHandlerV2
+from mind_swarm.subspace.brain_handler_dynamic import DynamicBrainHandler
 from mind_swarm.ai.presets import preset_manager
 from mind_swarm.ai.providers.factory import create_ai_service
 from mind_swarm.utils.logging import logger
@@ -145,13 +144,9 @@ class SubspaceCoordinator:
         
         # AI services and brain handlers for agents (loaded on demand)
         self._ai_services: Dict[str, Any] = {}
-        self._brain_handlers: Dict[str, BrainHandler] = {}
-        self._brain_handlers_v2: Dict[str, BrainHandlerV2] = {}
+        self._brain_handlers: Dict[str, DynamicBrainHandler] = {}
         self._brain_handler_lock = asyncio.Lock()  # Protect brain handler creation
-        
-        # Flag to use new brain handler
-        self.use_v2_brain = True
-        
+                
         logger.info("Initialized subspace coordinator")
     
     async def start(self):
@@ -502,19 +497,7 @@ class SubspaceCoordinator:
         Returns:
             The AI response
         """
-        # Check if this is a structured thinking request
-        if prompt.strip().startswith("{") and '"type": "thinking_request"' in prompt:
-            # Parse the JSON thinking request
-            try:
-                import json
-                request_data = json.loads(prompt.strip())
-                logger.info(f"Processing thought for {name}: {json.dumps(request_data, indent=2)}")
-            except json.JSONDecodeError:
-                logger.error(f"Failed to parse thinking request from {name}")
-                return "Error: Invalid thinking request format"
-        else:
-            # Plain text prompt - log it
-            logger.info(f"Processing thought for {name}: {prompt}")
+        logger.info(f"Processing thought for {name}: {prompt[:200]}...")
         
         try:
             # Get agent configuration to determine which model to use
@@ -549,49 +532,31 @@ class SubspaceCoordinator:
                 if not ai_service:
                     return "My thinking process is temporarily unavailable."
                 
-                # Get or create brain handler for this preset
-                if self.use_v2_brain:
-                    # Use V2 brain handler with DSPy
-                    if preset_name not in self._brain_handlers_v2:
-                        # Get LM config from AI service
-                        # Convert ai_config to dict if it's an object
-                        config_dict = ai_config.__dict__ if hasattr(ai_config, '__dict__') else ai_config
-                        lm_config = self._get_lm_config_from_ai_service(ai_service, config_dict)
-                        self._brain_handlers_v2[preset_name] = BrainHandlerV2(lm_config)
-                    
-                    brain_handler = self._brain_handlers_v2[preset_name]
-                else:
-                    # Use original brain handler
-                    if preset_name not in self._brain_handlers:
-                        self._brain_handlers[preset_name] = BrainHandler(ai_service)
-                    
-                    brain_handler = self._brain_handlers[preset_name]
-            
-            # Process the thinking request based on format
-            if self.use_v2_brain and 'request_data' in locals():
-                # Structured thinking request for V2 brain
-                response = await brain_handler.process_structured_thinking(name, request_data)
+                # Get or create dynamic brain handler for this preset
+                if preset_name not in self._brain_handlers:
+                    # Get LM config from AI service
+                    config_dict = ai_config.__dict__ if hasattr(ai_config, '__dict__') else ai_config
+                    lm_config = self._get_lm_config_from_ai_service(ai_service, config_dict)
+                    self._brain_handlers[preset_name] = DynamicBrainHandler(ai_service, lm_config)
                 
-                # Response already includes <<<THOUGHT_COMPLETE>>> from brain handler
-                logger.info(f"Thought processed for {name}")
-                return response
-            else:
-                # Original plain text processing
-                response = await brain_handler.process_thinking_request(name, prompt)
-                logger.info(f"Thought processed for {name}")
-                return response
+                brain_handler = self._brain_handlers[preset_name]
+            
+            # Process the thinking request with dynamic handler
+            response = await brain_handler.process_thinking_request(name, prompt)
+            
+            # Response already includes <<<THOUGHT_COMPLETE>>> from brain handler
+            logger.info(f"Thought processed for {name}")
+            return response
             
         except Exception as e:
             logger.error(f"Error processing AI request for {name}: {e}")
-            # Return a properly formatted error response for V2 brain
-            if self.use_v2_brain:
-                error_response = {
-                    "output_values": {"error": str(e), "response": f"My thinking was interrupted: {str(e)}"},
-                    "metadata": {"error": True, "agent_id": name}
-                }
-                return json.dumps(error_response) + "\n<<<THOUGHT_COMPLETE>>>"
-            else:
-                return f"My thinking was interrupted: {str(e)}"
+            # Return a properly formatted error response
+            return json.dumps({
+                "request_id": "error",
+                "signature_hash": "error",
+                "output_values": {"error": str(e), "response": f"My thinking was interrupted: {str(e)}"},
+                "metadata": {"error": True, "agent_id": name}
+            }, indent=2) + "\n<<<THOUGHT_COMPLETE>>>"
     
     def _get_lm_config_from_ai_service(self, ai_service: Any, ai_config: Dict[str, Any]) -> Dict[str, Any]:
         """Extract language model configuration from AI service."""

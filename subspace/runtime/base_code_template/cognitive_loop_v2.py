@@ -7,6 +7,7 @@ filesystem perception and intelligent context management.
 import asyncio
 import json
 import logging
+import time
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from datetime import datetime
@@ -255,9 +256,9 @@ class CognitiveLoopV2:
         
         # Build structured thinking request for orient
         thinking_request = {
-            "type": "thinking_request",
             "signature": {
                 "task": "What does this mean and how should I handle it?",
+                "description": "Understand the context and meaning of observations",
                 "inputs": {
                     "observations": "What was observed",
                     "current_task": "Any task currently being worked on",
@@ -273,7 +274,9 @@ class CognitiveLoopV2:
                 "observations": f"New message received: {json.dumps(observation)}",
                 "current_task": current_task,
                 "recent_history": "\n".join(recent_history) if recent_history else "Just started"
-            }
+            },
+            "request_id": f"orient_{int(time.time()*1000)}",
+            "timestamp": datetime.now().isoformat()
         }
         
         # Use the brain with structured request
@@ -405,9 +408,9 @@ class CognitiveLoopV2:
         constraints = f"Token budget: {self.max_context_tokens}, Must respond via outbox"
         
         thinking_request = {
-            "type": "thinking_request",
             "signature": {
                 "task": "What should I do based on my understanding?",
+                "description": "Decide on the best approach or action to take",
                 "inputs": {
                     "understanding": "Understanding of the situation",
                     "available_actions": "What actions can be taken",
@@ -425,7 +428,9 @@ class CognitiveLoopV2:
                 "available_actions": "\n".join(available_actions),
                 "goals": goals,
                 "constraints": constraints
-            }
+            },
+            "request_id": f"decide_{int(time.time()*1000)}",
+            "timestamp": datetime.now().isoformat()
         }
         
         # Use the brain
@@ -488,7 +493,7 @@ class CognitiveLoopV2:
             )
             
             # Log the thinking result
-            logger.info(f"Thinking result: {response[:200]}{'...' if len(response) > 200 else ''}")
+            logger.info(f"Thinking result: {response}")
             
             # Update task status
             if "task_memory_id" in orientation:
@@ -504,7 +509,7 @@ class CognitiveLoopV2:
             history = HistoryMemoryBlock(
                 action_type="task_completed",
                 action_detail=f"Completed {orientation.get('task_type', 'unknown')} task",
-                result=response[:100] + "..." if len(response) > 100 else response,
+                result=response,
                 priority=Priority.MEDIUM
             )
             self.memory_manager.add_memory(history)
@@ -536,9 +541,9 @@ class CognitiveLoopV2:
         if "arithmetic" in task_type.lower() or "math" in task.lower():
             # Use arithmetic signature
             thinking_request = {
-                "type": "thinking_request",
                 "signature": {
                     "task": "Solve this arithmetic problem step by step",
+                    "description": "Perform mathematical calculations with clear steps",
                     "inputs": {
                         "problem": "The math problem to solve",
                         "context": "Any context"
@@ -552,14 +557,16 @@ class CognitiveLoopV2:
                 "input_values": {
                     "problem": task,
                     "context": f"User requested this calculation. Memory context:\n{memory_context[:500]}"
-                }
+                },
+                "request_id": f"arithmetic_{int(time.time()*1000)}",
+                "timestamp": datetime.now().isoformat()
             }
         else:
             # Use question signature for general tasks
             thinking_request = {
-                "type": "thinking_request",
                 "signature": {
                     "task": "Answer this question based on available knowledge",
+                    "description": "Use available context and knowledge to provide a thoughtful answer",
                     "inputs": {
                         "question": "The question to answer",
                         "context": "Context about the question",
@@ -575,7 +582,9 @@ class CognitiveLoopV2:
                     "question": task,
                     "context": f"Task type: {task_type}, Approach: {decision.get('approach', 'thinking')}",
                     "relevant_knowledge": memory_context
-                }
+                },
+                "request_id": f"question_{int(time.time()*1000)}",
+                "timestamp": datetime.now().isoformat()
             }
         
         # Log what we're doing
@@ -652,7 +661,7 @@ class CognitiveLoopV2:
         msg_file.write_text(json.dumps(response_msg, indent=2))
         
         # Log response details
-        logger.info(f"Sent response to {response_msg['to']}: {response[:100]}{'...' if len(response) > 100 else ''}")
+        logger.info(f"Sent response to {response_msg['to']}: {response}")
     
     async def maintain(self):
         """Perform maintenance tasks when idle."""
