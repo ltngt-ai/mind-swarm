@@ -243,11 +243,24 @@ class SubspaceManager:
         Returns:
             Configured sandbox instance
         """
-        if name in self.sandboxes:
-            return self.sandboxes[name]
+        # Check if agent already exists (on disk or in memory)
+        agent_exists = name in self.sandboxes or (self.agents_dir / name).exists()
         
-        sandbox = BubblewrapSandbox(name, self.root_path)
-        self.sandboxes[name] = sandbox
+        if name in self.sandboxes:
+            # Agent already in memory
+            sandbox = self.sandboxes[name]
+        else:
+            # Create new sandbox instance
+            sandbox = BubblewrapSandbox(name, self.root_path)
+            self.sandboxes[name] = sandbox
+        
+        # For existing agents, update their base_code
+        if agent_exists:
+            base_code = sandbox.agent_home / "base_code"
+            if base_code.exists():
+                logger.info(f"Updating base_code for existing agent {name}")
+                self._copy_agent_base_code(base_code)
+            return sandbox
         
         # Initialize agent directories
         inbox = sandbox.agent_home / "inbox"
@@ -286,12 +299,23 @@ class SubspaceManager:
         template_dir = self.runtime_dir / "base_code_template"
         
         if template_dir.exists():
-            # Copy from template
+            # Copy entire directory structure from template
             import shutil
+            
+            # First copy all .py files in the root
             for py_file in template_dir.glob("*.py"):
                 dst_file = base_code_dir / py_file.name
                 shutil.copy2(py_file, dst_file)
                 logger.debug(f"Copied {py_file.name} to agent base_code")
+            
+            # Then copy all subdirectories
+            for subdir in template_dir.iterdir():
+                if subdir.is_dir() and not subdir.name.startswith('.'):
+                    dst_subdir = base_code_dir / subdir.name
+                    if dst_subdir.exists():
+                        shutil.rmtree(dst_subdir)
+                    shutil.copytree(subdir, dst_subdir)
+                    logger.debug(f"Copied directory {subdir.name} to agent base_code")
         else:
             # Fallback: copy directly from source
             src_dir = Path(__file__).parent.parent / "agent_sandbox"

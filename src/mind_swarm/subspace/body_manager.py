@@ -172,7 +172,7 @@ class BodyManager:
                         
                         elif content.strip() == body_file.help_text.strip():
                             # Agent has reset the file, we can process again
-                            logger.info(f"MONITOR: Agent {self.name} reset brain file, enabling processing")
+                            logger.debug(f"MONITOR: Agent {self.name} reset brain file, enabling processing")
                             processing[name] = False
                 
                 # Adaptive delay - longer when nothing is happening

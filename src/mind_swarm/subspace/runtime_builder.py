@@ -32,25 +32,23 @@ class AgentRuntimeBuilder:
         logger.info("Agent runtime environment prepared")
     
     def _prepare_agent_base_code(self):
-        """Prepare the base code directory that will be copied to each agent's home."""
-        # Source is our agent_sandbox directory
-        src_dir = Path(__file__).parent.parent / "agent_sandbox"
+        """Verify the base code template exists in runtime.
         
-        if not src_dir.exists():
-            logger.error(f"Agent sandbox directory not found: {src_dir}")
+        The base_code_template is maintained manually in the runtime directory
+        to ensure complete separation from the server code.
+        """
+        base_code_template = self.runtime_dir.parent / "base_code_template"
+        
+        if not base_code_template.exists():
+            logger.error(f"Base code template not found at: {base_code_template}")
+            logger.error("Please ensure runtime/base_code_template exists with agent code")
             return
         
-        # Create a template base_code directory in runtime
-        base_code_template = self.runtime_dir.parent / "base_code_template"
-        base_code_template.mkdir(parents=True, exist_ok=True)
+        # Just verify it has content
+        py_files = list(base_code_template.glob("*.py"))
+        subdirs = [d for d in base_code_template.iterdir() if d.is_dir() and not d.name.startswith('.')]
         
-        # Copy all Python files from agent_sandbox
-        for py_file in src_dir.glob("*.py"):
-            dst_file = base_code_template / py_file.name
-            shutil.copy2(py_file, dst_file)
-            logger.debug(f"Copied {py_file.name} to base_code template")
-        
-        logger.info(f"Prepared base_code template with {len(list(base_code_template.glob('*.py')))} files")
+        logger.info(f"Base code template found with {len(py_files)} files and {len(subdirs)} subdirectories")
     
     def _copy_minimal_dependencies(self):
         """Copy only the minimal dependencies agents need."""
