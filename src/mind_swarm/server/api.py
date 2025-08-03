@@ -127,13 +127,14 @@ class MindSwarmServer:
         @self.app.on_event("shutdown")
         async def shutdown():
             """Clean shutdown."""
-            logger.info("Shutting down Mind-Swarm server")
-            if self.coordinator:
-                await self.coordinator.stop()
-            
-            # Close all websocket connections
+            logger.info("FastAPI shutdown event triggered")
+            # The actual shutdown is handled by the daemon's shutdown method
+            # We just need to close websocket connections here
             for client in self.clients:
-                await client.close()
+                try:
+                    await client.close()
+                except:
+                    pass
         
         @self.app.get("/")
         async def root():
@@ -397,15 +398,19 @@ class MindSwarmServer:
         """Shutdown the server and coordinator gracefully."""
         logger.info("Shutting down Mind-Swarm server")
         if self.coordinator:
+            logger.info("Stopping coordinator...")
             await self.coordinator.stop()
+            logger.info("Coordinator stopped")
         
         # Close all websocket connections
+        logger.info(f"Closing {len(self.clients)} websocket connections...")
         for client in self.clients:
             try:
                 await client.close()
             except:
                 pass
         self.clients.clear()
+        logger.info("Server shutdown method complete")
     
     async def run(self):
         """Run the server."""

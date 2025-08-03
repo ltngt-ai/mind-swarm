@@ -10,7 +10,7 @@ import aiofiles.os
 
 from mind_swarm.subspace.agent_spawner import AgentSpawner
 from mind_swarm.subspace.sandbox import SubspaceManager
-from mind_swarm.subspace.agent_state import AgentStateManager, AgentLifecycle
+from mind_swarm.subspace.agent_state import AgentStateManager
 from mind_swarm.subspace.body_manager import BodySystemManager
 from mind_swarm.subspace.body_monitor import create_body_monitor
 from mind_swarm.subspace.brain_handler_dynamic import DynamicBrainHandler
@@ -172,6 +172,7 @@ class SubspaceCoordinator:
         self.agent_registry = AgentRegistry(self.subspace.root_path)
         
         self._running = False
+        self._frozen = False  # When True, brain handlers stop responding
         self._router_task: Optional[asyncio.Task] = None
         
         # AI services and brain handlers for agents (loaded on demand)
@@ -191,34 +192,40 @@ class SubspaceCoordinator:
         # Start message routing
         self._router_task = asyncio.create_task(self._message_routing_loop())
         
-        # Restore sleeping agents in background to not block
-        asyncio.create_task(self._restore_sleeping_agents_background())
+        # Start all agents that have directories
+        asyncio.create_task(self._start_all_agents())
         
         logger.info("Subspace coordinator started")
     
     async def stop(self):
         """Stop the subspace coordinator."""
+        logger.info("Coordinator stop() called")
         self._running = False
         
         # Prepare agents for shutdown
         await self._prepare_agents_for_shutdown()
         
         # Stop routing
+        logger.info("Stopping message router...")
         if self._router_task and not self._router_task.done():
             self._router_task.cancel()
             try:
                 await self._router_task
             except asyncio.CancelledError:
                 pass
+        logger.info("Message router stopped")
         
         # Shutdown body system
+        logger.info("Shutting down body system...")
         await self.body_system.shutdown()
+        logger.info("Body system shut down")
         
         # Shutdown all agents gracefully
+        logger.info("Shutting down agent spawner...")
         await self.spawner.shutdown_all()
+        logger.info("Agent spawner shut down")
         
-        # Mark all agents as sleeping
-        await self.state_manager.mark_all_sleeping()
+        logger.info("Coordinator stop() complete")
         
         logger.info("Subspace coordinator stopped")
     
@@ -289,9 +296,9 @@ class SubspaceCoordinator:
             metadata={"config": agent_config}
         )
         
-        # Update lifecycle
-        await self.state_manager.update_lifecycle(state.name, AgentLifecycle.ACTIVE)
+        # Update activation count
         await self.state_manager.increment_activation(state.name)
+        await self.state_manager.update_last_active(state.name)
         
         # Start the agent process
         await self.spawner.start_agent(
@@ -327,11 +334,11 @@ class SubspaceCoordinator:
             uptime = agent_states[name].get("uptime", 0)
             await self.state_manager.update_uptime(name, uptime)
         
-        # Mark as hibernating (terminated agents can be restored later)
-        await self.state_manager.update_lifecycle(name, AgentLifecycle.HIBERNATING)
+        # Remove from agent registry - they're gone :(
+        self.agent_registry.unregister_agent(name)
         
-        # Update agent registry
-        self.agent_registry.update_agent_status(name, "hibernating")
+        # Delete agent state - this is final, agents don't come back from death
+        await self.state_manager.delete_agent(name)
         
         # Stop body file monitoring
         await self.body_system.stop_agent_monitoring(name)
@@ -435,7 +442,7 @@ class SubspaceCoordinator:
             agent_info = {
                 "name": state.name,
                 "agent_number": self.state_manager.name_generator.get_agent_number(state.name),
-                "lifecycle": state.lifecycle.value,
+                "status": "running",  # If we found the state, agent exists
                 "created_at": state.created_at,
                 "last_active": state.last_active,
                 "total_uptime": state.total_uptime,
@@ -448,84 +455,85 @@ class SubspaceCoordinator:
         
         return all_agents
     
-    async def _restore_sleeping_agents_background(self):
-        """Background task to restore sleeping agents without blocking."""
+    async def _start_all_agents(self):
+        """Start all agents that have directories in the subspace."""
+        logger.info("Starting all agents with directories...")
+        
         try:
-            await self._restore_sleeping_agents()
+            # List all directories in agents/
+            agents_dir = self.subspace.agents_dir
+            if not agents_dir.exists():
+                logger.info("No agents directory found")
+                return
+            
+            agent_dirs = [d for d in agents_dir.iterdir() if d.is_dir()]
+            
+            if not agent_dirs:
+                logger.info("No agent directories found")
+                return
+            
+            logger.info(f"Found {len(agent_dirs)} agent directories to start")
+            
+            for agent_dir in agent_dirs:
+                agent_name = agent_dir.name
+                try:
+                    logger.info(f"Starting agent {agent_name}")
+                    
+                    # Load config if exists
+                    config = {}
+                    config_file = agent_dir / "config.json"
+                    if config_file.exists():
+                        config = json.loads(config_file.read_text())
+                    
+                    # Determine agent type from config or registry
+                    agent_type = config.get("type", "general")
+                    
+                    # Register agent if not already registered
+                    if not self.agent_registry.get_agent(agent_name):
+                        agent_type_enum = AgentType.IO_GATEWAY if agent_type == "io_gateway" else AgentType.GENERAL
+                        self.agent_registry.register_agent(agent_name, agent_type_enum)
+                    
+                    # Start the agent process
+                    await self.spawner.start_agent(
+                        name=agent_name,
+                        config=config
+                    )
+                    
+                    # Create body files for the agent
+                    body_manager = await self.body_system.create_agent_body(agent_name, agent_dir)
+                    
+                    # Start monitoring body files
+                    await self.body_system.start_agent_monitoring(agent_name, self._handle_ai_request)
+                    
+                    # Start I/O monitoring if it's an I/O agent
+                    if agent_type == "io_gateway":
+                        await self._start_io_body_monitoring(agent_name)
+                    
+                    logger.info(f"Agent {agent_name} started successfully")
+                    
+                except Exception as e:
+                    logger.error(f"Failed to start agent {agent_name}: {e}")
+                    # Continue with other agents
+        
         except Exception as e:
-            logger.error(f"Failed to restore sleeping agents: {e}")
+            logger.error(f"Error starting agents: {e}")
     
-    async def _restore_sleeping_agents(self):
-        """Restore agents that were sleeping when server stopped."""
-        logger.info("Checking for sleeping agents to restore...")
-        
-        all_states = await self.state_manager.list_agents()
-        sleeping_agents = [
-            state for state in all_states
-            if state.lifecycle == AgentLifecycle.SLEEPING
-        ]
-        
-        if not sleeping_agents:
-            logger.info("No sleeping agents to restore")
-            return
-        
-        logger.info(f"Found {len(sleeping_agents)} sleeping agents to restore")
-        
-        for state in sleeping_agents:
-            try:
-                logger.info(f"Restoring agent {state.name}")
-                
-                # Update lifecycle to active
-                await self.state_manager.update_lifecycle(state.name, AgentLifecycle.ACTIVE)
-                await self.state_manager.increment_activation(state.name)
-                
-                # Start/resume the agent process with its saved config
-                await self.spawner.start_agent(
-                    name=state.name,
-                    config=state.config
-                )
-                
-                # Create body files for the agent
-                agent_home = self.subspace.agents_dir / state.name
-                body_manager = await self.body_system.create_agent_body(state.name, agent_home)
-                
-                # Start monitoring body files
-                await self.body_system.start_agent_monitoring(state.name, self._handle_ai_request)
-                
-                # The agent will restore its own memory from disk
-                logger.info(f"Agent {state.name} restored successfully")
-                
-            except Exception as e:
-                logger.error(f"Failed to restore agent {state.name}: {e}")
-                # Mark as hibernating if restore fails
-                await self.state_manager.update_lifecycle(state.name, AgentLifecycle.HIBERNATING)
     
     async def _prepare_agents_for_shutdown(self):
-        """Prepare all agents for shutdown."""
-        logger.info("Preparing agents for shutdown...")
+        """Freeze the agent world before shutdown."""
+        logger.info("Freezing agent world for shutdown...")
         
-        # Get list of active agents
-        active_agents = await self.state_manager.prepare_shutdown()
+        # Stop message routing - no new messages delivered
+        self._running = False
         
-        if not active_agents:
-            logger.info("No active agents to notify")
-            return
+        # Set flag to make brain handlers stop responding
+        self._frozen = True
         
-        logger.info(f"Notifying {len(active_agents)} agents of shutdown")
+        # Give a moment for current file operations to complete
+        logger.info("Waiting for in-flight operations to complete...")
+        await asyncio.sleep(1)  # Fast operations only
         
-        # Send shutdown message to all active agents
-        shutdown_message = {
-            "type": "SHUTDOWN",
-            "from": "subspace",
-            "reason": "Server shutting down",
-            "timestamp": datetime.now().isoformat()
-        }
-        
-        await self.spawner.broadcast_message(shutdown_message, exclude=[])
-        
-        # Give agents time to save state
-        logger.info("Waiting for agents to save state...")
-        await asyncio.sleep(3)  # Give agents 3 seconds to save state
+        # Agents are now frozen mid-thought, safe to kill processes
     
     async def _message_routing_loop(self):
         """Main loop for routing messages between agents."""
@@ -597,6 +605,15 @@ class SubspaceCoordinator:
         Returns:
             The AI response
         """
+        # If frozen, don't respond - agent will hang waiting
+        if self._frozen:
+            logger.debug(f"Brain request from {name} ignored - world is frozen")
+            # Never return - agent is frozen in time
+            while self._frozen:
+                await asyncio.sleep(1)
+            # If we somehow unfreeze, still don't process this request
+            return ""
+        
         logger.info(f"Processing thought for {name}: {prompt[:200]}...")
         
         try:

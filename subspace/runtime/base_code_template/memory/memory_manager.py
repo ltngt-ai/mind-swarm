@@ -210,6 +210,14 @@ class WorkingMemoryManager:
                 "path": memory.path,
                 "description": memory.description
             })
+        elif hasattr(memory, 'cycle_state'):  # CycleStateMemoryBlock
+            fields.update({
+                "cycle_state": memory.cycle_state,
+                "cycle_count": memory.cycle_count,
+                "current_observation": memory.current_observation,
+                "current_orientation": memory.current_orientation,
+                "current_actions": memory.current_actions
+            })
         # Add other types as needed
         
         return fields

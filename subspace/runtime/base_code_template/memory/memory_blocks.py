@@ -29,6 +29,7 @@ class MemoryType(Enum):
     HISTORY = "history"
     CONTEXT = "context"
     OBSERVATION = "observation"
+    CYCLE_STATE = "cycle_state"
 
 
 class MemoryBlock:
@@ -292,3 +293,30 @@ class ROMMemoryBlock(MemoryBlock):
         )
         self.type = MemoryType.ROM
         self.id = self.rom_id
+
+
+@dataclass
+class CycleStateMemoryBlock(MemoryBlock):
+    """Stores the current state of the cognitive cycle for resumable execution."""
+    cycle_state: str  # Current state: perceive, observe, orient, decide, act
+    cycle_count: int
+    current_observation: Optional[Dict[str, Any]] = None
+    current_orientation: Optional[Dict[str, Any]] = None
+    current_actions: Optional[List[Dict[str, Any]]] = None
+    confidence: float = 1.0
+    priority: Priority = Priority.CRITICAL  # Must always be preserved
+    timestamp: Optional[datetime] = None
+    expiry: Optional[datetime] = None
+    metadata: Optional[Dict[str, Any]] = None
+    
+    def __post_init__(self):
+        """Initialize base class and set type."""
+        super().__init__(
+            confidence=self.confidence,
+            priority=self.priority,
+            timestamp=self.timestamp,
+            expiry=self.expiry,
+            metadata=self.metadata
+        )
+        self.type = MemoryType.CYCLE_STATE
+        self.id = "cycle_state"  # Singleton - only one cycle state at a time

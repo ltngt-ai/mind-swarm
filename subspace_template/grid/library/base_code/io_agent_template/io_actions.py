@@ -62,14 +62,15 @@ class MakeNetworkRequestAction(Action):
             memory_manager = context.get("memory_manager")
             if memory_manager:
                 task_memory = TaskMemoryBlock(
-                    task_type="network_request",
+                    task_id=request_id,
                     description=f"Fetching {url}",
                     status="pending",
                     priority=Priority.HIGH,
                     metadata={
                         "request_id": request_id,
                         "url": url,
-                        "method": method
+                        "method": method,
+                        "task_type": "network_request"
                     }
                 )
                 memory_manager.add_memory(task_memory)

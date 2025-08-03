@@ -43,6 +43,7 @@ class AgentMind:
         
         # State
         self.running = False
+        self.stop_requested = False
         self.start_time = datetime.now()
         self.state = "INITIALIZING"
         
@@ -50,6 +51,11 @@ class AgentMind:
         logger.info(f"Agent mind initializing: {self.name}")
         for line in self.boot_rom.get_boot_sequence():
             logger.info(f"  {line}")
+    
+    def request_stop(self):
+        """Request a graceful stop after the current cycle."""
+        self.stop_requested = True
+        logger.info("Stop requested - will exit after current cycle completes")
     
     def _load_config(self) -> dict:
         """Load agent configuration from file."""
@@ -82,14 +88,14 @@ class AgentMind:
             # Main cognitive loop
             idle_cycles = 0
             
-            while self.running:
+            while self.running and not self.stop_requested:
                 # Run one cognitive cycle
                 was_active = await self.cognitive_loop.run_cycle()
                 
-                # Check if shutdown was requested
-                if hasattr(self.cognitive_loop, 'shutdown_requested') and self.cognitive_loop.shutdown_requested:
-                    logger.info(f"Agent {self.name} shutting down as requested")
-                    self.running = False
+                # Check if stop was requested
+                if self.stop_requested:
+                    logger.info("Graceful stop requested, saving state and exiting...")
+                    await self.cognitive_loop.save_memory()
                     break
                 
                 if was_active:

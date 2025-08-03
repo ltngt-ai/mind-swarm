@@ -6,17 +6,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 from dataclasses import dataclass, asdict
-from enum import Enum
-
 from mind_swarm.utils.logging import logger
-
-
-class AgentLifecycle(Enum):
-    """Agent lifecycle states."""
-    NASCENT = "nascent"       # Just created, never run
-    ACTIVE = "active"         # Currently running
-    SLEEPING = "sleeping"     # Process stopped, state saved
-    HIBERNATING = "hibernating"  # Long-term storage
 
 
 @dataclass
@@ -25,7 +15,6 @@ class AgentState:
     name: str  # Primary identifier
     created_at: str
     last_active: str
-    lifecycle: AgentLifecycle
     memory_snapshot: Dict[str, Any]
     config: Dict[str, Any]
     total_uptime: float = 0.0
@@ -33,14 +22,13 @@ class AgentState:
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
-        data = asdict(self)
-        data['lifecycle'] = self.lifecycle.value
-        return data
+        return asdict(self)
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'AgentState':
         """Create from dictionary."""
-        data['lifecycle'] = AgentLifecycle(data['lifecycle'])
+        # Remove lifecycle if present (for backward compatibility)
+        data.pop('lifecycle', None)
         return cls(**data)
 
 
@@ -180,7 +168,6 @@ class AgentStateManager:
             name=name,
             created_at=datetime.now().isoformat(),
             last_active=datetime.now().isoformat(),
-            lifecycle=AgentLifecycle.NASCENT,
             memory_snapshot={},
             config=config or {},
             total_uptime=0.0,
@@ -207,11 +194,10 @@ class AgentStateManager:
         await self.load_states()  # Ensure states are loaded
         return list(self.states.values())
     
-    async def update_lifecycle(self, name: str, lifecycle: AgentLifecycle):
-        """Update agent lifecycle state."""
+    async def update_last_active(self, name: str):
+        """Update agent's last active timestamp."""
         await self.load_states()  # Ensure states are loaded
         if name in self.states:
-            self.states[name].lifecycle = lifecycle
             self.states[name].last_active = datetime.now().isoformat()
             await self._save_state(self.states[name])
     
@@ -243,19 +229,14 @@ class AgentStateManager:
         async with aiofiles.open(state_file, 'w') as f:
             await f.write(json.dumps(state.to_dict(), indent=2))
     
-    async def prepare_shutdown(self) -> List[str]:
-        """Prepare for shutdown, return list of active agents to notify."""
+    async def delete_agent(self, name: str):
+        """Delete an agent's state (agent has been terminated)."""
         await self.load_states()  # Ensure states are loaded
-        active_agents = []
-        for name, state in self.states.items():
-            if state.lifecycle == AgentLifecycle.ACTIVE:
-                active_agents.append(name)
-        return active_agents
-    
-    async def mark_all_sleeping(self):
-        """Mark all active agents as sleeping (for shutdown)."""
-        await self.load_states()  # Ensure states are loaded
-        for name, state in self.states.items():
-            if state.lifecycle == AgentLifecycle.ACTIVE:
-                state.lifecycle = AgentLifecycle.SLEEPING
-                await self._save_state(state)
+        if name in self.states:
+            # Remove from memory
+            del self.states[name]
+            # Remove from disk
+            state_file = self.state_dir / f"{name}.json"
+            if state_file.exists():
+                state_file.unlink()
+            logger.info(f"Deleted agent state for {name}")

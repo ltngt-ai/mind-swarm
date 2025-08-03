@@ -39,32 +39,67 @@ class AgentProcess:
         
         logger.debug(f"Sent message {msg_id} to agent {self.name}")
     
-    async def terminate(self, timeout: float = 30.0):
-        """Gracefully terminate the agent."""
-        # Send shutdown message
-        await self.send_message({
-            "type": "SHUTDOWN",
-            "from": "subspace",
-            "reason": "Termination requested"
-        })
+    async def terminate(self, timeout: float = 1.0):
+        """Terminate the agent process."""
+        # Just kill the process - agents don't know about shutdown
+        logger.info(f"AgentProcess.terminate() called for {self.name}")
         
-        # Wait for graceful shutdown
+        if self.process.returncode is not None:
+            logger.info(f"Agent {self.name} already terminated (returncode={self.process.returncode})")
+            return
+            
+        logger.info(f"Requesting agent {self.name} to stop (PID: {self.process.pid})")
+        self.process.terminate()
+        
+        # Give it a moment to stop
         try:
+            logger.info(f"Waiting up to {timeout}s for agent {self.name} to stop...")
             await asyncio.wait_for(self.process.wait(), timeout=timeout)
-            logger.info(f"Agent {self.name} terminated gracefully")
+            logger.info(f"Agent {self.name} stopped gracefully")
         except asyncio.TimeoutError:
-            logger.warning(f"Agent {self.name} didn't shutdown gracefully, forcing...")
-            self.process.terminate()
-            await self.process.wait()
+            # Force stop if needed
+            logger.warning(f"Agent {self.name} not responding after {timeout}s, forcing stop...")
+            
+            # Try to kill the entire process group
+            import os
+            import signal
+            try:
+                # Get the process group id (should be same as pid due to start_new_session)
+                pgid = os.getpgid(self.process.pid)
+                logger.info(f"Force stopping process group {pgid} for agent {self.name}")
+                os.killpg(pgid, signal.SIGKILL)
+            except ProcessLookupError:
+                logger.info(f"Agent {self.name} already stopped")
+            except Exception as e:
+                logger.error(f"Error killing process group: {e}")
+                # Fall back to regular kill
+                self.process.kill()
+            
+            try:
+                await asyncio.wait_for(self.process.wait(), timeout=2.0)
+                logger.info(f"Agent {self.name} stopped (forced)")
+            except asyncio.TimeoutError:
+                logger.error(f"Failed to stop agent {self.name} - process may be unresponsive")
+        
+        # Close stdout/stderr to unblock any readers
+        if self.process.stdout:
+            try:
+                self.process.stdout.close()
+            except:
+                pass
+        if self.process.stderr:
+            try:
+                self.process.stderr.close()
+            except:
+                pass
         
         # Cancel log tasks
+        logger.info(f"Cancelling {len(self.log_tasks)} log tasks for {self.name}")
         for task in self.log_tasks:
             if not task.done():
                 task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
+                # Don't wait for the tasks - they might be blocked on readline
+        logger.info(f"AgentProcess.terminate() complete for {self.name}")
 
 
 class AgentProcessManager:
@@ -129,11 +164,12 @@ class AgentProcessManager:
         # Use sandbox to run the agent
         bwrap_cmd = sandbox._build_bwrap_cmd(cmd, env)
         
-        # Start the process
+        # Start the process with a new process group
         process = await asyncio.create_subprocess_exec(
             *bwrap_cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            start_new_session=True  # This creates a new process group
         )
         
         # Track the agent
@@ -150,18 +186,37 @@ class AgentProcessManager:
         logger.info(f"Agent {name} process started with PID {process.pid}")
         return name
     
-    async def terminate_agent(self, name: str, timeout: float = 30.0):
+    async def terminate_agent(self, name: str, timeout: float = 5.0):
         """Terminate an agent process."""
+        logger.info(f"terminate_agent called for {name} with timeout={timeout}")
+        
         if name not in self.agents:
             logger.warning(f"Agent {name} not found")
             return
         
+        logger.info(f"Terminating agent {name}")
         agent = self.agents[name]
-        await agent.terminate(timeout)
+        
+        logger.info(f"Calling agent.terminate() for {name}")
+        try:
+            await agent.terminate(timeout)
+            logger.info(f"agent.terminate() completed for {name}")
+        except Exception as e:
+            logger.error(f"Error terminating agent {name}: {e}", exc_info=True)
         
         # Clean up
-        del self.agents[name]
-        self.subspace.remove_sandbox(name)
+        logger.info(f"Removing {name} from agents dict")
+        if name in self.agents:  # Double check in case monitor removed it
+            del self.agents[name]
+        
+        logger.info(f"Removing sandbox for {name}")
+        try:
+            self.subspace.remove_sandbox(name)
+            logger.info(f"Sandbox removed for {name}")
+        except Exception as e:
+            logger.error(f"Error removing sandbox for {name}: {e}")
+        
+        logger.info(f"terminate_agent completed for {name}")
     
     async def send_message_to_agent(self, name: str, message: Dict[str, Any]):
         """Send a message to a specific agent."""
@@ -218,7 +273,7 @@ class AgentProcessManager:
                 dead_agents = []
                 for name, agent in self.agents.items():
                     if not await agent.is_alive():
-                        logger.warning(f"Agent {name} died (exit code: {agent.process.returncode})")
+                        logger.warning(f"Agent {name} stopped unexpectedly (exit code: {agent.process.returncode})")
                         
                         # Try to get stderr output
                         if agent.process.stderr:
@@ -242,9 +297,19 @@ class AgentProcessManager:
                 logger.error(f"Error in agent monitor: {e}")
                 await asyncio.sleep(5)
     
-    async def shutdown_all(self, timeout: float = 60.0):
+    async def shutdown_all(self, timeout: float = 5.0):
         """Shutdown all agents gracefully."""
         logger.info("Shutting down all agents...")
+        
+        # Cancel monitor task first to prevent interference
+        if self._monitor_task and not self._monitor_task.done():
+            logger.info("Cancelling agent monitor task...")
+            self._monitor_task.cancel()
+            try:
+                await self._monitor_task
+            except asyncio.CancelledError:
+                pass
+            logger.info("Agent monitor task cancelled")
         
         # Send shutdown to all agents
         shutdown_tasks = []
@@ -253,11 +318,11 @@ class AgentProcessManager:
         
         # Wait for all to complete
         if shutdown_tasks:
-            await asyncio.gather(*shutdown_tasks, return_exceptions=True)
-        
-        # Cancel monitor task
-        if self._monitor_task and not self._monitor_task.done():
-            self._monitor_task.cancel()
+            logger.info(f"Waiting for {len(shutdown_tasks)} agents to terminate...")
+            results = await asyncio.gather(*shutdown_tasks, return_exceptions=True)
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    logger.error(f"Error terminating agent: {result}")
         
         logger.info("All agents shut down")
     
@@ -295,9 +360,17 @@ class AgentProcessManager:
             current_log_file = log_file
             
             while True:
-                line = await stream.readline()
-                if not line:
-                    break
+                try:
+                    # Add timeout to prevent blocking forever
+                    line = await asyncio.wait_for(stream.readline(), timeout=1.0)
+                    if not line:
+                        break
+                except asyncio.TimeoutError:
+                    # Check if process is still alive
+                    if name not in self.agents:
+                        logger.debug(f"Agent {name} no longer exists, stopping log reader")
+                        break
+                    continue
                 
                 # Check if we need to rotate the log
                 if self.log_rotator.should_rotate(name):

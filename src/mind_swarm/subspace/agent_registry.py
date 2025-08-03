@@ -51,16 +51,16 @@ class AgentRegistry:
             subspace_root: Root path of the subspace
         """
         self.subspace_root = subspace_root
-        self.directory_path = subspace_root / "shared" / "directory"
-        self.directory_file = self.directory_path / "agents.json"
+        self.plaza_dir = subspace_root / "grid" / "plaza"
+        self.directory_file = self.plaza_dir / "agent_directory.json"
         
         # In-memory cache
         self._agents: Dict[str, AgentInfo] = {}
         self._io_agents: List[str] = []
         self._general_agents: List[str] = []
         
-        # Ensure directory exists
-        self.directory_path.mkdir(parents=True, exist_ok=True)
+        # Ensure plaza exists
+        self.plaza_dir.mkdir(parents=True, exist_ok=True)
         
         # Load existing registry
         self._load_registry()
@@ -72,55 +72,66 @@ class AgentRegistry:
                 with open(self.directory_file, 'r') as f:
                     data = json.load(f)
                 
-                # Load I/O agents
-                for agent_data in data.get("io_agents", []):
+                # Load all agents from flat list
+                for agent_data in data.get("agents", []):
+                    # Determine agent type from string
+                    type_str = agent_data.get("type", "general")
+                    agent_type = AgentType.IO_GATEWAY if type_str == "io_gateway" else AgentType.GENERAL
+                    
                     agent = AgentInfo(
                         name=agent_data["name"],
-                        agent_type=AgentType.IO_GATEWAY,
+                        agent_type=agent_type,
                         status=agent_data.get("status", "active"),
                         capabilities=agent_data.get("capabilities", []),
                         metadata=agent_data.get("metadata", {})
                     )
+                    
+                    # Set registered_at if available
+                    if "registered_at" in agent_data:
+                        agent.registered_at = agent_data["registered_at"]
+                    
                     self._agents[agent.name] = agent
-                    self._io_agents.append(agent.name)
+                    
+                    # Add to type-specific lists
+                    if agent_type == AgentType.IO_GATEWAY:
+                        self._io_agents.append(agent.name)
+                    else:
+                        self._general_agents.append(agent.name)
                 
-                # Load general agents
-                for agent_data in data.get("general_agents", []):
-                    agent = AgentInfo(
-                        name=agent_data["name"],
-                        agent_type=AgentType.GENERAL,
-                        status=agent_data.get("status", "active"),
-                        metadata=agent_data.get("metadata", {})
-                    )
-                    self._agents[agent.name] = agent
-                    self._general_agents.append(agent.name)
-                
-                logger.info(f"Loaded {len(self._agents)} agents from registry")
+                logger.info(f"Loaded {len(self._agents)} agents from plaza registry")
             except Exception as e:
                 logger.error(f"Failed to load agent registry: {e}")
                 self._save_registry()  # Create empty registry
     
     def _save_registry(self):
         """Save agent registry to disk."""
+        # Collect all agents
+        all_agents = []
+        for name, agent in self._agents.items():
+            all_agents.append(agent.to_dict())
+        
+        # Calculate stats
+        stats = {
+            "total_agents": len(self._agents),
+            "active_agents": len([a for a in self._agents.values() if a.status == "active"]),
+            "by_type": {}
+        }
+        
+        # Count by type
+        for agent in self._agents.values():
+            type_name = agent.agent_type.value
+            stats["by_type"][type_name] = stats["by_type"].get(type_name, 0) + 1
+        
         data = {
-            "io_agents": [
-                self._agents[name].to_dict() 
-                for name in self._io_agents 
-                if name in self._agents
-            ],
-            "general_agents": [
-                self._agents[name].to_dict()
-                for name in self._general_agents
-                if name in self._agents
-            ],
-            "users": [],  # Placeholder for future user directory
-            "updated_at": datetime.now().isoformat()
+            "last_updated": datetime.now().isoformat(),
+            "agents": all_agents,
+            "stats": stats
         }
         
         try:
             with open(self.directory_file, 'w') as f:
                 json.dump(data, f, indent=2)
-            logger.debug("Agent registry saved")
+            logger.debug("Agent registry saved to plaza")
         except Exception as e:
             logger.error(f"Failed to save agent registry: {e}")
     

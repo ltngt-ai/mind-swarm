@@ -485,8 +485,8 @@ def server(
             os.kill(pid, signal.SIGTERM)
             console.print(f"[green]Sent shutdown signal to server (PID: {pid})[/green]")
             
-            # Wait for shutdown (up to 30 seconds)
-            for i in range(60):
+            # Wait for shutdown (up to 60 seconds)
+            for i in range(120):
                 time.sleep(0.5)
                 try:
                     os.kill(pid, 0)
@@ -497,7 +497,7 @@ def server(
                     console.print("[green]Server stopped gracefully[/green]")
                     return
             
-            console.print("[red]Server still running after 30s, sending SIGKILL[/red]")
+            console.print("[red]Server still running after 60s, sending SIGKILL[/red]")
             os.kill(pid, signal.SIGKILL)
             
         except (ValueError, ProcessLookupError):

@@ -22,11 +22,15 @@ class ServerDaemon:
     def __init__(self, host: str = "127.0.0.1", port: int = 8888):
         self.server = MindSwarmServer(host, port)
         self._shutdown_event = asyncio.Event()
+        self._shutting_down = False
         
     def handle_signal(self):
         """Handle shutdown signals."""
-        logger.info("Received shutdown signal")
-        self._shutdown_event.set()
+        if not self._shutting_down:
+            logger.info("Received shutdown signal")
+            self._shutdown_event.set()
+        else:
+            logger.debug("Ignoring duplicate shutdown signal")
     
     async def run(self):
         """Run the server daemon."""
@@ -46,7 +50,18 @@ class ServerDaemon:
             # Wait for shutdown signal
             await self._shutdown_event.wait()
             
+            # Mark that we're shutting down to prevent duplicate handling
+            self._shutting_down = True
+            
             logger.info("Shutdown signal received, stopping server gracefully...")
+            
+            # Remove signal handlers immediately to prevent re-entry
+            loop = asyncio.get_event_loop()
+            for sig in (signal.SIGTERM, signal.SIGINT):
+                try:
+                    loop.remove_signal_handler(sig)
+                except Exception:
+                    pass
             
             # Call the server's shutdown method to properly close everything
             try:
@@ -55,17 +70,22 @@ class ServerDaemon:
             except Exception as e:
                 logger.error(f"Error during server shutdown: {e}")
             
-            # Stop the uvicorn server if it has one
-            if hasattr(self.server, 'server') and hasattr(self.server.server, 'shutdown'):
+            # Stop the uvicorn server properly
+            if hasattr(self.server, 'server') and self.server.server:
                 logger.info("Shutting down uvicorn server...")
-                await self.server.server.shutdown()
+                # Set should_exit to stop the server
+                self.server.server.should_exit = True
+                # Force close all connections
+                self.server.server.force_exit = True
             
             # Cancel the server task
             server_task.cancel()
             try:
                 await asyncio.wait_for(server_task, timeout=2.0)
             except (asyncio.CancelledError, asyncio.TimeoutError):
-                pass
+                logger.info("Server task cancelled/timed out")
+            except Exception as e:
+                logger.error(f"Error cancelling server task: {e}")
                     
         finally:
             # Remove signal handlers
@@ -76,6 +96,11 @@ class ServerDaemon:
             # Clean up PID file
             if pid_file.exists():
                 pid_file.unlink()
+            
+            logger.info("Server daemon exiting")
+            # Force exit to ensure the process terminates
+            import sys
+            sys.exit(0)
 
 
 def main():

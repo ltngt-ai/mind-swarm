@@ -12,17 +12,40 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
+
+class DateTimeEncoder(json.JSONEncoder):
+    """JSON encoder that handles datetime objects."""
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
+
 from .boot_rom import BootROM
 from .memory import (
     WorkingMemoryManager, ContentLoader, ContextBuilder, 
     MemorySelector, Priority, MemoryType,
     FileMemoryBlock, MessageMemoryBlock, TaskMemoryBlock,
-    HistoryMemoryBlock, ObservationMemoryBlock, ROMMemoryBlock
+    HistoryMemoryBlock, ObservationMemoryBlock, ROMMemoryBlock,
+    CycleStateMemoryBlock
 )
 from .perception import EnvironmentScanner
 from .actions import Action, ActionResult, ActionStatus, action_registry
 
 logger = logging.getLogger("agent.cognitive")
+
+# Define KnowledgeMemoryBlock if not available
+try:
+    from .memory import KnowledgeMemoryBlock
+except ImportError:
+    # Fallback definition
+    class KnowledgeMemoryBlock(ROMMemoryBlock):
+        """Knowledge memory block for library knowledge."""
+        def __init__(self, topic: str, location: str, subtopic: str = "",
+                     relevance_score: float = 1.0, **kwargs):
+            super().__init__(location=location, **kwargs)
+            self.topic = topic
+            self.subtopic = subtopic
+            self.relevance_score = relevance_score
 
 
 class CognitiveLoop:
@@ -75,10 +98,167 @@ class CognitiveLoop:
         self.cycle_count = 0
         self.last_activity = datetime.now()
         self.last_full_scan = datetime.now()
-        self.shutdown_requested = False
         
         # Initialize with boot ROM as critical memory
         self._load_boot_rom_memory()
+        
+        # Load or initialize cycle state
+        self._load_or_init_cycle_state()
+    
+    def _load_or_init_cycle_state(self):
+        """Load cycle state from saved memory or initialize new."""
+        memory_snapshot_file = self.memory_dir / "memory_snapshot.json"
+        
+        if memory_snapshot_file.exists():
+            try:
+                # Load existing memory snapshot
+                with open(memory_snapshot_file, 'r') as f:
+                    snapshot = json.load(f)
+                    self._restore_from_snapshot(snapshot)
+                    
+                # Find cycle state in restored memory
+                cycle_state_block = None
+                for memory in self.memory_manager.symbolic_memory:
+                    if isinstance(memory, CycleStateMemoryBlock):
+                        cycle_state_block = memory
+                        break
+                
+                if cycle_state_block:
+                    logger.info(f"Resumed at cycle {cycle_state_block.cycle_count}, state: {cycle_state_block.cycle_state}")
+                else:
+                    # No cycle state found, initialize
+                    self._init_cycle_state()
+            except Exception as e:
+                logger.error(f"Failed to load memory snapshot: {e}")
+                self._init_cycle_state()
+        else:
+            # Initialize new cycle state
+            self._init_cycle_state()
+    
+    def _init_cycle_state(self):
+        """Initialize a new cycle state."""
+        cycle_state = CycleStateMemoryBlock(
+            cycle_state="perceive",
+            cycle_count=0
+        )
+        self.memory_manager.add_memory(cycle_state)
+        logger.info("Initialized new cycle state")
+    
+    
+    def _restore_from_snapshot(self, snapshot: Dict[str, Any]):
+        """Restore memory from a snapshot."""
+        memories = snapshot.get('memories', [])
+        logger.info(f"Restoring from snapshot with {len(memories)} memories")
+        
+        # Restore configuration from snapshot
+        if 'max_tokens' in snapshot:
+            self.memory_manager.max_tokens = snapshot['max_tokens']
+        if 'current_task_id' in snapshot:
+            self.memory_manager.current_task_id = snapshot['current_task_id']
+        if 'active_topics' in snapshot:
+            self.memory_manager.active_topics = set(snapshot['active_topics'])
+        
+        # Reconstruct memory blocks
+        cycle_state_found = False
+        for mem_data in memories:
+            try:
+                memory_type = MemoryType(mem_data['type'])
+                
+                # Reconstruct based on type
+                if memory_type == MemoryType.CYCLE_STATE:
+                    # Special handling for cycle state
+                    memory = CycleStateMemoryBlock(
+                        cycle_state=mem_data['cycle_state'],
+                        cycle_count=mem_data['cycle_count'],
+                        current_observation=mem_data.get('current_observation'),
+                        current_orientation=mem_data.get('current_orientation'),
+                        current_actions=mem_data.get('current_actions'),
+                        confidence=mem_data.get('confidence', 1.0),
+                        priority=Priority[mem_data.get('priority', 'CRITICAL')]
+                    )
+                    cycle_state_found = True
+                    # Update our cycle count
+                    self.cycle_count = memory.cycle_count
+                    
+                elif memory_type == MemoryType.FILE:
+                    memory = FileMemoryBlock(
+                        location=mem_data['location'],
+                        start_line=mem_data.get('start_line'),
+                        end_line=mem_data.get('end_line'),
+                        digest=mem_data.get('digest'),
+                        confidence=mem_data.get('confidence', 1.0),
+                        priority=Priority[mem_data.get('priority', 'MEDIUM')]
+                    )
+                    
+                elif memory_type == MemoryType.MESSAGE:
+                    memory = MessageMemoryBlock(
+                        from_agent=mem_data['from_agent'],
+                        to_agent=mem_data['to_agent'],
+                        subject=mem_data.get('subject', ''),
+                        preview=mem_data.get('preview', ''),
+                        full_path=mem_data['full_path'],
+                        read=mem_data.get('read', False),
+                        confidence=mem_data.get('confidence', 1.0),
+                        priority=Priority[mem_data.get('priority', 'HIGH')]
+                    )
+                    
+                elif memory_type == MemoryType.OBSERVATION:
+                    memory = ObservationMemoryBlock(
+                        observation_type=mem_data['observation_type'],
+                        path=mem_data.get('path', ''),
+                        description=mem_data['description'],
+                        confidence=mem_data.get('confidence', 1.0),
+                        priority=Priority[mem_data.get('priority', 'MEDIUM')]
+                    )
+                    
+                else:
+                    # Skip other types for now
+                    continue
+                
+                # Restore timestamps
+                if 'timestamp' in mem_data:
+                    memory.timestamp = datetime.fromisoformat(mem_data['timestamp'])
+                if 'expiry' in mem_data and mem_data['expiry']:
+                    memory.expiry = datetime.fromisoformat(mem_data['expiry'])
+                
+                # Add to memory manager
+                self.memory_manager.add_memory(memory)
+                
+            except Exception as e:
+                logger.warning(f"Failed to restore memory: {e}")
+                continue
+        
+        # If no cycle state was found, initialize one
+        if not cycle_state_found:
+            logger.info("No cycle state found in snapshot, initializing new one")
+            self._init_cycle_state()
+    
+    def _get_cycle_state_block(self) -> Optional[CycleStateMemoryBlock]:
+        """Get the current cycle state memory block."""
+        for memory in self.memory_manager.symbolic_memory:
+            if isinstance(memory, CycleStateMemoryBlock):
+                return memory
+        return None
+    
+    def _update_cycle_state(self, new_state: str, **kwargs):
+        """Update the cycle state memory block."""
+        # Get the old cycle state
+        old_state = None
+        for memory in self.memory_manager.symbolic_memory:
+            if isinstance(memory, CycleStateMemoryBlock):
+                old_state = memory
+                break
+        
+        # Create new cycle state with updated values
+        cycle_state = CycleStateMemoryBlock(
+            cycle_state=new_state,
+            cycle_count=old_state.cycle_count if old_state else self.cycle_count,
+            current_observation=kwargs.get('current_observation', old_state.current_observation if old_state else None),
+            current_orientation=kwargs.get('current_orientation', old_state.current_orientation if old_state else None),
+            current_actions=kwargs.get('current_actions', old_state.current_actions if old_state else None)
+        )
+        # add_memory will handle removing the old one since they have the same id
+        self.memory_manager.add_memory(cycle_state)
     
     def _load_boot_rom_memory(self):
         """Load boot ROM from library knowledge files."""
@@ -164,48 +344,133 @@ class CognitiveLoop:
     async def run_cycle(self) -> bool:
         """Run one complete cognitive cycle with memory system.
         
+        This is a resumable state machine - each step saves its output
+        to working memory before moving to the next state.
+        
         Returns:
             True if something was processed, False if idle
         """
         self.cycle_count += 1
-        logger.debug(f"Starting cycle {self.cycle_count}")
+        
+        # Get current state from cycle state memory block
+        cycle_state_block = self._get_cycle_state_block()
+        state = cycle_state_block.cycle_state if cycle_state_block else "perceive"
+        logger.debug(f"Resuming cycle {self.cycle_count} at state: {state}")
         
         try:
-            # PERCEIVE - Scan environment and update memories
-            await self.perceive()
-            
-            # OBSERVE - Check for high-priority inputs
-            observation = await self.observe()
-            if not observation:
-                # No urgent tasks, but still do maintenance
-                await self.maintain()
-                return False
-            
-            # ORIENT - Understand the situation with full context
-            orientation = await self.orient(observation)
-            logger.info(f"Oriented: {orientation.get('task_type')} - approach={orientation.get('approach')}")
-            
-            # DECIDE - Choose actions to take
-            actions = await self.decide(orientation)
-            logger.info(f"Decided on {len(actions)} actions: {[a.name for a in actions]}")
-            
-            # ACT - Execute actions in sequence
-            await self.act(observation, orientation, actions)
-            
-            # Check if task is complete (finish action was executed)
-            if any(a.name == 'finish' for a in actions):
-                # Clear any task tracking
-                if 'task_memory_id' in orientation:
-                    task_memory = self.memory_manager.access_memory(orientation['task_memory_id'])
-                    if task_memory and isinstance(task_memory, TaskMemoryBlock):
-                        task_memory.status = "completed"
-                logger.info(f"Task completed for {orientation.get('task_type')} request")
+            # State machine - each state processes and advances to next
+            if state == "perceive":
+                # PERCEIVE - Scan environment and update memories
+                await self.perceive()
+                self._update_cycle_state("observe")
+                await self._save_memory_snapshot()
+                
+            elif state == "observe":
+                # OBSERVE - Check for high-priority inputs
+                observation = await self.observe()
+                if observation:
+                    # Save observation and move to orient
+                    self._update_cycle_state("orient", current_observation=observation)
+                else:
+                    # No observation, do maintenance and restart
+                    await self.maintain()
+                    self._update_cycle_state("perceive")
+                    await self._save_memory_snapshot()
+                    return False
+                await self._save_memory_snapshot()
+                
+            elif state == "orient":
+                # ORIENT - Understand the situation with full context
+                cycle_state_block = self._get_cycle_state_block()
+                observation = cycle_state_block.current_observation if cycle_state_block else None
+                if not observation:
+                    # Lost our observation, restart
+                    self._update_cycle_state("perceive")
+                    await self._save_memory_snapshot()
+                    return True
+                    
+                orientation = await self.orient(observation)
+                logger.info(f"Oriented: {orientation.get('task_type')} - approach={orientation.get('approach')}")
+                
+                # Save orientation and advance
+                self._update_cycle_state("decide", current_orientation=orientation)
+                await self._save_memory_snapshot()
+                
+            elif state == "decide":
+                # DECIDE - Choose actions to take (this is where brain calls happen)
+                cycle_state_block = self._get_cycle_state_block()
+                orientation = cycle_state_block.current_orientation if cycle_state_block else None
+                if not orientation:
+                    # Lost our orientation, restart
+                    self._update_cycle_state("perceive")
+                    await self._save_memory_snapshot()
+                    return True
+                    
+                actions = await self.decide(orientation)
+                logger.info(f"Decided on {len(actions)} actions: {[a.name for a in actions]}")
+                
+                # Save actions as serializable data
+                action_data = [{"name": a.name, "params": a.params} for a in actions]
+                self._update_cycle_state("act", current_actions=action_data)
+                await self._save_memory_snapshot()
+                
+            elif state == "act":
+                # ACT - Execute actions in sequence
+                cycle_state_block = self._get_cycle_state_block()
+                if not cycle_state_block:
+                    # Missing state, restart
+                    self._update_cycle_state("perceive")
+                    await self._save_memory_snapshot()
+                    return True
+                    
+                observation = cycle_state_block.current_observation
+                orientation = cycle_state_block.current_orientation
+                action_data = cycle_state_block.current_actions or []
+                
+                if not all([observation, orientation, action_data]):
+                    # Missing data, restart
+                    self._update_cycle_state("perceive")
+                    await self._save_memory_snapshot()
+                    return True
+                
+                # Recreate action objects from saved data
+                actions = []
+                agent_type = self.agent_type if hasattr(self, 'agent_type') else 'base'
+                for data in action_data:
+                    action = action_registry.create_action(agent_type, data["name"])
+                    if action:
+                        action.with_params(**data.get("params", {}))
+                        actions.append(action)
+                
+                await self.act(observation, orientation, actions)
+                
+                # Check if task is complete (finish action was executed)
+                if any(a.name == 'finish' for a in actions):
+                    # Clear any task tracking
+                    if 'task_memory_id' in orientation:
+                        task_memory = self.memory_manager.access_memory(orientation['task_memory_id'])
+                        if task_memory and isinstance(task_memory, TaskMemoryBlock):
+                            task_memory.status = "completed"
+                    logger.info(f"Task completed for {orientation.get('task_type')} request")
+                
+                # Clear current task data and restart cycle
+                self._update_cycle_state("perceive")
+                await self._save_memory_snapshot()
+                
+            else:
+                # Unknown state, restart
+                logger.warning(f"Unknown cycle state: {state}, restarting")
+                self._update_cycle_state("perceive")
+                await self._save_memory_snapshot()
             
             self.last_activity = datetime.now()
             return True
             
         except Exception as e:
-            logger.error(f"Error in cognitive cycle: {e}", exc_info=True)
+            logger.error(f"Error in cognitive cycle state {state}: {e}", exc_info=True)
+            # On error, try to restart from perceive
+            self._update_cycle_state("perceive")
+            self._save_memory_snapshot()
             return False
     
     async def perceive(self):
@@ -257,38 +522,7 @@ class CognitiveLoop:
                 if msg_path.exists():
                     message = json.loads(msg_path.read_text())
                     
-                    # Check if this is a SHUTDOWN message - handle immediately
-                    if message.get("type") == "SHUTDOWN":
-                        logger.info("Received SHUTDOWN message - processing immediately")
-                        
-                        # Move to processed FIRST to prevent re-reading on next startup
-                        processed_dir = self.inbox_dir / "processed"
-                        processed_dir.mkdir(exist_ok=True)
-                        msg_path.rename(processed_dir / msg_path.name)
-                        
-                        # Mark as processed in memory/scanner
-                        self.memory_manager.mark_message_read(oldest_msg.id)
-                        self.environment_scanner.mark_message_processed(str(msg_path))
-                        
-                        # Move ALL other SHUTDOWN messages to processed as well
-                        for other_msg in self.inbox_dir.glob("*.msg"):
-                            try:
-                                if other_msg != msg_path and other_msg.exists():
-                                    other_data = json.loads(other_msg.read_text())
-                                    if other_data.get("type") == "SHUTDOWN":
-                                        logger.info(f"Moving additional SHUTDOWN message: {other_msg.name}")
-                                        other_msg.rename(processed_dir / other_msg.name)
-                                        self.environment_scanner.mark_message_processed(str(other_msg))
-                            except Exception as e:
-                                logger.error(f"Error processing additional shutdown message {other_msg}: {e}")
-                        
-                        # Set shutdown flag
-                        self.shutdown_requested = True
-                        
-                        # Return None to skip normal processing
-                        return None
-                    
-                    # For non-shutdown messages, process normally
+                    # Process the message
                     # Mark as read in memory
                     self.memory_manager.mark_message_read(oldest_msg.id)
                     
@@ -381,10 +615,7 @@ class CognitiveLoop:
             
             logger.info(f"Oriented: {orientation['task_type']} - {orientation['reasoning']}")
             
-            # Special handling for shutdown
-            if observation.get("type") == "SHUTDOWN":
-                orientation["approach"] = "terminating"
-                orientation["requires_response"] = False
+            # No special message types - agents don't know about infrastructure
             
             # Create task memory if we're going to process it
             if orientation.get("approach") not in ["terminating", "ignoring"]:
@@ -423,8 +654,6 @@ class CognitiveLoop:
             return "answering"
         elif "command" in situation:
             return "executing"
-        elif "shutdown" in situation:
-            return "terminating"
         else:
             return "thinking"
     
@@ -474,10 +703,7 @@ class CognitiveLoop:
         agent_type = self.agent_type if hasattr(self, 'agent_type') else 'base'
         available_actions = action_registry.get_available_actions(agent_type)
         
-        # Special case: handle shutdown immediately
-        if orientation.get('approach') == 'terminating':
-            finish_action = action_registry.create_action(agent_type, 'finish')
-            return [finish_action]
+        # No special cases - agents process all tasks the same way
         
         # Build decision thinking request with parameter details
         action_descriptions = []
@@ -895,18 +1121,30 @@ class CognitiveLoop:
         """Save current memory state to disk."""
         try:
             snapshot = self.memory_manager.create_snapshot()
-            snapshot_file = self.memory_dir / f"snapshot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
             
-            with open(snapshot_file, 'w') as f:
-                json.dump(snapshot, f, indent=2)
+            # Save to fixed filename for resume (atomic write to prevent corruption)
+            memory_file = self.memory_dir / "memory_snapshot.json"
+            temp_file = self.memory_dir / "memory_snapshot.tmp"
             
-            logger.debug(f"Saved memory snapshot to {snapshot_file.name}")
+            # Write to temp file first
+            with open(temp_file, 'w') as f:
+                json.dump(snapshot, f, indent=2, cls=DateTimeEncoder)
             
-            # Clean old snapshots (keep last 5)
-            snapshots = sorted(self.memory_dir.glob("snapshot_*.json"))
-            if len(snapshots) > 5:
-                for old_snapshot in snapshots[:-5]:
-                    old_snapshot.unlink()
+            # Atomic rename (on POSIX systems, rename is atomic)
+            temp_file.replace(memory_file)
+            
+            # Also save timestamped backup periodically
+            if self.cycle_count % 100 == 0:
+                backup_file = self.memory_dir / f"snapshot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+                with open(backup_file, 'w') as f:
+                    json.dump(snapshot, f, indent=2, cls=DateTimeEncoder)
+                logger.debug(f"Saved memory backup to {backup_file.name}")
+                
+                # Clean old backups (keep last 5)
+                backups = sorted(self.memory_dir.glob("snapshot_*.json"))
+                if len(backups) > 5:
+                    for old_backup in backups[:-5]:
+                        old_backup.unlink()
                     
         except Exception as e:
             logger.error(f"Error saving memory snapshot: {e}")

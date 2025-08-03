@@ -265,7 +265,9 @@ class SubspaceManager:
         import shutil
         
         # Find template directory
-        template_dir = Path(__file__).parent.parent.parent / "subspace_template"
+        # __file__ is src/mind_swarm/subspace/sandbox.py
+        # Need to go up to project root: parent.parent.parent.parent
+        template_dir = Path(__file__).parent.parent.parent.parent / "subspace_template"
         if not template_dir.exists():
             logger.warning(f"Template directory not found at {template_dir}")
             return
@@ -288,13 +290,16 @@ class SubspaceManager:
                     logger.info("Copying ROM knowledge from template")
                     shutil.copytree(src_rom, rom_dir)
             
-            # Copy base_code to library if not present
+            # Always sync base_code from template (for development)
             base_code_dir = self.library_dir / "base_code"
-            if not base_code_dir.exists():
-                src_base_code = grid_template / "library" / "base_code"
-                if src_base_code.exists():
+            src_base_code = grid_template / "library" / "base_code"
+            if src_base_code.exists():
+                if base_code_dir.exists():
+                    logger.info("Updating base_code in library from template")
+                    shutil.rmtree(base_code_dir)
+                else:
                     logger.info("Copying base_code to library")
-                    shutil.copytree(src_base_code, base_code_dir)
+                shutil.copytree(src_base_code, base_code_dir)
             
             # Copy knowledge schema if missing
             schema_file = self.library_dir / "KNOWLEDGE_SCHEMA.md"
@@ -311,16 +316,13 @@ class SubspaceManager:
                     if src_readme.exists():
                         shutil.copy2(src_readme, readme)
         
-        # Initialize shared directory structure
-        shared_template = template_dir / "shared"
-        if shared_template.exists():
-            agents_json = self.root_path / "shared" / "directory" / "agents.json"
-            if not agents_json.exists():
-                agents_json.parent.mkdir(parents=True, exist_ok=True)
-                src_agents = shared_template / "directory" / "agents.json"
-                if src_agents.exists():
-                    logger.info("Copying initial agents.json from template")
-                    shutil.copy2(src_agents, agents_json)
+        # Initialize agent directory in plaza
+        agent_dir_file = self.plaza_dir / "agent_directory.json"
+        if not agent_dir_file.exists():
+            src_agent_dir = grid_template / "plaza" / "agent_directory.json"
+            if src_agent_dir.exists():
+                logger.info("Copying initial agent_directory.json to plaza")
+                shutil.copy2(src_agent_dir, agent_dir_file)
     
     def create_sandbox(self, name: str, agent_type: str = "general") -> BubblewrapSandbox:
         """Create a sandbox for an agent.
