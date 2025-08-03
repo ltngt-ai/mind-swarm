@@ -46,13 +46,11 @@ htmlcov/
 .env.local
 
 # Mind-Swarm specific
-# Ignore subspace data but not runtime code
-/subspace/agents/
-/subspace/agent_states/
-/subspace/logs/
-/subspace/grid/
-# Keep runtime folder in git
-!/subspace/runtime/
+# Ignore entire runtime subspace (created from template)
+/subspace/
+
+# But keep the template in git
+!/subspace_template/
 
 logs/
 data/

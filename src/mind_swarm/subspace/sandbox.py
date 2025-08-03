@@ -249,6 +249,9 @@ class SubspaceManager:
         
         self.sandboxes: Dict[str, BubblewrapSandbox] = {}
         
+        # Initialize from template if needed
+        self._initialize_from_template()
+        
         # Prepare the agent runtime environment
         from mind_swarm.subspace.runtime_builder import AgentRuntimeBuilder
         self.runtime_builder = AgentRuntimeBuilder(self.root_path)
@@ -256,6 +259,60 @@ class SubspaceManager:
         self.runtime_builder.create_tools_directory()
         
         logger.info(f"Initialized subspace at {self.root_path}")
+    
+    def _initialize_from_template(self):
+        """Initialize subspace directories from template if they don't exist."""
+        import shutil
+        
+        # Find template directory
+        template_dir = Path(__file__).parent.parent.parent / "subspace_template"
+        if not template_dir.exists():
+            logger.warning(f"Template directory not found at {template_dir}")
+            return
+        
+        # Copy runtime if it doesn't exist
+        if not self.runtime_dir.exists() or not list(self.runtime_dir.iterdir()):
+            src_runtime = template_dir / "runtime"
+            if src_runtime.exists():
+                logger.info("Copying runtime from template")
+                shutil.copytree(src_runtime, self.runtime_dir, dirs_exist_ok=True)
+        
+        # Copy grid structure if needed
+        grid_template = template_dir / "grid"
+        if grid_template.exists():
+            # Copy library ROM and schema if not present
+            rom_dir = self.library_dir / "rom"
+            if not rom_dir.exists():
+                src_rom = grid_template / "library" / "rom"
+                if src_rom.exists():
+                    logger.info("Copying ROM knowledge from template")
+                    shutil.copytree(src_rom, rom_dir)
+            
+            # Copy knowledge schema if missing
+            schema_file = self.library_dir / "KNOWLEDGE_SCHEMA.md"
+            if not schema_file.exists():
+                src_schema = grid_template / "library" / "KNOWLEDGE_SCHEMA.md"
+                if src_schema.exists():
+                    shutil.copy2(src_schema, schema_file)
+            
+            # Copy README files
+            for subdir in ["plaza", "workshop", "library"]:
+                readme = getattr(self, f"{subdir}_dir") / "README.md"
+                if not readme.exists():
+                    src_readme = grid_template / subdir / "README.md"
+                    if src_readme.exists():
+                        shutil.copy2(src_readme, readme)
+        
+        # Initialize shared directory structure
+        shared_template = template_dir / "shared"
+        if shared_template.exists():
+            agents_json = self.root_path / "shared" / "directory" / "agents.json"
+            if not agents_json.exists():
+                agents_json.parent.mkdir(parents=True, exist_ok=True)
+                src_agents = shared_template / "directory" / "agents.json"
+                if src_agents.exists():
+                    logger.info("Copying initial agents.json from template")
+                    shutil.copy2(src_agents, agents_json)
     
     def create_sandbox(self, name: str, agent_type: str = "general") -> BubblewrapSandbox:
         """Create a sandbox for an agent.
