@@ -1,56 +1,46 @@
 """Main entry point for I/O Gateway agents."""
 
 import asyncio
-import logging
 import os
-from pathlib import Path
+import sys
+import logging
 
-# Set up logging
+# Set up logging - follow the same pattern as general agents
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler()
+    ]
 )
-logger = logging.getLogger("agent.io")
+logger = logging.getLogger("agent")
 
-# Import the I/O cognitive loop
-from io_agent_template.io_cognitive_loop import IOCognitiveLoop
+from .io_mind import IOAgentMind
 
 
 async def main():
     """Main entry point for I/O agent."""
-    agent_id = os.environ.get("AGENT_NAME", "io-agent")
-    agent_type = os.environ.get("AGENT_TYPE", "io_gateway")
-    home = Path("/home")
+    # Verify we're in a sandbox - same as general agents
+    if not os.environ.get("AGENT_NAME"):
+        print("ERROR: This must be run inside a Mind-Swarm sandbox")
+        sys.exit(1)
     
-    logger.info(f"I/O Gateway Agent starting: {agent_id}")
-    logger.info(f"Agent type: {agent_type}")
+    logger.info("I/O Gateway Agent starting...")
     
-    # Verify we have the special body files
-    network_file = home / "network"
-    user_io_file = home / "user_io"
-    
-    if network_file.exists():
-        logger.info("Network body file available")
-    else:
-        logger.warning("Network body file not found!")
-    
-    if user_io_file.exists():
-        logger.info("User I/O body file available")
-    else:
-        logger.warning("User I/O body file not found!")
-    
-    # Create and run the cognitive loop
     try:
-        loop = IOCognitiveLoop(agent_id, home)
-        logger.info("Starting I/O cognitive loop...")
-        await loop.run()
-    except KeyboardInterrupt:
-        logger.info("I/O agent interrupted by user")
+        # Create and run the I/O agent mind
+        mind = IOAgentMind()
+        await mind.run()
     except Exception as e:
-        logger.error(f"I/O agent error: {e}", exc_info=True)
-    finally:
-        logger.info("I/O agent shutting down")
+        logger.error(f"Fatal error: {e}", exc_info=True)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("Agent interrupted")
+    except Exception as e:
+        logger.error(f"Unhandled error: {e}")
+        sys.exit(1)

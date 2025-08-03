@@ -55,12 +55,25 @@ class AgentNameGenerator:
         "Yara", "Zoe"
     ]
     
+    # I-based names for I/O agents
+    IO_NAMES = [
+        "Ian", "Ivy", "Isaac", "Isabel", "Igor", "Irene", "Ivan", "Isla",
+        "Ira", "Ingrid", "Indigo", "Imogen", "Ike", "Ilana", "Inigo", "Ida"
+    ]
+    
     def __init__(self, used_names: Optional[List[str]] = None):
         """Initialize with list of already used names."""
         self.used_names = set(used_names or [])
         
-    def get_next_name(self) -> str:
-        """Get the next available name."""
+    def get_next_name(self, agent_type: str = "general") -> str:
+        """Get the next available name for the agent type."""
+        if agent_type == "io_gateway":
+            return self._get_next_io_name()
+        else:
+            return self._get_next_general_name()
+    
+    def _get_next_general_name(self) -> str:
+        """Get the next available general agent name."""
         for name in self.NAMES:
             if name not in self.used_names:
                 self.used_names.add(name)
@@ -76,13 +89,38 @@ class AgentNameGenerator:
                     return numbered_name
             counter += 1
     
+    def _get_next_io_name(self) -> str:
+        """Get the next available I/O agent name with -io suffix."""
+        for base_name in self.IO_NAMES:
+            io_name = f"{base_name}-io"
+            if io_name not in self.used_names:
+                self.used_names.add(io_name)
+                return io_name
+        
+        # If all I/O names used, add numbers
+        counter = 2
+        while True:
+            for base_name in self.IO_NAMES:
+                numbered_name = f"{base_name}{counter}-io"
+                if numbered_name not in self.used_names:
+                    self.used_names.add(numbered_name)
+                    return numbered_name
+            counter += 1
+    
     def get_agent_number(self, name: str) -> int:
         """Get the agent number from name (1-based)."""
-        # Strip any numbers from the end
-        base_name = name.rstrip('0123456789')
-        
-        if base_name in self.NAMES:
-            return self.NAMES.index(base_name) + 1
+        # Check if it's an I/O agent name
+        if name.endswith("-io"):
+            base_name = name[:-3]  # Remove "-io" suffix
+            # Strip any numbers from the end
+            base_name = base_name.rstrip('0123456789')
+            if base_name in self.IO_NAMES:
+                return self.IO_NAMES.index(base_name) + 1000  # I/O agents start at 1000
+        else:
+            # Strip any numbers from the end
+            base_name = name.rstrip('0123456789')
+            if base_name in self.NAMES:
+                return self.NAMES.index(base_name) + 1
         return -1
 
 
@@ -134,7 +172,9 @@ class AgentStateManager:
             # Track the name as used
             self.name_generator.used_names.add(name)
         else:
-            name = self.name_generator.get_next_name()
+            # Get agent type from config to generate appropriate name
+            agent_type = config.get("agent_type", "general") if config else "general"
+            name = self.name_generator.get_next_name(agent_type)
         
         state = AgentState(
             name=name,

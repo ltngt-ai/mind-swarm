@@ -36,7 +36,7 @@ Mind-Swarm uses a client-server architecture where:
 - **BrainHandler**: Manages "body files" (brain interface) for agent thinking
 - **BodyManager/BodyMonitor**: Handles special body file interfaces
 
-#### Agent Processes (`/src/mind_swarm/agent_executable.py`)
+#### Agent Processes (`/subspace/runtune`)
 - **SubspaceAgent**: The agent process that runs inside sandbox
 - **CognitiveLoop**: Agent's thinking and decision-making system
 - **BootROM/WorkingMemory**: Agent's knowledge and memory management
@@ -184,21 +184,21 @@ The subspace provides this filesystem structure that agents interact with:
 │   └── knowledge/ # Shared facts and information
 ├── tools/         # Executable scripts available to agents
 └── runtime/       # Clean agent runtime (no implementation exposed)
-    └── agent/     # Minimal agent code
+    └── base_code_template/     # Minimal agent code
+    └── io_agent_template/     # Specialist I/O agent code
+
 ```
 
 Inside the sandbox, agents see a clean, minimal world:
 - `/home/agent/` - Their private home (maps to `/subspace/agents/{id}/`)
 - `/home/brain` - Special "body file" for thinking (write prompt, read response)
-- `/shared/` - Shared memory space
-- `/tools/` - Available tools (read-only)
+- `/grid/` - The shared grid hive mind
 - `/runtime/` - Their execution environment (minimal, clean)
 
 ## Agent-Subspace Communication
 
 ### Body Files (Special Interfaces)
 - **`/home/brain`**: Thinking interface - write prompt, read response
-- **`/home/voice`**: Speaking interface (future)
 - These files appear normal but trigger subspace actions when written
 - Time "stops" during operations - the agent sees instant results
 
@@ -217,7 +217,7 @@ Messages are JSON files written to inbox/outbox:
 
 ## Current Implementation Status
 
-### Phase 0 Complete
+### Phase 0 Complete DONE
 - Core infrastructure with client-server architecture
 - Sandbox environment with bubblewrap
 - Agent lifecycle management
@@ -253,5 +253,4 @@ Messages are JSON files written to inbox/outbox:
 - Don't bypass the sandbox - all agent work happens in isolation
 - Don't assume synchronous communication - everything is async
 - Don't hardcode agent behaviors - let them learn and adapt
-- Don't forget to set SUBSPACE_ROOT when running server commands
 - Don't assume local LLM is always available - check with mind-swarm check-llm

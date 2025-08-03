@@ -123,10 +123,8 @@ class AgentProcessManager:
         # Build command to run agent from its base_code directory
         # The agent code is in /home/base_code when viewed from inside sandbox
         # Launch appropriate module based on agent type
-        if agent_type == "io_gateway":
-            cmd = ["python3", "-m", "io_agent_template"]
-        else:
-            cmd = ["python3", "-m", "base_code"]
+        # All agents run from base_code directory
+        cmd = ["python3", "-m", "base_code"]
         
         # Use sandbox to run the agent
         bwrap_cmd = sandbox._build_bwrap_cmd(cmd, env)

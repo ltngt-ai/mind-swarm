@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<N10X>
+	<Workspace>
+		<IncludeFilter>*.*</IncludeFilter>
+		<ExcludeFilter>*.obj,*.lib,*.pch,*.dll,*.pdb,.vs,Debug,Release,x64,obj,*.user,Intermediate,.git</ExcludeFilter>
+		<SyncFiles>true</SyncFiles>
+		<Recursive>true</Recursive>
+		<ShowEmptyFolders>true</ShowEmptyFolders>
+		<IncludeFilesWithoutExt>false</IncludeFilesWithoutExt>
+		<IsFolder>false</IsFolder>
+		<UseVisualStudioEnvBat>true</UseVisualStudioEnvBat>
+		<CaptureExeOutput>false</CaptureExeOutput>
+		<Configurations>
+			<Configuration>Debug</Configuration>
+			<Configuration>Release</Configuration>
+		</Configurations>
+		<Platforms>
+			<Platform>x64</Platform>
+		</Platforms>
+		<AdditionalIncludePaths></AdditionalIncludePaths>
+		<Defines></Defines>
+		<ConfigProperties></ConfigProperties>
+		<Children></Children>
+	</Workspace>
+</N10X>

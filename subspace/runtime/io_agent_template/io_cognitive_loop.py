@@ -7,8 +7,8 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 
-from base_code_template.cognitive_loop import CognitiveLoop, ObservationMemoryBlock, TaskMemoryBlock
-from base_code_template.memory_manager import MemoryManager, Priority
+from .base_code_template.cognitive_loop import CognitiveLoop
+from .base_code_template.memory import ObservationMemoryBlock, TaskMemoryBlock, Priority
 
 logger = logging.getLogger("agent.io_cognitive")
 
@@ -95,36 +95,39 @@ class IOCognitiveLoop(CognitiveLoop):
     def _load_io_knowledge(self):
         """Load I/O agent specific knowledge."""
         try:
-            from io_agent_template.boot_rom import (
+            from .boot_rom import (
                 NETWORK_PROTOCOL, USER_IO_PROTOCOL, 
                 SECURITY_RULES, ROUTING_RULES
             )
             
-            # Add to boot ROM
-            self.boot_rom.extend([
-                f"=== NETWORK PROTOCOL ===\n{NETWORK_PROTOCOL}",
-                f"=== USER I/O PROTOCOL ===\n{USER_IO_PROTOCOL}",
-                f"=== SECURITY RULES ===\n{SECURITY_RULES}",
-                f"=== ROUTING RULES ===\n{ROUTING_RULES}"
-            ])
+            # Store I/O specific knowledge
+            self.io_knowledge = {
+                "network_protocol": NETWORK_PROTOCOL,
+                "user_io_protocol": USER_IO_PROTOCOL,
+                "security_rules": SECURITY_RULES,
+                "routing_rules": ROUTING_RULES
+            }
             
             logger.info("Loaded I/O agent knowledge")
         except ImportError:
             logger.warning("I/O agent boot ROM not found, using defaults")
+            self.io_knowledge = {
+                "network_protocol": "Handle network requests through /home/network body file",
+                "user_io_protocol": "Handle user interactions through /home/user_io body file",
+                "security_rules": "Validate all external requests for safety",
+                "routing_rules": "Route messages between internal agents and external systems"
+            }
     
-    async def observe(self) -> List[Dict[str, Any]]:
+    async def observe(self) -> Optional[Dict[str, Any]]:
         """Extended observe for I/O agents - check special body files."""
-        observations = await super().observe()
+        # First check standard observations (messages, etc)
+        observation = await super().observe()
+        if observation:
+            return observation
         
         # Check network responses
         network_response = await self.io_handler.check_network_file()
         if network_response:
-            observations.append({
-                "type": "network_response",
-                "data": network_response,
-                "timestamp": datetime.now()
-            })
-            
             # Create memory
             self.memory_manager.add_memory(
                 ObservationMemoryBlock(
@@ -134,16 +137,16 @@ class IOCognitiveLoop(CognitiveLoop):
                     priority=Priority.HIGH
                 )
             )
+            
+            return {
+                "type": "network_response",
+                "data": network_response,
+                "timestamp": datetime.now().isoformat()
+            }
         
         # Check user messages
         user_message = await self.io_handler.check_user_io_file()
         if user_message:
-            observations.append({
-                "type": "user_message",
-                "data": user_message,
-                "timestamp": datetime.now()
-            })
-            
             # Create memory
             self.memory_manager.add_memory(
                 ObservationMemoryBlock(
@@ -153,65 +156,100 @@ class IOCognitiveLoop(CognitiveLoop):
                     priority=Priority.HIGH
                 )
             )
+            
+            return {
+                "type": "user_message",
+                "data": user_message,
+                "timestamp": datetime.now().isoformat()
+            }
         
-        return observations
+        return None
     
-    async def decide(self, orientation: Dict[str, Any]) -> str:
+    async def decide(self, orientation: Dict[str, Any]) -> Dict[str, Any]:
         """Extended decide for I/O agents."""
         # Check if this is an I/O-specific task
         task_type = orientation.get("task_type", "")
+        observation = orientation.get("observation", {})
         
-        if task_type == "network_request":
-            return "make_network_request"
-        elif task_type == "user_interaction":
-            return "send_user_response"
-        elif task_type == "route_message":
-            return "route_to_agent"
+        if observation.get("type") == "network_response":
+            return {
+                "action": "handle_network_response",
+                "reason": "Process network response from body file",
+                "decision_text": "Handle network response"
+            }
+        elif observation.get("type") == "user_message":
+            return {
+                "action": "handle_user_message",
+                "reason": "Process user message from body file",
+                "decision_text": "Handle user interaction"
+            }
         else:
             # Fall back to standard decision making
             return await super().decide(orientation)
     
-    async def act(self, action: str, context: Dict[str, Any]) -> Any:
+    async def act(self, observation: Dict[str, Any], 
+                  orientation: Dict[str, Any], 
+                  decision: Dict[str, Any]):
         """Extended act for I/O agents."""
-        if action == "make_network_request":
-            # Extract request details from context
-            request = context.get("network_request", {})
-            request_id = await self.io_handler.make_network_request(request)
-            
-            return {
-                "status": "pending",
-                "request_id": request_id,
-                "message": "Network request submitted"
-            }
+        action = decision.get("action", "")
         
-        elif action == "send_user_response":
-            # Extract response details from context
-            response = context.get("user_response", {})
-            await self.io_handler.send_user_response(response)
+        if action == "handle_network_response":
+            # Process network response
+            response_data = observation.get("data", {})
+            original_request = response_data.get("original_request", {})
             
-            return {
-                "status": "sent",
-                "session_id": response.get("session_id"),
-                "message": "Response sent to user"
-            }
-        
-        elif action == "route_to_agent":
-            # Route message to another agent
-            target_agent = context.get("target_agent")
-            message = context.get("message")
+            # Log the response
+            logger.info(f"Network response: {response_data.get('status')} for {original_request.get('url')}")
             
-            if target_agent and message:
-                # Send through standard mail system
-                await self._send_message(target_agent, message)
-                return {
-                    "status": "routed",
-                    "to": target_agent,
-                    "message": "Message routed to agent"
-                }
+            # Could route response back to requesting agent if needed
+            
+        elif action == "handle_user_message":
+            # Process user message
+            user_data = observation.get("data", {})
+            message_type = user_data.get("type", "unknown")
+            
+            logger.info(f"User message type: {message_type}")
+            
+            # Handle different message types
+            if message_type == "request":
+                # Process user request
+                await self._handle_user_request(user_data)
+            elif message_type == "query":
+                # Route query to appropriate agent
+                await self._route_user_query(user_data)
         
         else:
             # Fall back to standard actions
-            return await super().act(action, context)
+            await super().act(observation, orientation, decision)
+    
+    async def _handle_user_request(self, user_data: Dict[str, Any]):
+        """Handle a user request."""
+        # Example: validate and process request
+        request_type = user_data.get("request_type")
+        
+        if request_type == "network":
+            # Make network request on behalf of user
+            network_request = {
+                "method": user_data.get("method", "GET"),
+                "url": user_data.get("url"),
+                "headers": user_data.get("headers", {})
+            }
+            request_id = await self.io_handler.make_network_request(network_request)
+            logger.info(f"Made network request {request_id} for user")
+    
+    async def _route_user_query(self, user_data: Dict[str, Any]):
+        """Route user query to appropriate agent."""
+        query = user_data.get("query", "")
+        target_agent = user_data.get("target_agent")
+        
+        if target_agent:
+            # Send to specific agent
+            await self._send_message(target_agent, {
+                "type": "USER_QUERY",
+                "query": query,
+                "from_user": user_data.get("user_id"),
+                "session_id": user_data.get("session_id")
+            })
     
     async def _send_message(self, to_agent: str, content: Any):
         """Send a message to another agent."""
