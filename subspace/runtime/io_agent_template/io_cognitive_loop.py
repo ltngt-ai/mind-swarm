@@ -186,15 +186,6 @@ class IOCognitiveLoop(CognitiveLoop):
                 process_action.with_params(response_data=observation.get("data", {}))
                 actions.append(process_action)
             
-            # Think about what to do with it
-            think_action = action_registry.create_action('io_gateway', 'think')
-            if think_action:
-                think_action.with_params(
-                    prompt="I just received a network response. What should I do with this information?",
-                    strategy="balanced"
-                )
-                actions.append(think_action)
-            
             # Send response to requester
             send_action = action_registry.create_action('io_gateway', 'send_message')
             if send_action:
@@ -202,7 +193,7 @@ class IOCognitiveLoop(CognitiveLoop):
                 send_action.with_params(
                     to=from_agent,
                     type="RESPONSE",
-                    content=""  # Will be filled based on thinking
+                    content=""  # Will be filled based on processed response
                 )
                 actions.append(send_action)
             

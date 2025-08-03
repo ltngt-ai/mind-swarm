@@ -195,3 +195,55 @@ AGENT_MEMORY_LIMIT_MB=512
 - Body file operations appear instant to agents
 - Use agent names for routing (no hardcoded "subspace" address)
 - I/O agents use special naming: Ian-io, Ivy-io, etc.
+
+## Runtime System and Agent Code Organization
+
+### How the Runtime Works
+When the server creates or resumes an agent:
+1. **Sandbox Creation**: `SubspaceManager.create_sandbox()` creates a sandbox for the agent
+2. **Runtime Copying**: `_copy_agent_base_code()` copies the entire runtime template to the agent's `base_code` directory
+   - General agents: copies from `subspace/runtime/base_code_template/`
+   - IO agents: copies from `subspace/runtime/io_agent_template/`
+3. **Process Launch**: Agent is launched with `python3 -m base_code` from inside the sandbox
+4. **Inside Sandbox**: The agent sees its code at `/home/base_code/` (mapped from `subspace/agents/{name}/base_code/`)
+
+### Import Rules for Agent Code
+**CRITICAL**: All imports in agent code must be RELATIVE to the base_code directory:
+- ✅ CORRECT: `from .cognitive_loop import CognitiveLoop`
+- ✅ CORRECT: `from .base_code_template.actions import Action`
+- ❌ WRONG: `from base_code_template.actions import Action`
+- ❌ WRONG: `from mind_swarm.xxx import anything`
+
+The agent code runs as a module (`python3 -m base_code`), so all imports must use relative imports.
+
+### Agent Code Structure
+```
+subspace/runtime/
+├── base_code_template/       # Template for general agents
+│   ├── __init__.py
+│   ├── __main__.py          # Entry point
+│   ├── cognitive_loop.py    # Core OODA loop
+│   ├── actions.py           # Action system
+│   ├── memory.py            # Memory management
+│   └── ...
+└── io_agent_template/       # Template for IO agents
+    ├── __init__.py
+    ├── __main__.py          # Entry point (imports from base_code_template)
+    ├── io_cognitive_loop.py # Extended loop for IO
+    ├── io_actions.py        # IO-specific actions
+    └── io_mind.py           # IO agent mind
+
+# When copied to agent:
+subspace/agents/{agent_name}/
+└── base_code/               # Complete copy of template
+    ├── __init__.py
+    ├── __main__.py
+    └── ... (all files from template)
+```
+
+### Key Points
+- Runtime is copied fresh on each agent start/resume
+- Agents are isolated - they cannot import server code
+- All agent code uses relative imports
+- IO agents inherit from base agents using relative imports
+- The base_code directory is the agent's entire world of code

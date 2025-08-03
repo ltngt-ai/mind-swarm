@@ -412,11 +412,23 @@ class CognitiveLoop:
             finish_action = action_registry.create_action(agent_type, 'finish')
             return [finish_action]
         
-        # Build decision thinking request
-        action_descriptions = [
-            f"- {name}: {cls().description}" 
-            for name, cls in available_actions.items()
-        ]
+        # Build decision thinking request with parameter details
+        action_descriptions = []
+        for name, cls in available_actions.items():
+            action_inst = cls()
+            desc = f"- {name}: {action_inst.description}"
+            
+            # Add parameter hints for common actions
+            if name == "send_message":
+                desc += " (params: to, type, content)"
+            elif name == "update_memory":
+                desc += " (params: memory_type, content)"
+            elif name == "wait":
+                desc += " (params: duration, condition)"
+            elif name == "make_network_request":
+                desc += " (params: url, method, headers, body)"
+            
+            action_descriptions.append(desc)
         
         goals = "Respond helpfully and accurately to the user's request"
         constraints = f"Token budget: {self.max_context_tokens}, Must respond via outbox"
@@ -424,23 +436,35 @@ class CognitiveLoop:
         thinking_request = {
             "signature": {
                 "task": "What actions should I take to complete this task?",
-                "description": "Decide on the sequence of actions needed",
+                "description": "Return a literal JSON array of action objects with parameters",
                 "inputs": {
                     "understanding": "Understanding of the situation",
                     "available_actions": "Available actions and their descriptions",
                     "goals": "Current goals or objectives",
-                    "constraints": "Any constraints or limitations"
+                    "constraints": "Any constraints or limitations",
+                    "original_request": "The original user request text"
                 },
                 "outputs": {
-                    "action_plan": "Ordered list of actions to take",
+                    "actions": "JSON array of action objects like [{\"action\": \"send_message\", \"params\": {\"to\": \"user\", \"content\": \"...\"}}] or [{\"action\": \"finish\", \"params\": {}}]",
                     "reasoning": "Why this sequence of actions is best"
-                }
+                },
+                "examples": [
+                    {
+                        "input": "User asks to fetch google.com",
+                        "output": "[{\"action\": \"make_network_request\", \"params\": {\"url\": \"https://google.com\"}}, {\"action\": \"wait\", \"params\": {\"duration\": 1.0}}, {\"action\": \"send_message\", \"params\": {\"to\": \"user\", \"content\": \"<will be filled after fetch>\"}}]"
+                    },
+                    {
+                        "input": "User asks 'What is 2 + 2?'",
+                        "output": "[{\"action\": \"send_message\", \"params\": {\"to\": \"user\", \"content\": \"2 + 2 equals 4\"}}, {\"action\": \"finish\", \"params\": {}}]"
+                    }
+                ]
             },
             "input_values": {
                 "understanding": orientation.get("reasoning", "Need to process this request"),
                 "available_actions": "\n".join(action_descriptions),
                 "goals": goals,
-                "constraints": constraints
+                "constraints": constraints,
+                "original_request": orientation.get("content", str(orientation.get("original_message", {})))
             },
             "request_id": f"decide_{int(time.time()*1000)}",
             "timestamp": datetime.now().isoformat()
@@ -457,15 +481,44 @@ class CognitiveLoop:
             result = json.loads(response.replace("<<<THOUGHT_COMPLETE>>>", "").strip())
             output = result.get("output_values", {})
             
-            action_plan = output.get("action_plan", "")
+            action_names = output.get("actions", "[]")
             reasoning = output.get("reasoning", "")
             
-            logger.info(f"Action plan: {action_plan}")
+            logger.info(f"Action names: {action_names}")
             logger.info(f"Reasoning: {reasoning}")
             
-            # Parse the action plan into actual Action objects
-            # For now, use simple heuristics - can be enhanced with better parsing
-            actions = self._parse_action_plan(action_plan, orientation, available_actions)
+            # Parse the JSON array of action objects
+            try:
+                if isinstance(action_names, str):
+                    action_objects = json.loads(action_names)
+                else:
+                    action_objects = action_names
+                
+                # Create Action objects from the specifications
+                for action_spec in action_objects:
+                    if isinstance(action_spec, dict):
+                        action_name = action_spec.get("action")
+                        params = action_spec.get("params", {})
+                    else:
+                        # Fallback for simple string format
+                        action_name = action_spec
+                        params = {}
+                    
+                    action = action_registry.create_action(agent_type, action_name)
+                    if action:
+                        # Use provided parameters or fall back to defaults
+                        if params:
+                            action.with_params(**params)
+                        else:
+                            # Set default parameters based on context
+                            self._configure_action(action, orientation)
+                        actions.append(action)
+                    else:
+                        logger.warning(f"Unknown action: {action_name}")
+                        
+            except json.JSONDecodeError:
+                logger.error(f"Failed to parse action names as JSON: {action_names}")
+                actions = self._get_fallback_actions(orientation, available_actions)
             
         except Exception as e:
             logger.error(f"Failed to parse decide response: {e}", exc_info=True)
@@ -483,46 +536,27 @@ class CognitiveLoop:
         
         return actions
     
-    def _parse_action_plan(self, action_plan: str, orientation: Dict[str, Any], 
-                          available_actions: Dict[str, type[Action]]) -> List[Action]:
-        """Parse the action plan text into Action objects."""
-        actions = []
-        
-        # Simple parsing - look for action names in the plan
-        plan_lower = action_plan.lower()
-        
-        # Common patterns
-        if "think" in plan_lower:
-            think_action = action_registry.create_action(self.agent_type if hasattr(self, 'agent_type') else 'base', 'think')
-            if think_action:
-                think_action.with_params(
-                    prompt=orientation.get("content", ""),
-                    strategy="balanced"
-                )
-                actions.append(think_action)
-        
-        if "send" in plan_lower and "message" in plan_lower:
+    def _configure_action(self, action: Action, orientation: Dict[str, Any]):
+        """Configure action parameters based on context."""
+        if action.name == "send_message":
             # Determine recipient
             from_agent = orientation.get("from", "")
-            send_action = action_registry.create_action(self.agent_type if hasattr(self, 'agent_type') else 'base', 'send_message')
-            if send_action:
-                send_action.with_params(
-                    to=from_agent if from_agent else "user",
-                    type="RESPONSE",
-                    content=""  # Will be filled by act phase
-                )
-                actions.append(send_action)
-        
-        # Always add finish at the end unless it's a multi-step task
-        if not any(a.name == 'finish' for a in actions):
-            # Check if this seems like a single-response task
-            task_type = orientation.get('task_type', '')
-            if task_type in ['message', 'question', 'simple_request']:
-                finish_action = action_registry.create_action(self.agent_type if hasattr(self, 'agent_type') else 'base', 'finish')
-                if finish_action:
-                    actions.append(finish_action)
-        
-        return actions
+            action.with_params(
+                to=from_agent if from_agent else "user",
+                type="RESPONSE",
+                content=""  # Will be filled based on previous action results
+            )
+        elif action.name == "update_memory":
+            action.with_params(
+                memory_type="task_result",
+                content=""  # Will be filled based on task results
+            )
+        elif action.name == "wait":
+            action.with_params(
+                duration=1.0,
+                condition=None
+            )
+        # finish action needs no parameters
     
     def _get_fallback_actions(self, orientation: Dict[str, Any], 
                              available_actions: Dict[str, type[Action]]) -> List[Action]:
@@ -530,23 +564,15 @@ class CognitiveLoop:
         agent_type = self.agent_type if hasattr(self, 'agent_type') else 'base'
         actions = []
         
-        # Default: think about it and respond
-        think_action = action_registry.create_action(agent_type, 'think')
-        if think_action:
-            think_action.with_params(
-                prompt=orientation.get("content", ""),
-                strategy="balanced"
-            )
-            actions.append(think_action)
-        
-        # Send response if this was a message
-        if orientation.get('type') == 'message':
+        # Default: send a response if it's a message, otherwise just finish
+        if orientation.get('type') == 'message' or orientation.get('from'):
             send_action = action_registry.create_action(agent_type, 'send_message')
             if send_action:
                 from_agent = orientation.get("from", "")
                 send_action.with_params(
                     to=from_agent if from_agent else "user",
-                    type="RESPONSE"
+                    type="RESPONSE",
+                    content="I understand your request but I'm not sure how to proceed. Let me continue thinking..."
                 )
                 actions.append(send_action)
         
@@ -578,7 +604,7 @@ class CognitiveLoop:
             "observation": observation,
             "orientation": orientation,
             "task_id": orientation.get("task_memory_id"),
-            "original_text": observation.get("content", "")
+            "original_text": observation.get("query", observation.get("command", observation.get("content", "")))
         }
         
         # Add agent-specific context

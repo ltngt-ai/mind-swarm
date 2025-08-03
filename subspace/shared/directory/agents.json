@@ -12,45 +12,29 @@
             "thinking_style": "analytical",
             "curiosity_level": 0.7
           },
-          "agent_type": "io_gateway",
+          "agent_type": "general",
           "type_config": {
-            "agent_type": "io_gateway",
-            "display_name": "I/O Gateway Agent",
-            "description": "Bridge agent for external communication and user interaction",
+            "agent_type": "general",
+            "display_name": "General Agent",
+            "description": "Standard agent for thinking, learning, and collaboration",
             "sandbox_config": {
-              "memory_limit_mb": 1024,
-              "cpu_limit_percent": 30,
-              "additional_body_files": [
-                "network",
-                "user_io"
-              ],
+              "memory_limit_mb": 512,
+              "cpu_limit_percent": 20,
+              "additional_body_files": [],
               "network_access": false,
               "additional_binds": {}
             },
-            "server_component": {
-              "enabled": true,
-              "handler_class": "IOAgentHandler",
-              "capabilities": [
-                "user_interaction",
-                "network_requests",
-                "api_gateway"
-              ]
-            },
+            "server_component": null,
             "default_personality": {
-              "response_style": "helpful",
-              "security_awareness": 0.9,
-              "request_validation": 0.95
+              "curiosity_level": 0.7,
+              "collaboration_preference": 0.8,
+              "exploration_tendency": 0.6
             },
-            "default_knowledge": [
-              "I am an I/O gateway agent",
-              "I bridge the internal world with external systems",
-              "I validate and route requests between agents and the outside world",
-              "I maintain security by filtering potentially harmful requests"
-            ]
+            "default_knowledge": []
           }
         }
       },
-      "registered_at": "2025-08-03T07:17:49.720782"
+      "registered_at": "2025-08-03T08:47:18.283365"
     },
     {
       "name": "Ian-io",
@@ -106,7 +90,7 @@
           }
         }
       },
-      "registered_at": "2025-08-03T07:17:56.257252"
+      "registered_at": "2025-08-03T08:47:25.076341"
     }
   ],
   "general_agents": [
@@ -122,45 +106,29 @@
             "thinking_style": "analytical",
             "curiosity_level": 0.7
           },
-          "agent_type": "io_gateway",
+          "agent_type": "general",
           "type_config": {
-            "agent_type": "io_gateway",
-            "display_name": "I/O Gateway Agent",
-            "description": "Bridge agent for external communication and user interaction",
+            "agent_type": "general",
+            "display_name": "General Agent",
+            "description": "Standard agent for thinking, learning, and collaboration",
             "sandbox_config": {
-              "memory_limit_mb": 1024,
-              "cpu_limit_percent": 30,
-              "additional_body_files": [
-                "network",
-                "user_io"
-              ],
+              "memory_limit_mb": 512,
+              "cpu_limit_percent": 20,
+              "additional_body_files": [],
               "network_access": false,
               "additional_binds": {}
             },
-            "server_component": {
-              "enabled": true,
-              "handler_class": "IOAgentHandler",
-              "capabilities": [
-                "user_interaction",
-                "network_requests",
-                "api_gateway"
-              ]
-            },
+            "server_component": null,
             "default_personality": {
-              "response_style": "helpful",
-              "security_awareness": 0.9,
-              "request_validation": 0.95
+              "curiosity_level": 0.7,
+              "collaboration_preference": 0.8,
+              "exploration_tendency": 0.6
             },
-            "default_knowledge": [
-              "I am an I/O gateway agent",
-              "I bridge the internal world with external systems",
-              "I validate and route requests between agents and the outside world",
-              "I maintain security by filtering potentially harmful requests"
-            ]
+            "default_knowledge": []
           }
         }
       },
-      "registered_at": "2025-08-03T07:17:49.720782"
+      "registered_at": "2025-08-03T08:47:18.283365"
     },
     {
       "name": "ip",
@@ -196,7 +164,7 @@
           }
         }
       },
-      "registered_at": "2025-08-03T07:17:49.720784"
+      "registered_at": "2025-08-03T08:47:18.283367"
     },
     {
       "name": "io",
@@ -232,7 +200,7 @@
           }
         }
       },
-      "registered_at": "2025-08-03T07:17:49.720785"
+      "registered_at": "2025-08-03T08:47:18.283368"
     },
     {
       "name": "--ui",
@@ -268,7 +236,7 @@
           }
         }
       },
-      "registered_at": "2025-08-03T07:17:49.720786"
+      "registered_at": "2025-08-03T08:47:18.283369"
     },
     {
       "name": "-io",
@@ -304,9 +272,9 @@
           }
         }
       },
-      "registered_at": "2025-08-03T07:17:49.720787"
+      "registered_at": "2025-08-03T08:47:18.283370"
     }
   ],
   "users": [],
-  "updated_at": "2025-08-03T07:17:56.257279"
+  "updated_at": "2025-08-03T08:47:25.076359"
 }

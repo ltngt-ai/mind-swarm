@@ -6,8 +6,8 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-from base_code_template.actions import Action, ActionResult, ActionStatus, Priority
-from base_code_template.memory import TaskMemoryBlock
+from .base_code_template.actions import Action, ActionResult, ActionStatus, Priority
+from .base_code_template.memory import TaskMemoryBlock
 
 
 class MakeNetworkRequestAction(Action):

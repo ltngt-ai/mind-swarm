@@ -79,46 +79,6 @@ class Action(ABC):
 
 # Base Actions available to all agents
 
-class ThinkAction(Action):
-    """Think about a topic using the brain interface."""
-    
-    def __init__(self):
-        super().__init__("think", "Think deeply about a topic")
-    
-    async def execute(self, context: Dict[str, Any]) -> ActionResult:
-        """Execute thinking through brain interface."""
-        cognitive_loop = context.get("cognitive_loop")
-        prompt = self.params.get("prompt", "")
-        strategy = self.params.get("strategy", "balanced")
-        
-        if not cognitive_loop:
-            return ActionResult(
-                self.name, 
-                ActionStatus.FAILED, 
-                error="No cognitive loop in context"
-            )
-        
-        try:
-            # Use the cognitive loop's thinking method
-            response = await cognitive_loop._think_with_memory(
-                prompt,
-                {"approach": "thinking"},
-                strategy=strategy
-            )
-            
-            return ActionResult(
-                self.name,
-                ActionStatus.COMPLETED,
-                result=response
-            )
-        except Exception as e:
-            return ActionResult(
-                self.name,
-                ActionStatus.FAILED,
-                error=str(e)
-            )
-
-
 class SendMessageAction(Action):
     """Send a message to another agent."""
     
@@ -303,7 +263,6 @@ class ActionRegistry:
         self._actions: Dict[str, Dict[str, type[Action]]] = {
             # Base actions available to all agents
             "base": {
-                "think": ThinkAction,
                 "send_message": SendMessageAction,
                 "update_memory": UpdateMemoryAction,
                 "wait": WaitAction,
