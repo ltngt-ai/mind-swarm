@@ -161,7 +161,12 @@ class ContentLoader:
             return f"Subject: {memory.subject}\n\n{memory.preview}"
     
     def load_knowledge_content(self, memory: KnowledgeMemoryBlock) -> str:
-        """Load knowledge content from file."""
+        """Load knowledge content from metadata or file."""
+        # Check if content is in metadata (for ROM and in-memory knowledge)
+        if memory.metadata.get("content"):
+            return memory.metadata["content"]
+        
+        # Otherwise load from file
         cache_key = f"knowledge:{memory.location}"
         
         # Check cache
@@ -175,18 +180,16 @@ class ContentLoader:
             if not knowledge_path.exists():
                 return f"[Knowledge not found: {memory.topic}]"
             
-            content = knowledge_path.read_text(encoding='utf-8', errors='replace')
+            # Load and parse knowledge file
+            knowledge_data = json.loads(knowledge_path.read_text(encoding='utf-8', errors='replace'))
             
-            # Format with topic header
-            formatted = f"=== KNOWLEDGE: {memory.topic} ===\n"
-            if memory.subtopic:
-                formatted += f"Subtopic: {memory.subtopic}\n"
-            formatted += f"\n{content}"
+            # Extract content from knowledge file
+            content = knowledge_data.get("content", "[No content in knowledge file]")
             
             # Cache it
-            self.cache.put(cache_key, formatted)
+            self.cache.put(cache_key, content)
             
-            return formatted
+            return content
             
         except Exception as e:
             logger.error(f"Error loading knowledge {memory.location}: {e}")

@@ -266,3 +266,29 @@ class ObservationMemoryBlock(MemoryBlock):
         )
         self.type = MemoryType.OBSERVATION
         self.id = f"obs:{self.path}:{self.timestamp.timestamp()}"
+
+
+@dataclass
+class ROMMemoryBlock(MemoryBlock):
+    """Read-Only Memory - fundamental knowledge from library."""
+    rom_id: str
+    content: str
+    category: str = "general"
+    source: str = "library"
+    confidence: float = 1.0
+    priority: Priority = Priority.CRITICAL
+    timestamp: Optional[datetime] = None
+    expiry: Optional[datetime] = None
+    metadata: Optional[Dict[str, Any]] = None
+    
+    def __post_init__(self):
+        """Initialize base class and set type."""
+        super().__init__(
+            confidence=self.confidence,
+            priority=self.priority,
+            timestamp=self.timestamp,
+            expiry=self.expiry,
+            metadata=self.metadata
+        )
+        self.type = MemoryType.ROM
+        self.id = self.rom_id

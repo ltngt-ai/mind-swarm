@@ -37,22 +37,18 @@ class ContextBuilder:
         self.include_metadata = include_metadata
     
     def build_context(self, selected_memories: List[MemoryBlock], 
-                     format_type: str = "structured") -> str:
+                     format_type: str = "json") -> str:
         """Convert symbolic memories to formatted context.
         
         Args:
             selected_memories: Memory blocks selected for inclusion
-            format_type: Output format - "structured", "json", or "narrative"
+            format_type: Output format - always use "json" for efficiency
             
         Returns:
             Formatted context string for LLM
         """
-        if format_type == "json":
-            return self._build_json_context(selected_memories)
-        elif format_type == "narrative":
-            return self._build_narrative_context(selected_memories)
-        else:
-            return self._build_structured_context(selected_memories)
+        # Always use JSON format for clarity and efficiency
+        return self._build_json_context(selected_memories)
     
     def _build_json_context(self, memories: List[MemoryBlock]) -> str:
         """Build JSON-formatted context."""
@@ -66,16 +62,39 @@ class ContextBuilder:
                 if len(content) > self.max_content_length:
                     content = content[:self.max_content_length] + "\n[...truncated...]"
                 
+                # Compact format - only include non-default values
                 entry = {
                     "id": memory.id,
-                    "type": memory.type.value,
-                    "content": content,
-                    "confidence": memory.confidence,
-                    "priority": memory.priority.name.lower()
+                    "content": content
                 }
                 
-                if self.include_metadata:
-                    entry["metadata"] = self._build_metadata(memory)
+                # Only add type if not obvious from id
+                if not memory.id.startswith(memory.type.value):
+                    entry["type"] = memory.type.value
+                
+                # Only add confidence if not 1.0
+                if memory.confidence < 1.0:
+                    entry["confidence"] = round(memory.confidence, 2)
+                
+                # Only add priority if not MEDIUM
+                if memory.priority != Priority.MEDIUM:
+                    entry["priority"] = memory.priority.value
+                
+                # Add minimal metadata if needed
+                if self.include_metadata and memory.metadata:
+                    # Only include essential metadata
+                    essential_meta = {}
+                    if isinstance(memory, FileMemoryBlock) and memory.location != "<BOOT_ROM>":
+                        essential_meta["loc"] = memory.location
+                    elif isinstance(memory, MessageMemoryBlock):
+                        essential_meta["from"] = memory.from_agent
+                        if not memory.read:
+                            essential_meta["unread"] = True
+                    elif isinstance(memory, TaskMemoryBlock):
+                        essential_meta["status"] = memory.status
+                    
+                    if essential_meta:
+                        entry["meta"] = essential_meta
                 
                 context_entries.append(entry)
                 

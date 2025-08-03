@@ -12,6 +12,7 @@ from .memory_blocks import (
     HistoryMemoryBlock,
     ContextMemoryBlock,
     ObservationMemoryBlock,
+    ROMMemoryBlock,
 )
 from .memory_manager import WorkingMemoryManager
 from .content_loader import ContentLoader
@@ -31,6 +32,7 @@ __all__ = [
     "HistoryMemoryBlock",
     "ContextMemoryBlock",
     "ObservationMemoryBlock",
+    "ROMMemoryBlock",
     # Core components
     "WorkingMemoryManager",
     "ContentLoader",

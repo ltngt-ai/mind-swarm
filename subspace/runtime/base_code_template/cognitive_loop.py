@@ -17,7 +17,7 @@ from .memory import (
     WorkingMemoryManager, ContentLoader, ContextBuilder, 
     MemorySelector, Priority, MemoryType,
     FileMemoryBlock, MessageMemoryBlock, TaskMemoryBlock,
-    HistoryMemoryBlock, ObservationMemoryBlock
+    HistoryMemoryBlock, ObservationMemoryBlock, ROMMemoryBlock
 )
 from .perception import EnvironmentScanner
 from .actions import Action, ActionResult, ActionStatus, action_registry
@@ -81,18 +81,85 @@ class CognitiveLoop:
         self._load_boot_rom_memory()
     
     def _load_boot_rom_memory(self):
-        """Load boot ROM as critical memory."""
-        # Create a virtual file memory for boot ROM
-        rom_memory = FileMemoryBlock(
-            location="<BOOT_ROM>",
-            priority=Priority.CRITICAL,
-            confidence=1.0,
-            metadata={
-                "virtual": True,
-                "content": self.boot_rom.format_core_knowledge()
-            }
-        )
-        self.memory_manager.add_memory(rom_memory)
+        """Load boot ROM from library knowledge files."""
+        # Load general ROM files
+        general_rom_dir = Path("/grid/library/rom/general")
+        if general_rom_dir.exists():
+            self._load_rom_directory(general_rom_dir)
+        else:
+            # Fallback to legacy boot ROM
+            logger.warning("ROM directory not found, using legacy boot ROM")
+            rom_memory = FileMemoryBlock(
+                location="<BOOT_ROM>",
+                priority=Priority.CRITICAL,
+                confidence=1.0,
+                metadata={
+                    "virtual": True,
+                    "content": self.boot_rom.format_core_knowledge()
+                }
+            )
+            self.memory_manager.add_memory(rom_memory)
+        
+        # Load agent-specific ROM if available
+        agent_rom_dir = Path(f"/grid/library/rom/{self.agent_type}")
+        if agent_rom_dir.exists():
+            self._load_rom_directory(agent_rom_dir)
+    
+    def _load_rom_directory(self, rom_dir: Path):
+        """Load all knowledge files from a ROM directory."""
+        rom_count = 0
+        for knowledge_file in rom_dir.glob("*.json"):
+            if self._load_knowledge_file(knowledge_file, is_rom=True):
+                rom_count += 1
+        
+        logger.info(f"Loaded {rom_count} ROM files from {rom_dir}")
+    
+    def _load_knowledge_file(self, knowledge_path: Path, is_rom: bool = False) -> bool:
+        """Load a knowledge file and add to working memory.
+        
+        Args:
+            knowledge_path: Path to knowledge JSON file
+            is_rom: Whether this is a ROM file (always loaded)
+            
+        Returns:
+            True if successfully loaded
+        """
+        try:
+            knowledge_data = json.loads(knowledge_path.read_text())
+            
+            # Validate schema version
+            if knowledge_data.get("knowledge_version") != "1.0":
+                logger.warning(f"Unknown knowledge version in {knowledge_path}")
+                return False
+            
+            # Extract metadata
+            metadata = knowledge_data.get("metadata", {})
+            priority_value = metadata.get("priority", 3)
+            
+            # Create a KnowledgeMemoryBlock
+            knowledge_memory = KnowledgeMemoryBlock(
+                topic=metadata.get("category", "general"),
+                location=str(knowledge_path),
+                subtopic=knowledge_data.get("title", ""),
+                relevance_score=1.0 if is_rom else metadata.get("confidence", 0.8),
+                confidence=metadata.get("confidence", 1.0),
+                priority=Priority(priority_value),
+                metadata={
+                    "knowledge_id": knowledge_data["id"],
+                    "content": knowledge_data["content"],
+                    "tags": metadata.get("tags", []),
+                    "source": metadata.get("source", "library"),
+                    "version": metadata.get("version", 1),
+                    "is_rom": is_rom
+                }
+            )
+            
+            self.memory_manager.add_memory(knowledge_memory)
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to load knowledge from {knowledge_path}: {e}")
+            return False
     
     async def run_cycle(self) -> bool:
         """Run one complete cognitive cycle with memory system.
