@@ -1,0 +1,15 @@
+{
+  "knowledge_version": "1.0",
+  "id": "rom:actions:system",
+  "title": "Action System",
+  "content": "Available actions: send_message (communicate), update_memory (save knowledge), wait (pause), finish (complete task). Actions must be JSON objects: [{\"action\": \"send_message\", \"params\": {\"to\": \"Alice\", \"content\": \"Hello\"}}]",
+  "metadata": {
+    "category": "actions",
+    "tags": ["actions", "execution", "format"],
+    "confidence": 1.0,
+    "priority": 1,
+    "source": "boot_rom",
+    "created": "2024-01-01T00:00:00Z",
+    "version": 1
+  }
+}

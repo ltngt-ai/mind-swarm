@@ -1,0 +1,15 @@
+{
+  "knowledge_version": "1.0",
+  "id": "rom:interfaces:messages",
+  "title": "Message Protocol",
+  "content": "Messages arrive in /home/inbox as JSON files. I send messages via /home/outbox. Format: {\"from\": \"me\", \"to\": \"agent\", \"type\": \"MESSAGE\", \"content\": \"...\"}",
+  "metadata": {
+    "category": "interface",
+    "tags": ["messages", "communication", "protocol"],
+    "confidence": 1.0,
+    "priority": 1,
+    "source": "boot_rom",
+    "created": "2024-01-01T00:00:00Z",
+    "version": 1
+  }
+}
