@@ -270,12 +270,12 @@ class SubspaceManager:
             logger.warning(f"Template directory not found at {template_dir}")
             return
         
-        # Copy runtime if it doesn't exist
+        # Copy base_code from library to runtime if it doesn't exist
         if not self.runtime_dir.exists() or not list(self.runtime_dir.iterdir()):
-            src_runtime = template_dir / "runtime"
-            if src_runtime.exists():
-                logger.info("Copying runtime from template")
-                shutil.copytree(src_runtime, self.runtime_dir, dirs_exist_ok=True)
+            src_base_code = template_dir / "grid" / "library" / "base_code"
+            if src_base_code.exists():
+                logger.info("Copying base_code from template library")
+                shutil.copytree(src_base_code, self.runtime_dir, dirs_exist_ok=True)
         
         # Copy grid structure if needed
         grid_template = template_dir / "grid"
@@ -287,6 +287,14 @@ class SubspaceManager:
                 if src_rom.exists():
                     logger.info("Copying ROM knowledge from template")
                     shutil.copytree(src_rom, rom_dir)
+            
+            # Copy base_code to library if not present
+            base_code_dir = self.library_dir / "base_code"
+            if not base_code_dir.exists():
+                src_base_code = grid_template / "library" / "base_code"
+                if src_base_code.exists():
+                    logger.info("Copying base_code to library")
+                    shutil.copytree(src_base_code, base_code_dir)
             
             # Copy knowledge schema if missing
             schema_file = self.library_dir / "KNOWLEDGE_SCHEMA.md"
@@ -377,11 +385,11 @@ class SubspaceManager:
             base_code_dir: The base_code directory in agent's home
             agent_type: Type of agent (general, io_gateway)
         """
-        # Choose template based on agent type
+        # Choose template from library/base_code based on agent type
         if agent_type == "io_gateway":
-            template_dir = self.runtime_dir / "io_agent_template"
+            template_dir = self.library_dir / "base_code" / "io_agent_template"
         else:
-            template_dir = self.runtime_dir / "base_code_template"
+            template_dir = self.library_dir / "base_code" / "base_code_template"
         
         if template_dir.exists():
             # Copy entire directory structure from template
@@ -389,7 +397,7 @@ class SubspaceManager:
             
             # For I/O agents, first copy base template as dependency
             if agent_type == "io_gateway":
-                base_template = self.runtime_dir / "base_code_template"
+                base_template = self.library_dir / "base_code" / "base_code_template"
                 if base_template.exists():
                     # Create base_code_template subdirectory
                     base_dest = base_code_dir / "base_code_template"
