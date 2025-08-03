@@ -1,0 +1,43 @@
+{
+  "io_agents": [],
+  "general_agents": [
+    {
+      "name": "Alice",
+      "type": "general",
+      "status": "active",
+      "capabilities": [],
+      "metadata": {
+        "config": {
+          "ai": {
+            "use_premium": false,
+            "thinking_style": "analytical",
+            "curiosity_level": 0.7
+          },
+          "agent_type": "general",
+          "type_config": {
+            "agent_type": "general",
+            "display_name": "General Agent",
+            "description": "Standard agent for thinking, learning, and collaboration",
+            "sandbox_config": {
+              "memory_limit_mb": 512,
+              "cpu_limit_percent": 20,
+              "additional_body_files": [],
+              "network_access": false,
+              "additional_binds": {}
+            },
+            "server_component": null,
+            "default_personality": {
+              "curiosity_level": 0.7,
+              "collaboration_preference": 0.8,
+              "exploration_tendency": 0.6
+            },
+            "default_knowledge": []
+          }
+        }
+      },
+      "registered_at": "2025-08-03T06:41:14.937892"
+    }
+  ],
+  "users": [],
+  "updated_at": "2025-08-03T06:41:14.937903"
+}

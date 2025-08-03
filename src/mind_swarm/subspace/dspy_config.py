@@ -29,6 +29,7 @@ class MindSwarmDSPyLM(dspy.LM):
         
         # Debug: log the config we received
         logger.info(f"DSPy LM initializing with config: {config}")
+        logger.info(f"DSPy LM parsed values - provider: {self.provider}, model: {self.model}, temp: {self.temperature}, max_tokens: {self.max_tokens}")
         
         # Set up provider-specific configuration
         self._setup_provider()
@@ -89,7 +90,7 @@ class MindSwarmDSPyLM(dspy.LM):
                 model_str = self.model
             
             # PROOF: Log LLM request details
-            logger.info(f"LM REQUEST: model={model_str}, api_base={getattr(self, 'api_base', 'None')}, temp={temperature}")
+            logger.info(f"LM REQUEST: model={model_str}, api_base={getattr(self, 'api_base', 'None')}, temp={temperature}, max_tokens={max_tokens}")
             logger.info(f"LM REQUEST PROMPT: {prompt}")
             
             response = completion(

@@ -11,18 +11,20 @@ from mind_swarm.utils.logging import logger
 class BubblewrapSandbox:
     """Manages sandboxed agent execution using bubblewrap."""
     
-    def __init__(self, name: str, subspace_root: Path):
+    def __init__(self, name: str, subspace_root: Path, agent_type: str = "general"):
         """Initialize sandbox for an agent.
         
         Args:
             name: Unique name for the agent
             subspace_root: Root directory of the subspace
+            agent_type: Type of agent (general, io_gateway)
         """
         self.name = name
         self.subspace_root = subspace_root
         self.agent_home = subspace_root / "agents" / name
         self.grid_root = subspace_root / "grid"
         self.tools_dir = subspace_root / "grid" / "workshop"
+        self.agent_type = agent_type
         
         # Ensure directories exist
         self.agent_home.mkdir(parents=True, exist_ok=True)
@@ -94,7 +96,28 @@ class BubblewrapSandbox:
             "--setenv", "HOME", "/home",
             "--setenv", "PATH", "/grid/workshop:/usr/bin:/bin",
             "--setenv", "PYTHONPATH", "/home",
+            "--setenv", "AGENT_TYPE", self.agent_type,
         ]
+        
+        # Add special body files for I/O agents
+        if self.agent_type == "io_gateway":
+            io_bodies_dir = self.agent_home / ".io_bodies"
+            io_bodies_dir.mkdir(exist_ok=True)
+            
+            # Create body files if they don't exist
+            network_file = io_bodies_dir / "network"
+            if not network_file.exists():
+                network_file.write_text("")
+            
+            user_io_file = io_bodies_dir / "user_io"
+            if not user_io_file.exists():
+                user_io_file.write_text("")
+            
+            # Bind special body files
+            bwrap_cmd.extend([
+                "--bind", str(network_file), "/home/network",
+                "--bind", str(user_io_file), "/home/user_io",
+            ])
         
         # Add custom environment variables
         if env:
@@ -234,11 +257,12 @@ class SubspaceManager:
         
         logger.info(f"Initialized subspace at {self.root_path}")
     
-    def create_sandbox(self, name: str) -> BubblewrapSandbox:
+    def create_sandbox(self, name: str, agent_type: str = "general") -> BubblewrapSandbox:
         """Create a sandbox for an agent.
         
         Args:
             name: Unique agent name
+            agent_type: Type of agent (general, io_gateway)
             
         Returns:
             Configured sandbox instance
@@ -251,7 +275,7 @@ class SubspaceManager:
             sandbox = self.sandboxes[name]
         else:
             # Create new sandbox instance
-            sandbox = BubblewrapSandbox(name, self.root_path)
+            sandbox = BubblewrapSandbox(name, self.root_path, agent_type)
             self.sandboxes[name] = sandbox
         
         # For existing agents, update their base_code
@@ -259,7 +283,7 @@ class SubspaceManager:
             base_code = sandbox.agent_home / "base_code"
             if base_code.exists():
                 logger.info(f"Updating base_code for existing agent {name}")
-                self._copy_agent_base_code(base_code)
+                self._copy_agent_base_code(base_code, agent_type)
             return sandbox
         
         # Initialize agent directories
@@ -273,7 +297,7 @@ class SubspaceManager:
             directory.mkdir(exist_ok=True)
         
         # Copy agent code to base_code directory
-        self._copy_agent_base_code(base_code)
+        self._copy_agent_base_code(base_code, agent_type)
         
         logger.info(f"Created sandbox for agent {name}")
         return sandbox
@@ -289,18 +313,33 @@ class SubspaceManager:
             del self.sandboxes[name]
             logger.info(f"Removed sandbox for agent {name}")
     
-    def _copy_agent_base_code(self, base_code_dir: Path):
+    def _copy_agent_base_code(self, base_code_dir: Path, agent_type: str = "general"):
         """Copy agent base code to the agent's home directory.
         
         Args:
             base_code_dir: The base_code directory in agent's home
+            agent_type: Type of agent (general, io_gateway)
         """
-        # Check if we have a prepared base_code template
-        template_dir = self.runtime_dir / "base_code_template"
+        # Choose template based on agent type
+        if agent_type == "io_gateway":
+            template_dir = self.runtime_dir / "io_agent_template"
+        else:
+            template_dir = self.runtime_dir / "base_code_template"
         
         if template_dir.exists():
             # Copy entire directory structure from template
             import shutil
+            
+            # For I/O agents, first copy base template as dependency
+            if agent_type == "io_gateway":
+                base_template = self.runtime_dir / "base_code_template"
+                if base_template.exists():
+                    # Create base_code_template subdirectory
+                    base_dest = base_code_dir / "base_code_template"
+                    if base_dest.exists():
+                        shutil.rmtree(base_dest)
+                    shutil.copytree(base_template, base_dest)
+                    logger.debug("Copied base_code_template for I/O agent")
             
             # First copy all .py files in the root
             for py_file in template_dir.glob("*.py"):

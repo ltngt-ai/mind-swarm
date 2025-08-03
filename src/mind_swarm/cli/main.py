@@ -180,7 +180,7 @@ class MindSwarmCLI:
         console.print("[bold]Mind-Swarm Interactive Mode[/bold]")
         console.print("Commands:")
         console.print("  [cyan]status[/cyan] - Show agent status")
-        console.print("  [cyan]create [--premium] [name][/cyan] - Create a new AI agent")
+        console.print("  [cyan]create [--premium] [--io] [name][/cyan] - Create a new AI agent")
         console.print("  [cyan]terminate <name>[/cyan] - Terminate an agent")
         console.print("  [cyan]command <name> <command> [params][/cyan] - Send command to agent")
         console.print("  [cyan]question <text>[/cyan] - Create a shared question")
@@ -218,22 +218,30 @@ class MindSwarmCLI:
                     await self.show_status()
                 
                 elif cmd == "create":
-                    # Parse create options: create [--premium] [name]
+                    # Parse create options: create [--premium] [--io] [name]
                     use_premium = False
+                    is_io_agent = False
                     agent_name = None
                     
                     for i, part in enumerate(parts[1:], 1):
                         if part == "--premium":
                             use_premium = True
+                        elif part == "--io":
+                            is_io_agent = True
                         else:
                             agent_name = part
                     
+                    # Determine agent type
+                    agent_type = "io_gateway" if is_io_agent else "general"
+                    
                     agent_name_result = await self.client.create_agent(
                         name=agent_name,
+                        agent_type=agent_type,
                         use_premium=use_premium,
                     )
                     ai_type = "Premium" if use_premium else "Local"
-                    console.print(f"Created {agent_name_result} [AI: {ai_type}]")
+                    type_str = "I/O Gateway" if is_io_agent else "General"
+                    console.print(f"Created {agent_name_result} [{type_str}, AI: {ai_type}]")
                 
                 elif cmd == "terminate" and len(parts) > 1:
                     agent_name = parts[1]

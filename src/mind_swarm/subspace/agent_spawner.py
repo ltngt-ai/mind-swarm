@@ -92,14 +92,14 @@ class AgentProcessManager:
         
         Args:
             name: Agent name (required, must be unique)
-            agent_type: Ignored, kept for compatibility
+            agent_type: Type of agent (general, io_gateway)
             config: Agent configuration including AI settings
             
         Returns:
             Agent name
         """
-        # Create sandbox using name
-        sandbox = self.subspace.create_sandbox(name)
+        # Create sandbox using name and type
+        sandbox = self.subspace.create_sandbox(name, agent_type)
         
         # Write agent configuration
         agent_config = {
@@ -122,7 +122,11 @@ class AgentProcessManager:
         
         # Build command to run agent from its base_code directory
         # The agent code is in /home/base_code when viewed from inside sandbox
-        cmd = ["python3", "-m", "base_code"]
+        # Launch appropriate module based on agent type
+        if agent_type == "io_gateway":
+            cmd = ["python3", "-m", "io_agent_template"]
+        else:
+            cmd = ["python3", "-m", "base_code"]
         
         # Use sandbox to run the agent
         bwrap_cmd = sandbox._build_bwrap_cmd(cmd, env)

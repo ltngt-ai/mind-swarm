@@ -1,0 +1,219 @@
+"""Registry for agent types and their configurations."""
+
+import json
+from pathlib import Path
+from typing import Dict, List, Optional, Any
+from datetime import datetime
+
+from mind_swarm.schemas.agent_types import (
+    AgentType, AgentTypeConfig, get_agent_type_config
+)
+from mind_swarm.utils.logging import logger
+
+
+class AgentInfo:
+    """Information about a registered agent."""
+    
+    def __init__(
+        self,
+        name: str,
+        agent_type: AgentType,
+        status: str = "active",
+        capabilities: Optional[List[str]] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ):
+        self.name = name
+        self.agent_type = agent_type
+        self.status = status
+        self.capabilities = capabilities or []
+        self.metadata = metadata or {}
+        self.registered_at = datetime.now().isoformat()
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "name": self.name,
+            "type": self.agent_type.value,
+            "status": self.status,
+            "capabilities": self.capabilities,
+            "metadata": self.metadata,
+            "registered_at": self.registered_at
+        }
+
+
+class AgentRegistry:
+    """Central registry for all agents in the system."""
+    
+    def __init__(self, subspace_root: Path):
+        """Initialize the agent registry.
+        
+        Args:
+            subspace_root: Root path of the subspace
+        """
+        self.subspace_root = subspace_root
+        self.directory_path = subspace_root / "shared" / "directory"
+        self.directory_file = self.directory_path / "agents.json"
+        
+        # In-memory cache
+        self._agents: Dict[str, AgentInfo] = {}
+        self._io_agents: List[str] = []
+        self._general_agents: List[str] = []
+        
+        # Ensure directory exists
+        self.directory_path.mkdir(parents=True, exist_ok=True)
+        
+        # Load existing registry
+        self._load_registry()
+    
+    def _load_registry(self):
+        """Load agent registry from disk."""
+        if self.directory_file.exists():
+            try:
+                with open(self.directory_file, 'r') as f:
+                    data = json.load(f)
+                
+                # Load I/O agents
+                for agent_data in data.get("io_agents", []):
+                    agent = AgentInfo(
+                        name=agent_data["name"],
+                        agent_type=AgentType.IO_GATEWAY,
+                        status=agent_data.get("status", "active"),
+                        capabilities=agent_data.get("capabilities", []),
+                        metadata=agent_data.get("metadata", {})
+                    )
+                    self._agents[agent.name] = agent
+                    self._io_agents.append(agent.name)
+                
+                # Load general agents
+                for agent_data in data.get("general_agents", []):
+                    agent = AgentInfo(
+                        name=agent_data["name"],
+                        agent_type=AgentType.GENERAL,
+                        status=agent_data.get("status", "active"),
+                        metadata=agent_data.get("metadata", {})
+                    )
+                    self._agents[agent.name] = agent
+                    self._general_agents.append(agent.name)
+                
+                logger.info(f"Loaded {len(self._agents)} agents from registry")
+            except Exception as e:
+                logger.error(f"Failed to load agent registry: {e}")
+                self._save_registry()  # Create empty registry
+    
+    def _save_registry(self):
+        """Save agent registry to disk."""
+        data = {
+            "io_agents": [
+                self._agents[name].to_dict() 
+                for name in self._io_agents 
+                if name in self._agents
+            ],
+            "general_agents": [
+                self._agents[name].to_dict()
+                for name in self._general_agents
+                if name in self._agents
+            ],
+            "users": [],  # Placeholder for future user directory
+            "updated_at": datetime.now().isoformat()
+        }
+        
+        try:
+            with open(self.directory_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            logger.debug("Agent registry saved")
+        except Exception as e:
+            logger.error(f"Failed to save agent registry: {e}")
+    
+    def register_agent(
+        self,
+        name: str,
+        agent_type: AgentType,
+        capabilities: Optional[List[str]] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> AgentInfo:
+        """Register a new agent in the system.
+        
+        Args:
+            name: Agent name
+            agent_type: Type of agent
+            capabilities: List of agent capabilities
+            metadata: Additional metadata
+            
+        Returns:
+            AgentInfo object
+        """
+        # Get default capabilities from type config
+        if capabilities is None and agent_type == AgentType.IO_GATEWAY:
+            type_config = get_agent_type_config(agent_type)
+            if type_config.server_component:
+                capabilities = type_config.server_component.capabilities
+        
+        agent = AgentInfo(name, agent_type, "active", capabilities, metadata)
+        self._agents[name] = agent
+        
+        # Add to appropriate list
+        if agent_type == AgentType.IO_GATEWAY:
+            if name not in self._io_agents:
+                self._io_agents.append(name)
+        else:
+            if name not in self._general_agents:
+                self._general_agents.append(name)
+        
+        self._save_registry()
+        logger.info(f"Registered {agent_type.value} agent: {name}")
+        
+        return agent
+    
+    def unregister_agent(self, name: str):
+        """Remove an agent from the registry."""
+        if name in self._agents:
+            agent = self._agents[name]
+            del self._agents[name]
+            
+            # Remove from lists
+            if name in self._io_agents:
+                self._io_agents.remove(name)
+            if name in self._general_agents:
+                self._general_agents.remove(name)
+            
+            self._save_registry()
+            logger.info(f"Unregistered agent: {name}")
+    
+    def update_agent_status(self, name: str, status: str):
+        """Update an agent's status."""
+        if name in self._agents:
+            self._agents[name].status = status
+            self._save_registry()
+    
+    def get_agent(self, name: str) -> Optional[AgentInfo]:
+        """Get information about a specific agent."""
+        return self._agents.get(name)
+    
+    def get_agents_by_type(self, agent_type: AgentType) -> List[AgentInfo]:
+        """Get all agents of a specific type."""
+        return [
+            agent for agent in self._agents.values()
+            if agent.agent_type == agent_type and agent.status == "active"
+        ]
+    
+    def get_io_agents(self) -> List[AgentInfo]:
+        """Get all active I/O agents."""
+        return self.get_agents_by_type(AgentType.IO_GATEWAY)
+    
+    def find_io_agent_with_capability(self, capability: str) -> Optional[str]:
+        """Find an I/O agent with a specific capability.
+        
+        Args:
+            capability: Required capability (e.g., "user_interaction", "web_access")
+            
+        Returns:
+            Agent name if found, None otherwise
+        """
+        for agent in self.get_io_agents():
+            if capability in agent.capabilities:
+                return agent.name
+        return None
+    
+    def get_agent_type_config(self, agent_type: AgentType) -> AgentTypeConfig:
+        """Get configuration for a specific agent type."""
+        return get_agent_type_config(agent_type)

@@ -14,6 +14,8 @@ from mind_swarm.subspace.agent_state import AgentStateManager, AgentLifecycle
 from mind_swarm.subspace.body_manager import BodySystemManager
 from mind_swarm.subspace.body_monitor import create_body_monitor
 from mind_swarm.subspace.brain_handler_dynamic import DynamicBrainHandler
+from mind_swarm.subspace.agent_registry import AgentRegistry
+from mind_swarm.schemas.agent_types import AgentType
 from mind_swarm.ai.presets import preset_manager
 from mind_swarm.ai.providers.factory import create_ai_service
 from mind_swarm.utils.logging import logger
@@ -32,7 +34,9 @@ class MessageRouter:
         
         try:
             agent_names = await aiofiles.os.listdir(self.agents_dir)
-        except OSError:
+            logger.debug(f"Checking outboxes for {len(agent_names)} agents: {agent_names}")
+        except OSError as e:
+            logger.error(f"Failed to list agents directory: {e}")
             return routed_count
         
         for agent_name in agent_names:
@@ -42,13 +46,17 @@ class MessageRouter:
                 
             outbox_dir = agent_dir / "outbox"
             if not await aiofiles.os.path.exists(outbox_dir):
+                logger.debug(f"No outbox directory for {agent_name}")
                 continue
             
             # Process each message in outbox
             try:
                 outbox_files = await aiofiles.os.listdir(outbox_dir)
                 msg_files = [f for f in outbox_files if f.endswith('.msg')]
-            except OSError:
+                if msg_files:
+                    logger.info(f"Found {len(msg_files)} messages in {agent_name}'s outbox")
+            except OSError as e:
+                logger.error(f"Failed to list outbox for {agent_name}: {e}")
                 continue
             
             for msg_filename in msg_files:
@@ -58,19 +66,21 @@ class MessageRouter:
                         content = await f.read()
                     message = json.loads(content)
                     to_agent = message.get("to", "")
+                    logger.info(f"Routing message from {agent_name} to {to_agent}")
                     
-                    if to_agent == "subspace":
-                        # Message for subspace itself
-                        logger.info(f"Received message for subspace: {message}")
-                        # TODO: Handle subspace commands
-                    elif to_agent == "broadcast":
+                    if to_agent == "broadcast":
                         # Broadcast to all agents
                         await self._broadcast_message(message, exclude=[agent_name])
                     elif to_agent.startswith("agent-"):
                         # Direct message to another agent
-                        await self._deliver_message(to_agent, message)
+                        if not await self._agent_exists(to_agent):
+                            # Send error back to sender
+                            await self._send_delivery_error(agent_name, message, f"Agent {to_agent} not found")
+                        else:
+                            await self._deliver_message(to_agent, message)
                     else:
-                        logger.warning(f"Unknown recipient: {to_agent}")
+                        # Unknown recipient format
+                        await self._send_delivery_error(agent_name, message, f"Unknown recipient format: {to_agent}")
                     
                     # Move to sent folder
                     sent_dir = outbox_dir / "sent"
@@ -90,7 +100,7 @@ class MessageRouter:
                     logger.error(f"Error routing message {msg_file}: {e}")
         
         if routed_count > 0:
-            logger.debug(f"Routed {routed_count} messages")
+            logger.info(f"Successfully routed {routed_count} messages")
         
         return routed_count
     
@@ -126,6 +136,26 @@ class MessageRouter:
                 continue
             
             await self._deliver_message(agent_name, message)
+    
+    async def _agent_exists(self, agent_name: str) -> bool:
+        """Check if an agent exists."""
+        agent_dir = self.agents_dir / agent_name
+        return await aiofiles.os.path.exists(agent_dir)
+    
+    async def _send_delivery_error(self, sender: str, original_message: Dict[str, Any], error_reason: str):
+        """Send a delivery error message back to the sender."""
+        error_message = {
+            "type": "DELIVERY_ERROR",
+            "from": "subspace",
+            "to": sender,
+            "error": error_reason,
+            "original_message": original_message,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        # Deliver directly to sender's inbox
+        await self._deliver_message(sender, error_message)
+        logger.info(f"Sent delivery error to {sender}: {error_reason}")
 
 
 class SubspaceCoordinator:
@@ -138,6 +168,7 @@ class SubspaceCoordinator:
         self.router = MessageRouter(self.subspace.root_path)
         self.body_system = BodySystemManager()
         self.state_manager = AgentStateManager(self.subspace.root_path)
+        self.agent_registry = AgentRegistry(self.subspace.root_path)
         
         self._running = False
         self._router_task: Optional[asyncio.Task] = None
@@ -199,7 +230,7 @@ class SubspaceCoordinator:
         
         Args:
             name: Agent name (auto-generated from next letter if not provided)
-            agent_type: Type of agent (kept for compatibility, ignored)
+            agent_type: Type of agent ("general" or "io_gateway")
             use_ai: Whether to enable AI (kept for compatibility, always True)
             use_premium: Whether to use premium AI model
             config: Additional configuration
@@ -207,6 +238,16 @@ class SubspaceCoordinator:
         Returns:
             Agent ID
         """
+        # Parse agent type
+        try:
+            agent_type_enum = AgentType(agent_type)
+        except ValueError:
+            logger.warning(f"Unknown agent type: {agent_type}, using GENERAL")
+            agent_type_enum = AgentType.GENERAL
+        
+        # Get type configuration
+        type_config = self.agent_registry.get_agent_type_config(agent_type_enum)
+        
         # All agents are AI-powered
         agent_config = config or {}
         agent_config["ai"] = {
@@ -215,8 +256,34 @@ class SubspaceCoordinator:
             "curiosity_level": agent_config.get("curiosity_level", 0.7)
         }
         
+        # Add type-specific configuration
+        agent_config["agent_type"] = agent_type_enum.value
+        # Convert type_config to a serializable dict
+        type_config_dict = {
+            "agent_type": type_config.agent_type.value,  # Convert enum to string
+            "display_name": type_config.display_name,
+            "description": type_config.description,
+            "sandbox_config": type_config.sandbox_config.__dict__,
+            "server_component": type_config.server_component.__dict__ if type_config.server_component else None,
+            "default_personality": type_config.default_personality,
+            "default_knowledge": type_config.default_knowledge
+        }
+        agent_config["type_config"] = type_config_dict
+        
         # Create agent state (name will be auto-generated if not provided)
         state = await self.state_manager.create_agent(name, agent_config)
+        
+        # Register agent in directory
+        capabilities = []
+        if type_config.server_component and type_config.server_component.capabilities:
+            capabilities = type_config.server_component.capabilities
+        
+        self.agent_registry.register_agent(
+            name=state.name,
+            agent_type=agent_type_enum,
+            capabilities=capabilities,
+            metadata={"config": agent_config}
+        )
         
         # Update lifecycle
         await self.state_manager.update_lifecycle(state.name, AgentLifecycle.ACTIVE)
@@ -233,8 +300,16 @@ class SubspaceCoordinator:
         agent_home = self.subspace.agents_dir / state.name
         body_manager = await self.body_system.create_agent_body(state.name, agent_home)
         
+        # Create additional body files for I/O agents
+        if agent_type_enum == AgentType.IO_GATEWAY:
+            await self._create_io_agent_body_files(state.name, agent_home)
+        
         # Start monitoring body files
         await self.body_system.start_agent_monitoring(state.name, self._handle_ai_request)
+        
+        # Start server component for I/O agents
+        if agent_type_enum == AgentType.IO_GATEWAY and type_config.server_component.enabled:
+            await self._start_io_agent_server_component(state.name, type_config)
         
         return state.name
     
@@ -250,6 +325,9 @@ class SubspaceCoordinator:
         
         # Mark as hibernating (terminated agents can be restored later)
         await self.state_manager.update_lifecycle(name, AgentLifecycle.HIBERNATING)
+        
+        # Update agent registry
+        self.agent_registry.update_agent_status(name, "hibernating")
         
         # Stop body file monitoring
         await self.body_system.stop_agent_monitoring(name)
@@ -534,10 +612,21 @@ class SubspaceCoordinator:
                 
                 # Get or create dynamic brain handler for this preset
                 if preset_name not in self._brain_handlers:
-                    # Get LM config from AI service
-                    config_dict = ai_config.__dict__ if hasattr(ai_config, '__dict__') else ai_config
-                    lm_config = self._get_lm_config_from_ai_service(ai_service, config_dict)
-                    self._brain_handlers[preset_name] = DynamicBrainHandler(ai_service, lm_config)
+                    # Convert AIExecutionConfig to the format expected by DSPy
+                    if hasattr(ai_config, '__dict__'):
+                        # ai_config is AIExecutionConfig, convert to DSPy format
+                        config_dict = {
+                            "provider": ai_config.provider,
+                            "model": ai_config.model_id,  # DSPy expects 'model', not 'model_id'
+                            "temperature": ai_config.temperature,
+                            "max_tokens": ai_config.max_tokens,
+                            "api_key": ai_config.api_key,
+                            "base_url": ai_config.provider_settings.get("host") if ai_config.provider_settings else None
+                        }
+                    else:
+                        config_dict = ai_config
+                    logger.info(f"Creating brain handler for preset {preset_name} with config: {config_dict}")
+                    self._brain_handlers[preset_name] = DynamicBrainHandler(ai_service, config_dict)
                 
                 brain_handler = self._brain_handlers[preset_name]
             
@@ -561,9 +650,10 @@ class SubspaceCoordinator:
     def _get_lm_config_from_ai_service(self, ai_service: Any, ai_config: Dict[str, Any]) -> Dict[str, Any]:
         """Extract language model configuration from AI service."""
         # This extracts the config needed for DSPy from our AI service
+        # ai_config comes from the preset and should have all the right values
         lm_config = {
-            "provider": ai_config.get("provider", "openai"),
-            "model": ai_config.get("model", "gpt-3.5-turbo"),
+            "provider": ai_config.get("provider"),
+            "model": ai_config.get("model"),
             "temperature": ai_config.get("temperature", 0.7),
             "max_tokens": ai_config.get("max_tokens", 1000)
         }
@@ -591,3 +681,35 @@ class SubspaceCoordinator:
             lm_config["base_url"] = settings["host"]
         
         return lm_config
+    
+    async def _create_io_agent_body_files(self, agent_name: str, agent_home: Path):
+        """Create additional body files for I/O agents.
+        
+        Args:
+            agent_name: Name of the I/O agent
+            agent_home: Agent's home directory
+        """
+        io_bodies_dir = agent_home / ".io_bodies"
+        io_bodies_dir.mkdir(exist_ok=True)
+        
+        # Create network body file
+        network_file = io_bodies_dir / "network"
+        network_file.write_text("")
+        logger.info(f"Created network body file for {agent_name}")
+        
+        # Create user_io body file  
+        user_io_file = io_bodies_dir / "user_io"
+        user_io_file.write_text("")
+        logger.info(f"Created user_io body file for {agent_name}")
+        
+        # TODO: Set up monitoring for these special body files
+    
+    async def _start_io_agent_server_component(self, agent_name: str, type_config):
+        """Start the server-side component for an I/O agent.
+        
+        Args:
+            agent_name: Name of the I/O agent
+            type_config: Agent type configuration
+        """
+        # TODO: Implement server component initialization
+        logger.info(f"I/O agent server component for {agent_name} not yet implemented")

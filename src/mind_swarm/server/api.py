@@ -18,6 +18,7 @@ from mind_swarm.utils.logging import logger
 class CreateAgentRequest(BaseModel):
     """Request to create a new agent."""
     name: Optional[str] = None
+    agent_type: str = "general"
     use_premium: bool = False
     config: Optional[Dict[str, Any]] = None
 
@@ -227,6 +228,7 @@ class MindSwarmServer:
             try:
                 name = await self.coordinator.create_agent(
                     name=request.name,
+                    agent_type=request.agent_type,
                     use_premium=request.use_premium,
                     config=request.config
                 )

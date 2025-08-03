@@ -1,0 +1,1 @@
+"""I/O Gateway Agent Template - Bridge between internal and external worlds."""
