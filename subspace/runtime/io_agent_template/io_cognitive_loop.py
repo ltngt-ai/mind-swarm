@@ -9,6 +9,8 @@ from typing import Dict, Any, Optional, List
 
 from .base_code_template.cognitive_loop import CognitiveLoop
 from .base_code_template.memory import ObservationMemoryBlock, TaskMemoryBlock, Priority
+from .base_code_template.actions import Action, ActionResult, ActionStatus, action_registry
+from .io_actions import register_io_actions
 
 logger = logging.getLogger("agent.io_cognitive")
 
@@ -86,8 +88,11 @@ class IOCognitiveLoop(CognitiveLoop):
     """Extended cognitive loop for I/O agents."""
     
     def __init__(self, agent_id: str, home: Path):
-        super().__init__(agent_id, home)
+        super().__init__(agent_id, home, agent_type='io_gateway')
         self.io_handler = IOBodyFileHandler(home)
+        
+        # Register I/O actions
+        register_io_actions(action_registry)
         
         # Load I/O-specific knowledge
         self._load_io_knowledge()
@@ -165,127 +170,84 @@ class IOCognitiveLoop(CognitiveLoop):
         
         return None
     
-    async def decide(self, orientation: Dict[str, Any]) -> Dict[str, Any]:
+    async def decide(self, orientation: Dict[str, Any]) -> List[Action]:
         """Extended decide for I/O agents."""
         # Check if this is an I/O-specific task
-        task_type = orientation.get("task_type", "")
         observation = orientation.get("observation", {})
+        obs_type = observation.get("type", "")
         
-        if observation.get("type") == "network_response":
-            return {
-                "action": "handle_network_response",
-                "reason": "Process network response from body file",
-                "decision_text": "Handle network response"
-            }
-        elif observation.get("type") == "user_message":
-            return {
-                "action": "handle_user_message",
-                "reason": "Process user message from body file",
-                "decision_text": "Handle user interaction"
-            }
+        # Handle network response
+        if obs_type == "network_response":
+            actions = []
+            
+            # Process the response
+            process_action = action_registry.create_action('io_gateway', 'process_network_response')
+            if process_action:
+                process_action.with_params(response_data=observation.get("data", {}))
+                actions.append(process_action)
+            
+            # Think about what to do with it
+            think_action = action_registry.create_action('io_gateway', 'think')
+            if think_action:
+                think_action.with_params(
+                    prompt="I just received a network response. What should I do with this information?",
+                    strategy="balanced"
+                )
+                actions.append(think_action)
+            
+            # Send response to requester
+            send_action = action_registry.create_action('io_gateway', 'send_message')
+            if send_action:
+                from_agent = orientation.get("from", "user")
+                send_action.with_params(
+                    to=from_agent,
+                    type="RESPONSE",
+                    content=""  # Will be filled based on thinking
+                )
+                actions.append(send_action)
+            
+            # Task complete
+            finish_action = action_registry.create_action('io_gateway', 'finish')
+            if finish_action:
+                actions.append(finish_action)
+            
+            return actions
+        
+        # Handle user message
+        elif obs_type == "user_message":
+            # For now, use standard decision making
+            return await super().decide(orientation)
         
         # Check if this is a network-related request
+        content = orientation.get("content", "").lower()
         question = orientation.get("question", "").lower()
-        request = orientation.get("request", "").lower()
-        all_text = f"{question} {request}"
+        all_text = f"{content} {question}"
         
         # Keywords that indicate network requests
         network_keywords = ["fetch", "get", "post", "http", "https", "url", "website", "webpage", "api", "download"]
         
         if any(keyword in all_text for keyword in network_keywords):
-            # This looks like a network request
-            return {
-                "action": "make_network_request",
-                "reason": "User is asking to fetch content from the web",
-                "decision_text": "Make a network request"
-            }
+            # This is a network request
+            actions = []
+            
+            # Make the network request
+            network_action = action_registry.create_action('io_gateway', 'make_network_request')
+            if network_action:
+                network_action.with_params(url=None)  # Will be extracted from text
+                actions.append(network_action)
+            
+            # Wait for response
+            wait_action = action_registry.create_action('io_gateway', 'wait')
+            if wait_action:
+                wait_action.with_params(duration=0.5, condition="network_response")
+                actions.append(wait_action)
+            
+            # Don't finish yet - we need to wait for the response
+            return actions
         
         # Fall back to standard decision making
         return await super().decide(orientation)
     
-    async def act(self, observation: Dict[str, Any], 
-                  orientation: Dict[str, Any], 
-                  decision: Dict[str, Any]):
-        """Extended act for I/O agents."""
-        action = decision.get("action", "")
-        
-        if action == "handle_network_response":
-            # Process network response
-            response_data = observation.get("data", {})
-            original_request = response_data.get("original_request", {})
-            
-            # Log the response
-            logger.info(f"Network response: {response_data.get('status')} for {original_request.get('url')}")
-            
-            # Could route response back to requesting agent if needed
-            
-        elif action == "handle_user_message":
-            # Process user message
-            user_data = observation.get("data", {})
-            message_type = user_data.get("type", "unknown")
-            
-            logger.info(f"User message type: {message_type}")
-            
-            # Handle different message types
-            if message_type == "request":
-                # Process user request
-                await self._handle_user_request(user_data)
-            elif message_type == "query":
-                # Route query to appropriate agent
-                await self._route_user_query(user_data)
-        
-        elif action == "make_network_request":
-            # Extract URL from the request
-            question = observation.get("question", "")
-            command = observation.get("command", "")
-            full_text = f"{question} {command}"
-            
-            # Parse the URL from the request
-            import re
-            url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
-            urls = re.findall(url_pattern, full_text)
-            
-            if not urls:
-                # Try to find common domain patterns
-                domain_pattern = r'(?:www\.)?([a-zA-Z0-9-]+\.(?:com|org|net|edu|gov|co\.uk|io))'
-                domains = re.findall(domain_pattern, full_text)
-                if domains:
-                    urls = [f"https://{domain}" if not domain.startswith('www.') else f"https://{domain}" for domain in domains]
-            
-            if urls:
-                url = urls[0]  # Take the first URL found
-                logger.info(f"Making network request to {url}")
-                
-                # Create network request
-                network_request = {
-                    "method": "GET",
-                    "url": url,
-                    "headers": {
-                        "User-Agent": "Mind-Swarm-IO-Agent/1.0"
-                    }
-                }
-                
-                # Write request to network body file
-                request_id = await self.io_handler.make_network_request(network_request)
-                
-                # Create a task memory for tracking
-                self.memory_manager.add_memory(
-                    TaskMemoryBlock(
-                        task_type="network_request",
-                        description=f"Fetching {url}",
-                        status="pending",
-                        priority=Priority.HIGH,
-                        metadata={"request_id": request_id, "url": url}
-                    )
-                )
-                
-                logger.info(f"Network request {request_id} submitted")
-            else:
-                logger.warning("No URL found in request")
-        
-        else:
-            # Fall back to standard actions
-            await super().act(observation, orientation, decision)
     
     async def _handle_user_request(self, user_data: Dict[str, Any]):
         """Handle a user request."""

@@ -20,6 +20,7 @@ from .memory import (
     HistoryMemoryBlock, ObservationMemoryBlock
 )
 from .perception import EnvironmentScanner
+from .actions import Action, ActionResult, ActionStatus, action_registry
 
 logger = logging.getLogger("agent.cognitive")
 
@@ -28,17 +29,20 @@ class CognitiveLoop:
     """Enhanced cognitive loop with full memory system."""
     
     def __init__(self, agent_id: str, home: Path, 
-                 max_context_tokens: int = 50000):
+                 max_context_tokens: int = 50000,
+                 agent_type: str = 'base'):
         """Initialize the enhanced cognitive loop.
         
         Args:
             agent_id: The agent's identifier
             home: Path to agent's home directory
             max_context_tokens: Maximum tokens for LLM context
+            agent_type: Type of agent (base, io_gateway, etc.)
         """
         self.agent_id = agent_id
         self.home = Path(home)
         self.max_context_tokens = max_context_tokens
+        self.agent_type = agent_type
         
         # Core cognitive components
         self.boot_rom = BootROM()
@@ -114,13 +118,21 @@ class CognitiveLoop:
             orientation = await self.orient(observation)
             logger.info(f"Oriented: {orientation.get('task_type')} - approach={orientation.get('approach')}")
             
-            # DECIDE - Choose approach with memory-informed decision
-            decision = await self.decide(orientation)
-            logger.info(f"Decided: {decision.get('decision_text', 'Process task')}")
+            # DECIDE - Choose actions to take
+            actions = await self.decide(orientation)
+            logger.info(f"Decided on {len(actions)} actions: {[a.name for a in actions]}")
             
-            # ACT - Execute with full memory context
-            await self.act(observation, orientation, decision)
-            logger.info(f"Completed action for {orientation.get('task_type')} task")
+            # ACT - Execute actions in sequence
+            await self.act(observation, orientation, actions)
+            
+            # Check if task is complete (finish action was executed)
+            if any(a.name == 'finish' for a in actions):
+                # Clear any task tracking
+                if 'task_memory_id' in orientation:
+                    task_memory = self.memory_manager.access_memory(orientation['task_memory_id'])
+                    if task_memory and isinstance(task_memory, TaskMemoryBlock):
+                        task_memory.status = "completed"
+                logger.info(f"Task completed for {orientation.get('task_type')} request")
             
             self.last_activity = datetime.now()
             return True
@@ -385,23 +397,25 @@ class CognitiveLoop:
         
         return "general"
     
-    async def decide(self, orientation: Dict[str, Any]) -> Dict[str, Any]:
-        """Use the decide DSPy signature to determine approach."""
+    async def decide(self, orientation: Dict[str, Any]) -> List[Action]:
+        """Decide what actions to take based on the current situation.
+        
+        Returns:
+            List of Actions to execute in order
+        """
+        # Get available actions for this agent type
+        agent_type = self.agent_type if hasattr(self, 'agent_type') else 'base'
+        available_actions = action_registry.get_available_actions(agent_type)
+        
         # Special case: handle shutdown immediately
         if orientation.get('approach') == 'terminating':
-            return {
-                "action": "terminate",
-                "approach": "terminating",
-                "task_type": orientation.get('task_type', 'shutdown')
-            }
+            finish_action = action_registry.create_action(agent_type, 'finish')
+            return [finish_action]
         
         # Build decision thinking request
-        available_actions = [
-            "Think deeply about the problem",
-            "Answer based on knowledge",
-            "Perform calculations",
-            "Send response message",
-            "Update my memory/journal"
+        action_descriptions = [
+            f"- {name}: {cls().description}" 
+            for name, cls in available_actions.items()
         ]
         
         goals = "Respond helpfully and accurately to the user's request"
@@ -409,23 +423,22 @@ class CognitiveLoop:
         
         thinking_request = {
             "signature": {
-                "task": "What should I do based on my understanding?",
-                "description": "Decide on the best approach or action to take",
+                "task": "What actions should I take to complete this task?",
+                "description": "Decide on the sequence of actions needed",
                 "inputs": {
                     "understanding": "Understanding of the situation",
-                    "available_actions": "What actions can be taken",
+                    "available_actions": "Available actions and their descriptions",
                     "goals": "Current goals or objectives",
                     "constraints": "Any constraints or limitations"
                 },
                 "outputs": {
-                    "decision": "What to do",
-                    "approach": "How to approach it",
-                    "reasoning": "Why this is the best choice"
+                    "action_plan": "Ordered list of actions to take",
+                    "reasoning": "Why this sequence of actions is best"
                 }
             },
             "input_values": {
                 "understanding": orientation.get("reasoning", "Need to process this request"),
-                "available_actions": "\n".join(available_actions),
+                "available_actions": "\n".join(action_descriptions),
                 "goals": goals,
                 "constraints": constraints
             },
@@ -433,86 +446,195 @@ class CognitiveLoop:
             "timestamp": datetime.now().isoformat()
         }
         
-        # Use the brain
+        # Use the brain to decide
         decision_json = json.dumps(thinking_request)
         response = await self._use_brain(decision_json)
+        
+        actions = []
         
         try:
             # Parse response
             result = json.loads(response.replace("<<<THOUGHT_COMPLETE>>>", "").strip())
             output = result.get("output_values", {})
             
-            # Build decision from DSPy outputs
-            decision = {
-                "approach": orientation.get("approach", "thinking"),
-                "task_type": orientation.get("task_type", "general"),
-                "decision_text": output.get("decision", "Process the request"),
-                "reasoning": output.get("reasoning", ""),
-                "dspy_approach": output.get("approach", "Direct processing"),
-                "memory_strategy": "balanced"  # Could be enhanced later
-            }
+            action_plan = output.get("action_plan", "")
+            reasoning = output.get("reasoning", "")
             
-            logger.info(f"Decided: {decision['decision_text']} - {decision['reasoning']}")
+            logger.info(f"Action plan: {action_plan}")
+            logger.info(f"Reasoning: {reasoning}")
+            
+            # Parse the action plan into actual Action objects
+            # For now, use simple heuristics - can be enhanced with better parsing
+            actions = self._parse_action_plan(action_plan, orientation, available_actions)
             
         except Exception as e:
             logger.error(f"Failed to parse decide response: {e}", exc_info=True)
-            # Fallback
-            decision = {
-                "approach": orientation.get("approach", "thinking"),
-                "task_type": orientation.get("task_type", "general"),
-                "decision_text": "Process this request",
-                "memory_strategy": "balanced"
-            }
+            # Fallback: simple action sequence
+            actions = self._get_fallback_actions(orientation, available_actions)
         
         # Record decision
         history = HistoryMemoryBlock(
             action_type="decision",
-            action_detail=decision.get("decision_text", "Made decision"),
-            result=decision.get("reasoning", ""),
+            action_detail=f"Planned {len(actions)} actions",
+            result=f"Actions: {[a.name for a in actions]}",
             priority=Priority.LOW
         )
         self.memory_manager.add_memory(history)
         
-        return decision
+        return actions
+    
+    def _parse_action_plan(self, action_plan: str, orientation: Dict[str, Any], 
+                          available_actions: Dict[str, type[Action]]) -> List[Action]:
+        """Parse the action plan text into Action objects."""
+        actions = []
+        
+        # Simple parsing - look for action names in the plan
+        plan_lower = action_plan.lower()
+        
+        # Common patterns
+        if "think" in plan_lower:
+            think_action = action_registry.create_action(self.agent_type if hasattr(self, 'agent_type') else 'base', 'think')
+            if think_action:
+                think_action.with_params(
+                    prompt=orientation.get("content", ""),
+                    strategy="balanced"
+                )
+                actions.append(think_action)
+        
+        if "send" in plan_lower and "message" in plan_lower:
+            # Determine recipient
+            from_agent = orientation.get("from", "")
+            send_action = action_registry.create_action(self.agent_type if hasattr(self, 'agent_type') else 'base', 'send_message')
+            if send_action:
+                send_action.with_params(
+                    to=from_agent if from_agent else "user",
+                    type="RESPONSE",
+                    content=""  # Will be filled by act phase
+                )
+                actions.append(send_action)
+        
+        # Always add finish at the end unless it's a multi-step task
+        if not any(a.name == 'finish' for a in actions):
+            # Check if this seems like a single-response task
+            task_type = orientation.get('task_type', '')
+            if task_type in ['message', 'question', 'simple_request']:
+                finish_action = action_registry.create_action(self.agent_type if hasattr(self, 'agent_type') else 'base', 'finish')
+                if finish_action:
+                    actions.append(finish_action)
+        
+        return actions
+    
+    def _get_fallback_actions(self, orientation: Dict[str, Any], 
+                             available_actions: Dict[str, type[Action]]) -> List[Action]:
+        """Get fallback actions when parsing fails."""
+        agent_type = self.agent_type if hasattr(self, 'agent_type') else 'base'
+        actions = []
+        
+        # Default: think about it and respond
+        think_action = action_registry.create_action(agent_type, 'think')
+        if think_action:
+            think_action.with_params(
+                prompt=orientation.get("content", ""),
+                strategy="balanced"
+            )
+            actions.append(think_action)
+        
+        # Send response if this was a message
+        if orientation.get('type') == 'message':
+            send_action = action_registry.create_action(agent_type, 'send_message')
+            if send_action:
+                from_agent = orientation.get("from", "")
+                send_action.with_params(
+                    to=from_agent if from_agent else "user",
+                    type="RESPONSE"
+                )
+                actions.append(send_action)
+        
+        # Finish the task
+        finish_action = action_registry.create_action(agent_type, 'finish')
+        if finish_action:
+            actions.append(finish_action)
+        
+        return actions
     
     async def act(self, observation: Dict[str, Any], 
                   orientation: Dict[str, Any], 
-                  decision: Dict[str, Any]):
-        """Execute action with full memory context."""
-        if decision.get("action") == "terminate":
-            logger.info("Executing shutdown")
-            self.shutdown_requested = True
-            return
+                  actions: List[Action]):
+        """Execute actions in sequence, storing results in memory.
         
-        # Most actions involve thinking with memory context
-        if decision["approach"] in ["thinking", "answering"]:
-            response = await self._think_with_memory(
-                orientation["content"], 
-                decision,
-                strategy=decision.get("memory_strategy", "balanced")
-            )
+        Args:
+            observation: Current observation
+            orientation: Understanding of the situation  
+            actions: List of actions to execute in order
+        """
+        # Build execution context
+        context = {
+            "cognitive_loop": self,
+            "memory_manager": self.memory_manager,
+            "agent_id": getattr(self, 'agent_id', 'unknown'),
+            "home_dir": self.home,
+            "outbox_dir": self.outbox_dir,
+            "memory_dir": self.memory_dir,
+            "observation": observation,
+            "orientation": orientation,
+            "task_id": orientation.get("task_memory_id"),
+            "original_text": observation.get("content", "")
+        }
+        
+        # Add agent-specific context
+        if hasattr(self, 'io_handler'):
+            context["io_handler"] = self.io_handler
+        
+        # Execute each action in sequence
+        for i, action in enumerate(actions):
+            logger.info(f"Executing action {i+1}/{len(actions)}: {action.name}")
             
-            # Log the thinking result
-            logger.info(f"Thinking result: {response}")
-            
-            # Update task status
-            if "task_memory_id" in orientation:
-                task_memory = self.memory_manager.access_memory(orientation["task_memory_id"])
-                if task_memory and isinstance(task_memory, TaskMemoryBlock):
-                    task_memory.status = "completed"
-            
-            # Send response if needed
-            if orientation.get("requires_response", True):
-                await self._send_response(observation, response)
-            
-            # Record completion
-            history = HistoryMemoryBlock(
-                action_type="task_completed",
-                action_detail=f"Completed {orientation.get('task_type', 'unknown')} task",
-                result=response,
-                priority=Priority.MEDIUM
-            )
-            self.memory_manager.add_memory(history)
+            try:
+                # Execute the action
+                result = await action.execute(context)
+                
+                # Store result in memory
+                history = HistoryMemoryBlock(
+                    action_type=f"action_{action.name}",
+                    action_detail=action.description,
+                    result=f"Status: {result.status.value}, Result: {result.result}",
+                    priority=Priority.MEDIUM
+                )
+                self.memory_manager.add_memory(history)
+                
+                # Update context with results for next action
+                context[f"action_{i}_result"] = result
+                
+                # Check if action failed
+                if result.status == ActionStatus.FAILED:
+                    logger.error(f"Action {action.name} failed: {result.error}")
+                    # Decide whether to continue or abort
+                    if action.priority == Priority.HIGH:
+                        logger.warning("High priority action failed, aborting sequence")
+                        break
+                
+                # Check if task is marked complete
+                if context.get("task_complete", False):
+                    logger.info("Task marked complete, ending action sequence")
+                    break
+                    
+            except Exception as e:
+                logger.error(f"Error executing action {action.name}: {e}", exc_info=True)
+                
+                # Record error
+                history = HistoryMemoryBlock(
+                    action_type=f"action_{action.name}_error",
+                    action_detail=f"Failed to execute {action.name}",
+                    result=str(e),
+                    priority=Priority.HIGH
+                )
+                self.memory_manager.add_memory(history)
+                
+                # Continue with next action unless critical
+                if action.priority == Priority.HIGH:
+                    break
+        
+        logger.info(f"Completed {len(actions)} actions")
     
     async def _think_with_memory(self, task: str, decision: Dict[str, Any], 
                                 strategy: str = "balanced") -> str:
