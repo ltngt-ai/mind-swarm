@@ -183,9 +183,25 @@ class IOCognitiveLoop(CognitiveLoop):
                 "reason": "Process user message from body file",
                 "decision_text": "Handle user interaction"
             }
-        else:
-            # Fall back to standard decision making
-            return await super().decide(orientation)
+        
+        # Check if this is a network-related request
+        question = orientation.get("question", "").lower()
+        request = orientation.get("request", "").lower()
+        all_text = f"{question} {request}"
+        
+        # Keywords that indicate network requests
+        network_keywords = ["fetch", "get", "post", "http", "https", "url", "website", "webpage", "api", "download"]
+        
+        if any(keyword in all_text for keyword in network_keywords):
+            # This looks like a network request
+            return {
+                "action": "make_network_request",
+                "reason": "User is asking to fetch content from the web",
+                "decision_text": "Make a network request"
+            }
+        
+        # Fall back to standard decision making
+        return await super().decide(orientation)
     
     async def act(self, observation: Dict[str, Any], 
                   orientation: Dict[str, Any], 
@@ -217,6 +233,55 @@ class IOCognitiveLoop(CognitiveLoop):
             elif message_type == "query":
                 # Route query to appropriate agent
                 await self._route_user_query(user_data)
+        
+        elif action == "make_network_request":
+            # Extract URL from the request
+            question = observation.get("question", "")
+            command = observation.get("command", "")
+            full_text = f"{question} {command}"
+            
+            # Parse the URL from the request
+            import re
+            url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
+            urls = re.findall(url_pattern, full_text)
+            
+            if not urls:
+                # Try to find common domain patterns
+                domain_pattern = r'(?:www\.)?([a-zA-Z0-9-]+\.(?:com|org|net|edu|gov|co\.uk|io))'
+                domains = re.findall(domain_pattern, full_text)
+                if domains:
+                    urls = [f"https://{domain}" if not domain.startswith('www.') else f"https://{domain}" for domain in domains]
+            
+            if urls:
+                url = urls[0]  # Take the first URL found
+                logger.info(f"Making network request to {url}")
+                
+                # Create network request
+                network_request = {
+                    "method": "GET",
+                    "url": url,
+                    "headers": {
+                        "User-Agent": "Mind-Swarm-IO-Agent/1.0"
+                    }
+                }
+                
+                # Write request to network body file
+                request_id = await self.io_handler.make_network_request(network_request)
+                
+                # Create a task memory for tracking
+                self.memory_manager.add_memory(
+                    TaskMemoryBlock(
+                        task_type="network_request",
+                        description=f"Fetching {url}",
+                        status="pending",
+                        priority=Priority.HIGH,
+                        metadata={"request_id": request_id, "url": url}
+                    )
+                )
+                
+                logger.info(f"Network request {request_id} submitted")
+            else:
+                logger.warning("No URL found in request")
         
         else:
             # Fall back to standard actions

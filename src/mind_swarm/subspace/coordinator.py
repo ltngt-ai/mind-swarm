@@ -15,6 +15,7 @@ from mind_swarm.subspace.body_manager import BodySystemManager
 from mind_swarm.subspace.body_monitor import create_body_monitor
 from mind_swarm.subspace.brain_handler_dynamic import DynamicBrainHandler
 from mind_swarm.subspace.agent_registry import AgentRegistry
+from mind_swarm.subspace.io_handlers import NetworkBodyHandler, UserIOBodyHandler
 from mind_swarm.schemas.agent_types import AgentType
 from mind_swarm.ai.presets import preset_manager
 from mind_swarm.ai.providers.factory import create_ai_service
@@ -177,6 +178,9 @@ class SubspaceCoordinator:
         self._ai_services: Dict[str, Any] = {}
         self._brain_handlers: Dict[str, DynamicBrainHandler] = {}
         self._brain_handler_lock = asyncio.Lock()  # Protect brain handler creation
+        
+        # I/O agent handlers
+        self._io_handlers: Dict[str, Dict[str, Any]] = {}  # agent_name -> {"network": handler, "user_io": handler}
                 
         logger.info("Initialized subspace coordinator")
     
@@ -331,6 +335,24 @@ class SubspaceCoordinator:
         
         # Stop body file monitoring
         await self.body_system.stop_agent_monitoring(name)
+        
+        # Clean up I/O handlers if this is an I/O agent
+        if name in self._io_handlers:
+            handlers = self._io_handlers[name]
+            
+            # Cancel monitoring tasks
+            if "network_task" in handlers:
+                handlers["network_task"].cancel()
+            if "user_io_task" in handlers:
+                handlers["user_io_task"].cancel()
+            
+            # Close handlers
+            if "network" in handlers:
+                await handlers["network"].close()
+            
+            # Remove from dictionary
+            del self._io_handlers[name]
+            logger.info(f"Cleaned up I/O handlers for {name}")
         
         # Terminate the agent process
         await self.spawner.terminate_agent(name)
@@ -702,7 +724,84 @@ class SubspaceCoordinator:
         user_io_file.write_text("")
         logger.info(f"Created user_io body file for {agent_name}")
         
-        # TODO: Set up monitoring for these special body files
+        # Create handlers
+        network_handler = NetworkBodyHandler(agent_name, network_file)
+        user_io_handler = UserIOBodyHandler(agent_name, user_io_file)
+        
+        # Store handlers
+        self._io_handlers[agent_name] = {
+            "network": network_handler,
+            "user_io": user_io_handler,
+            "network_file": network_file,
+            "user_io_file": user_io_file
+        }
+        
+        # Set up monitoring for these special body files
+        await self._start_io_body_monitoring(agent_name)
+    
+    async def _start_io_body_monitoring(self, agent_name: str):
+        """Start monitoring I/O body files for an agent.
+        
+        Args:
+            agent_name: Name of the I/O agent
+        """
+        if agent_name not in self._io_handlers:
+            logger.error(f"No I/O handlers found for {agent_name}")
+            return
+            
+        handlers = self._io_handlers[agent_name]
+        
+        # Start monitoring tasks for each body file
+        network_task = asyncio.create_task(
+            self._monitor_io_body_file(agent_name, "network", handlers["network_file"], handlers["network"])
+        )
+        user_io_task = asyncio.create_task(
+            self._monitor_io_body_file(agent_name, "user_io", handlers["user_io_file"], handlers["user_io"])
+        )
+        
+        # Store tasks so we can cancel them later if needed
+        handlers["network_task"] = network_task
+        handlers["user_io_task"] = user_io_task
+        
+        logger.info(f"Started I/O body file monitoring for {agent_name}")
+    
+    async def _monitor_io_body_file(self, agent_name: str, file_type: str, file_path: Path, handler):
+        """Monitor a single I/O body file for changes.
+        
+        Args:
+            agent_name: Name of the I/O agent
+            file_type: Type of body file (network or user_io)
+            file_path: Path to the body file
+            handler: Handler instance for processing requests
+        """
+        logger.info(f"Monitoring {file_type} body file for {agent_name}")
+        last_content = ""
+        
+        while agent_name in self._io_handlers:
+            try:
+                # Check if file has content
+                current_content = file_path.read_text().strip()
+                
+                if current_content and current_content != last_content:
+                    logger.info(f"Processing {file_type} request for {agent_name}")
+                    
+                    # Process the request
+                    response = await handler.handle_request(current_content)
+                    
+                    # Write response back
+                    file_path.write_text(response)
+                    last_content = response
+                    
+                    logger.info(f"Completed {file_type} request for {agent_name}")
+                
+                # Small delay to avoid busy waiting
+                await asyncio.sleep(0.1)
+                
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error monitoring {file_type} body file for {agent_name}: {e}")
+                await asyncio.sleep(1)  # Back off on error
     
     async def _start_io_agent_server_component(self, agent_name: str, type_config):
         """Start the server-side component for an I/O agent.
@@ -711,5 +810,5 @@ class SubspaceCoordinator:
             agent_name: Name of the I/O agent
             type_config: Agent type configuration
         """
-        # TODO: Implement server component initialization
-        logger.info(f"I/O agent server component for {agent_name} not yet implemented")
+        # The I/O body file monitoring is the main server component
+        logger.info(f"I/O agent server component initialized for {agent_name}")

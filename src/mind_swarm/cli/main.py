@@ -517,11 +517,16 @@ def server(
             console.print("[yellow]No log file found[/yellow]")
             return
         
-        # Tail the log file
+        # Tail the log file with --follow=name to handle truncation
         console.print(f"[cyan]Tailing {log_file}...[/cyan]")
         console.print("[dim]Press Ctrl+C to stop[/dim]\n")
         
         try:
+            # Use --follow=name to handle file truncation/rotation
+            # and --retry to keep trying if file is temporarily unavailable
+            subprocess.run(["tail", "-f", "--follow=name", "--retry", str(log_file)])
+        except subprocess.CalledProcessError:
+            # Fallback to simple tail -f if options not supported
             subprocess.run(["tail", "-f", str(log_file)])
         except KeyboardInterrupt:
             pass
