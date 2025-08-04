@@ -26,7 +26,6 @@ class MemoryType(Enum):
     TASK = "task"
     MESSAGE = "message"
     KNOWLEDGE = "knowledge"
-    HISTORY = "history"
     CONTEXT = "context"
     OBSERVATION = "observation"
     CYCLE_STATE = "cycle_state"
@@ -192,29 +191,6 @@ class KnowledgeMemoryBlock(MemoryBlock):
             self.id = f"knowledge:{self.topic}"
 
 
-@dataclass
-class HistoryMemoryBlock(MemoryBlock):
-    """Recent agent actions/thoughts."""
-    action_type: str
-    action_detail: str
-    result: Optional[str] = None
-    confidence: float = 1.0
-    priority: Priority = Priority.MEDIUM
-    timestamp: Optional[datetime] = None
-    expiry: Optional[datetime] = None
-    metadata: Optional[Dict[str, Any]] = None
-    
-    def __post_init__(self):
-        """Initialize base class and set type."""
-        super().__init__(
-            confidence=self.confidence,
-            priority=self.priority,
-            timestamp=self.timestamp,
-            expiry=self.expiry,
-            metadata=self.metadata
-        )
-        self.type = MemoryType.HISTORY
-        self.id = f"history:{self.action_type}:{self.timestamp.timestamp()}"
 
 
 @dataclass

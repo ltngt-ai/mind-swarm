@@ -104,7 +104,9 @@ class ModelRegistry:
         """Load curated models and blacklist from YAML files."""
         # Load curated models
         curated_file = self.config_dir / "curated_models.yaml"
+        logger.info(f"Looking for curated models at: {curated_file}")
         if curated_file.exists():
+            logger.info(f"Found curated models file at: {curated_file}")
             try:
                 with open(curated_file, 'r') as f:
                     data = yaml.safe_load(f)
@@ -115,10 +117,11 @@ class ModelRegistry:
                     # Load config settings
                     config = data.get('config', {})
                     self.use_curated_only = config.get('use_curated_only', True)
-                    logger.info(f"Loaded {len(self.curated_models)} curated models")
+                    logger.info(f"Loaded {len(self.curated_models)} curated models: {self.curated_models}")
             except Exception as e:
                 logger.error(f"Error loading curated models: {e}")
                 # Fallback to hardcoded list
+                logger.warning("Using fallback hardcoded curated models list")
                 self.curated_models = [
                     "google/gemini-2.0-flash-exp:free",
                     "meta-llama/llama-3.2-3b-instruct:free",
@@ -127,6 +130,17 @@ class ModelRegistry:
                     "qwen/qwen-2.5-coder-32b-instruct:free",
                     "google/gemma-2-9b-it:free",
                 ]
+        else:
+            logger.warning(f"Curated models file not found at: {curated_file}")
+            logger.warning("Using fallback hardcoded curated models list")
+            self.curated_models = [
+                "google/gemini-2.0-flash-exp:free",
+                "meta-llama/llama-3.2-3b-instruct:free",
+                "meta-llama/llama-3.3-70b-instruct:free",
+                "qwen/qwen-2.5-72b-instruct:free",
+                "qwen/qwen-2.5-coder-32b-instruct:free",
+                "google/gemma-2-9b-it:free",
+            ]
         
         # Load blacklist
         blacklist_file = self.config_dir / "blacklist_models.yaml"
@@ -415,4 +429,8 @@ class ModelRegistry:
 
 
 # Global registry instance
-model_registry = ModelRegistry()
+# Initialize with proper config directory
+from pathlib import Path
+_project_root = Path(__file__).parent.parent.parent.parent  # Go up to project root
+_config_dir = _project_root / "config"
+model_registry = ModelRegistry(config_dir=_config_dir)

@@ -308,6 +308,17 @@ class SubspaceManager:
                 if src_schema.exists():
                     shutil.copy2(src_schema, schema_file)
             
+            # Copy actions directory if missing or update it
+            actions_dir = self.library_dir / "actions"
+            src_actions = grid_template / "library" / "actions"
+            if src_actions.exists():
+                if actions_dir.exists():
+                    logger.info("Updating actions knowledge from template")
+                    shutil.rmtree(actions_dir)
+                else:
+                    logger.info("Copying actions knowledge to library")
+                shutil.copytree(src_actions, actions_dir)
+            
             # Copy README files
             for subdir in ["plaza", "workshop", "library"]:
                 readme = getattr(self, f"{subdir}_dir") / "README.md"

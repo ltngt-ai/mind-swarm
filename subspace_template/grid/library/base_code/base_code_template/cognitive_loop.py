@@ -25,7 +25,7 @@ from .memory import (
     WorkingMemoryManager, ContentLoader, ContextBuilder, 
     MemorySelector, Priority, MemoryType,
     FileMemoryBlock, MessageMemoryBlock, TaskMemoryBlock,
-    HistoryMemoryBlock, ObservationMemoryBlock, ROMMemoryBlock,
+    ObservationMemoryBlock, ROMMemoryBlock,
     CycleStateMemoryBlock
 )
 from .perception import EnvironmentScanner
@@ -411,7 +411,36 @@ class CognitiveLoop:
                 
                 # Save actions as serializable data
                 action_data = [{"name": a.name, "params": a.params} for a in actions]
-                self._update_cycle_state("act", current_actions=action_data)
+                self._update_cycle_state("instruct", current_actions=action_data)
+                await self._save_memory_snapshot()
+                
+            elif state == "instruct":
+                # INSTRUCT - Load action knowledge and validate/fix parameters
+                logger.info("=== ENTERING INSTRUCT PHASE ===")
+                cycle_state_block = self._get_cycle_state_block()
+                if not cycle_state_block:
+                    # Missing state, restart
+                    logger.warning("Missing cycle state block in instruct phase")
+                    self._update_cycle_state("perceive")
+                    await self._save_memory_snapshot()
+                    return True
+                
+                action_data = cycle_state_block.current_actions or []
+                logger.info(f"Instruct phase: found {len(action_data)} actions to instruct")
+                if not action_data:
+                    # No actions to instruct, skip to perceive
+                    logger.warning("No actions to instruct, returning to perceive")
+                    self._update_cycle_state("perceive")
+                    await self._save_memory_snapshot()
+                    return True
+                
+                # Load action knowledge and fix parameters
+                logger.info(f"Loading action knowledge for: {[a.get('name') for a in action_data]}")
+                instructed_actions = await self.instruct(action_data)
+                
+                # Save instructed actions and advance to act
+                logger.info(f"Instruct phase complete, advancing to act with {len(instructed_actions)} actions")
+                self._update_cycle_state("act", current_actions=instructed_actions)
                 await self._save_memory_snapshot()
                 
             elif state == "act":
@@ -446,11 +475,12 @@ class CognitiveLoop:
                 
                 # Check if task is complete (finish action was executed)
                 if any(a.name == 'finish' for a in actions):
-                    # Clear any task tracking
-                    if 'task_memory_id' in orientation:
-                        task_memory = self.memory_manager.access_memory(orientation['task_memory_id'])
-                        if task_memory and isinstance(task_memory, TaskMemoryBlock):
-                            task_memory.status = "completed"
+                    # Mark all in-progress tasks as completed
+                    task_memories = [m for m in self.memory_manager.symbolic_memory 
+                                   if isinstance(m, TaskMemoryBlock) and m.status == "in_progress"]
+                    for task_memory in task_memories:
+                        task_memory.status = "completed"
+                        logger.info(f"Marked task as completed: {task_memory.description}")
                     logger.info(f"Task completed for {orientation.get('task_type')} request")
                 
                 # Clear current task data and restart cycle
@@ -470,7 +500,7 @@ class CognitiveLoop:
             logger.error(f"Error in cognitive cycle state {state}: {e}", exc_info=True)
             # On error, try to restart from perceive
             self._update_cycle_state("perceive")
-            self._save_memory_snapshot()
+            await self._save_memory_snapshot()
             return False
     
     async def perceive(self):
@@ -560,12 +590,13 @@ class CognitiveLoop:
         if task_memories:
             current_task = task_memories[0].description
         
-        # Get recent history
+        # Get recent actions from observations
         recent_history = []
-        history_memories = [m for m in self.memory_manager.symbolic_memory 
-                          if isinstance(m, HistoryMemoryBlock)]
-        recent_history = [f"{h.action_type}: {h.action_detail}" 
-                         for h in sorted(history_memories, key=lambda x: x.timestamp)[-3:]]
+        action_observations = [m for m in self.memory_manager.symbolic_memory 
+                          if isinstance(m, ObservationMemoryBlock) 
+                          and m.observation_type == "action_result"]
+        recent_history = [f"{o.metadata.get('action_name', 'unknown')}: {o.description[:50]}" 
+                         for o in sorted(action_observations, key=lambda x: x.timestamp)[-3:]]
         
         # Build structured thinking request for orient
         thinking_request = {
@@ -646,8 +677,12 @@ class CognitiveLoop:
     
     def _determine_approach(self, output_values: Dict[str, Any]) -> str:
         """Determine approach based on DSPy orient outputs."""
-        situation = output_values.get("situation_type", "").lower()
-        understanding = output_values.get("understanding", "").lower()
+        situation = output_values.get("situation_type") or ""
+        understanding = output_values.get("understanding") or ""
+        
+        # Convert to lowercase for comparison
+        situation = situation.lower() if isinstance(situation, str) else ""
+        understanding = understanding.lower() if isinstance(understanding, str) else ""
         
         if "arithmetic" in situation or "math" in situation:
             return "thinking"
@@ -709,8 +744,14 @@ class CognitiveLoop:
         # Build decision thinking request with parameter details
         action_descriptions = []
         for name, cls in available_actions.items():
-            action_inst = cls()
-            desc = f"- {name}: {action_inst.description}"
+            # Get description without instantiating if possible
+            try:
+                # Temporarily instantiate to get description
+                action_inst = cls()
+                desc = f"- {name}: {action_inst.description}"
+            except TypeError:
+                # Fallback if instantiation fails
+                desc = f"- {name}: Action available"
             
             # Add parameter hints for common actions
             if name == "send_message":
@@ -730,7 +771,7 @@ class CognitiveLoop:
         thinking_request = {
             "signature": {
                 "task": "What actions should I take to complete this task?",
-                "description": "Return a literal JSON array of action objects with parameters",
+                "description": "Return a literal JSON array of action objects with parameters. Do not wrap in markdown code blocks.",
                 "inputs": {
                     "understanding": "Understanding of the situation",
                     "available_actions": "Available actions and their descriptions",
@@ -739,7 +780,7 @@ class CognitiveLoop:
                     "original_request": "The original user request text"
                 },
                 "outputs": {
-                    "actions": "JSON array of action objects like [{\"action\": \"send_message\", \"params\": {\"to\": \"user\", \"content\": \"...\"}}] or [{\"action\": \"finish\", \"params\": {}}]",
+                    "actions": "Raw JSON array only, no markdown formatting. Example: [{\"action\": \"send_message\", \"params\": {\"to\": \"user\", \"content\": \"...\"}}]",
                     "reasoning": "Why this sequence of actions is best"
                 },
                 "display_field": "reasoning",
@@ -782,54 +823,309 @@ class CognitiveLoop:
             logger.info(f"Action names: {action_names}")
             logger.info(f"Reasoning: {reasoning}")
             
+            # Store raw action output for potential instruct phase correction
+            raw_action_output = action_names
+            
             # Parse the JSON array of action objects
             try:
-                if isinstance(action_names, str):
-                    action_objects = json.loads(action_names)
-                else:
-                    action_objects = action_names
+                # First, try to clean up markdown-wrapped JSON
+                cleaned_actions = action_names
+                if isinstance(action_names, str) and "```json" in action_names and "```" in action_names:
+                    # Extract JSON from markdown code block
+                    start = action_names.find("```json") + 7
+                    end = action_names.rfind("```")
+                    if start < end:
+                        cleaned_actions = action_names[start:end].strip()
+                        logger.info(f"Extracted JSON from markdown: {cleaned_actions}")
+                elif isinstance(action_names, str) and "```" in action_names:
+                    # Try generic code block
+                    start = action_names.find("```") + 3
+                    end = action_names.rfind("```")
+                    if start < end:
+                        cleaned_actions = action_names[start:end].strip()
+                        logger.info(f"Extracted from code block: {cleaned_actions}")
                 
-                # Create Action objects from the specifications
-                for action_spec in action_objects:
-                    if isinstance(action_spec, dict):
-                        action_name = action_spec.get("action")
-                        params = action_spec.get("params", {})
-                    else:
-                        # Fallback for simple string format
-                        action_name = action_spec
-                        params = {}
-                    
-                    action = action_registry.create_action(agent_type, action_name)
-                    if action:
-                        # Use provided parameters or fall back to defaults
-                        if params:
-                            action.with_params(**params)
+                if isinstance(cleaned_actions, str):
+                    action_objects = json.loads(cleaned_actions)
+                else:
+                    action_objects = cleaned_actions
+                
+                # Check if we got None or invalid response
+                if action_objects is None:
+                    logger.warning("Brain returned None for actions, using fallback")
+                    actions = self._get_fallback_actions(orientation, available_actions)
+                else:
+                    # Create Action objects from the specifications
+                    for action_spec in action_objects:
+                        if isinstance(action_spec, dict):
+                            action_name = action_spec.get("action")
+                            params = action_spec.get("params", {})
                         else:
-                            # Set default parameters based on context
-                            self._configure_action(action, orientation)
-                        actions.append(action)
-                    else:
-                        logger.warning(f"Unknown action: {action_name}")
+                            # Fallback for simple string format
+                            action_name = action_spec
+                            params = {}
+                        
+                        if action_name:  # Only create action if we have a valid name
+                            action = action_registry.create_action(agent_type, action_name)
+                            if action:
+                                # Use provided parameters or fall back to defaults
+                                if params:
+                                    action.with_params(**params)
+                                else:
+                                    # Set default parameters based on context
+                                    self._configure_action(action, orientation)
+                                actions.append(action)
+                            else:
+                                logger.warning(f"Unknown action: {action_name}")
                         
             except json.JSONDecodeError:
                 logger.error(f"Failed to parse action names as JSON: {action_names}")
-                actions = self._get_fallback_actions(orientation, available_actions)
+                # Pass raw output to instruct phase for correction
+                actions = []
+                # Create a special raw action to signal instruct phase
+                raw_action = type('RawAction', (), {
+                    'name': '_raw_action_output',
+                    'params': {
+                        'raw_output': raw_action_output, 
+                        'reasoning': reasoning,
+                        'orientation': orientation,
+                        'available_actions': list(available_actions.keys())
+                    }
+                })()
+                actions.append(raw_action)
             
         except Exception as e:
             logger.error(f"Failed to parse decide response: {e}", exc_info=True)
             # Fallback: simple action sequence
             actions = self._get_fallback_actions(orientation, available_actions)
         
-        # Record decision
-        history = HistoryMemoryBlock(
-            action_type="decision",
-            action_detail=f"Planned {len(actions)} actions",
-            result=f"Actions: {[a.name for a in actions]}",
-            priority=Priority.LOW
+        # Record decision as observation
+        decision_obs = ObservationMemoryBlock(
+            observation_type="decision",
+            path="cognitive_loop",
+            description=f"Planned {len(actions)} actions: {[a.name for a in actions]}",
+            priority=Priority.LOW,
+            metadata={"action_count": len(actions), "action_names": [a.name for a in actions]}
         )
-        self.memory_manager.add_memory(history)
+        self.memory_manager.add_memory(decision_obs)
         
         return actions
+    
+    async def instruct(self, action_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Instruct phase - Load action knowledge and validate/fix parameters.
+        
+        This phase loads knowledge about how to use each action and fixes
+        common parameter mistakes before execution.
+        
+        Args:
+            action_data: List of action dictionaries with name and params
+            
+        Returns:
+            List of corrected action dictionaries
+        """
+        corrected_actions = []
+        
+        # Check if we have raw action output to fix
+        if (len(action_data) == 1 and 
+            action_data[0].get("name") == "_raw_action_output"):
+            # Special case: need to parse and fix raw output
+            logger.info("Instruct phase: Fixing raw action output")
+            raw_params = action_data[0].get("params", {})
+            raw_output = raw_params.get("raw_output", "")
+            reasoning = raw_params.get("reasoning", "")
+            orientation = raw_params.get("orientation", {})
+            available_actions = raw_params.get("available_actions", [])
+            
+            # Use brain to fix the formatting
+            fix_request = {
+                "signature": {
+                    "task": "Fix malformed action JSON",
+                    "description": "Convert the raw action output into proper JSON format",
+                    "inputs": {
+                        "raw_output": "The raw action output that failed to parse",
+                        "reasoning": "The reasoning behind the actions",
+                        "available_actions": "List of valid action names",
+                        "context": "Context about the task"
+                    },
+                    "outputs": {
+                        "fixed_json": "Properly formatted JSON array of action objects",
+                        "explanation": "What was wrong and how it was fixed"
+                    }
+                },
+                "input_values": {
+                    "raw_output": raw_output,
+                    "reasoning": reasoning,
+                    "available_actions": ", ".join(available_actions),
+                    "context": str(orientation)
+                },
+                "request_id": f"fix_actions_{int(time.time()*1000)}",
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            response = await self._use_brain(json.dumps(fix_request))
+            
+            try:
+                result = json.loads(response.replace("<<<THOUGHT_COMPLETE>>>", "").strip())
+                fixed_json = result.get("output_values", {}).get("fixed_json", "[]")
+                explanation = result.get("output_values", {}).get("explanation", "")
+                
+                logger.info(f"Fixed JSON: {fixed_json}")
+                logger.info(f"Fix explanation: {explanation}")
+                
+                # Parse the fixed JSON
+                action_objects = json.loads(fixed_json)
+                
+                # Convert to our format
+                for action_spec in action_objects:
+                    if isinstance(action_spec, dict):
+                        corrected_actions.append({
+                            "name": action_spec.get("action", ""),
+                            "params": action_spec.get("params", {})
+                        })
+                
+                # If we got valid actions, return them
+                if corrected_actions:
+                    return corrected_actions
+                    
+            except Exception as e:
+                logger.error(f"Failed to fix raw actions: {e}")
+            
+            # If fixing failed, return simple fallback
+            return [
+                {"name": "send_message", "params": {"to": "user", "content": "I apologize, I had trouble parsing my action plan. Let me try a simpler approach."}},
+                {"name": "finish", "params": {}}
+            ]
+        
+        # Normal case: process each action
+        for action_spec in action_data:
+            action_name = action_spec.get("name", "")
+            original_params = action_spec.get("params", {})
+            
+            # Load action knowledge
+            action_knowledge = await self._load_action_knowledge(action_name)
+            
+            if action_knowledge:
+                # Add to working memory
+                self.memory_manager.add_memory(action_knowledge)
+                
+                # Extract parameter schema from knowledge
+                metadata = action_knowledge.metadata if action_knowledge.metadata else {}
+                param_schema = metadata.get("parameter_schema", {})
+                corrections = metadata.get("common_corrections", [])
+                
+                # Apply automatic corrections
+                corrected_params = original_params.copy()
+                
+                # Check for parameter aliases and rename
+                for param_name, param_info in param_schema.items():
+                    if param_name not in corrected_params:
+                        # Check if any alias was used
+                        aliases = param_info.get("aliases", [])
+                        for alias in aliases:
+                            if alias in corrected_params:
+                                corrected_params[param_name] = corrected_params.pop(alias)
+                                logger.info(f"Corrected parameter: '{alias}' -> '{param_name}' for action {action_name}")
+                                break
+                
+                # Apply specific corrections
+                for correction in corrections:
+                    if_param = correction.get("if_param")
+                    then_rename = correction.get("then_rename")
+                    if if_param in corrected_params and then_rename:
+                        corrected_params[then_rename] = corrected_params.pop(if_param)
+                        logger.info(f"Applied correction: '{if_param}' -> '{then_rename}' for action {action_name}")
+                
+                # Validate required parameters
+                missing_required = []
+                for param_name, param_info in param_schema.items():
+                    if param_info.get("required", False) and param_name not in corrected_params:
+                        missing_required.append(param_name)
+                
+                if missing_required:
+                    # Use brain to figure out missing parameters
+                    thinking_request = {
+                        "signature": {
+                            "task": "Fill in missing action parameters",
+                            "description": "Determine values for missing required parameters based on context",
+                            "inputs": {
+                                "action_name": "The action being prepared",
+                                "missing_params": "List of missing required parameters",
+                                "param_descriptions": "What each parameter does",
+                                "current_params": "Parameters already provided",
+                                "context": "Current task context"
+                            },
+                            "outputs": {
+                                "filled_params": "Dictionary of parameter names to values",
+                                "reasoning": "Why these values were chosen"
+                            },
+                            "display_field": "reasoning"
+                        },
+                        "input_values": {
+                            "action_name": action_name,
+                            "missing_params": missing_required,
+                            "param_descriptions": {p: param_schema[p].get("description", "") for p in missing_required},
+                            "current_params": corrected_params,
+                            "context": f"Working on: {getattr(self, 'current_task', 'unknown task')}"
+                        },
+                        "request_id": f"instruct_{int(time.time()*1000)}",
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    
+                    response = await self._use_brain(json.dumps(thinking_request))
+                    try:
+                        result = json.loads(response.replace("<<<THOUGHT_COMPLETE>>>", "").strip())
+                        filled = result.get("output_values", {}).get("filled_params", {})
+                        if isinstance(filled, dict):
+                            corrected_params.update(filled)
+                            logger.info(f"Brain filled missing params for {action_name}: {filled}")
+                    except Exception as e:
+                        logger.warning(f"Failed to fill missing params: {e}")
+                
+                # Apply defaults for optional parameters
+                for param_name, param_info in param_schema.items():
+                    if param_name not in corrected_params and "default" in param_info:
+                        corrected_params[param_name] = param_info["default"]
+                
+                corrected_actions.append({
+                    "name": action_name,
+                    "params": corrected_params
+                })
+            else:
+                # No knowledge available, use original
+                logger.warning(f"No knowledge found for action: {action_name}")
+                corrected_actions.append(action_spec)
+        
+        # Log the corrections made
+        for i, (original, corrected) in enumerate(zip(action_data, corrected_actions)):
+            if original != corrected:
+                logger.info(f"Action {i} corrected: {original} -> {corrected}")
+        
+        return corrected_actions
+    
+    async def _load_action_knowledge(self, action_name: str) -> Optional[KnowledgeMemoryBlock]:
+        """Load knowledge about how to use an action.
+        
+        Args:
+            action_name: Name of the action
+            
+        Returns:
+            KnowledgeMemoryBlock if found, None otherwise
+        """
+        # Look for action knowledge in the library (always at /grid/library)
+        knowledge_path = Path(f"/grid/library/actions/{action_name}.json")
+        
+        if knowledge_path.exists():
+            if self._load_knowledge_file(knowledge_path):
+                # Find the loaded knowledge in memory
+                for memory in self.memory_manager.symbolic_memory:
+                    if isinstance(memory, KnowledgeMemoryBlock) and action_name in str(memory.location):
+                        return memory
+                # If not found in memory after loading, something went wrong
+                logger.warning(f"Loaded knowledge file but couldn't find in memory: {knowledge_path}")
+        else:
+            logger.debug(f"No knowledge file found at: {knowledge_path}")
+        
+        return None
     
     def _configure_action(self, action: Action, orientation: Dict[str, Any]):
         """Configure action parameters based on context."""
@@ -914,17 +1210,28 @@ class CognitiveLoop:
                 # Execute the action
                 result = await action.execute(context)
                 
-                # Store result in memory
-                history = HistoryMemoryBlock(
-                    action_type=f"action_{action.name}",
-                    action_detail=action.description,
-                    result=f"Status: {result.status.value}, Result: {result.result}",
-                    priority=Priority.MEDIUM
-                )
-                self.memory_manager.add_memory(history)
+                # Store result as observation for subsequent actions
+                if result.result:
+                    obs = ObservationMemoryBlock(
+                        observation_type="action_result",
+                        path=f"action_{i}_{action.name}",
+                        description=f"Result of {action.name}: {str(result.result)[:100]}",
+                        priority=Priority.HIGH,
+                        metadata={
+                            "action_name": action.name,
+                            "action_index": i,
+                            "status": result.status.value,
+                            "full_result": result.result,
+                            "error": result.error if result.status == ActionStatus.FAILED else None
+                        }
+                    )
+                    self.memory_manager.add_memory(obs)
+                    
+                    # Make the observation ID available to subsequent actions
+                    context[f"action_{i}_result_id"] = obs.id
+                    context["last_action_result_id"] = obs.id
+                    context["last_action_result"] = result.result
                 
-                # Update context with results for next action
-                context[f"action_{i}_result"] = result
                 
                 # Check if action failed
                 if result.status == ActionStatus.FAILED:
@@ -942,14 +1249,20 @@ class CognitiveLoop:
             except Exception as e:
                 logger.error(f"Error executing action {action.name}: {e}", exc_info=True)
                 
-                # Record error
-                history = HistoryMemoryBlock(
-                    action_type=f"action_{action.name}_error",
-                    action_detail=f"Failed to execute {action.name}",
-                    result=str(e),
-                    priority=Priority.HIGH
+                # Record error as observation
+                error_obs = ObservationMemoryBlock(
+                    observation_type="action_error",
+                    path=f"action_{i}_{action.name}",
+                    description=f"Failed to execute {action.name}: {str(e)}",
+                    priority=Priority.HIGH,
+                    metadata={
+                        "action_name": action.name,
+                        "action_index": i,
+                        "error": str(e),
+                        "error_type": type(e).__name__
+                    }
                 )
-                self.memory_manager.add_memory(history)
+                self.memory_manager.add_memory(error_obs)
                 
                 # Continue with next action unless critical
                 if action.priority == Priority.HIGH:
@@ -1112,10 +1425,10 @@ class CognitiveLoop:
         """Perform maintenance tasks when idle."""
         # Cleanup old memories
         expired = self.memory_manager.cleanup_expired()
-        old_history = self.memory_manager.cleanup_old_history(max_age_seconds=1800)
+        old_observations = self.memory_manager.cleanup_old_observations(max_age_seconds=1800)
         
-        if expired or old_history:
-            logger.debug(f"Cleaned up {expired} expired, {old_history} old history memories")
+        if expired or old_observations:
+            logger.debug(f"Cleaned up {expired} expired, {old_observations} old observation memories")
         
         # Save memory snapshot periodically
         if self.cycle_count % 100 == 0:

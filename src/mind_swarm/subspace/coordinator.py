@@ -194,6 +194,10 @@ class SubspaceCoordinator:
         # Model registry and selector
         self.model_selector = ModelSelector(model_registry)
         self._model_refresh_task: Optional[asyncio.Task] = None
+        
+        # Cache for agent model selections (agent_name -> selected_model_id)
+        # This is in-memory only, not persisted
+        self._agent_model_cache: Dict[str, str] = {}
                 
         logger.info("Initialized subspace coordinator")
     
@@ -280,32 +284,11 @@ class SubspaceCoordinator:
         # Get type configuration
         type_config = self.agent_registry.get_agent_type_config(agent_type_enum)
         
-        # All agents are AI-powered - select a model for this agent
+        # All agents are AI-powered
         agent_config = config or {}
         
-        # Select a model for this agent
-        import os
-        api_key = os.getenv("OPENROUTER_API_KEY")
-        selected_model = self.model_selector.select_model(
-            strategy=SelectionStrategy.RANDOM_CURATED
-        )
-        
-        if selected_model:
-            model_config = self.model_selector.get_model_config(selected_model, api_key)
-            logger.info(f"Selected model {selected_model.id} for agent {name or 'new'}")
-        else:
-            # Fallback to local model
-            logger.warning("No suitable model found, using local fallback")
-            model_config = {
-                "provider": "ollama",
-                "model": "llama3.2:3b",
-                "temperature": 0.7,
-                "max_tokens": 2048,
-            }
-        
+        # Don't persist model selection - it should be dynamic
         agent_config["ai"] = {
-            "model_config": model_config,
-            "selected_model_id": selected_model.id if selected_model else "ollama/llama3.2:3b",
             "thinking_style": agent_config.get("thinking_style", "analytical"),
             "curiosity_level": agent_config.get("curiosity_level", 0.7)
         }
@@ -755,30 +738,51 @@ class SubspaceCoordinator:
             agent_states = await self.spawner.get_agent_states()
             agent_info = agent_states.get(name, {})
             
-            # Get agent's model configuration
-            agent_dir = self.subspace.agents_dir / name
-            config_file = agent_dir / "config.json"
-            model_config = None
-            selected_model_id = None
+            # Check if we have a cached model selection for this agent
+            selected_model_id = self._agent_model_cache.get(name)
             
-            if await aiofiles.os.path.exists(config_file):
-                async with aiofiles.open(config_file, 'r') as f:
-                    content = await f.read()
-                config = json.loads(content)
-                ai_config = config.get("ai", {})
-                model_config = ai_config.get("model_config")
-                selected_model_id = ai_config.get("selected_model_id")
+            if selected_model_id:
+                # Use cached model
+                logger.debug(f"Using cached model {selected_model_id} for agent {name}")
+                selected_model = model_registry.get_model(selected_model_id)
+                if selected_model:
+                    import os
+                    api_key = os.getenv("OPENROUTER_API_KEY")
+                    model_config = self.model_selector.get_model_config(selected_model, api_key)
+                else:
+                    # Cached model no longer available, clear cache
+                    logger.warning(f"Cached model {selected_model_id} no longer available, selecting new model")
+                    del self._agent_model_cache[name]
+                    selected_model_id = None
             
-            # Use model config or fall back to default
-            if not model_config:
-                logger.warning(f"No model config for agent {name}, using default")
-                model_config = {
-                    "provider": "ollama",
-                    "model": "llama3.2:3b",
-                    "temperature": 0.7,
-                    "max_tokens": 2048,
-                }
-                selected_model_id = "ollama/llama3.2:3b"
+            if not selected_model_id:
+                # No cached model, select one dynamically
+                import os
+                api_key = os.getenv("OPENROUTER_API_KEY")
+                
+                # Select a model using the configured strategy
+                selected_model = self.model_selector.select_model(
+                    strategy=SelectionStrategy.RANDOM_CURATED
+                )
+                
+                if selected_model:
+                    model_config = self.model_selector.get_model_config(selected_model, api_key)
+                    selected_model_id = selected_model.id
+                    # Cache the selection
+                    self._agent_model_cache[name] = selected_model_id
+                    logger.info(f"Selected and cached model {selected_model_id} for agent {name}")
+                else:
+                    # Fallback to local model
+                    logger.warning("No suitable model found, using local fallback")
+                    model_config = {
+                        "provider": "ollama",
+                        "model": "llama3.2:3b",
+                        "temperature": 0.7,
+                        "max_tokens": 2048,
+                    }
+                    selected_model_id = "ollama/llama3.2:3b"
+                    # Cache the fallback
+                    self._agent_model_cache[name] = selected_model_id
             
             # Ensure API key is included for providers that need it
             if model_config.get("provider") == "openrouter" and "api_key" not in model_config:
@@ -888,6 +892,52 @@ class SubspaceCoordinator:
             lm_config["base_url"] = settings["host"]
         
         return lm_config
+    
+    async def boost_agent_brain(self, agent_name: str, model_id: str) -> bool:
+        """Boost an agent's brain by changing its model.
+        
+        Args:
+            agent_name: Name of the agent to boost
+            model_id: Model ID to use (must be in registry)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        # Check if model exists
+        model = model_registry.get_model(model_id)
+        if not model:
+            logger.error(f"Model {model_id} not found in registry")
+            return False
+        
+        # Update the cache
+        self._agent_model_cache[agent_name] = model_id
+        logger.info(f"Boosted agent {agent_name} to use model {model_id}")
+        
+        # Clear any existing brain handler to force recreation with new model
+        # Find and remove brain handlers for this agent
+        handlers_to_remove = []
+        for key in self._brain_handlers:
+            if any(h.agent_name == agent_name for h in [self._brain_handlers[key]] if hasattr(h, 'agent_name')):
+                handlers_to_remove.append(key)
+        
+        for key in handlers_to_remove:
+            del self._brain_handlers[key]
+        
+        return True
+    
+    def clear_agent_model_cache(self, agent_name: Optional[str] = None):
+        """Clear cached model selection for agent(s).
+        
+        Args:
+            agent_name: Specific agent to clear, or None to clear all
+        """
+        if agent_name:
+            if agent_name in self._agent_model_cache:
+                del self._agent_model_cache[agent_name]
+                logger.info(f"Cleared model cache for agent {agent_name}")
+        else:
+            self._agent_model_cache.clear()
+            logger.info("Cleared all agent model caches")
     
     async def _create_io_agent_body_files(self, agent_name: str, agent_home: Path):
         """Create additional body files for I/O agents.

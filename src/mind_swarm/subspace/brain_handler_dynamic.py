@@ -373,32 +373,48 @@ class DynamicBrainHandler:
             agent_id: The agent requesting the switch
         """
         from mind_swarm.ai.model_selector import ModelSelector, SelectionStrategy
+        from mind_swarm.ai.model_registry import model_registry
+        from mind_swarm.ai.presets import preset_manager
         
         try:
-            # Get the model selector
-            selector = ModelSelector()
+            # Get the model selector with registry
+            selector = ModelSelector(model_registry)
             
-            # Try to select a different free model
-            new_model = selector.select_model(
-                strategy=SelectionStrategy.RANDOM_FREE,
-                exclude_models=[self.lm.model] if hasattr(self, 'lm') and hasattr(self.lm, 'model') else []
+            # Try to select a different free model from curated list
+            new_model_info = selector.select_model(
+                strategy=SelectionStrategy.RANDOM_CURATED
             )
             
-            if new_model:
-                self.logger.info(f"Switching from {getattr(self.lm, 'model', 'unknown')} to {new_model} for agent {agent_id}")
+            if new_model_info and new_model_info.id != getattr(self.lm, 'model', None):
+                self.logger.info(f"Switching from {getattr(self.lm, 'model', 'unknown')} to {new_model_info.id} for agent {agent_id}")
                 
                 # Reconfigure DSPy with the new model
                 config = {
                     'provider': 'openrouter',
-                    'model': new_model,
-                    'api_key': self.config.get('api_key'),
-                    'temperature': self.config.get('temperature', 0.7),
-                    'max_tokens': self.config.get('max_tokens', 4096)
+                    'model': new_model_info.id,
+                    'api_key': self.lm_config.get('api_key'),
+                    'temperature': self.lm_config.get('temperature', 0.7),
+                    'max_tokens': self.lm_config.get('max_tokens', 4096)
                 }
                 self.lm = configure_dspy_for_mind_swarm(config)
-                self.config['model'] = new_model
+                self.lm_config['model'] = new_model_info.id
             else:
-                self.logger.warning(f"No alternative model available for agent {agent_id}")
+                # No alternative curated model, fall back to local default
+                self.logger.warning(f"No alternative curated model for agent {agent_id}, falling back to local default")
+                
+                # Get the default preset (local model)
+                default_preset = preset_manager.get_preset("default")
+                if default_preset:
+                    config = {
+                        'provider': default_preset.provider,
+                        'model': default_preset.model,
+                        'temperature': default_preset.temperature,
+                        'max_tokens': default_preset.max_tokens,
+                        'api_settings': default_preset.api_settings
+                    }
+                    self.lm = configure_dspy_for_mind_swarm(config)
+                    self.lm_config.update(config)
+                    self.logger.info(f"Switched to local model {default_preset.model} for agent {agent_id}")
                 
         except Exception as e:
             self.logger.error(f"Error switching models for agent {agent_id}: {e}")

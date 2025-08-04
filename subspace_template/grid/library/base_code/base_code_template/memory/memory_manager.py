@@ -127,18 +127,18 @@ class WorkingMemoryManager:
         
         return len(expired)
     
-    def cleanup_old_history(self, max_age_seconds: int = 3600) -> int:
-        """Remove old history entries beyond max age."""
+    def cleanup_old_observations(self, max_age_seconds: int = 3600) -> int:
+        """Remove old observation entries beyond max age."""
         cutoff = datetime.now() - timedelta(seconds=max_age_seconds)
-        old_history = [
-            m for m in self.get_memories_by_type(MemoryType.HISTORY)
-            if m.timestamp < cutoff and m.priority != Priority.HIGH
+        old_observations = [
+            m for m in self.get_memories_by_type(MemoryType.OBSERVATION)
+            if m.timestamp < cutoff and m.priority == Priority.LOW
         ]
         
-        for memory in old_history:
+        for memory in old_observations:
             self.remove_memory(memory.id)
         
-        return len(old_history)
+        return len(old_observations)
     
     def get_memory_stats(self) -> Dict[str, Any]:
         """Get statistics about current memory state."""

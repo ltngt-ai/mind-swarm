@@ -246,14 +246,14 @@ class EnvironmentScanner:
         return memories
     
     def _scan_memory_dir(self) -> List[MemoryBlock]:
-        """Scan agent's memory directory."""
+        """Scan agent's memory directory for important files only."""
         memories = []
         
         if not self.memory_path.exists():
             return memories
         
         try:
-            # Look for specific memory files
+            # Only observe the journal file - it's user-visible content
             journal_file = self.memory_path / "journal.md"
             if journal_file.exists():
                 state = self._check_file_state(journal_file)
@@ -265,16 +265,8 @@ class EnvironmentScanner:
                         metadata={"type": "journal"}
                     ))
             
-            # Check for other memory files
-            for mem_file in self.memory_path.glob("*.json"):
-                state = self._check_file_state(mem_file)
-                if state:
-                    memories.append(ObservationMemoryBlock(
-                        observation_type="memory_updated",
-                        path=str(mem_file),
-                        description=f"Memory file updated: {mem_file.name}",
-                        priority=Priority.LOW
-                    ))
+            # Skip all JSON memory files (memory_snapshot.json, etc)
+            # These are internal state and observing them creates noise
         
         except Exception as e:
             logger.error(f"Error scanning memory directory: {e}")

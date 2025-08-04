@@ -1,0 +1,49 @@
+{
+  "id": "action_search_memory",
+  "knowledge_version": "1.0",
+  "title": "Search Memory Action",
+  "content": "The search_memory action allows you to search through both loaded memories and files on disk for specific content.\n\n## Parameters\n\n- **query** (required): The text to search for in memories and files\n- **scope** (optional): Where to search - 'personal', 'shared', or 'all' (default: 'all')\n- **memory_types** (optional): List of memory types to search - e.g., ['file', 'knowledge'] (default: ['file', 'knowledge'])\n- **max_results** (optional): Maximum number of results to return (default: 10)\n\n## Common Mistakes\n\n1. Using 'content' instead of 'query' for the search term\n2. Not providing any search query\n3. Using invalid scope values\n\n## Examples\n\n```json\n{\n  \"action\": \"search_memory\",\n  \"params\": {\n    \"query\": \"agents in grid\",\n    \"scope\": \"shared\"\n  }\n}\n```",
+  "metadata": {
+    "category": "action_guide",
+    "tags": ["search", "memory", "files"],
+    "confidence": 1.0,
+    "priority": 1,
+    "parameter_schema": {
+      "query": {
+        "type": "string",
+        "required": true,
+        "description": "The text to search for",
+        "aliases": ["content", "search", "text", "q"]
+      },
+      "scope": {
+        "type": "string",
+        "required": false,
+        "default": "all",
+        "options": ["personal", "shared", "all"]
+      },
+      "memory_types": {
+        "type": "array",
+        "required": false,
+        "default": ["file", "knowledge"],
+        "item_type": "string"
+      },
+      "max_results": {
+        "type": "integer",
+        "required": false,
+        "default": 10,
+        "min": 1,
+        "max": 100
+      }
+    },
+    "common_corrections": [
+      {
+        "if_param": "content",
+        "then_rename": "query"
+      },
+      {
+        "if_param": "search",
+        "then_rename": "query"
+      }
+    ]
+  }
+}

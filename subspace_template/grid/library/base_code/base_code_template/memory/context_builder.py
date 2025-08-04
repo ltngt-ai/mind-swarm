@@ -12,7 +12,7 @@ import logging
 from .memory_blocks import (
     MemoryBlock, MemoryType, Priority,
     FileMemoryBlock, MessageMemoryBlock, TaskMemoryBlock,
-    KnowledgeMemoryBlock, HistoryMemoryBlock, ObservationMemoryBlock
+    KnowledgeMemoryBlock, ObservationMemoryBlock
 )
 from .content_loader import ContentLoader
 

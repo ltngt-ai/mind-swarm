@@ -98,6 +98,36 @@ class SendMessageAction(Action):
                 error="No recipient specified"
             )
         
+        # Process template references in content
+        if "@last" in content and "last_action_result" in context:
+            last_result = context["last_action_result"]
+            
+            # Simple @last replacement
+            if isinstance(last_result, str) or isinstance(last_result, (int, float)):
+                content = content.replace("@last", str(last_result))
+            elif isinstance(last_result, dict):
+                # For dict results, use string representation for bare @last
+                content = content.replace("@last", str(last_result))
+                
+                # Handle nested access like @last.output or @last.variables.result
+                import re
+                # Find all @last.path.to.value patterns
+                pattern = r'@last\.([a-zA-Z0-9_.]+)'
+                matches = re.findall(pattern, content)
+                
+                for path in matches:
+                    # Navigate the path
+                    value = last_result
+                    for part in path.split('.'):
+                        if isinstance(value, dict) and part in value:
+                            value = value[part]
+                        else:
+                            value = f"<undefined:{path}>"
+                            break
+                    
+                    # Replace the pattern with the value
+                    content = content.replace(f"@last.{path}", str(value))
+        
         try:
             # Get outbox from context
             outbox_dir = context.get("outbox_dir")
@@ -299,3 +329,19 @@ class ActionRegistry:
 
 # Global action registry
 action_registry = ActionRegistry()
+
+# Import and register compute actions
+try:
+    from .compute_actions import register_compute_actions
+    register_compute_actions(action_registry)
+except ImportError:
+    # Compute actions not available
+    pass
+
+# Import and register memory actions
+try:
+    from .memory_actions import register_memory_actions
+    register_memory_actions(action_registry)
+except ImportError:
+    # Memory actions not available
+    pass
