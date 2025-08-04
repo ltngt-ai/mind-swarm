@@ -83,6 +83,11 @@ reset_subspace() {
     clean_directory "$SUBSPACE_ROOT/grid/bulletin"
     clean_directory "$SUBSPACE_ROOT/grid/workshop"
     
+    # Clean shared directory (includes developer registry)
+    echo ""
+    echo "Cleaning shared directory..."
+    clean_directory "$SUBSPACE_ROOT/shared/directory"
+    
     # Clean logs
     echo ""
     echo "Cleaning logs..."
@@ -112,6 +117,7 @@ reset_subspace() {
     mkdir -p "$SUBSPACE_ROOT/grid/workshop"
     mkdir -p "$SUBSPACE_ROOT/logs/agents"
     mkdir -p "$SUBSPACE_ROOT/agent_states"
+    mkdir -p "$SUBSPACE_ROOT/shared/directory"
     
     # Create placeholder files
     echo "# Plaza - Community Discussions" > "$SUBSPACE_ROOT/grid/plaza/README.md"
@@ -125,6 +131,7 @@ reset_subspace() {
     echo "Summary:"
     echo "  - All agents removed"
     echo "  - Grid areas cleaned"
+    echo "  - Developer registry cleared"
     echo "  - Logs cleared"
     echo "  - State files removed"
     echo "  - Directory structure recreated"

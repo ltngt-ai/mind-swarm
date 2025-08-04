@@ -30,10 +30,28 @@ class CommandRequest(BaseModel):
     params: Optional[Dict[str, Any]] = None
 
 
+class MessageRequest(BaseModel):
+    """Request to send a message to an agent."""
+    content: str
+    message_type: str = "text"
+
+
 class QuestionRequest(BaseModel):
     """Request to create a plaza question."""
     text: str
     created_by: str = "user"
+
+
+class RegisterDeveloperRequest(BaseModel):
+    """Request model for registering a developer."""
+    name: str
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+
+
+class SetCurrentDeveloperRequest(BaseModel):
+    """Request model for setting current developer."""
+    name: str
 
 
 class StatusResponse(BaseModel):
@@ -302,6 +320,25 @@ class MindSwarmServer:
                 logger.error(f"Failed to send command: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
+        @self.app.post("/agents/{name}/message")
+        async def send_message(name: str, request: MessageRequest):
+            """Send a message to an agent."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            if not getattr(self, '_coordinator_ready', False):
+                raise HTTPException(status_code=503, detail="Server still initializing, please wait")
+            
+            try:
+                await self.coordinator.send_message(
+                    name, 
+                    request.content,
+                    request.message_type
+                )
+                return {"message": f"Message sent to {name}"}
+            except Exception as e:
+                logger.error(f"Failed to send message: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         @self.app.post("/plaza/questions")
         async def create_question(request: QuestionRequest):
             """Create a new plaza question."""
@@ -351,6 +388,99 @@ class MindSwarmServer:
             
             agents = await self.coordinator.list_all_agents()
             return {"agents": agents}
+        
+        @self.app.post("/developers/register")
+        async def register_developer(request: RegisterDeveloperRequest):
+            """Register a new developer."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            if not getattr(self, '_coordinator_ready', False):
+                raise HTTPException(status_code=503, detail="Server still initializing, please wait")
+            
+            try:
+                agent_name = await self.coordinator.register_developer(
+                    request.name,
+                    request.full_name,
+                    request.email
+                )
+                
+                # Notify websocket clients
+                await self._broadcast_event({
+                    "type": "developer_registered",
+                    "name": request.name,
+                    "agent_name": agent_name,
+                    "timestamp": datetime.now().isoformat()
+                })
+                
+                return {"agent_name": agent_name}
+            except Exception as e:
+                logger.error(f"Failed to register developer: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.post("/developers/current")
+        async def set_current_developer(request: SetCurrentDeveloperRequest):
+            """Set the current developer."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            if not getattr(self, '_coordinator_ready', False):
+                raise HTTPException(status_code=503, detail="Server still initializing, please wait")
+            
+            try:
+                success = await self.coordinator.set_current_developer(request.name)
+                if not success:
+                    raise HTTPException(status_code=404, detail=f"Developer {request.name} not found")
+                
+                return {"success": success}
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Failed to set current developer: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.get("/developers/current")
+        async def get_current_developer():
+            """Get the current developer."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            if not getattr(self, '_coordinator_ready', False):
+                return {"developer": None}
+            
+            try:
+                developer = await self.coordinator.get_current_developer()
+                return {"developer": developer}
+            except Exception as e:
+                logger.error(f"Failed to get current developer: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.get("/developers")
+        async def list_developers():
+            """List all registered developers."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            if not getattr(self, '_coordinator_ready', False):
+                return {"developers": {}}
+            
+            try:
+                developers = await self.coordinator.list_developers()
+                return {"developers": developers}
+            except Exception as e:
+                logger.error(f"Failed to list developers: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.get("/developers/mailbox")
+        async def check_mailbox():
+            """Check current developer's mailbox."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            if not getattr(self, '_coordinator_ready', False):
+                return {"messages": []}
+            
+            try:
+                messages = await self.coordinator.check_developer_mailbox()
+                return {"messages": messages}
+            except Exception as e:
+                logger.error(f"Failed to check mailbox: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
         
         @self.app.websocket("/ws")
         async def websocket_endpoint(websocket: WebSocket):

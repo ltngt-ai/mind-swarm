@@ -179,8 +179,13 @@ class MindSwarmCLI:
         console.print("  [cyan]create [--io] [name][/cyan] - Create a new AI agent")
         console.print("  [cyan]terminate <name>[/cyan] - Terminate an agent")
         console.print("  [cyan]command <name> <command> [params][/cyan] - Send command to agent")
+        console.print("  [cyan]message <name> <text>[/cyan] - Send message to agent")
         console.print("  [cyan]question <text>[/cyan] - Create a shared question")
         console.print("  [cyan]presets[/cyan] - List available AI presets")
+        console.print("  [cyan]dev register <name> [full_name] [email][/cyan] - Register developer")
+        console.print("  [cyan]dev current [name][/cyan] - Show/set current developer")
+        console.print("  [cyan]dev list[/cyan] - List registered developers")
+        console.print("  [cyan]mailbox[/cyan] - Check developer mailbox")
         console.print("  [cyan]quit[/cyan] - Exit the system")
         console.print("\n[dim]Tip: Use 'quit' or Ctrl+C to exit[/dim]")
         
@@ -248,6 +253,14 @@ class MindSwarmCLI:
                     await self.client.send_command(agent_name, command, params)
                     console.print(f"Command '{command}' sent to {agent_name}")
                 
+                elif cmd == "message" and len(parts) >= 3:
+                    # message <agent_name> <text>
+                    agent_name = parts[1]
+                    message_text = " ".join(parts[2:])
+                    
+                    await self.client.send_message(agent_name, message_text)
+                    console.print(f"Message sent to {agent_name}")
+                
                 elif cmd == "question" and len(parts) > 1:
                     # Post a question to the Plaza
                     question_text = " ".join(parts[1:])
@@ -256,6 +269,100 @@ class MindSwarmCLI:
                 
                 elif cmd == "presets":
                     self.show_presets()
+                
+                elif cmd == "dev" and len(parts) > 1:
+                    # Developer commands
+                    subcmd = parts[1].lower()
+                    
+                    if subcmd == "register" and len(parts) >= 3:
+                        # dev register <name> [full_name] [email]
+                        name = parts[2]
+                        full_name = parts[3] if len(parts) > 3 else None
+                        email = parts[4] if len(parts) > 4 else None
+                        
+                        try:
+                            agent_name = await self.client.register_developer(name, full_name, email)
+                            console.print(f"[green]Registered developer {name} as {agent_name}[/green]")
+                        except Exception as e:
+                            console.print(f"[red]Failed to register developer: {e}[/red]")
+                    
+                    elif subcmd == "current":
+                        if len(parts) > 2:
+                            # Set current developer
+                            name = parts[2]
+                            try:
+                                success = await self.client.set_current_developer(name)
+                                if success:
+                                    console.print(f"[green]Set current developer to {name}[/green]")
+                                else:
+                                    console.print(f"[red]Developer {name} not found[/red]")
+                            except Exception as e:
+                                console.print(f"[red]Failed to set developer: {e}[/red]")
+                        else:
+                            # Show current developer
+                            try:
+                                dev = await self.client.get_current_developer()
+                                if dev:
+                                    console.print(f"Current developer: {dev['agent_name']} ({dev.get('full_name', 'N/A')})")
+                                else:
+                                    console.print("No current developer set")
+                            except Exception as e:
+                                console.print(f"[red]Failed to get current developer: {e}[/red]")
+                    
+                    elif subcmd == "list":
+                        # List all developers
+                        try:
+                            developers = await self.client.list_developers()
+                            if developers:
+                                table = Table(title="Registered Developers")
+                                table.add_column("Username", style="cyan")
+                                table.add_column("Agent Name", style="green")
+                                table.add_column("Full Name")
+                                table.add_column("Email")
+                                table.add_column("Last Active")
+                                
+                                for name, info in developers.items():
+                                    table.add_row(
+                                        name,
+                                        info["agent_name"],
+                                        info.get("full_name", "N/A"),
+                                        info.get("email", "N/A"),
+                                        info.get("last_active", "N/A")[:19]  # Trim timestamp
+                                    )
+                                
+                                console.print(table)
+                            else:
+                                console.print("No developers registered")
+                        except Exception as e:
+                            console.print(f"[red]Failed to list developers: {e}[/red]")
+                    
+                    else:
+                        console.print(f"Unknown dev command: {subcmd}", style="red")
+                
+                elif cmd == "mailbox":
+                    # Check current developer's mailbox
+                    try:
+                        messages = await self.client.check_mailbox()
+                        if messages:
+                            console.print(f"[cyan]You have {len(messages)} messages:[/cyan]")
+                            for i, msg in enumerate(messages, 1):
+                                console.print(f"\n[bold]Message {i}:[/bold]")
+                                console.print(f"  From: {msg.get('from', 'unknown')}")
+                                console.print(f"  Type: {msg.get('type', 'unknown')}")
+                                console.print(f"  Time: {msg.get('timestamp', 'unknown')[:19]}")
+                                
+                                if msg.get('type') == 'text':
+                                    console.print(f"  Content: {msg.get('content', '')}")
+                                elif msg.get('type') == 'COMMAND':
+                                    console.print(f"  Command: {msg.get('command', '')}")
+                                    if msg.get('params'):
+                                        console.print(f"  Params: {msg.get('params')}")
+                                else:
+                                    console.print(f"  Data: {msg}")
+                        else:
+                            console.print("No messages in mailbox")
+                    except Exception as e:
+                        console.print(f"[red]Failed to check mailbox: {e}[/red]")
                 
                 else:
                     console.print(f"Unknown command: {command}", style="red")

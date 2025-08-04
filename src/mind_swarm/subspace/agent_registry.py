@@ -228,3 +228,38 @@ class AgentRegistry:
     def get_agent_type_config(self, agent_type: AgentType) -> AgentTypeConfig:
         """Get configuration for a specific agent type."""
         return get_agent_type_config(agent_type)
+    
+    async def update_registry(self):
+        """Update registry to include developer accounts."""
+        # Import here to avoid circular import
+        from mind_swarm.subspace.developer_registry import DeveloperRegistry
+        
+        dev_registry = DeveloperRegistry(self.subspace_root)
+        developers = dev_registry.list_developers()
+        
+        # Add each developer to the agent registry
+        for dev_name, dev_info in developers.items():
+            agent_name = dev_info["agent_name"]
+            
+            # Create agent info for developer
+            agent = AgentInfo(
+                name=agent_name,
+                agent_type=AgentType.GENERAL,  # Developers are like general agents
+                status="active",
+                capabilities=["mail", "command", "developer"],
+                metadata={
+                    "developer_name": dev_name,
+                    "full_name": dev_info.get("full_name"),
+                    "email": dev_info.get("email"),
+                    "is_developer": True
+                }
+            )
+            agent.registered_at = dev_info.get("registered_at", datetime.now().isoformat())
+            
+            # Register in memory
+            self._agents[agent_name] = agent
+            if agent_name not in self._general_agents:
+                self._general_agents.append(agent_name)
+        
+        # Save updated registry
+        self._save_registry()

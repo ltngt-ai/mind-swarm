@@ -15,6 +15,7 @@ from mind_swarm.subspace.body_manager import BodySystemManager
 from mind_swarm.subspace.body_monitor import create_body_monitor
 from mind_swarm.subspace.brain_handler_dynamic import DynamicBrainHandler
 from mind_swarm.subspace.agent_registry import AgentRegistry
+from mind_swarm.subspace.developer_registry import DeveloperRegistry
 from mind_swarm.subspace.io_handlers import NetworkBodyHandler, UserIOBodyHandler
 from mind_swarm.schemas.agent_types import AgentType
 from mind_swarm.ai.presets import preset_manager
@@ -74,16 +75,20 @@ class MessageRouter:
                     if to_agent == "broadcast":
                         # Broadcast to all agents
                         await self._broadcast_message(message, exclude=[agent_name])
-                    elif to_agent.startswith("agent-"):
-                        # Direct message to another agent
+                    elif to_agent.startswith("agent-") or to_agent.endswith("_dev"):
+                        # Direct message to another agent or developer
                         if not await self._agent_exists(to_agent):
                             # Send error back to sender
                             await self._send_delivery_error(agent_name, message, f"Agent {to_agent} not found")
                         else:
                             await self._deliver_message(to_agent, message)
                     else:
-                        # Unknown recipient format
-                        await self._send_delivery_error(agent_name, message, f"Unknown recipient format: {to_agent}")
+                        # Unknown recipient format - be more helpful
+                        await self._send_delivery_error(
+                            agent_name, 
+                            message, 
+                            f"Unknown recipient format: {to_agent}. Use 'agent-name' for agents or 'name_dev' for developers"
+                        )
                     
                     # Move to sent folder
                     sent_dir = outbox_dir / "sent"
@@ -172,6 +177,7 @@ class SubspaceCoordinator:
         self.body_system = BodySystemManager()
         self.state_manager = AgentStateManager(self.subspace.root_path)
         self.agent_registry = AgentRegistry(self.subspace.root_path)
+        self.developer_registry = DeveloperRegistry(self.subspace.root_path)
         
         self._running = False
         self._frozen = False  # When True, brain handlers stop responding
@@ -401,11 +407,36 @@ class SubspaceCoordinator:
         # Terminate the agent process
         await self.spawner.terminate_agent(name)
     
-    async def send_command(self, name: str, command: str, params: Optional[Dict[str, Any]] = None):
-        """Send a command to an agent."""
+    async def send_command(self, name: str, command: str, params: Optional[Dict[str, Any]] = None,
+                          from_developer: Optional[str] = None):
+        """Send a command to an agent.
+        
+        Args:
+            name: Target agent name
+            command: Command to send
+            params: Optional command parameters
+            from_developer: Optional developer name override
+        """
+        # Determine sender identity
+        sender = "subspace"
+        if from_developer:
+            # Use provided developer
+            dev = self.developer_registry.get_developer(from_developer)
+            if dev:
+                sender = dev["agent_name"]
+                self.developer_registry.update_developer_activity(from_developer)
+        else:
+            # Use current developer if set
+            current_dev = self.developer_registry.get_current_developer()
+            if current_dev:
+                sender = current_dev["agent_name"]
+                # Update activity for the username (not agent_name)
+                dev_name = sender.rstrip("_dev")
+                self.developer_registry.update_developer_activity(dev_name)
+        
         message = {
             "type": "COMMAND",
-            "from": "subspace",
+            "from": sender,
             "command": command,
             "params": params or {},
             "timestamp": datetime.now().isoformat()
@@ -413,11 +444,66 @@ class SubspaceCoordinator:
         
         await self.spawner.send_message_to_agent(name, message)
     
-    async def broadcast_command(self, command: str, params: Optional[Dict[str, Any]] = None):
+    async def send_message(self, to_agent: str, content: str, message_type: str = "text",
+                          from_developer: Optional[str] = None):
+        """Send a regular message to an agent.
+        
+        Args:
+            to_agent: Target agent name
+            content: Message content
+            message_type: Type of message (default: "text")
+            from_developer: Optional developer name override
+        """
+        # Determine sender identity
+        sender = "subspace"
+        if from_developer:
+            # Use provided developer
+            dev = self.developer_registry.get_developer(from_developer)
+            if dev:
+                sender = dev["agent_name"]
+                self.developer_registry.update_developer_activity(from_developer)
+        else:
+            # Use current developer if set
+            current_dev = self.developer_registry.get_current_developer()
+            if current_dev:
+                sender = current_dev["agent_name"]
+                # Update activity for the username (not agent_name)
+                dev_name = sender.rstrip("_dev")
+                self.developer_registry.update_developer_activity(dev_name)
+        
+        message = {
+            "from": sender,
+            "to": to_agent,
+            "type": message_type,
+            "content": content,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        await self.spawner.send_message_to_agent(to_agent, message)
+    
+    async def broadcast_command(self, command: str, params: Optional[Dict[str, Any]] = None,
+                               from_developer: Optional[str] = None):
         """Broadcast a command to all agents."""
+        # Determine sender identity
+        sender = "subspace"
+        if from_developer:
+            # Use provided developer
+            dev = self.developer_registry.get_developer(from_developer)
+            if dev:
+                sender = dev["agent_name"]
+                self.developer_registry.update_developer_activity(from_developer)
+        else:
+            # Use current developer if set
+            current_dev = self.developer_registry.get_current_developer()
+            if current_dev:
+                sender = current_dev["agent_name"]
+                # Update activity for the username (not agent_name)
+                dev_name = sender.rstrip("_dev")
+                self.developer_registry.update_developer_activity(dev_name)
+        
         message = {
             "type": "COMMAND",
-            "from": "subspace",
+            "from": sender,
             "command": command,
             "params": params or {},
             "timestamp": datetime.now().isoformat()
@@ -954,3 +1040,58 @@ class SubspaceCoordinator:
             except Exception as e:
                 logger.error(f"Error in model registry loop: {e}")
                 await asyncio.sleep(60)  # Back off on error
+    
+    # Developer management methods
+    async def register_developer(self, name: str, full_name: Optional[str] = None,
+                               email: Optional[str] = None) -> str:
+        """Register a new developer account.
+        
+        Args:
+            name: Developer username
+            full_name: Optional full name
+            email: Optional email address
+            
+        Returns:
+            Developer agent name (e.g., "deano_dev")
+        """
+        agent_name = self.developer_registry.register_developer(name, full_name, email)
+        
+        # Update agent registry to include developer
+        await self.agent_registry.update_registry()
+        
+        logger.info(f"Registered developer {name} as {agent_name}")
+        return agent_name
+    
+    async def set_current_developer(self, name: str) -> bool:
+        """Set the current developer.
+        
+        Args:
+            name: Developer username
+            
+        Returns:
+            True if successful
+        """
+        success = self.developer_registry.set_current_developer(name)
+        if success:
+            logger.info(f"Set current developer to {name}")
+        else:
+            logger.warning(f"Failed to set developer {name} - not found")
+        return success
+    
+    async def get_current_developer(self) -> Optional[Dict[str, Any]]:
+        """Get current developer information."""
+        return self.developer_registry.get_current_developer()
+    
+    async def list_developers(self) -> Dict[str, Dict[str, Any]]:
+        """List all registered developers."""
+        return self.developer_registry.list_developers()
+    
+    async def check_developer_mailbox(self) -> List[Dict[str, Any]]:
+        """Check current developer's mailbox."""
+        current_dev = self.developer_registry.get_current_developer()
+        if not current_dev:
+            return []
+        
+        # Get username from agent_name (remove _dev suffix)
+        dev_name = current_dev["agent_name"].rstrip("_dev")
+        return self.developer_registry.check_developer_inbox(dev_name)

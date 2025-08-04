@@ -136,6 +136,31 @@ class MindSwarmClient:
             )
             response.raise_for_status()
     
+    async def send_message(
+        self,
+        agent_id: str,
+        content: str,
+        message_type: str = "text"
+    ):
+        """Send a message to an agent.
+        
+        Args:
+            agent_id: Target agent name
+            content: Message content
+            message_type: Type of message (default: "text")
+        """
+        payload = {
+            "content": content,
+            "message_type": message_type
+        }
+        
+        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
+            response = await client.post(
+                f"{self.base_url}/agents/{agent_id}/message",
+                json=payload
+            )
+            response.raise_for_status()
+    
     async def create_plaza_question(self, text: str, created_by: str = "user") -> str:
         """Create a new plaza question.
         
@@ -189,6 +214,72 @@ class MindSwarmClient:
             response = await client.get(f"{self.base_url}/plaza/questions")
             response.raise_for_status()
             return response.json()["questions"]
+    
+    async def register_developer(self, name: str, full_name: Optional[str] = None,
+                               email: Optional[str] = None) -> str:
+        """Register a new developer.
+        
+        Args:
+            name: Developer username
+            full_name: Optional full name
+            email: Optional email address
+            
+        Returns:
+            Developer agent name (e.g., "deano_dev")
+        """
+        payload = {
+            "name": name,
+            "full_name": full_name,
+            "email": email
+        }
+        
+        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
+            response = await client.post(
+                f"{self.base_url}/developers/register",
+                json=payload
+            )
+            response.raise_for_status()
+            return response.json()["agent_name"]
+    
+    async def set_current_developer(self, name: str) -> bool:
+        """Set the current developer.
+        
+        Args:
+            name: Developer username
+            
+        Returns:
+            True if successful
+        """
+        payload = {"name": name}
+        
+        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
+            response = await client.post(
+                f"{self.base_url}/developers/current",
+                json=payload
+            )
+            response.raise_for_status()
+            return response.json()["success"]
+    
+    async def get_current_developer(self) -> Optional[Dict[str, Any]]:
+        """Get current developer information."""
+        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
+            response = await client.get(f"{self.base_url}/developers/current")
+            response.raise_for_status()
+            return response.json().get("developer")
+    
+    async def list_developers(self) -> Dict[str, Dict[str, Any]]:
+        """List all registered developers."""
+        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
+            response = await client.get(f"{self.base_url}/developers")
+            response.raise_for_status()
+            return response.json()["developers"]
+    
+    async def check_mailbox(self) -> List[Dict[str, Any]]:
+        """Check current developer's mailbox."""
+        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
+            response = await client.get(f"{self.base_url}/developers/mailbox")
+            response.raise_for_status()
+            return response.json()["messages"]
     
     async def connect_websocket(self, on_event=None):
         """Connect to server WebSocket for real-time updates.
