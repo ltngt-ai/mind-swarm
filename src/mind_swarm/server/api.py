@@ -54,6 +54,11 @@ class SetCurrentDeveloperRequest(BaseModel):
     name: str
 
 
+class MarkMessageReadRequest(BaseModel):
+    """Request model for marking message as read."""
+    message_index: int
+
+
 class StatusResponse(BaseModel):
     """Server status response."""
     agents: Dict[str, Dict[str, Any]]
@@ -468,7 +473,7 @@ class MindSwarmServer:
                 raise HTTPException(status_code=500, detail=str(e))
         
         @self.app.get("/developers/mailbox")
-        async def check_mailbox():
+        async def check_mailbox(include_read: bool = False):
             """Check current developer's mailbox."""
             if not self.coordinator:
                 raise HTTPException(status_code=503, detail="Server not initialized")
@@ -476,10 +481,25 @@ class MindSwarmServer:
                 return {"messages": []}
             
             try:
-                messages = await self.coordinator.check_developer_mailbox()
+                messages = await self.coordinator.check_developer_mailbox(include_read=include_read)
                 return {"messages": messages}
             except Exception as e:
                 logger.error(f"Failed to check mailbox: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.post("/developers/mailbox/read")
+        async def mark_message_read(request: MarkMessageReadRequest):
+            """Mark a message as read."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            if not getattr(self, '_coordinator_ready', False):
+                raise HTTPException(status_code=503, detail="Server still initializing, please wait")
+            
+            try:
+                success = await self.coordinator.mark_developer_message_read(request.message_index)
+                return {"success": success}
+            except Exception as e:
+                logger.error(f"Failed to mark message as read: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
         @self.app.websocket("/ws")

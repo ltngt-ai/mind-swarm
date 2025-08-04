@@ -111,8 +111,16 @@ class DeveloperRegistry:
         inbox_dir = agent_dir / "inbox"
         inbox_dir.mkdir(exist_ok=True)
         
+        # Create processed subdirectory (for read messages)
+        processed_dir = inbox_dir / "processed"
+        processed_dir.mkdir(exist_ok=True)
+        
         outbox_dir = agent_dir / "outbox"
         outbox_dir.mkdir(exist_ok=True)
+        
+        # Create sent subdirectory
+        sent_dir = outbox_dir / "sent"
+        sent_dir.mkdir(exist_ok=True)
         
         # Create a simple info file
         info_file = agent_dir / "developer_info.json"
@@ -194,14 +202,15 @@ class DeveloperRegistry:
             }
         }
     
-    def check_developer_inbox(self, developer_name: str) -> List[Dict[str, Any]]:
-        """Check developer's inbox for new messages.
+    def check_developer_inbox(self, developer_name: str, include_read: bool = False) -> List[Dict[str, Any]]:
+        """Check developer's inbox for messages.
         
         Args:
             developer_name: Developer username (without _dev suffix)
+            include_read: If True, include processed/read messages
             
         Returns:
-            List of unread messages
+            List of messages with file paths
         """
         dev = self.get_developer(developer_name)
         if not dev:
@@ -211,13 +220,67 @@ class DeveloperRegistry:
         inbox_dir = self.subspace_root / "agents" / agent_name / "inbox"
         
         messages = []
+        
+        # Get unread messages
         if inbox_dir.exists():
             for msg_file in sorted(inbox_dir.glob("*.msg")):
                 try:
                     with open(msg_file, 'r') as f:
                         message = json.load(f)
+                        message['_file_path'] = str(msg_file)
+                        message['_read'] = False
                         messages.append(message)
                 except Exception as e:
                     logger.error(f"Failed to read message {msg_file}: {e}")
         
+        # Get read messages if requested
+        if include_read:
+            processed_dir = inbox_dir / "processed"
+            if processed_dir.exists():
+                for msg_file in sorted(processed_dir.glob("*.msg")):
+                    try:
+                        with open(msg_file, 'r') as f:
+                            message = json.load(f)
+                            message['_file_path'] = str(msg_file)
+                            message['_read'] = True
+                            messages.append(message)
+                    except Exception as e:
+                        logger.error(f"Failed to read message {msg_file}: {e}")
+        
         return messages
+    
+    def mark_message_as_read(self, developer_name: str, message_path: str) -> bool:
+        """Mark a message as read by moving it to processed directory.
+        
+        Args:
+            developer_name: Developer username (without _dev suffix)
+            message_path: Path to the message file
+            
+        Returns:
+            True if successful
+        """
+        try:
+            msg_path = Path(message_path)
+            if not msg_path.exists():
+                logger.error(f"Message file not found: {message_path}")
+                return False
+            
+            # Get the processed directory
+            dev = self.get_developer(developer_name)
+            if not dev:
+                return False
+                
+            agent_name = dev["agent_name"]
+            processed_dir = self.subspace_root / "agents" / agent_name / "inbox" / "processed"
+            processed_dir.mkdir(exist_ok=True)
+            
+            # Move the file
+            new_path = processed_dir / msg_path.name
+            msg_path.rename(new_path)
+            
+            logger.info(f"Marked message as read: {msg_path.name}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to mark message as read: {e}")
+            return False

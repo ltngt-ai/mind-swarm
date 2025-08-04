@@ -340,29 +340,79 @@ class MindSwarmCLI:
                         console.print(f"Unknown dev command: {subcmd}", style="red")
                 
                 elif cmd == "mailbox":
-                    # Check current developer's mailbox
-                    try:
-                        messages = await self.client.check_mailbox()
-                        if messages:
-                            console.print(f"[cyan]You have {len(messages)} messages:[/cyan]")
-                            for i, msg in enumerate(messages, 1):
-                                console.print(f"\n[bold]Message {i}:[/bold]")
-                                console.print(f"  From: {msg.get('from', 'unknown')}")
-                                console.print(f"  Type: {msg.get('type', 'unknown')}")
-                                console.print(f"  Time: {msg.get('timestamp', 'unknown')[:19]}")
-                                
-                                if msg.get('type') == 'text':
-                                    console.print(f"  Content: {msg.get('content', '')}")
-                                elif msg.get('type') == 'COMMAND':
-                                    console.print(f"  Command: {msg.get('command', '')}")
-                                    if msg.get('params'):
-                                        console.print(f"  Params: {msg.get('params')}")
+                    # Enhanced mailbox with options
+                    if len(parts) > 1:
+                        subcmd = parts[1].lower()
+                        
+                        if subcmd == "read" and len(parts) > 2:
+                            # Mark message as read
+                            try:
+                                msg_index = int(parts[2]) - 1
+                                success = await self.client.mark_message_read(msg_index)
+                                if success:
+                                    console.print(f"[green]Message {parts[2]} marked as read[/green]")
                                 else:
-                                    console.print(f"  Data: {msg}")
+                                    console.print(f"[red]Failed to mark message as read[/red]")
+                            except ValueError:
+                                console.print("[red]Invalid message number[/red]")
+                            except Exception as e:
+                                console.print(f"[red]Error: {e}[/red]")
+                        
+                        elif subcmd == "all":
+                            # Show all messages including read ones
+                            try:
+                                messages = await self.client.check_mailbox(include_read=True)
+                                if messages:
+                                    unread = [m for m in messages if not m.get('_read', False)]
+                                    read = [m for m in messages if m.get('_read', False)]
+                                    
+                                    console.print(f"[cyan]Mailbox ({len(unread)} unread, {len(read)} read):[/cyan]")
+                                    
+                                    for i, msg in enumerate(messages, 1):
+                                        status = "[dim]" if msg.get('_read') else "[bold]"
+                                        console.print(f"\n{status}Message {i}:{'' if msg.get('_read') else '[/bold]'}")
+                                        console.print(f"  From: {msg.get('from', 'unknown')}")
+                                        console.print(f"  Time: {msg.get('timestamp', 'unknown')[:19]}")
+                                        
+                                        if msg.get('type') == 'text':
+                                            console.print(f"  Content: {msg.get('content', '')}")
+                                        else:
+                                            console.print(f"  Type: {msg.get('type', 'unknown')}")
+                                else:
+                                    console.print("No messages in mailbox")
+                            except Exception as e:
+                                console.print(f"[red]Failed to check mailbox: {e}[/red]")
+                        
                         else:
-                            console.print("No messages in mailbox")
-                    except Exception as e:
-                        console.print(f"[red]Failed to check mailbox: {e}[/red]")
+                            console.print("Usage: mailbox [all|read <num>]")
+                    
+                    else:
+                        # Show unread messages by default
+                        try:
+                            messages = await self.client.check_mailbox()
+                            if messages:
+                                console.print(f"[cyan]You have {len(messages)} unread messages:[/cyan]")
+                                for i, msg in enumerate(messages, 1):
+                                    console.print(f"\n[bold]Message {i}:[/bold]")
+                                    console.print(f"  From: {msg.get('from', 'unknown')}")
+                                    console.print(f"  Type: {msg.get('type', 'unknown')}")
+                                    console.print(f"  Time: {msg.get('timestamp', 'unknown')[:19]}")
+                                    
+                                    if msg.get('type') == 'text':
+                                        console.print(f"  Content: {msg.get('content', '')}")
+                                    elif msg.get('type') == 'COMMAND':
+                                        console.print(f"  Command: {msg.get('command', '')}")
+                                        if msg.get('params'):
+                                            console.print(f"  Params: {msg.get('params')}")
+                                    else:
+                                        console.print(f"  Data: {msg}")
+                                
+                                console.print("\n[dim]Use 'mailbox read <num>' to mark as read[/dim]")
+                                console.print("[dim]Use 'mailbox all' to see all messages[/dim]")
+                            else:
+                                console.print("No unread messages")
+                        except Exception as e:
+                            console.print(f"[red]Failed to check mailbox: {e}[/red]")
                 
                 else:
                     console.print(f"Unknown command: {command}", style="red")

@@ -274,12 +274,24 @@ class MindSwarmClient:
             response.raise_for_status()
             return response.json()["developers"]
     
-    async def check_mailbox(self) -> List[Dict[str, Any]]:
+    async def check_mailbox(self, include_read: bool = False) -> List[Dict[str, Any]]:
         """Check current developer's mailbox."""
+        params = {"include_read": include_read}
         async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
-            response = await client.get(f"{self.base_url}/developers/mailbox")
+            response = await client.get(f"{self.base_url}/developers/mailbox", params=params)
             response.raise_for_status()
             return response.json()["messages"]
+    
+    async def mark_message_read(self, message_index: int) -> bool:
+        """Mark a message as read by index."""
+        payload = {"message_index": message_index}
+        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
+            response = await client.post(
+                f"{self.base_url}/developers/mailbox/read",
+                json=payload
+            )
+            response.raise_for_status()
+            return response.json()["success"]
     
     async def connect_websocket(self, on_event=None):
         """Connect to server WebSocket for real-time updates.

@@ -1086,7 +1086,7 @@ class SubspaceCoordinator:
         """List all registered developers."""
         return self.developer_registry.list_developers()
     
-    async def check_developer_mailbox(self) -> List[Dict[str, Any]]:
+    async def check_developer_mailbox(self, include_read: bool = False) -> List[Dict[str, Any]]:
         """Check current developer's mailbox."""
         current_dev = self.developer_registry.get_current_developer()
         if not current_dev:
@@ -1094,4 +1094,22 @@ class SubspaceCoordinator:
         
         # Get username from agent_name (remove _dev suffix)
         dev_name = current_dev["agent_name"].rstrip("_dev")
-        return self.developer_registry.check_developer_inbox(dev_name)
+        return self.developer_registry.check_developer_inbox(dev_name, include_read=include_read)
+    
+    async def mark_developer_message_read(self, message_index: int) -> bool:
+        """Mark a developer message as read by index."""
+        current_dev = self.developer_registry.get_current_developer()
+        if not current_dev:
+            return False
+        
+        # Get username from agent_name (remove _dev suffix)
+        dev_name = current_dev["agent_name"].rstrip("_dev")
+        
+        # Get the messages to find the file path
+        messages = self.developer_registry.check_developer_inbox(dev_name, include_read=False)
+        if 0 <= message_index < len(messages):
+            message_path = messages[message_index].get('_file_path')
+            if message_path:
+                return self.developer_registry.mark_message_as_read(dev_name, message_path)
+        
+        return False
