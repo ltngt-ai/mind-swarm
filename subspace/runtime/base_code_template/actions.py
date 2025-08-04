@@ -4,6 +4,7 @@ Actions are the formal way agents decide what to do and execute their decisions.
 Each agent type can have its own set of available actions.
 """
 
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
@@ -11,6 +12,8 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime
 
 from .memory import MemoryBlock, Priority
+
+logger = logging.getLogger("agent.actions")
 
 
 class ActionStatus(Enum):
@@ -198,19 +201,31 @@ class WaitAction(Action):
         
         try:
             import asyncio
+            from pathlib import Path
             
-            if condition:
-                # Check condition (simplified)
-                # Real implementation would check memory, files, etc.
-                await asyncio.sleep(0.1)  # Quick check
-            else:
-                # Simple timeout
-                await asyncio.sleep(duration)
+            # Parse duration if it's a string
+            if isinstance(duration, str):
+                # Parse common duration formats
+                if duration.endswith('h'):
+                    duration = float(duration[:-1]) * 3600
+                elif duration.endswith('m'):
+                    duration = float(duration[:-1]) * 60
+                elif duration.endswith('s'):
+                    duration = float(duration[:-1])
+                else:
+                    duration = float(duration)
+            
+            # Don't wait longer than 5 minutes at a time
+            max_wait = 300  # 5 minutes
+            actual_duration = min(duration, max_wait)
+            
+            # Just wait for the specified duration
+            await asyncio.sleep(actual_duration)
             
             return ActionResult(
                 self.name,
                 ActionStatus.COMPLETED,
-                result={"waited": duration}
+                result={"waited": actual_duration}
             )
         except Exception as e:
             return ActionResult(

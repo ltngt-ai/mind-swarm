@@ -73,7 +73,6 @@ class MindSwarmClient:
         self, 
         name: Optional[str] = None,
         agent_type: str = "general",
-        use_premium: bool = False,
         config: Optional[Dict[str, Any]] = None
     ) -> str:
         """Create a new agent.
@@ -81,7 +80,6 @@ class MindSwarmClient:
         Args:
             name: Optional agent name
             agent_type: Type of agent (general, io_gateway)
-            use_premium: Whether to use premium AI model
             config: Additional configuration
             
         Returns:
@@ -90,7 +88,6 @@ class MindSwarmClient:
         payload = {
             "name": name,
             "agent_type": agent_type,
-            "use_premium": use_premium,
             "config": config or {}
         }
         

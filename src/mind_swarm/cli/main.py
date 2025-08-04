@@ -91,14 +91,10 @@ class MindSwarmCLI:
         
         for i in range(count):
             try:
-                # First agent uses premium AI, others use local
-                use_premium = (i == 0)
                 agent_id = await self.client.create_agent(
                     name=f"Explorer-{i+1}",
-                    use_premium=use_premium,
                 )
-                ai_type = "Premium" if use_premium else "Local"
-                console.print(f"  ✓ Created Explorer-{i+1} ({agent_id}) [AI: {ai_type}]")
+                console.print(f"  ✓ Created Explorer-{i+1} ({agent_id})")
             except Exception as e:
                 console.print(f"  ✗ Failed to create agent: {e}", style="red")
     
@@ -180,7 +176,7 @@ class MindSwarmCLI:
         console.print("[bold]Mind-Swarm Interactive Mode[/bold]")
         console.print("Commands:")
         console.print("  [cyan]status[/cyan] - Show agent status")
-        console.print("  [cyan]create [--premium] [--io] [name][/cyan] - Create a new AI agent")
+        console.print("  [cyan]create [--io] [name][/cyan] - Create a new AI agent")
         console.print("  [cyan]terminate <name>[/cyan] - Terminate an agent")
         console.print("  [cyan]command <name> <command> [params][/cyan] - Send command to agent")
         console.print("  [cyan]question <text>[/cyan] - Create a shared question")
@@ -218,15 +214,12 @@ class MindSwarmCLI:
                     await self.show_status()
                 
                 elif cmd == "create":
-                    # Parse create options: create [--premium] [--io] [name]
-                    use_premium = False
+                    # Parse create options: create [--io] [name]
                     is_io_agent = False
                     agent_name = None
                     
                     for i, part in enumerate(parts[1:], 1):
-                        if part == "--premium":
-                            use_premium = True
-                        elif part == "--io":
+                        if part == "--io":
                             is_io_agent = True
                         else:
                             agent_name = part
@@ -237,11 +230,9 @@ class MindSwarmCLI:
                     agent_name_result = await self.client.create_agent(
                         name=agent_name,
                         agent_type=agent_type,
-                        use_premium=use_premium,
                     )
-                    ai_type = "Premium" if use_premium else "Local"
                     type_str = "I/O Gateway" if is_io_agent else "General"
-                    console.print(f"Created {agent_name_result} [{type_str}, AI: {ai_type}]")
+                    console.print(f"Created {agent_name_result} [{type_str}]")
                 
                 elif cmd == "terminate" and len(parts) > 1:
                     agent_name = parts[1]

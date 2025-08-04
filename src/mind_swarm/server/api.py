@@ -8,10 +8,12 @@ from datetime import datetime
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from mind_swarm.subspace.coordinator import SubspaceCoordinator
 from mind_swarm.utils.logging import logger
+from mind_swarm.server.monitoring_events import set_server_reference, get_event_emitter
 
 
 # API Models
@@ -19,7 +21,6 @@ class CreateAgentRequest(BaseModel):
     """Request to create a new agent."""
     name: Optional[str] = None
     agent_type: str = "general"
-    use_premium: bool = False
     config: Optional[Dict[str, Any]] = None
 
 
@@ -61,6 +62,15 @@ class MindSwarmServer:
         self.start_time = datetime.now()
         self.clients: List[WebSocket] = []
         
+        # Configure CORS
+        self.app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["http://localhost:5173", "http://localhost:5174", "http://localhost:5175"],  # Vite dev servers
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+        
         # Set up routes
         self._setup_routes()
     
@@ -73,6 +83,9 @@ class MindSwarmServer:
             logger.info(f"Starting Mind-Swarm server on {self.host}:{self.port}")
             self.coordinator = SubspaceCoordinator()
             self._coordinator_ready = False
+            
+            # Set server reference for monitoring events
+            set_server_reference(self)
             
             # Start the coordinator initialization in background
             # This prevents blocking the HTTP server startup
@@ -230,7 +243,6 @@ class MindSwarmServer:
                 name = await self.coordinator.create_agent(
                     name=request.name,
                     agent_type=request.agent_type,
-                    use_premium=request.use_premium,
                     config=request.config
                 )
                 
@@ -238,7 +250,6 @@ class MindSwarmServer:
                 await self._broadcast_event({
                     "type": "agent_created",
                     "name": name,
-                    "use_premium": request.use_premium,
                     "timestamp": datetime.now().isoformat()
                 })
                 

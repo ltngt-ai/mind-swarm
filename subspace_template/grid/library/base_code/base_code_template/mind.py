@@ -84,6 +84,9 @@ class AgentMind:
         # Start status task
         status_task = asyncio.create_task(self._update_status_loop())
         
+        # Start shutdown monitor task
+        shutdown_task = asyncio.create_task(self._shutdown_monitor_loop())
+        
         try:
             # Main cognitive loop
             idle_cycles = 0
@@ -122,10 +125,12 @@ class AgentMind:
             self.running = False
             heartbeat_task.cancel()
             status_task.cancel()
+            shutdown_task.cancel()
             
             try:
                 await heartbeat_task
                 await status_task
+                await shutdown_task
             except asyncio.CancelledError:
                 pass
             
@@ -182,6 +187,23 @@ class AgentMind:
                 logger.error(f"Error updating status: {e}")
             
             await asyncio.sleep(30)  # Update every 30 seconds
+    
+    async def _shutdown_monitor_loop(self):
+        """Monitor for shutdown signal from coordinator."""
+        shutdown_file = self.home / "shutdown"
+        
+        while self.running:
+            try:
+                if shutdown_file.exists():
+                    logger.info("Shutdown file detected, initiating graceful shutdown...")
+                    self.stop_requested = True
+                    self.running = False
+                    break
+                    
+            except Exception as e:
+                logger.error(f"Error checking shutdown file: {e}")
+            
+            await asyncio.sleep(0.5)  # Check every 0.5 seconds
     
     async def _autonomous_action(self):
         """Take autonomous action when idle."""

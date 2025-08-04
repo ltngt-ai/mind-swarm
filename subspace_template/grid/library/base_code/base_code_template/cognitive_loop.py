@@ -581,7 +581,8 @@ class CognitiveLoop:
                     "situation_type": "What kind of situation this is",
                     "understanding": "What I understand about the situation",
                     "relevant_knowledge": "What knowledge or skills apply"
-                }
+                },
+                "display_field": "understanding"
             },
             "input_values": {
                 "observations": f"New message received: {json.dumps(observation)}",
@@ -741,6 +742,7 @@ class CognitiveLoop:
                     "actions": "JSON array of action objects like [{\"action\": \"send_message\", \"params\": {\"to\": \"user\", \"content\": \"...\"}}] or [{\"action\": \"finish\", \"params\": {}}]",
                     "reasoning": "Why this sequence of actions is best"
                 },
+                "display_field": "reasoning",
                 "examples": [
                     {
                         "input": "User asks to fetch google.com",
@@ -993,11 +995,12 @@ class CognitiveLoop:
                         "steps": "Step by step solution",
                         "answer": "The final answer",
                         "verification": "How to verify"
-                    }
+                    },
+                    "display_field": "answer"
                 },
                 "input_values": {
                     "problem": task,
-                    "context": f"User requested this calculation. Memory context:\n{memory_context[:500]}"
+                    "context": f"User requested this calculation. Memory context:\n{memory_context}"
                 },
                 "request_id": f"arithmetic_{int(time.time()*1000)}",
                 "timestamp": datetime.now().isoformat()
@@ -1017,7 +1020,8 @@ class CognitiveLoop:
                         "answer": "The answer to the question",
                         "confidence": "Confidence level (high/medium/low)",
                         "reasoning": "The reasoning process"
-                    }
+                    },
+                    "display_field": "answer"
                 },
                 "input_values": {
                     "question": task,

@@ -19,6 +19,8 @@ from mind_swarm.subspace.io_handlers import NetworkBodyHandler, UserIOBodyHandle
 from mind_swarm.schemas.agent_types import AgentType
 from mind_swarm.ai.presets import preset_manager
 from mind_swarm.ai.providers.factory import create_ai_service
+from mind_swarm.ai.model_registry import model_registry
+from mind_swarm.ai.model_selector import ModelSelector, SelectionStrategy
 from mind_swarm.utils.logging import logger
 
 
@@ -182,12 +184,19 @@ class SubspaceCoordinator:
         
         # I/O agent handlers
         self._io_handlers: Dict[str, Dict[str, Any]] = {}  # agent_name -> {"network": handler, "user_io": handler}
+        
+        # Model registry and selector
+        self.model_selector = ModelSelector(model_registry)
+        self._model_refresh_task: Optional[asyncio.Task] = None
                 
         logger.info("Initialized subspace coordinator")
     
     async def start(self):
         """Start the subspace coordinator."""
         self._running = True
+        
+        # Initialize model registry
+        asyncio.create_task(self._initialize_model_registry())
         
         # Start message routing
         self._router_task = asyncio.create_task(self._message_routing_loop())
@@ -215,6 +224,14 @@ class SubspaceCoordinator:
                 pass
         logger.info("Message router stopped")
         
+        # Stop model refresh task
+        if self._model_refresh_task and not self._model_refresh_task.done():
+            self._model_refresh_task.cancel()
+            try:
+                await self._model_refresh_task
+            except asyncio.CancelledError:
+                pass
+        
         # Shutdown body system
         logger.info("Shutting down body system...")
         await self.body_system.shutdown()
@@ -234,7 +251,6 @@ class SubspaceCoordinator:
         name: Optional[str] = None,
         agent_type: str = "general",
         use_ai: bool = False,
-        use_premium: bool = False,
         config: Optional[Dict[str, Any]] = None
     ) -> str:
         """Create a new AI agent.
@@ -243,7 +259,6 @@ class SubspaceCoordinator:
             name: Agent name (auto-generated from next letter if not provided)
             agent_type: Type of agent ("general" or "io_gateway")
             use_ai: Whether to enable AI (kept for compatibility, always True)
-            use_premium: Whether to use premium AI model
             config: Additional configuration
             
         Returns:
@@ -259,10 +274,32 @@ class SubspaceCoordinator:
         # Get type configuration
         type_config = self.agent_registry.get_agent_type_config(agent_type_enum)
         
-        # All agents are AI-powered
+        # All agents are AI-powered - select a model for this agent
         agent_config = config or {}
+        
+        # Select a model for this agent
+        import os
+        api_key = os.getenv("OPENROUTER_API_KEY")
+        selected_model = self.model_selector.select_model(
+            strategy=SelectionStrategy.RANDOM_CURATED
+        )
+        
+        if selected_model:
+            model_config = self.model_selector.get_model_config(selected_model, api_key)
+            logger.info(f"Selected model {selected_model.id} for agent {name or 'new'}")
+        else:
+            # Fallback to local model
+            logger.warning("No suitable model found, using local fallback")
+            model_config = {
+                "provider": "ollama",
+                "model": "llama3.2:3b",
+                "temperature": 0.7,
+                "max_tokens": 2048,
+            }
+        
         agent_config["ai"] = {
-            "use_premium": use_premium,
+            "model_config": model_config,
+            "selected_model_id": selected_model.id if selected_model else "ollama/llama3.2:3b",
             "thinking_style": agent_config.get("thinking_style", "analytical"),
             "curiosity_level": agent_config.get("curiosity_level", 0.7)
         }
@@ -529,11 +566,22 @@ class SubspaceCoordinator:
         # Set flag to make brain handlers stop responding
         self._frozen = True
         
-        # Give a moment for current file operations to complete
-        logger.info("Waiting for in-flight operations to complete...")
-        await asyncio.sleep(1)  # Fast operations only
+        # Create shutdown files for all agents
+        logger.info("Creating shutdown files for all agents...")
+        agent_states = await self.spawner.get_agent_states()
+        for agent_name in agent_states:
+            shutdown_file = self.subspace.root_path / "agents" / agent_name / "shutdown"
+            try:
+                shutdown_file.write_text("SHUTDOWN")
+                logger.debug(f"Created shutdown file for {agent_name}")
+            except Exception as e:
+                logger.error(f"Failed to create shutdown file for {agent_name}: {e}")
         
-        # Agents are now frozen mid-thought, safe to kill processes
+        # Give agents time to notice shutdown files and exit gracefully
+        logger.info("Waiting for agents to shutdown gracefully...")
+        await asyncio.sleep(2)  # Give agents 2 seconds to exit cleanly
+        
+        # Agents should now have exited gracefully
     
     async def _message_routing_loop(self):
         """Main loop for routing messages between agents."""
@@ -621,56 +669,80 @@ class SubspaceCoordinator:
             agent_states = await self.spawner.get_agent_states()
             agent_info = agent_states.get(name, {})
             
-            # Check if agent uses premium model
-            use_premium = False
+            # Get agent's model configuration
             agent_dir = self.subspace.agents_dir / name
             config_file = agent_dir / "config.json"
+            model_config = None
+            selected_model_id = None
+            
             if await aiofiles.os.path.exists(config_file):
                 async with aiofiles.open(config_file, 'r') as f:
                     content = await f.read()
                 config = json.loads(content)
-                use_premium = config.get("ai", {}).get("use_premium", False)
+                ai_config = config.get("ai", {})
+                model_config = ai_config.get("model_config")
+                selected_model_id = ai_config.get("selected_model_id")
             
-            # Get appropriate AI service
-            preset_name = "smart_balanced" if use_premium else "local_explorer"
+            # Use model config or fall back to default
+            if not model_config:
+                logger.warning(f"No model config for agent {name}, using default")
+                model_config = {
+                    "provider": "ollama",
+                    "model": "llama3.2:3b",
+                    "temperature": 0.7,
+                    "max_tokens": 2048,
+                }
+                selected_model_id = "ollama/llama3.2:3b"
+            
+            # Ensure API key is included for providers that need it
+            if model_config.get("provider") == "openrouter" and "api_key" not in model_config:
+                import os
+                api_key = os.getenv("OPENROUTER_API_KEY")
+                if api_key:
+                    model_config = model_config.copy()  # Don't modify the original
+                    model_config["api_key"] = api_key
+                else:
+                    logger.error("OpenRouter API key not found in environment")
+            
+            # Create a unique key for this model config
+            config_key = f"{model_config['provider']}:{model_config['model']}"
             
             # Use lock to protect brain handler creation
             async with self._brain_handler_lock:
-                if preset_name not in self._ai_services:
-                    # Create AI service on demand
-                    ai_config = preset_manager.get_config(preset_name)
-                    if ai_config:
-                        self._ai_services[preset_name] = create_ai_service(ai_config)
-                    else:
-                        logger.error(f"AI preset {preset_name} not found")
-                        return "I cannot access my thinking capabilities right now."
+                if config_key not in self._brain_handlers:
+                    # Create brain handler for this model config
+                    logger.info(f"Creating brain handler for {config_key} with config: {model_config}")
+                    # Note: We pass model_config directly to DynamicBrainHandler
+                    # The handler will create its own DSPy LM instance
+                    self._brain_handlers[config_key] = DynamicBrainHandler(None, model_config)
                 
-                ai_service = self._ai_services.get(preset_name)
-                if not ai_service:
-                    return "My thinking process is temporarily unavailable."
-                
-                # Get or create dynamic brain handler for this preset
-                if preset_name not in self._brain_handlers:
-                    # Convert AIExecutionConfig to the format expected by DSPy
-                    if hasattr(ai_config, '__dict__'):
-                        # ai_config is AIExecutionConfig, convert to DSPy format
-                        config_dict = {
-                            "provider": ai_config.provider,
-                            "model": ai_config.model_id,  # DSPy expects 'model', not 'model_id'
-                            "temperature": ai_config.temperature,
-                            "max_tokens": ai_config.max_tokens,
-                            "api_key": ai_config.api_key,
-                            "base_url": ai_config.provider_settings.get("host") if ai_config.provider_settings else None
-                        }
-                    else:
-                        config_dict = ai_config
-                    logger.info(f"Creating brain handler for preset {preset_name} with config: {config_dict}")
-                    self._brain_handlers[preset_name] = DynamicBrainHandler(ai_service, config_dict)
-                
-                brain_handler = self._brain_handlers[preset_name]
+                brain_handler = self._brain_handlers[config_key]
             
             # Process the thinking request with dynamic handler
+            start_time = asyncio.get_event_loop().time()
             response = await brain_handler.process_thinking_request(name, prompt)
+            elapsed_ms = (asyncio.get_event_loop().time() - start_time) * 1000
+            
+            # Update model metrics
+            if selected_model_id:
+                # Estimate tokens (rough approximation)
+                estimated_tokens = len(prompt.split()) + len(response.split())
+                model_registry.update_metrics(
+                    model_id=selected_model_id,
+                    success=True,
+                    time_ms=elapsed_ms,
+                    tokens=estimated_tokens
+                )
+            
+            # Emit brain response event for monitoring
+            try:
+                from mind_swarm.server.brain_monitor import get_brain_monitor
+                monitor = get_brain_monitor()
+                await monitor.on_brain_response(name, response)
+            except ImportError:
+                pass  # Brain monitor not available (running in subspace only)
+            except Exception as e:
+                logger.debug(f"Failed to emit brain response: {e}")
             
             # Response already includes <<<THOUGHT_COMPLETE>>> from brain handler
             logger.info(f"Thought processed for {name}")
@@ -678,6 +750,16 @@ class SubspaceCoordinator:
             
         except Exception as e:
             logger.error(f"Error processing AI request for {name}: {e}")
+            
+            # Update model metrics for failure
+            if selected_model_id:
+                model_registry.update_metrics(
+                    model_id=selected_model_id,
+                    success=False,
+                    time_ms=0,
+                    error=str(e)
+                )
+            
             # Return a properly formatted error response
             return json.dumps({
                 "request_id": "error",
@@ -829,3 +911,46 @@ class SubspaceCoordinator:
         """
         # The I/O body file monitoring is the main server component
         logger.info(f"I/O agent server component initialized for {agent_name}")
+    
+    async def _initialize_model_registry(self):
+        """Initialize the model registry and start periodic updates."""
+        try:
+            # Load environment variables from .env file
+            from dotenv import load_dotenv
+            load_dotenv()
+            
+            # Get OpenRouter API key
+            import os
+            api_key = os.getenv("OPENROUTER_API_KEY")
+            
+            # Initialize registry
+            await model_registry.initialize(api_key)
+            logger.info("Model registry initialized")
+            
+            # Start periodic refresh and grid updates
+            self._model_refresh_task = asyncio.create_task(self._model_registry_loop())
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize model registry: {e}")
+    
+    async def _model_registry_loop(self):
+        """Periodically refresh models and write to grid."""
+        while self._running:
+            try:
+                # Write current state to grid
+                grid_path = self.subspace.root_path / "grid"
+                await model_registry.write_to_grid(grid_path)
+                
+                # Wait 5 minutes before next update
+                await asyncio.sleep(300)
+                
+                # Refresh model list (respects cache TTL)
+                import os
+                api_key = os.getenv("OPENROUTER_API_KEY")
+                await model_registry.refresh_models(api_key)
+                
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error in model registry loop: {e}")
+                await asyncio.sleep(60)  # Back off on error

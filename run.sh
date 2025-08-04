@@ -40,17 +40,18 @@ show_usage() {
     echo "Usage: ./run.sh [command]"
     echo ""
     echo "Commands:"
-    echo "  server    - Start the Mind-Swarm server"
-    echo "  client    - Connect to the server (interactive mode)"
-    echo "  status    - Check server and system status"
-    echo "  stop      - Stop the server"
-    echo "  restart   - Restart the server"
-    echo "  logs      - View server logs"
-    echo "  demo      - Start server and create 3 agents"
+    echo "  server [--debug]  - Start the Mind-Swarm server (--debug for debug logging)"
+    echo "  client            - Connect to the server (interactive mode)"
+    echo "  status            - Check server and system status"
+    echo "  stop              - Stop the server"
+    echo "  restart [--debug] - Restart the server (--debug for debug logging)"
+    echo "  logs              - View server logs"
+    echo "  demo              - Start server and create 3 agents"
     echo ""
     echo "Example workflow:"
-    echo "  1. ./run.sh server    # Start the server"
-    echo "  2. ./run.sh client    # Connect and interact"
+    echo "  1. ./run.sh server           # Start the server"
+    echo "  2. ./run.sh server --debug   # Start with debug logging"
+    echo "  3. ./run.sh client           # Connect and interact"
 }
 
 # Parse command
@@ -59,7 +60,13 @@ COMMAND=${1:-help}
 case $COMMAND in
     server|start)
         echo -e "${GREEN}Starting Mind-Swarm server...${NC}"
-        mind-swarm server start
+        # Check if --debug flag is provided
+        if [[ " $@ " =~ " --debug " ]]; then
+            echo -e "${YELLOW}Debug mode enabled${NC}"
+            mind-swarm server --debug start
+        else
+            mind-swarm server start
+        fi
         echo ""
         echo -e "${CYAN}Server is running in the background.${NC}"
         echo "View logs with: ./run.sh logs"
@@ -82,7 +89,13 @@ case $COMMAND in
     
     restart)
         echo -e "${YELLOW}Restarting Mind-Swarm server...${NC}"
-        mind-swarm server restart
+        # Check if --debug flag is provided
+        if [[ " $@ " =~ " --debug " ]]; then
+            echo -e "${YELLOW}Debug mode enabled${NC}"
+            mind-swarm server --debug restart
+        else
+            mind-swarm server restart
+        fi
         ;;
     
     logs)

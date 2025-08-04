@@ -581,7 +581,8 @@ class CognitiveLoop:
                     "situation_type": "What kind of situation this is",
                     "understanding": "What I understand about the situation",
                     "relevant_knowledge": "What knowledge or skills apply"
-                }
+                },
+                "display_field": "understanding"
             },
             "input_values": {
                 "observations": f"New message received: {json.dumps(observation)}",
@@ -741,6 +742,7 @@ class CognitiveLoop:
                     "actions": "JSON array of action objects like [{\"action\": \"send_message\", \"params\": {\"to\": \"user\", \"content\": \"...\"}}] or [{\"action\": \"finish\", \"params\": {}}]",
                     "reasoning": "Why this sequence of actions is best"
                 },
+                "display_field": "reasoning",
                 "examples": [
                     {
                         "input": "User asks to fetch google.com",
@@ -993,11 +995,12 @@ class CognitiveLoop:
                         "steps": "Step by step solution",
                         "answer": "The final answer",
                         "verification": "How to verify"
-                    }
+                    },
+                    "display_field": "answer"
                 },
                 "input_values": {
                     "problem": task,
-                    "context": f"User requested this calculation. Memory context:\n{memory_context[:500]}"
+                    "context": f"User requested this calculation. Memory context:\n{memory_context}"
                 },
                 "request_id": f"arithmetic_{int(time.time()*1000)}",
                 "timestamp": datetime.now().isoformat()
@@ -1017,7 +1020,8 @@ class CognitiveLoop:
                         "answer": "The answer to the question",
                         "confidence": "Confidence level (high/medium/low)",
                         "reasoning": "The reasoning process"
-                    }
+                    },
+                    "display_field": "answer"
                 },
                 "input_values": {
                     "question": task,
@@ -1068,8 +1072,19 @@ class CognitiveLoop:
         # Write prompt with end marker
         self.brain_file.write_text(f"{prompt}\n<<<END_THOUGHT>>>")
         
-        # Wait for response
+        # Wait for response with timeout
+        start_time = asyncio.get_event_loop().time()
+        timeout = 300  # 5 minute timeout for brain operations
+        
         while True:
+            # Check for shutdown file
+            shutdown_file = self.home / "shutdown"
+            if shutdown_file.exists():
+                logger.info("Shutdown detected while waiting for brain response")
+                # Reset brain for next use
+                self.brain_file.write_text("This is your brain. Write your thoughts here to think.")
+                return '{"error": "Shutdown requested"}'
+            
             content = self.brain_file.read_text()
             if "<<<THOUGHT_COMPLETE>>>" in content:
                 # Extract response
@@ -1079,6 +1094,13 @@ class CognitiveLoop:
                 self.brain_file.write_text("This is your brain. Write your thoughts here to think.")
                 
                 return response
+            
+            # Check for timeout
+            if asyncio.get_event_loop().time() - start_time > timeout:
+                logger.error(f"Brain operation timed out after {timeout}s")
+                # Reset brain for next use
+                self.brain_file.write_text("This is your brain. Write your thoughts here to think.")
+                return '{"error": "Brain operation timed out"}'
             
             # Brief pause to avoid spinning
             await asyncio.sleep(0.01)

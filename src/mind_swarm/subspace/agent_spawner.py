@@ -39,26 +39,40 @@ class AgentProcess:
         
         logger.debug(f"Sent message {msg_id} to agent {self.name}")
     
-    async def terminate(self, timeout: float = 1.0):
+    async def terminate(self, timeout: float = 5.0):
         """Terminate the agent process."""
-        # Just kill the process - agents don't know about shutdown
         logger.info(f"AgentProcess.terminate() called for {self.name}")
         
         if self.process.returncode is not None:
             logger.info(f"Agent {self.name} already terminated (returncode={self.process.returncode})")
             return
-            
-        logger.info(f"Requesting agent {self.name} to stop (PID: {self.process.pid})")
-        self.process.terminate()
         
-        # Give it a moment to stop
+        # First create shutdown file to signal agent to exit gracefully
+        shutdown_file = self.sandbox.agent_home / "shutdown"
         try:
-            logger.info(f"Waiting up to {timeout}s for agent {self.name} to stop...")
+            shutdown_file.write_text("SHUTDOWN")
+            logger.info(f"Created shutdown file for agent {self.name}")
+        except Exception as e:
+            logger.error(f"Failed to create shutdown file for {self.name}: {e}")
+        
+        # Wait for agent to exit gracefully
+        try:
+            logger.info(f"Waiting up to {timeout}s for agent {self.name} to exit gracefully...")
             await asyncio.wait_for(self.process.wait(), timeout=timeout)
-            logger.info(f"Agent {self.name} stopped gracefully")
+            logger.info(f"Agent {self.name} exited gracefully")
+            return
         except asyncio.TimeoutError:
-            # Force stop if needed
-            logger.warning(f"Agent {self.name} not responding after {timeout}s, forcing stop...")
+            # If agent didn't exit, try terminating the process
+            logger.warning(f"Agent {self.name} didn't exit after {timeout}s, sending SIGTERM...")
+            self.process.terminate()
+        
+        # Give it another moment to stop after SIGTERM
+        try:
+            await asyncio.wait_for(self.process.wait(), timeout=2.0)
+            logger.info(f"Agent {self.name} stopped after SIGTERM")
+        except asyncio.TimeoutError:
+            # Force stop if still not responding
+            logger.warning(f"Agent {self.name} still not responding, forcing stop...")
             
             # Try to kill the entire process group
             import os
@@ -151,6 +165,12 @@ class AgentProcessManager:
             "AGENT_TYPE": agent_type,
             "PYTHONPATH": str(Path(__file__).parent.parent.parent),
         }
+        
+        # Clean up any leftover shutdown file from previous runs
+        shutdown_file = sandbox.agent_home / "shutdown"
+        if shutdown_file.exists():
+            shutdown_file.unlink()
+            logger.debug(f"Removed old shutdown file for {name}")
         
         # Launch agent process in sandbox
         logger.info(f"Starting agent process for {name}")

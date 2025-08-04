@@ -53,6 +53,8 @@ class OpenRouterAIService(AIService):
             "max_tokens": config.max_tokens,
         }
         
+        logger.debug(f"OpenRouterAIService init - api_key: {self.api_key[:10] if self.api_key else 'None'}...")
+        
         if not self.api_key:
             raise ValueError("OpenRouter requires an API key")
         
@@ -99,6 +101,9 @@ class OpenRouterAIService(AIService):
         """Non-streaming chat completion."""
         headers = self._get_headers()
         payload = self._build_payload(messages, tools=tools, **kwargs)
+        
+        logger.debug(f"OpenRouter request - URL: {API_URL}")
+        logger.debug(f"OpenRouter request - payload model: {payload.get('model')}")
         
         async with httpx.AsyncClient() as client:
             try:
@@ -196,12 +201,14 @@ class OpenRouterAIService(AIService):
     
     def _get_headers(self) -> Dict[str, str]:
         """Get request headers."""
-        return {
+        headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": self.site_url,
+            "Referer": self.site_url,
             "X-Title": self.app_name,
         }
+        logger.debug(f"OpenRouter headers - has auth: {bool(self.api_key)}, auth header: {headers['Authorization'][:20]}...")
+        return headers
     
     def _build_payload(
         self,
@@ -239,8 +246,10 @@ class OpenRouterAIService(AIService):
         try:
             error_data = response.json()
             error_msg = error_data.get("error", {}).get("message", response.text)
+            logger.debug(f"OpenRouter error response - status: {status_code}, full error data: {error_data}")
         except Exception:
             error_msg = response.text
+            logger.debug(f"OpenRouter error response - status: {status_code}, text: {error_msg}")
         
         if status_code == 401:
             raise OpenRouterAuthError(f"Authentication failed: {error_msg}")

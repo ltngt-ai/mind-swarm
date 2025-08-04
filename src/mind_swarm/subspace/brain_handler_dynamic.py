@@ -7,6 +7,7 @@ DSPy signatures dynamically based on generic protocol requests from agents.
 import json
 import time
 import logging
+import asyncio
 from typing import Dict, Any, Optional, Type, Union
 from pathlib import Path
 from threading import Lock
@@ -16,6 +17,13 @@ import dspy
 
 from mind_swarm.utils.logging import logger
 from mind_swarm.subspace.dspy_config import configure_dspy_for_mind_swarm
+
+# Import brain monitor if available
+try:
+    from mind_swarm.server.brain_monitor import get_brain_monitor
+    _has_brain_monitor = True
+except ImportError:
+    _has_brain_monitor = False
 
 
 @dataclass
@@ -209,6 +217,14 @@ class DynamicBrainHandler:
         Returns:
             Response text to write back to brain file
         """
+        # Emit brain activity event
+        if _has_brain_monitor:
+            try:
+                monitor = get_brain_monitor()
+                await monitor.on_brain_request(agent_id, request_text)
+            except Exception as e:
+                self.logger.debug(f"Failed to emit brain activity: {e}")
+        
         try:
             # Remove the end marker if present
             request_text = request_text.split("<<<END_THOUGHT>>>")[0].strip()
@@ -243,39 +259,67 @@ class DynamicBrainHandler:
                 self.cache.put(signature_hash, signature_class, signature_spec)
                 self.logger.info(f"Created new signature for {signature_spec['task']}")
             
-            # Execute the signature
-            try:
-                # Create a ChainOfThought module with the signature
-                cot = dspy.ChainOfThought(signature_class)
-                
-                # Execute with the provided inputs
-                result = cot(**input_values)
-                
-                # Extract outputs
-                output_values = {}
-                for output_name in signature_spec['outputs'].keys():
-                    output_values[output_name] = getattr(result, output_name, None)
-                
-                # Create response
-                response_data = {
-                    "request_id": request_id,
-                    "signature_hash": signature_hash,
-                    "output_values": output_values,
-                    "metadata": {
-                        "cached": cached is not None,
-                        "execution_time": time.time(),
-                        "signature_task": signature_spec['task'],
-                        "agent_id": agent_id
-                    },
-                    "timestamp": time.time()
-                }
-                
-                self.logger.info(f"Successfully processed request {request_id} for agent {agent_id}")
-                return json.dumps(response_data, indent=2) + "\n<<<THOUGHT_COMPLETE>>>"
-                
-            except Exception as e:
-                self.logger.error(f"Error executing signature: {e}")
-                return self._create_error_response(request_id, f"Signature execution failed: {e}")
+            # Execute the signature with retry on rate limit
+            max_retries = 3
+            retry_count = 0
+            last_error = None
+            
+            while retry_count < max_retries:
+                try:
+                    # Create a ChainOfThought module with the signature
+                    cot = dspy.ChainOfThought(signature_class)
+                    
+                    # Execute with the provided inputs (async)
+                    result = await cot.aforward(**input_values)
+                    
+                    # Extract outputs
+                    output_values = {}
+                    for output_name in signature_spec['outputs'].keys():
+                        output_values[output_name] = getattr(result, output_name, None)
+                    
+                    # Create response
+                    response_data = {
+                        "request_id": request_id,
+                        "signature_hash": signature_hash,
+                        "output_values": output_values,
+                        "metadata": {
+                            "cached": cached is not None,
+                            "execution_time": time.time(),
+                            "signature_task": signature_spec['task'],
+                            "agent_id": agent_id,
+                            "retry_count": retry_count,
+                            "model_used": self.lm.model if hasattr(self, 'lm') else None
+                        },
+                        "timestamp": time.time()
+                    }
+                    
+                    self.logger.info(f"Successfully processed request {request_id} for agent {agent_id}")
+                    return json.dumps(response_data, indent=2) + "\n<<<THOUGHT_COMPLETE>>>"
+                    
+                except Exception as e:
+                    last_error = e
+                    error_str = str(e)
+                    
+                    # Check if it's a rate limit error
+                    if "rate limit" in error_str.lower() or "429" in error_str:
+                        retry_count += 1
+                        if retry_count < max_retries:
+                            self.logger.warning(f"Rate limit hit for agent {agent_id}, attempt {retry_count}/{max_retries}")
+                            
+                            # Try to switch to a different model
+                            await self._switch_to_alternative_model(agent_id)
+                            
+                            # Brief delay before retry
+                            await asyncio.sleep(1.0)
+                            continue
+                    
+                    # For other errors, don't retry
+                    self.logger.error(f"Error executing signature: {e}")
+                    return self._create_error_response(request_id, f"Signature execution failed: {e}")
+            
+            # All retries exhausted
+            self.logger.error(f"All retries exhausted for agent {agent_id}: {last_error}")
+            return self._create_error_response(request_id, f"Rate limit persists after {max_retries} retries: {last_error}")
             
         except json.JSONDecodeError as e:
             self.logger.error(f"Invalid JSON in request: {e}")
@@ -321,3 +365,40 @@ class DynamicBrainHandler:
     def get_cache_stats(self) -> Dict[str, Any]:
         """Get cache statistics."""
         return self.cache.get_stats()
+    
+    async def _switch_to_alternative_model(self, agent_id: str):
+        """Switch to an alternative model when rate limited.
+        
+        Args:
+            agent_id: The agent requesting the switch
+        """
+        from mind_swarm.ai.model_selector import ModelSelector, SelectionStrategy
+        
+        try:
+            # Get the model selector
+            selector = ModelSelector()
+            
+            # Try to select a different free model
+            new_model = selector.select_model(
+                strategy=SelectionStrategy.RANDOM_FREE,
+                exclude_models=[self.lm.model] if hasattr(self, 'lm') and hasattr(self.lm, 'model') else []
+            )
+            
+            if new_model:
+                self.logger.info(f"Switching from {getattr(self.lm, 'model', 'unknown')} to {new_model} for agent {agent_id}")
+                
+                # Reconfigure DSPy with the new model
+                config = {
+                    'provider': 'openrouter',
+                    'model': new_model,
+                    'api_key': self.config.get('api_key'),
+                    'temperature': self.config.get('temperature', 0.7),
+                    'max_tokens': self.config.get('max_tokens', 4096)
+                }
+                self.lm = configure_dspy_for_mind_swarm(config)
+                self.config['model'] = new_model
+            else:
+                self.logger.warning(f"No alternative model available for agent {agent_id}")
+                
+        except Exception as e:
+            self.logger.error(f"Error switching models for agent {agent_id}: {e}")

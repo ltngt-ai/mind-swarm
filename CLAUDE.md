@@ -247,3 +247,6 @@ subspace/agents/{agent_name}/
 - All agent code uses relative imports
 - IO agents inherit from base agents using relative imports
 - The base_code directory is the agent's entire world of code
+- **CRITICAL**: NEVER write code directly to the `/subspace` folder - it's the runtime folder that gets reset
+- **ALWAYS** write agent runtime code to `/subspace_template` folder - this is the source template
+- The server copies from `/subspace_template` to `/subspace` on startup

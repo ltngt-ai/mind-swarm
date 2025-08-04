@@ -1,0 +1,49 @@
+# Blacklist of models to avoid in Mind-Swarm
+# These models are known to have issues or are unsuitable for agent tasks
+# Last updated: 2025-08-04
+
+blacklisted_models:
+  - id: "nousresearch/hermes-2-theta-llama-3-8b:free"
+    reason: "Inconsistent output quality, tends to produce malformed JSON"
+    blacklisted_since: "2025-01-15"
+    
+  - id: "microsoft/phi-2:free"
+    reason: "Too small for complex agent tasks, poor instruction following"
+    blacklisted_since: "2025-01-20"
+    
+  - id: "mistralai/mistral-7b-instruct:free"
+    reason: "Older version with known issues, use newer Mixtral models instead"
+    blacklisted_since: "2025-02-01"
+    
+  - id: "huggingfaceh4/zephyr-7b-beta:free"
+    reason: "Frequently returns incomplete responses"
+    blacklisted_since: "2025-02-10"
+
+# Temporary blacklist - models experiencing issues
+temporary_blacklist:
+  - id: "gryphe/mythomax-l2-13b:free"
+    reason: "Server reliability issues reported"
+    blacklisted_until: "2025-03-01"
+    check_status_url: "https://openrouter.ai/models/gryphe/mythomax-l2-13b"
+
+# Pattern blacklist - block models matching these patterns
+pattern_blacklist:
+  - pattern: ".*-uncensored.*"
+    reason: "Uncensored models may produce inappropriate content for agents"
+    
+  - pattern: ".*-roleplay.*"
+    reason: "Roleplay models not suitable for task-oriented agents"
+    
+  - pattern: ".*test.*"
+    reason: "Test models are unstable and should not be used in production"
+
+# Configuration
+config:
+  # Whether to enforce blacklist strictly (true) or just warn (false)
+  enforce_blacklist: true
+  
+  # Log blacklisted model attempts
+  log_blacklist_attempts: true
+  
+  # Allow override with explicit flag
+  allow_blacklist_override: false
