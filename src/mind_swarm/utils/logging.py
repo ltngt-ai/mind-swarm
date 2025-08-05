@@ -14,6 +14,7 @@ def setup_logging(
     name: str = "mind_swarm",
     log_file: Optional[Path] = None,
     level: Optional[str] = None,
+    clear_log: bool = True,
 ) -> logging.Logger:
     """Set up logging with Rich handler for better output.
     
@@ -21,6 +22,7 @@ def setup_logging(
         name: Logger name
         log_file: Optional file path for logging
         level: Log level (defaults to settings.log_level)
+        clear_log: Clear log file on startup (default True)
     
     Returns:
         Configured logger instance
@@ -49,7 +51,12 @@ def setup_logging(
     # File handler if specified
     if log_file:
         log_file.parent.mkdir(parents=True, exist_ok=True)
-        file_handler = logging.FileHandler(log_file)
+        # Clear log file if requested
+        if clear_log and log_file.exists():
+            # Clear the file content
+            log_file.write_text("")
+        # Always use append mode for the handler
+        file_handler = logging.FileHandler(log_file, mode='a')
         file_handler.setLevel(level)
         file_formatter = logging.Formatter(
             '%(asctime)s - %(name)s - %(levelname)s - %(message)s'

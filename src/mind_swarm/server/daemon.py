@@ -113,17 +113,25 @@ def main():
     default_log = project_root / "mind-swarm.log"
     parser.add_argument("--log-file", default=str(default_log), help="Log file path")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
+    parser.add_argument("--llm-debug", action="store_true", help="Enable LLM API call logging")
     
     args = parser.parse_args()
     
-    # Clear the log file when starting fresh
+    # Set up logging - clear log on startup
     log_path = Path(args.log_file)
-    if log_path.exists():
-        log_path.write_text("")  # Clear the file
-    
-    # Set up logging
     level = "DEBUG" if args.debug else "INFO"
-    setup_logging(level=level, log_file=log_path)
+    setup_logging(level=level, log_file=log_path, clear_log=True)
+    
+    # Set LLM debug flag in environment for DSPy config to pick up
+    if args.llm_debug:
+        os.environ["MIND_SWARM_LLM_DEBUG"] = "true"
+        os.environ["MIND_SWARM_LOG_FILE"] = str(log_path)
+        llm_log_path = log_path.parent / "mind-swarm-llm.log"
+        # Clear the LLM log file on startup
+        if llm_log_path.exists():
+            llm_log_path.write_text("")
+            logger.info(f"Cleared LLM debug log: {llm_log_path}")
+        logger.info(f"LLM API call logging enabled to: {llm_log_path}")
     
     logger.info(f"Starting Mind-Swarm server daemon on {args.host}:{args.port}")
     logger.info(f"Logging to: {args.log_file}")
@@ -132,7 +140,6 @@ def main():
     daemon = ServerDaemon(args.host, args.port)
     
     try:
-        import os
         asyncio.run(daemon.run())
     except KeyboardInterrupt:
         logger.info("Server daemon interrupted")

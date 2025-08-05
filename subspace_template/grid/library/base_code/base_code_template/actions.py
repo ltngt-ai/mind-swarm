@@ -168,53 +168,6 @@ class SendMessageAction(Action):
                 error=str(e)
             )
 
-
-class UpdateMemoryAction(Action):
-    """Update agent's memory."""
-    
-    def __init__(self):
-        super().__init__("update_memory", "Update memory with new information")
-    
-    async def execute(self, context: Dict[str, Any]) -> ActionResult:
-        """Add or update memory blocks."""
-        memory_type = self.params.get("memory_type", "note")
-        content = self.params.get("content", "")
-        
-        try:
-            memory_manager = context.get("memory_manager")
-            if not memory_manager:
-                return ActionResult(
-                    self.name,
-                    ActionStatus.FAILED,
-                    error="No memory manager in context"
-                )
-            
-            # Create appropriate memory block based on type
-            # This is simplified - real implementation would handle different types
-            from .memory import ObservationMemoryBlock
-            
-            memory_block = ObservationMemoryBlock(
-                observation_type=memory_type,
-                path="internal",
-                description=content,
-                priority=Priority.MEDIUM
-            )
-            
-            memory_manager.add_memory(memory_block)
-            
-            return ActionResult(
-                self.name,
-                ActionStatus.COMPLETED,
-                result={"memory_id": memory_block.id}
-            )
-        except Exception as e:
-            return ActionResult(
-                self.name,
-                ActionStatus.FAILED,
-                error=str(e)
-            )
-
-
 class WaitAction(Action):
     """Wait for a condition or timeout."""
     
@@ -250,38 +203,6 @@ class WaitAction(Action):
             )
 
 
-class FinishAction(Action):
-    """Complete the current task and exit the cognitive loop."""
-    
-    def __init__(self):
-        super().__init__("finish", "Complete task and exit loop", Priority.HIGH)
-    
-    async def execute(self, context: Dict[str, Any]) -> ActionResult:
-        """Mark task as complete and signal loop exit."""
-        try:
-            # Update task status if tracking
-            task_id = context.get("task_id")
-            if task_id:
-                memory_manager = context.get("memory_manager")
-                if memory_manager:
-                    task_memory = memory_manager.access_memory(task_id)
-                    if task_memory:
-                        task_memory.status = "completed"
-            
-            # Signal loop to exit after this cycle
-            context["task_complete"] = True
-            
-            return ActionResult(
-                self.name,
-                ActionStatus.COMPLETED,
-                result={"task_complete": True}
-            )
-        except Exception as e:
-            return ActionResult(
-                self.name,
-                ActionStatus.FAILED,
-                error=str(e)
-            )
 
 
 # Action Registry
@@ -294,9 +215,7 @@ class ActionRegistry:
             # Base actions available to all agents
             "base": {
                 "send_message": SendMessageAction,
-                "update_memory": UpdateMemoryAction,
                 "wait": WaitAction,
-                "finish": FinishAction,
             }
         }
     

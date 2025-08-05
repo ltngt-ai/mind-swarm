@@ -4,11 +4,50 @@ This module handles the configuration of DSPy with various language model provid
 """
 
 import os
+import logging
 from typing import Dict, Any, Optional, List
+from pathlib import Path
 
 import dspy
 
 from mind_swarm.utils.logging import logger
+
+# Set up dedicated LLM debug logger
+llm_logger = logging.getLogger("mind_swarm.llm_debug")
+llm_logger.setLevel(logging.INFO)
+llm_logger.propagate = False  # Don't propagate to parent logger
+
+# Global flag to track if we've set up the file handler
+_llm_logger_configured = False
+
+def _ensure_llm_logger():
+    """Ensure LLM logger is configured with file handler if needed."""
+    global _llm_logger_configured
+    
+    if _llm_logger_configured:
+        return
+        
+    # Check if LLM debug is enabled
+    if os.getenv("MIND_SWARM_LLM_DEBUG", "false").lower() == "true":
+        # Get the main log file path and create llm debug log next to it
+        main_log = os.getenv("MIND_SWARM_LOG_FILE", "/tmp/mind-swarm.log")
+        llm_log_path = Path(main_log).parent / "mind-swarm-llm.log"
+        
+        # Create file handler
+        file_handler = logging.FileHandler(llm_log_path, mode='a')
+        file_handler.setLevel(logging.INFO)
+        
+        # Simple format without timestamps (they're in the log content)
+        formatter = logging.Formatter('%(message)s')
+        file_handler.setFormatter(formatter)
+        
+        llm_logger.addHandler(file_handler)
+        logger.info(f"LLM debug logging configured to: {llm_log_path}")
+        
+        # Test write to ensure it's working
+        llm_logger.info("=== LLM Debug Log Started ===\n")
+        
+    _llm_logger_configured = True
 
 
 class MindSwarmDSPyLM(dspy.LM):
@@ -24,6 +63,8 @@ class MindSwarmDSPyLM(dspy.LM):
         model = config.get("model", "gpt-3.5-turbo")
         provider = config.get("provider", "openai")
         cache = config.get("cache", False)
+        
+        logger.info(f"Initializing MindSwarmDSPyLM with provider={provider}, model={model}")
         
         # Initialize parent with model
         super().__init__(model=model, cache=cache)
@@ -52,7 +93,7 @@ class MindSwarmDSPyLM(dspy.LM):
             self.api_base = "https://openrouter.ai/api/v1"
             self.api_key = self.config.get("api_key") or os.getenv("OPENROUTER_API_KEY")
             logger.debug(f"OpenRouter setup - api_key from config: {'yes' if self.config.get('api_key') else 'no'}, from env: {'yes' if os.getenv('OPENROUTER_API_KEY') else 'no'}")
-            logger.debug(f"Final api_key: {self.api_key[:10] if self.api_key else 'None'}...")
+            logger.debug(f"Final api_key: {self.api_key if self.api_key else 'None'}")
         
         elif self.provider == "openai":
             self.api_key = self.config.get("api_key") or os.getenv("OPENAI_API_KEY")
@@ -65,8 +106,9 @@ class MindSwarmDSPyLM(dspy.LM):
             # Local or custom OpenAI-compatible endpoint
             self.api_key = self.config.get("api_key", "dummy")
             # Use base_url directly from config
-            base_url = self.config.get("base_url", "http://localhost:1234")
-            self.api_base = f"{base_url}/v1" if not base_url.endswith("/v1") else base_url
+            base_url = self.config.get("base_url", "http://192.168.1.147:1234")
+            # For local providers, base_url is the host URL, api_base is used by openai_compatible
+            self.api_base = base_url
             logger.info(f"Configured local provider with base URL: {self.api_base}")
         
         else:
@@ -83,7 +125,7 @@ class MindSwarmDSPyLM(dspy.LM):
             settings["site_url"] = "http://mind-swarm:8000"
             settings["app_name"] = "Mind-Swarm"
         elif self.provider in ["local", "ollama", "openai_compatible"]:
-            # Local providers need the host URL
+            # Local providers need the host URL (without /v1)
             if hasattr(self, 'api_base') and self.api_base:
                 settings["host"] = self.api_base
         
@@ -117,16 +159,22 @@ class MindSwarmDSPyLM(dspy.LM):
         Returns:
             List with completion dict containing 'text' key
         """
+        logger.info(f"=== acall invoked! Provider: {self.provider}, Model: {self.model} ===")
         # Create and use our AI service
         from mind_swarm.ai.config import AIExecutionConfig
         from mind_swarm.ai.providers.factory import create_ai_service
+        
+        # Check if LLM debug is enabled
+        llm_debug = os.getenv("MIND_SWARM_LLM_DEBUG", "false").lower() == "true"
+        if llm_debug:
+            logger.debug(f"LLM debug enabled, about to log API call")
         
         # Override temperature and max_tokens if provided
         temperature = kwargs.get("temperature", self.temperature)
         max_tokens = kwargs.get("max_tokens", self.max_tokens)
         
         # Build AIExecutionConfig from our config
-        logger.debug(f"Creating AIExecutionConfig with api_key: {self.api_key[:10] if self.api_key else 'None'}...")
+        logger.debug(f"Creating AIExecutionConfig with api_key: {self.api_key if self.api_key else 'None'}")
         
         ai_config = AIExecutionConfig(
             model_id=self.model,
@@ -149,18 +197,72 @@ class MindSwarmDSPyLM(dspy.LM):
         elif prompt:
             # Convert prompt to messages
             messages = [{"role": "user", "content": prompt}]
-            logger.debug(f"DSPy acall with prompt: {prompt[:50]}...")
+            logger.debug(f"DSPy acall with prompt: {prompt}")
         else:
             # No input
             logger.warning("DSPy acall with no prompt or messages")
             return []
+        
+        # Log full API call if LLM debug is enabled
+        if llm_debug:
+            _ensure_llm_logger()  # Configure logger if not already done
+            import datetime
+            timestamp = datetime.datetime.now().isoformat()
+            llm_logger.info(f"\n{'='*80}")
+            llm_logger.info(f"LLM API CALL [{timestamp}]")
+            llm_logger.info(f"{'='*80}")
+            llm_logger.info(f"Model: {self.model}")
+            llm_logger.info(f"Provider: {self.provider}")
+            llm_logger.info(f"Temperature: {temperature}")
+            llm_logger.info(f"Max Tokens: {max_tokens}")
+            llm_logger.info("")
+            
+            for i, msg in enumerate(messages):
+                role = msg.get('role', 'unknown')
+                content = msg.get('content', '')
+                
+                # Debug: Check for truncation
+                if 'Message Protocol' in content and 'MESSAGE' not in content:
+                    llm_logger.info(f"WARNING: Message Protocol appears truncated!")
+                    llm_logger.info(f"Content length: {len(content)}")
+                    llm_logger.info(f"Last 50 chars: {repr(content[-50:])}")
+                
+                llm_logger.info(f"--- Message {i+1} ({role}) ---")
+                
+                # Replace all literal \n with actual newlines throughout the content
+                expanded_content = content.replace('\\n', '\n')
+                llm_logger.info(expanded_content)
+                
+                llm_logger.info("")  # Empty line between messages
+            
+            llm_logger.info(f"{'='*80}\n")
         
         try:
             # Use our AI service to generate response
             result = await ai_service.chat_completion(messages)
             response_text = result["message"]["content"]
             
-            logger.debug(f"DSPy LM response: {response_text[:100]}...")
+            logger.debug(f"DSPy LM response: {response_text}")
+            
+            # Log full response if LLM debug is enabled
+            if llm_debug:
+                _ensure_llm_logger()  # Configure logger if not already done
+                
+                llm_logger.info(f"{'='*80}")
+                llm_logger.info("LLM API RESPONSE")
+                llm_logger.info(f"{'='*80}")
+                
+                # Replace all literal \n with actual newlines
+                expanded_response = response_text.replace('\\n', '\n')
+                llm_logger.info(expanded_response)
+                
+                if "usage" in result:
+                    llm_logger.info("")
+                    llm_logger.info("Token Usage:")
+                    for key, value in result['usage'].items():
+                        llm_logger.info(f"  {key}: {value}")
+                
+                llm_logger.info(f"{'='*80}\n")
             
             # Track in history
             self.history.append({
@@ -223,8 +325,10 @@ def configure_dspy_for_mind_swarm(config: Dict[str, Any]) -> dspy.LM:
     Returns:
         Configured language model
     """
+    logger.info(f"Configuring DSPy with Mind-Swarm LM for model: {config.get('model')}")
     lm = MindSwarmDSPyLM(config)
     dspy.settings.configure(lm=lm)
+    logger.info(f"DSPy configured successfully with LM: {lm}")
     return lm
 
 
@@ -257,6 +361,9 @@ def get_dspy_lm_from_preset(preset_name: str) -> Optional[dspy.LM]:
         # Add provider settings if any
         if preset_config.provider_settings:
             config_dict.update(preset_config.provider_settings)
+            # Map host to base_url for local providers
+            if "host" in preset_config.provider_settings:
+                config_dict["base_url"] = preset_config.provider_settings["host"]
         
         return configure_dspy_for_mind_swarm(config_dict)
         

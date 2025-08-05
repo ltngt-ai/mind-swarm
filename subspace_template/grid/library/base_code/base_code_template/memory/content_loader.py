@@ -5,6 +5,7 @@ Includes caching to avoid repeated file reads.
 """
 
 import json
+import yaml
 import hashlib
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
@@ -181,7 +182,8 @@ class ContentLoader:
                 return f"[Knowledge not found: {memory.topic}]"
             
             # Load and parse knowledge file
-            knowledge_data = json.loads(knowledge_path.read_text(encoding='utf-8', errors='replace'))
+            file_content = knowledge_path.read_text(encoding='utf-8', errors='replace')
+            knowledge_data = yaml.safe_load(file_content)
             
             # Extract content from knowledge file
             content = knowledge_data.get("content", "[No content in knowledge file]")

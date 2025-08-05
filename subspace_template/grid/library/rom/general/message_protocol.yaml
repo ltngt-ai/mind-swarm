@@ -1,0 +1,14 @@
+knowledge_version: "1.0"
+id: "rom:interfaces:messages"
+title: "Message Protocol"
+content: |
+  Messages: JSON files in /home/inbox and /home/outbox.
+  Format: {"from": "sender", "to": "recipient", "type": "MESSAGE", "content": "text"}
+metadata:
+  category: "interface"
+  tags: ["messages", "communication", "protocol"]
+  confidence: 1.0
+  priority: 1
+  source: "boot_rom"
+  created: "2024-01-01T00:00:00Z"
+  version: 1

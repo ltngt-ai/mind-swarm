@@ -40,11 +40,13 @@ show_usage() {
     echo "Usage: ./run.sh [command]"
     echo ""
     echo "Commands:"
-    echo "  server [--debug]  - Start the Mind-Swarm server (--debug for debug logging)"
+    echo "  server [--debug] [--llm-debug]  - Start the Mind-Swarm server"
+    echo "                     --debug for debug logging"
+    echo "                     --llm-debug for LLM API call logging"
     echo "  client            - Connect to the server (interactive mode)"
     echo "  status            - Check server and system status"
     echo "  stop              - Stop the server"
-    echo "  restart [--debug] - Restart the server (--debug for debug logging)"
+    echo "  restart [--debug] [--llm-debug] - Restart the server"
     echo "  logs              - View server logs"
     echo "  demo              - Start server and create 3 agents"
     echo ""
@@ -60,13 +62,18 @@ COMMAND=${1:-help}
 case $COMMAND in
     server|start)
         echo -e "${GREEN}Starting Mind-Swarm server...${NC}"
-        # Check if --debug flag is provided
+        # Build command with optional flags
+        CMD="mind-swarm server"
         if [[ " $@ " =~ " --debug " ]]; then
             echo -e "${YELLOW}Debug mode enabled${NC}"
-            mind-swarm server --debug start
-        else
-            mind-swarm server start
+            CMD="$CMD --debug"
         fi
+        if [[ " $@ " =~ " --llm-debug " ]]; then
+            echo -e "${YELLOW}LLM debug mode enabled${NC}"
+            CMD="$CMD --llm-debug"
+        fi
+        CMD="$CMD start"
+        $CMD
         echo ""
         echo -e "${CYAN}Server is running in the background.${NC}"
         echo "View logs with: ./run.sh logs"
@@ -89,13 +96,18 @@ case $COMMAND in
     
     restart)
         echo -e "${YELLOW}Restarting Mind-Swarm server...${NC}"
-        # Check if --debug flag is provided
+        # Build command with optional flags
+        CMD="mind-swarm server"
         if [[ " $@ " =~ " --debug " ]]; then
             echo -e "${YELLOW}Debug mode enabled${NC}"
-            mind-swarm server --debug restart
-        else
-            mind-swarm server restart
+            CMD="$CMD --debug"
         fi
+        if [[ " $@ " =~ " --llm-debug " ]]; then
+            echo -e "${YELLOW}LLM debug mode enabled${NC}"
+            CMD="$CMD --llm-debug"
+        fi
+        CMD="$CMD restart"
+        $CMD
         ;;
     
     logs)

@@ -1,0 +1,38 @@
+id: simplify_expression
+knowledge_version: '1.0'
+title: Simplify Expression Action
+content:
+  description: Evaluates a mathematical expression and returns the result
+  usage: Use this action to compute mathematical expressions like '2+2', '3*4', '2**3',
+    etc.
+  parameter_details:
+    expression: A string containing the mathematical expression to evaluate. Supports
+      pythonic arithmetic including basic (+, -, *, /), exponentiation (**), parentheses,
+      and common functions.
+  examples:
+  - expression: 2 + 2
+    result: '4'
+  - expression: 2**3 + 1
+    result: '9'
+  - expression: (5 + 3) * 2
+    result: '16'
+metadata:
+  category: compute
+  priority: 3
+  confidence: 1.0
+  source: system
+  parameter_schema:
+    expression:
+      type: string
+      required: true
+      description: The mathematical expression to evaluate
+      aliases:
+      - expr
+      - math
+      - equation
+      - formula
+  common_corrections:
+  - if_param: expr
+    then_rename: expression
+  - if_param: math
+    then_rename: expression

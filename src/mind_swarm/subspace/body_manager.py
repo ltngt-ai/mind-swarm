@@ -131,6 +131,11 @@ class BodyManager:
                     
                     # For brain file, check for end marker
                     if name == "brain":
+                        # Debug: log what we're seeing in the brain file
+                        if content != body_file.help_text:
+                            logger.debug(f"Brain file content for {self.name}: length={len(content)}, first 100 chars: {repr(content[:100])}")
+                            logger.debug(f"Contains END_THOUGHT: {'<<<END_THOUGHT>>>' in content}")
+                        
                         if "<<<END_THOUGHT>>>" in content and not processing.get(name, False):
                             # Agent has written a thought and is waiting
                             processing[name] = True

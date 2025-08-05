@@ -282,13 +282,16 @@ class SubspaceManager:
         # Copy grid structure if needed
         grid_template = template_dir / "grid"
         if grid_template.exists():
-            # Copy library ROM and schema if not present
+            # Always sync ROM from template (for development)
             rom_dir = self.library_dir / "rom"
-            if not rom_dir.exists():
-                src_rom = grid_template / "library" / "rom"
-                if src_rom.exists():
+            src_rom = grid_template / "library" / "rom"
+            if src_rom.exists():
+                if rom_dir.exists():
+                    logger.info("Updating ROM knowledge from template")
+                    shutil.rmtree(rom_dir)
+                else:
                     logger.info("Copying ROM knowledge from template")
-                    shutil.copytree(src_rom, rom_dir)
+                shutil.copytree(src_rom, rom_dir)
             
             # Always sync base_code from template (for development)
             base_code_dir = self.library_dir / "base_code"

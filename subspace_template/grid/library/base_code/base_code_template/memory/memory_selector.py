@@ -82,7 +82,6 @@ class RelevanceScorer:
         decay_rates = {
             MemoryType.OBSERVATION: 300,    # 5 minutes
             MemoryType.MESSAGE: 1800,       # 30 minutes
-            MemoryType.HISTORY: 600,        # 10 minutes
             MemoryType.STATUS: 300,         # 5 minutes
             MemoryType.FILE: 3600,          # 1 hour
             MemoryType.TASK: 7200,          # 2 hours

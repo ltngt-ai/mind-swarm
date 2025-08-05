@@ -180,31 +180,32 @@ class EnvironmentScanner:
                 "Plaza discussion"
             ))
         
-        # Scan library (shared knowledge)
+        # Scan library (shared knowledge) - only YAML files
         if self.library_path and self.library_path.exists():
-            for knowledge_file in self.library_path.rglob("*.md"):
-                state = self._check_file_state(knowledge_file)
-                if state:  # New or changed
-                    # Extract topic from path
-                    rel_path = knowledge_file.relative_to(self.library_path)
-                    topic = rel_path.parts[0] if rel_path.parts else "general"
-                    subtopic = rel_path.stem if len(rel_path.parts) > 1 else None
-                    
-                    knowledge_memory = KnowledgeMemoryBlock(
-                        topic=topic,
-                        subtopic=subtopic,
-                        location=str(knowledge_file),
-                        relevance_score=0.7,  # Default relevance
-                        priority=Priority.MEDIUM
-                    )
-                    memories.append(knowledge_memory)
-                    
-                    memories.append(ObservationMemoryBlock(
-                        observation_type="library_updated",
-                        path=str(knowledge_file),
-                        description=f"Library updated: {topic}" + (f"/{subtopic}" if subtopic else ""),
-                        priority=Priority.MEDIUM
-                    ))
+            for pattern in ["*.yaml", "*.yml"]:
+                for knowledge_file in self.library_path.rglob(pattern):
+                    state = self._check_file_state(knowledge_file)
+                    if state:  # New or changed
+                        # Extract topic from path
+                        rel_path = knowledge_file.relative_to(self.library_path)
+                        topic = rel_path.parts[0] if rel_path.parts else "general"
+                        subtopic = rel_path.stem if len(rel_path.parts) > 1 else None
+                        
+                        knowledge_memory = KnowledgeMemoryBlock(
+                            topic=topic,
+                            subtopic=subtopic,
+                            location=str(knowledge_file),
+                            relevance_score=0.7,  # Default relevance
+                            priority=Priority.MEDIUM
+                        )
+                        memories.append(knowledge_memory)
+                        
+                        memories.append(ObservationMemoryBlock(
+                            observation_type="library_updated",
+                            path=str(knowledge_file),
+                            description=f"Library updated: {topic}" + (f"/{subtopic}" if subtopic else ""),
+                            priority=Priority.MEDIUM
+                        ))
         
         # Scan bulletin (announcements)
         if self.bulletin_path and self.bulletin_path.exists():
@@ -233,7 +234,8 @@ class EnvironmentScanner:
                         ))
                         
                         # Also create file memory for important files
-                        if file_path.suffix in ['.md', '.txt', '.json']:
+                        # Skip .md files to avoid JSON parsing errors
+                        if file_path.suffix in ['.txt', '.json', '.yaml', '.yml']:
                             memories.append(FileMemoryBlock(
                                 location=str(file_path),
                                 priority=Priority.MEDIUM,

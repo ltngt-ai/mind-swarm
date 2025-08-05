@@ -23,17 +23,14 @@ class ContextBuilder:
     """Builds LLM context from symbolic memory blocks."""
     
     def __init__(self, content_loader: ContentLoader, 
-                 max_content_length: int = 2000,
                  include_metadata: bool = True):
         """Initialize context builder.
         
         Args:
             content_loader: Loader for fetching actual content
-            max_content_length: Maximum length for individual content pieces
             include_metadata: Whether to include metadata in context
         """
         self.content_loader = content_loader
-        self.max_content_length = max_content_length
         self.include_metadata = include_metadata
     
     def build_context(self, selected_memories: List[MemoryBlock], 
@@ -58,9 +55,8 @@ class ContextBuilder:
             try:
                 content = self.content_loader.load_content(memory)
                 
-                # Truncate if needed
-                if len(content) > self.max_content_length:
-                    content = content[:self.max_content_length] + "\n[...truncated...]"
+                # Don't truncate - we need full context
+                # User explicitly requested no truncation anywhere in the system
                 
                 # Compact format - only include non-default values
                 entry = {
@@ -130,7 +126,6 @@ class ContextBuilder:
             MemoryType.FILE,     # File content
             MemoryType.KNOWLEDGE,  # Knowledge base
             MemoryType.CONTEXT,  # Derived context
-            MemoryType.HISTORY,  # History last
         ]
         
         for mem_type in type_order:
@@ -161,7 +156,6 @@ class ContextBuilder:
             MemoryType.FILE: "=== FILE CONTENT ===",
             MemoryType.KNOWLEDGE: "=== KNOWLEDGE BASE ===",
             MemoryType.OBSERVATION: "=== OBSERVATIONS ===",
-            MemoryType.HISTORY: "=== RECENT HISTORY ===",
             MemoryType.CONTEXT: "=== CONTEXT ===",
             MemoryType.STATUS: "=== STATUS ===",
         }
@@ -197,9 +191,7 @@ class ContextBuilder:
                         meta_parts.append(f"priority: {memory.priority.name}")
                     lines.append(f"[{', '.join(meta_parts)}]")
                 
-                # Add content
-                if len(content) > self.max_content_length:
-                    content = content[:self.max_content_length] + "\n[...truncated...]"
+                # Add content - no truncation
                 lines.append(content)
                 
             except Exception as e:
@@ -218,7 +210,7 @@ class ContextBuilder:
             lines.append("My core knowledge tells me:")
             for memory in rom_memories:
                 content = self.content_loader.load_content(memory)
-                lines.append(f"- {content[:200]}...")
+                lines.append(f"- {content}")
             lines.append("")
         
         # Current situation
@@ -260,8 +252,7 @@ class ContextBuilder:
             for memory in other_memories[:5]:  # Limit to avoid too long
                 try:
                     content = self.content_loader.load_content(memory)
-                    preview = content.split('\n')[0][:100]
-                    lines.append(f"- {memory.type.value}: {preview}...")
+                    lines.append(f"- {memory.type.value}: {content}")
                 except Exception:
                     pass
         

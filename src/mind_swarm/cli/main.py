@@ -564,6 +564,7 @@ def status():
 def server(
     action: str = typer.Argument(..., help="Action: start, stop, restart, logs"),
     debug: bool = typer.Option(False, "--debug", "-d", help="Enable debug logging"),
+    llm_debug: bool = typer.Option(False, "--llm-debug", help="Enable LLM API call logging"),
     host: str = typer.Option("127.0.0.1", "--host", "-h", help="Server host"),
     port: int = typer.Option(8888, "--port", "-p", help="Server port"),
 ):
@@ -589,9 +590,7 @@ def server(
         
         console.print(f"[cyan]Starting Mind-Swarm server on {host}:{port}...[/cyan]")
         
-        # Clear log file on start
-        if log_file.exists():
-            log_file.unlink()
+        # Ensure log directory exists
         log_file.parent.mkdir(parents=True, exist_ok=True)
         
         # Start server in background
@@ -603,6 +602,8 @@ def server(
         ]
         if debug:
             cmd.append("--debug")
+        if llm_debug:
+            cmd.append("--llm-debug")
         
         process = subprocess.Popen(
             cmd,
@@ -655,10 +656,10 @@ def server(
     elif action == "restart":
         console.print("[cyan]Restarting server...[/cyan]")
         # First stop
-        server("stop", debug=False, host=host, port=port)
+        server("stop", debug=False, llm_debug=False, host=host, port=port)
         time.sleep(1)
         # Then start
-        server("start", debug=debug, host=host, port=port)
+        server("start", debug=debug, llm_debug=llm_debug, host=host, port=port)
     
     elif action == "logs":
         if not log_file.exists():

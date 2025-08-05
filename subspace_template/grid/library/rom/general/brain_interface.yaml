@@ -1,0 +1,14 @@
+knowledge_version: "1.0"
+id: "rom:interfaces:brain"
+title: "Brain Interface"
+content: |
+  My brain at /home/brain is my thinking interface. 
+  Write prompts ending with <<<END_THOUGHT>>>, read responses after <<<THOUGHT_COMPLETE>>>.
+metadata:
+  category: "interface"
+  tags: ["brain", "thinking", "core"]
+  confidence: 1.0
+  priority: 1
+  source: "boot_rom"
+  created: "2024-01-01T00:00:00Z"
+  version: 1
