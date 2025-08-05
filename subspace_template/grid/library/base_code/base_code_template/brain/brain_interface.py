@@ -283,11 +283,15 @@ class BrainInterface:
         """
         try:
             result = json.loads(response)
-            memory_id = result.get("output_values", {}).get("memory_id", "")
-            reasoning = result.get("output_values", {}).get("reasoning", "")
+            output_values = result.get("output_values", {})
+            memory_id = output_values.get("memory_id", "")
+            reasoning = output_values.get("reasoning", "")
+            
+            # Debug logging to understand what the brain is returning
+            logger.debug(f"🧠 Brain output_values: {output_values}")
+            logger.info(f"🧠 Brain selected: '{memory_id}' - {reasoning}")
             
             if memory_id == "none" or not memory_id:
-                logger.info(f"🧠 Brain reasoning: {reasoning}")
                 return None
             
             return {
