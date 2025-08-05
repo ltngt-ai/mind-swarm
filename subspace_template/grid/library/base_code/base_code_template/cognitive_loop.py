@@ -7,14 +7,13 @@ delegating all supporting functionality to specialized modules.
 import asyncio
 import json
 import logging
-import time
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
 # Import supporting modules
 from .memory import (
-    WorkingMemoryManager, MemorySelector, ContextBuilder, ContentLoader,
+    MemorySystem,
     ObservationMemoryBlock, MessageMemoryBlock, CycleStateMemoryBlock,
     KnowledgeMemoryBlock, FileMemoryBlock,
     Priority, MemoryType
@@ -22,8 +21,9 @@ from .memory import (
 from .perception import EnvironmentScanner
 from .knowledge import KnowledgeManager
 from .state import AgentStateManager, ExecutionStateTracker
-from .actions import Action, ActionStatus, ActionCoordinator, action_registry
+from .actions import ActionCoordinator
 from .utils import DateTimeEncoder, CognitiveUtils, FileManager
+from .brain import BrainInterface, MessageProcessor
 
 logger = logging.getLogger("agent.cognitive")
 
@@ -76,12 +76,11 @@ class CognitiveLoop:
     
     def _initialize_managers(self):
         """Initialize all supporting managers."""
-        # Memory system
-        self.memory_manager = WorkingMemoryManager(max_tokens=self.max_context_tokens)
-        self.memory_selector = MemorySelector(
-            ContextBuilder(ContentLoader(filesystem_root=self.home.parent))
+        # Unified memory system
+        self.memory_system = MemorySystem(
+            filesystem_root=self.home.parent,
+            max_tokens=self.max_context_tokens
         )
-        self.context_builder = ContextBuilder(ContentLoader(filesystem_root=self.home.parent))
         
         # Knowledge system
         self.knowledge_manager = KnowledgeManager(agent_type=self.agent_type)
@@ -103,6 +102,10 @@ class CognitiveLoop:
         # Utilities
         self.cognitive_utils = CognitiveUtils()
         self.file_manager = FileManager()
+        
+        # Brain interface
+        self.brain_interface = BrainInterface(self.brain_file, self.agent_id)
+        self.message_processor = MessageProcessor(self.inbox_dir, self.file_manager)
     
     def _initialize_systems(self):
         """Initialize all systems and load initial data."""
@@ -111,9 +114,9 @@ class CognitiveLoop:
         self.knowledge_manager.initialize()
         
         # Try to restore memory from snapshot first
-        if not self.memory_manager.load_from_snapshot_file(self.memory_dir, self.knowledge_manager):
+        if not self.memory_system.load_from_snapshot_file(self.memory_dir, self.knowledge_manager):
             # No snapshot - load ROM and init fresh
-            self.knowledge_manager.load_rom_into_memory(self.memory_manager)
+            self.knowledge_manager.load_rom_into_memory(self.memory_system.memory_manager)
             self._init_cycle_state()
         
         # Load state
@@ -131,7 +134,7 @@ class CognitiveLoop:
             cycle_state="perceive",
             cycle_count=0
         )
-        self.memory_manager.add_memory(cycle_state)
+        self.memory_system.add_memory(cycle_state)
         self.state_manager.update_state({
             "cycle_state": "perceive",
             "cycle_count": 0
@@ -271,7 +274,7 @@ class CognitiveLoop:
         significant_count = 0
         high_priority_items = []
         for obs in observations:
-            self.memory_manager.add_memory(obs)
+            self.memory_system.add_memory(obs)
             if obs.priority != Priority.LOW:
                 significant_count += 1
                 if obs.priority == Priority.HIGH:
@@ -299,13 +302,11 @@ class CognitiveLoop:
         logger.info("=== OBSERVE PHASE ===")
         
         # Build full working memory context for the brain to see everything
-        selected_memories = self.memory_selector.select_memories(
-            symbolic_memory=self.memory_manager.symbolic_memory,
+        memory_context = self.memory_system.build_context(
             max_tokens=self.max_context_tokens // 2,  # Give more context for better decisions
             current_task="Deciding what to focus on",
             selection_strategy="balanced"
         )
-        memory_context = self.context_builder.build_context(selected_memories)
         
         # Let the AI brain see everything and decide what to focus on
         observation = await self._select_focus_from_memory(memory_context)
@@ -338,7 +339,7 @@ class CognitiveLoop:
         
         # Use brain to understand the situation
         logger.info("🧠 Analyzing situation and understanding context...")
-        orientation = await self._analyze_situation(observation)
+        orientation = await self.brain_interface.analyze_situation(observation)
         
         # Log what we understood
         task_type = orientation.get("task_type", "unknown")
@@ -367,7 +368,16 @@ class CognitiveLoop:
         
         # Use brain to decide on actions
         logger.info("🤔 Making decision based on situation...")
-        actions = await self._make_decision(orientation, decision_context)
+        action_specs = await self.brain_interface.make_decision(orientation, decision_context)
+        
+        # Convert action specs to Action objects
+        actions = []
+        for spec in action_specs:
+            action = self.action_coordinator.prepare_action(
+                spec["name"], spec.get("params", {}), self.knowledge_manager
+            )
+            if action:
+                actions.append(action)
         
         # Log the decision
         if actions:
@@ -512,7 +522,7 @@ class CognitiveLoop:
                     break
                 
         # Process results into observations
-        self.action_coordinator.process_action_results(results, self.memory_manager)
+        self.action_coordinator.process_action_results(results, self.memory_system.memory_manager)
         
         logger.info(f"⚡ Action phase complete: {successful_actions}/{len(results)} successful")
     
@@ -520,7 +530,7 @@ class CognitiveLoop:
     
     def _get_cycle_state(self) -> Optional[CycleStateMemoryBlock]:
         """Get the current cycle state from memory."""
-        cycle_states = self.memory_manager.get_memories_by_type(MemoryType.CYCLE_STATE)
+        cycle_states = self.memory_system.get_memories_by_type(MemoryType.CYCLE_STATE)
         if cycle_states and isinstance(cycle_states[0], CycleStateMemoryBlock):
             return cycle_states[0]
         return None
@@ -544,15 +554,15 @@ class CognitiveLoop:
         cycle_state.timestamp = datetime.now()
         
         # Add/update in memory
-        self.memory_manager.add_memory(cycle_state)
+        self.memory_system.add_memory(cycle_state)
 
     # === SUPPORTING METHODS ===
     
     async def maintain(self):
         """Perform maintenance tasks when idle."""
         # Cleanup old memories
-        expired = self.memory_manager.cleanup_expired()
-        old_observations = self.memory_manager.cleanup_old_observations(max_age_seconds=1800)
+        expired = self.memory_system.cleanup_expired()
+        old_observations = self.memory_system.cleanup_old_observations(max_age_seconds=1800)
         
         if expired or old_observations:
             logger.info(f"🧹 Cleaned up {expired} expired, {old_observations} old memories")
@@ -576,13 +586,7 @@ class CognitiveLoop:
     async def save_memory(self):
         """Save memory snapshot to disk."""
         try:
-            snapshot = self.memory_manager.create_snapshot()
-            
-            memory_file = self.memory_dir / "memory_snapshot.json"
-            memory_json = json.dumps(snapshot, indent=2, cls=DateTimeEncoder)
-            
-            self.file_manager.save_file(memory_file, memory_json, atomic=True)
-            
+            self.memory_system.save_snapshot_to_file(self.memory_dir)
         except Exception as e:
             logger.error(f"Error saving memory: {e}")
     
@@ -593,7 +597,7 @@ class CognitiveLoop:
         """Build context for action execution."""
         return {
             "cognitive_loop": self,
-            "memory_manager": self.memory_manager,
+            "memory_system": self.memory_system,
             "agent_id": self.agent_id,
             "home_dir": self.home,
             "outbox_dir": self.outbox_dir,
@@ -604,306 +608,48 @@ class CognitiveLoop:
             "original_text": observation.get("query", observation.get("command", ""))
         }
     
-    # === BRAIN INTERFACE METHODS ===
-    
-    async def _use_brain(self, prompt: str) -> str:
-        """Use the brain file interface for thinking."""
-        # Parse the thinking request to get task info
-        try:
-            request_data = json.loads(prompt)
-            task = request_data.get("signature", {}).get("task", "thinking")
-            logger.info(f"🧠 Brain thinking: {task}")
-        except:
-            logger.info("🧠 Brain thinking...")
-        
-        # Escape markers
-        escaped_prompt = prompt.replace("<<<THOUGHT_COMPLETE>>>", "[THOUGHT_COMPLETE]")
-        escaped_prompt = escaped_prompt.replace("<<<END_THOUGHT>>>", "[END_THOUGHT]")
-        
-        # Write prompt
-        self.brain_file.write_text(f"{escaped_prompt}\n<<<END_THOUGHT>>>")
-        
-        # Wait for response
-        wait_count = 0
-        while True:
-            content = self.brain_file.read_text()
-            
-            if "<<<THOUGHT_COMPLETE>>>" in content:
-                # Extract response
-                prompt_end = content.find("<<<END_THOUGHT>>>")
-                if prompt_end != -1:
-                    response_start = prompt_end + len("<<<END_THOUGHT>>>")
-                    response = content[response_start:].strip()
-                    response = response.replace("<<<THOUGHT_COMPLETE>>>", "").strip()
-                else:
-                    response = content.split("<<<THOUGHT_COMPLETE>>>")[0].strip()
-                    
-                # Log brain response summary
-                try:
-                    response_data = json.loads(response)
-                    if "output_values" in response_data:
-                        # Show key output from brain
-                        outputs = response_data["output_values"]
-                        if "reasoning" in outputs:
-                            reasoning = outputs["reasoning"][:100]
-                            logger.info(f"🧠 Brain reasoning: {reasoning}")
-                        elif "understanding" in outputs:
-                            understanding = outputs["understanding"][:100]  
-                            logger.info(f"🧠 Brain understanding: {understanding}")
-                except:
-                    logger.info("🧠 Brain response received")
-                    
-                # Reset brain
-                self.brain_file.write_text("Ready for thinking.")
-                
-                return response
-                
-            wait_count += 1
-            if wait_count % 100 == 0:
-                logger.debug(f"⏳ Waiting for brain response ({wait_count/100:.1f}s)")
-                
-            await asyncio.sleep(0.01)
     
     async def _select_focus_from_memory(self, memory_context: str) -> Optional[Dict[str, Any]]:
         """Use brain to select what to focus on from full memory context."""
+        selection_result = await self.brain_interface.select_focus_from_memory(memory_context)
         
-        thinking_request = {
-            "signature": {
-                "instruction": "Review your working memory and decide what deserves immediate attention. Look at timestamps, priorities, and your current situation. You can focus on any memory item by returning its ID, or return 'none' if no immediate focus is needed.",
-                "inputs": {
-                    "working_memory": "Your current symbolic memory with all observations, messages, tasks, and context"
-                },
-                "outputs": {
-                    "memory_id": "The exact memory ID to focus on (e.g. 'message:inbox:from-alice/urgent-request:abc123') or 'none'",
-                    "reasoning": "Why this memory deserves attention right now based on timestamps, priority, and context"
-                },
-                "display_field": "reasoning"
-            },
-            "input_values": {
-                "working_memory": memory_context
-            }
-        }
+        if not selection_result:
+            return None
+            
+        memory_id = selection_result["memory_id"]
+        reasoning = selection_result["reasoning"]
         
-        response = await self._use_brain(json.dumps(thinking_request, cls=DateTimeEncoder))
+        # Retrieve the selected memory
+        observation = self.brain_interface.retrieve_memory_by_id(
+            memory_id, self.memory_system.memory_manager, reasoning
+        )
         
-        # Parse response and retrieve the selected memory
-        return self._parse_memory_selection(response)
+        # If it's a message that needs processing, handle it
+        if observation and "message" in memory_id.lower():
+            # Find the message memory block for processing
+            for memory in self.memory_system.memory_manager.symbolic_memory:
+                if memory.id == memory_id and isinstance(memory, MessageMemoryBlock):
+                    processed_msg = self.message_processor.process_selected_message(
+                        memory, self.memory_system.memory_manager, self.environment_scanner
+                    )
+                    if processed_msg:
+                        processed_msg["observe_reasoning"] = reasoning
+                        return processed_msg
+                    break
+        
+        return observation
     
-    async def _analyze_situation(self, observation: Dict[str, Any]) -> Dict[str, Any]:
-        """Use brain to analyze and orient to the situation."""
-        thinking_request = {
-            "signature": {
-                "task": "What does this mean and how should I handle it?",
-                "description": "Understand the context and meaning of observations",
-                "inputs": {
-                    "observations": "What was observed",
-                },
-                "outputs": {
-                    "situation_type": "What kind of situation this is",
-                    "understanding": "What I understand about the situation",
-                    "relevant_knowledge": "What knowledge or skills apply"
-                },
-                "display_field": "understanding"
-            },
-            "input_values": {
-                "observations": json.dumps(observation),
-            },
-            "request_id": f"orient_{int(time.time()*1000)}",
-            "timestamp": datetime.now().isoformat()
-        }
-        
-        response = await self._use_brain(json.dumps(thinking_request))
-        return self._parse_orientation(response, observation)
     
     async def _build_decision_context(self, orientation: Dict[str, Any]) -> str:
         """Build context for decision making."""
-        # Select relevant memories
-        selected_memories = self.memory_selector.select_memories(
-            symbolic_memory=self.memory_manager.symbolic_memory,
+        return self.memory_system.build_context(
             max_tokens=self.max_context_tokens // 2,
             current_task="Making a decision",
             selection_strategy="balanced"
         )
-        
-        return self.context_builder.build_context(selected_memories)
-    
-    async def _make_decision(self, orientation: Dict[str, Any], 
-                           context: str) -> List[Action]:
-        """Use brain to decide on actions."""
-        thinking_request = {
-            "signature": {
-                "task": "What actions should I take?",
-                "description": "Decide what actions to take based on the situation",
-                "inputs": {
-                    "situation": "Current situation and understanding",
-                    "working_memory": "Your memories including available actions",
-                    "goal": "What needs to be accomplished"
-                },
-                "outputs": {
-                    "actions": "JSON array of actions to take",
-                    "reasoning": "Why these actions make sense"
-                },
-                "display_field": "reasoning"
-            },
-            "input_values": {
-                "situation": orientation.get("reasoning", "Need to process this request"),
-                "working_memory": context,
-                "goal": orientation.get("content", "unknown request")
-            },
-            "request_id": f"decide_{int(time.time()*1000)}",
-            "timestamp": datetime.now().isoformat()
-        }
-        
-        response = await self._use_brain(json.dumps(thinking_request))
-        return self._parse_action_decision(response)
-    
-    # === PARSING HELPER METHODS ===
     
     
-    def _parse_memory_selection(self, response: str) -> Optional[Dict[str, Any]]:
-        """Parse brain response to get selected memory ID and retrieve it."""
-        try:
-            result = json.loads(response)
-            memory_id = result.get("output_values", {}).get("memory_id", "")
-            reasoning = result.get("output_values", {}).get("reasoning", "")
-            
-            if memory_id == "none" or not memory_id:
-                logger.info(f"🧠 Brain reasoning: {reasoning}")
-                return None
-            
-            # Find the memory by ID
-            memory_block = None
-            for memory in self.memory_manager.symbolic_memory:
-                if memory.id == memory_id:
-                    memory_block = memory
-                    break
-            
-            if not memory_block:
-                logger.warning(f"Memory ID not found: {memory_id}")
-                return None
-            
-            logger.info(f"🧠 Brain reasoning: {reasoning}")
-            
-            # Handle different memory types
-            if isinstance(memory_block, MessageMemoryBlock):
-                return self._process_message(memory_block, reasoning)
-            elif isinstance(memory_block, ObservationMemoryBlock):
-                return self._convert_observation(memory_block, reasoning)
-            else:
-                # For other memory types, convert to observation format
-                return {
-                    "from": "memory",
-                    "type": "MEMORY_FOCUS",
-                    "memory_type": memory_block.type.name,
-                    "content": str(memory_block),
-                    "id": memory_id,
-                    "timestamp": memory_block.timestamp.isoformat() if memory_block.timestamp else datetime.now().isoformat(),
-                    "observe_reasoning": reasoning
-                }
-                
-        except Exception as e:
-            logger.error(f"Failed to parse memory selection: {e}")
-            
-        return None
     
-    def _process_message(self, msg: MessageMemoryBlock, reasoning: str) -> Optional[Dict[str, Any]]:
-        """Process a selected message."""
-        try:
-            msg_path = Path(msg.full_path)
-            if msg_path.exists():
-                message = json.loads(msg_path.read_text())
-                
-                # Mark as read
-                self.memory_manager.mark_message_read(msg.id)
-                self.environment_scanner.mark_message_processed(str(msg_path))
-                
-                # Move to processed
-                processed_dir = self.inbox_dir / "processed"
-                self.file_manager.ensure_directory(processed_dir)
-                msg_path.rename(processed_dir / msg_path.name)
-                
-                message["observe_reasoning"] = reasoning
-                return message
-                
-        except Exception as e:
-            logger.error(f"Error processing message: {e}")
-            
-        return None
     
-    def _convert_observation(self, obs: ObservationMemoryBlock, reasoning: str) -> Dict[str, Any]:
-        """Convert observation to standard format."""
-        return {
-            "from": "environment",
-            "type": "OBSERVATION",
-            "observation_type": obs.observation_type,
-            "content": obs.path,
-            "path": obs.path,
-            "timestamp": obs.timestamp.isoformat() if obs.timestamp else datetime.now().isoformat(),
-            "id": obs.id,
-            "observe_reasoning": reasoning
-        }
     
-    def _parse_orientation(self, response: str, observation: Dict[str, Any]) -> Dict[str, Any]:
-        """Parse brain response for orientation."""
-        try:
-            result = json.loads(response)
-            output = result.get("output_values", {})
-            
-            return {
-                "task_type": output.get("situation_type", "unknown"),
-                "understanding": output.get("understanding", ""),
-                "approach": output.get("approach", "thinking"),
-                "requires_response": True,
-                "content": observation.get("command", observation.get("query", str(observation))),
-                "timestamp": datetime.now(),
-                "from": observation.get("from", "unknown"),
-                "original_message": observation
-            }
-            
-        except Exception as e:
-            logger.error(f"Failed to parse orientation: {e}")
-            return {
-                "task_type": "unknown",
-                "approach": "thinking",
-                "requires_response": True,
-                "content": str(observation),
-                "timestamp": datetime.now()
-            }
     
-    def _parse_action_decision(self, response: str) -> List[Action]:
-        """Parse brain response for action decision."""
-        actions = []
-        
-        try:
-            result = json.loads(response)
-            action_data = result.get("output_values", {}).get("actions", "[]")
-            
-            # Clean up markdown if present
-            if isinstance(action_data, str) and "```" in action_data:
-                start = action_data.find("```json") + 7 if "```json" in action_data else action_data.find("```") + 3
-                end = action_data.rfind("```")
-                if start < end:
-                    action_data = action_data[start:end].strip()
-                    
-            # Parse actions
-            if isinstance(action_data, str):
-                action_objects = json.loads(action_data)
-            else:
-                action_objects = action_data
-                
-            # Create Action objects
-            for spec in action_objects:
-                if isinstance(spec, dict):
-                    action_name = spec.get("action")
-                    params = spec.get("params", {})
-                    
-                    action = self.action_coordinator.prepare_action(
-                        action_name, params, self.knowledge_manager
-                    )
-                    if action:
-                        actions.append(action)
-                        
-        except Exception as e:
-            logger.error(f"Failed to parse action decision: {e}")
-            
-        return actions

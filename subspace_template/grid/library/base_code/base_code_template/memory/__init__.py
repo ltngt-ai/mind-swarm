@@ -17,6 +17,7 @@ from .memory_manager import WorkingMemoryManager
 from .content_loader import ContentLoader
 from .context_builder import ContextBuilder
 from .memory_selector import MemorySelector
+from .memory_system import MemorySystem
 
 __all__ = [
     # Memory blocks
@@ -32,9 +33,11 @@ __all__ = [
     "ObservationMemoryBlock",
     "CycleStateMemoryBlock",
     "IdentityMemoryBlock",
-    # Core components
+    # Core components (individual - for backward compatibility)
     "WorkingMemoryManager",
     "ContentLoader",
     "ContextBuilder",
     "MemorySelector",
+    # Unified facade (recommended)
+    "MemorySystem",
 ]
