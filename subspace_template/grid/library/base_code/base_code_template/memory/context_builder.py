@@ -9,8 +9,9 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 import logging
 
+from .memory_types import MemoryType, Priority
 from .memory_blocks import (
-    MemoryBlock, MemoryType, Priority,
+    MemoryBlock,
     FileMemoryBlock, MessageMemoryBlock, TaskMemoryBlock,
     KnowledgeMemoryBlock, ObservationMemoryBlock
 )
@@ -228,7 +229,7 @@ class ContextBuilder:
             lines.append("I've recently observed:")
             for memory in obs_memories:
                 if isinstance(memory, ObservationMemoryBlock):
-                    lines.append(f"- {memory.description}")
+                    lines.append(f"- {memory.observation_type}: {memory.path}")
             lines.append("")
         
         # Messages

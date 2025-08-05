@@ -1,9 +1,8 @@
 """Memory system for agents - filesystem perception and context management."""
 
+from .memory_types import Priority, MemoryType
 from .memory_blocks import (
     MemoryBlock,
-    Priority,
-    MemoryType,
     FileMemoryBlock,
     StatusMemoryBlock,
     TaskMemoryBlock,
@@ -13,6 +12,7 @@ from .memory_blocks import (
     ObservationMemoryBlock,
     ROMMemoryBlock,
     CycleStateMemoryBlock,
+    IdentityMemoryBlock,
 )
 from .memory_manager import WorkingMemoryManager
 from .content_loader import ContentLoader
@@ -33,6 +33,7 @@ __all__ = [
     "ObservationMemoryBlock",
     "ROMMemoryBlock",
     "CycleStateMemoryBlock",
+    "IdentityMemoryBlock",
     # Core components
     "WorkingMemoryManager",
     "ContentLoader",

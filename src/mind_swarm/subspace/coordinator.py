@@ -337,6 +337,9 @@ class SubspaceCoordinator:
         agent_home = self.subspace.agents_dir / state.name
         body_manager = await self.body_system.create_agent_body(state.name, agent_home)
         
+        # Create identity file with initial model info
+        await self._create_identity_file(state.name, agent_home, agent_type)
+        
         # Create additional body files for I/O agents
         if agent_type_enum == AgentType.IO_GATEWAY:
             await self._create_io_agent_body_files(state.name, agent_home)
@@ -608,6 +611,11 @@ class SubspaceCoordinator:
                     # Create body files for the agent
                     body_manager = await self.body_system.create_agent_body(agent_name, agent_dir)
                     
+                    # Ensure identity file exists (create if missing)
+                    identity_file = agent_dir / "identity.json"
+                    if not identity_file.exists():
+                        await self._create_identity_file(agent_name, agent_dir, agent_type)
+                    
                     # Start monitoring body files
                     await self.body_system.start_agent_monitoring(agent_name, self._handle_ai_request)
                     
@@ -804,7 +812,11 @@ class SubspaceCoordinator:
                     logger.info(f"Creating brain handler for {config_key} with config: {model_config}")
                     # Note: We pass model_config directly to DynamicBrainHandler
                     # The handler will create its own DSPy LM instance
-                    self._brain_handlers[config_key] = DynamicBrainHandler(None, model_config)
+                    self._brain_handlers[config_key] = DynamicBrainHandler(
+                        None, 
+                        model_config,
+                        model_switch_callback=self._on_model_switch
+                    )
                 
                 brain_handler = self._brain_handlers[config_key]
             
@@ -823,6 +835,9 @@ class SubspaceCoordinator:
                     time_ms=elapsed_ms,
                     tokens=estimated_tokens
                 )
+                
+                # Update agent's identity file with current model info
+                await self._update_agent_model_info(name, selected_model_id)
             
             # Emit brain response event for monitoring
             try:
@@ -939,6 +954,54 @@ class SubspaceCoordinator:
             self._agent_model_cache.clear()
             logger.info("Cleared all agent model caches")
     
+    async def _create_identity_file(self, agent_name: str, agent_home: Path, agent_type: str):
+        """Create identity file for the agent with vital statistics.
+        
+        Args:
+            agent_name: Name of the agent
+            agent_home: Agent's home directory
+            agent_type: Type of agent
+        """
+        # Select initial model for the agent
+        selected_model = self.model_selector.select_model(
+            strategy=SelectionStrategy.RANDOM_CURATED
+        )
+        
+        if selected_model:
+            model_id = selected_model.id
+            provider = selected_model.provider
+            max_context_length = selected_model.context_length
+        else:
+            # Fallback to local model
+            model_id = "ollama/llama3.2:3b"
+            provider = "ollama"
+            max_context_length = 4096
+        
+        # Determine capabilities based on agent type
+        capabilities = []
+        if agent_type == "io_gateway":
+            capabilities = ["network", "user_io"]
+        
+        # Create identity data
+        identity_data = {
+            "name": agent_name,
+            "agent_type": agent_type,
+            "model": model_id,
+            "provider": provider,
+            "max_context_length": max_context_length,
+            "created_at": datetime.now().isoformat(),
+            "capabilities": capabilities
+        }
+        
+        # Write identity file
+        identity_file = agent_home / "identity.json"
+        identity_file.write_text(json.dumps(identity_data, indent=2))
+        
+        # Cache the model selection
+        self._agent_model_cache[agent_name] = model_id
+        
+        logger.info(f"Created identity file for {agent_name}: model={model_id}, context={max_context_length}")
+    
     async def _create_io_agent_body_files(self, agent_name: str, agent_home: Path):
         """Create additional body files for I/O agents.
         
@@ -973,6 +1036,53 @@ class SubspaceCoordinator:
         
         # Set up monitoring for these special body files
         await self._start_io_body_monitoring(agent_name)
+    
+    async def _on_model_switch(self, agent_name: str, model_id: str, max_context_length: int):
+        """Callback when brain handler switches models.
+        
+        Args:
+            agent_name: Name of the agent
+            model_id: ID of the new model
+            max_context_length: Context length of the new model
+        """
+        logger.info(f"Model switch for {agent_name}: {model_id} (context: {max_context_length})")
+        await self._update_agent_model_info(agent_name, model_id)
+    
+    async def _update_agent_model_info(self, agent_name: str, model_id: str):
+        """Update agent's identity file with current model information.
+        
+        Args:
+            agent_name: Name of the agent
+            model_id: ID of the model being used
+        """
+        try:
+            agent_home = self.subspace.agents_dir / agent_name
+            identity_file = agent_home / "identity.json"
+            
+            if identity_file.exists():
+                # Load existing identity
+                identity_data = json.loads(identity_file.read_text())
+                
+                # Get model info from registry
+                model_info = model_registry.get_model(model_id)
+                if model_info:
+                    # Update model information
+                    identity_data["model"] = model_id
+                    identity_data["provider"] = model_info.provider
+                    identity_data["max_context_length"] = model_info.context_length
+                    identity_data["last_updated"] = datetime.now().isoformat()
+                    
+                    # Write updated identity
+                    identity_file.write_text(json.dumps(identity_data, indent=2))
+                    
+                    logger.debug(f"Updated identity for {agent_name}: model={model_id}, context={model_info.context_length}")
+                else:
+                    logger.warning(f"Model {model_id} not found in registry, identity not updated")
+            else:
+                logger.warning(f"Identity file not found for {agent_name}")
+                
+        except Exception as e:
+            logger.error(f"Error updating agent model info: {e}")
     
     async def _start_io_body_monitoring(self, agent_name: str):
         """Start monitoring I/O body files for an agent.

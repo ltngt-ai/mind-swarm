@@ -352,7 +352,6 @@ class ActionCoordinator:
             obs = ObservationMemoryBlock(
                 observation_type="action_result",
                 path=f"action_{i}_{result['action_name']}",
-                description=f"Result of {result['action_name']}: {self._format_result_summary(result)}",
                 priority=Priority.HIGH if result["success"] else Priority.MEDIUM,
                 metadata={
                     "action_name": result["action_name"],
@@ -360,6 +359,7 @@ class ActionCoordinator:
                     "status": result["status"],
                     "success": result["success"],
                     "duration": result["duration"],
+                    "result_summary": self._format_result_summary(result),
                     "full_result": result.get("result"),
                     "error": result.get("error")
                 }

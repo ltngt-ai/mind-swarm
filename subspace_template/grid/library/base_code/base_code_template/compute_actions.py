@@ -65,6 +65,9 @@ class ExecutePythonAction(Action):
             # Safe I/O
             'print': print,  # Output will be captured
             
+            # Import (needed for module access)
+            '__import__': __import__,
+            
             # Constants
             'True': True, 'False': False, 'None': None,
             
@@ -188,10 +191,11 @@ class ExecutePythonAction(Action):
             if context.get("memory_manager") and (output_lines or result_vars):
                 memory_block = ObservationMemoryBlock(
                     observation_type="computation_result",
-                    path="<computation>",
-                    description=f"{description}: {output_lines[0] if output_lines else 'Computed variables'}",
+                    path="computation",
                     priority=Priority.MEDIUM,
                     metadata={
+                        "description": description,
+                        "result_summary": output_lines[0] if output_lines else 'Computed variables',
                         "code": code if len(code) < 1000 else code[:1000] + "...",
                         "output": '\n'.join(output_lines),
                         "variables": result_vars,

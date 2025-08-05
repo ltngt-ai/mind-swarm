@@ -12,8 +12,9 @@ from datetime import datetime, timedelta
 import logging
 import re
 
+from .memory_types import Priority, MemoryType
 from .memory_blocks import (
-    MemoryBlock, Priority, MemoryType,
+    MemoryBlock,
     TaskMemoryBlock, KnowledgeMemoryBlock, FileMemoryBlock,
     MessageMemoryBlock, ObservationMemoryBlock
 )

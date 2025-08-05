@@ -62,24 +62,27 @@ class DSPySignatureFactory:
         
         # Combine all fields
         all_fields = {**input_fields, **output_fields}
-        all_fields['__doc__'] = f"{spec['task']}\n\n{spec['description']}"
+        all_fields['__doc__'] = spec['instruction']
         
         # Create the signature class dynamically
+        # Use hash of entire spec for class name to ensure uniqueness
+        import json
+        spec_hash = hash(json.dumps(spec, sort_keys=True)) & 0xFFFFFFFF
         signature_class = type(
-            f"DynamicSignature_{hash(spec['task'])&0xFFFFFFFF:08x}",
+            f"DynamicSignature_{spec_hash:08x}",
             (dspy.Signature,),
             all_fields
         )
         
-        self.logger.info(f"Created signature class for task: {spec['task']}")
+        self.logger.info(f"Created signature class for instruction: {spec['instruction'][:50]}...")
         return signature_class
     
     def validate_signature_spec(self, spec: Dict[str, Any]) -> list[str]:
         """Validate a signature specification."""
         errors = []
         
-        if not spec.get('task', '').strip():
-            errors.append("Task cannot be empty")
+        if not spec.get('instruction', '').strip():
+            errors.append("Instruction cannot be empty")
         
         if not spec.get('inputs'):
             errors.append("Must have at least one input")
@@ -171,7 +174,7 @@ class SignatureCache:
                 "signatures": [
                     {
                         "hash": h[:8],
-                        "task": cached.signature_spec['task'],
+                        "instruction": cached.signature_spec['instruction'][:50],
                         "use_count": cached.use_count,
                         "age_seconds": time.time() - cached.created_at
                     }
@@ -183,7 +186,7 @@ class SignatureCache:
 class DynamicBrainHandler:
     """Dynamic brain handler for processing generic thinking requests with DSPy."""
     
-    def __init__(self, ai_service, lm_config: Dict[str, Any], cache_size: int = 100, cache_ttl: int = 3600):
+    def __init__(self, ai_service, lm_config: Dict[str, Any], cache_size: int = 100, cache_ttl: int = 3600, model_switch_callback=None):
         """Initialize the handler.
         
         Args:
@@ -191,12 +194,14 @@ class DynamicBrainHandler:
             lm_config: Language model configuration for DSPy
             cache_size: Maximum number of signatures to cache
             cache_ttl: Cache time-to-live in seconds
+            model_switch_callback: Optional callback when model switches (agent_id, model_id, max_context_length)
         """
         self.ai_service = ai_service
         self.lm_config = lm_config
         self.factory = DSPySignatureFactory()
         self.cache = SignatureCache(cache_size, cache_ttl)
         self.logger = logger
+        self.model_switch_callback = model_switch_callback
         
         # Configure DSPy with the language model
         self._configure_dspy()
@@ -243,7 +248,7 @@ class DynamicBrainHandler:
             if errors:
                 return self._create_error_response(request_id, f"Invalid request: {'; '.join(errors)}")
             
-            # Get signature hash
+            # Get signature hash based on entire specification
             import hashlib
             canonical = json.dumps(signature_spec, sort_keys=True)
             signature_hash = hashlib.sha256(canonical.encode()).hexdigest()
@@ -252,12 +257,12 @@ class DynamicBrainHandler:
             cached = self.cache.get(signature_hash)
             if cached:
                 signature_class = cached.signature_class
-                self.logger.info(f"Using cached signature for {signature_spec['task']}")
+                self.logger.info(f"Using cached signature for {signature_spec['instruction'][:50]}...")
             else:
                 # Create new signature
                 signature_class = self.factory.create_signature_class(signature_spec)
                 self.cache.put(signature_hash, signature_class, signature_spec)
-                self.logger.info(f"Created new signature for {signature_spec['task']}")
+                self.logger.info(f"Created new signature for {signature_spec['instruction'][:50]}...")
             
             # Execute the signature with retry on rate limit
             max_retries = 3
@@ -285,10 +290,11 @@ class DynamicBrainHandler:
                         "metadata": {
                             "cached": cached is not None,
                             "execution_time": time.time(),
-                            "signature_task": signature_spec['task'],
+                            "instruction": signature_spec['instruction'][:100],
                             "agent_id": agent_id,
                             "retry_count": retry_count,
-                            "model_used": self.lm.model if hasattr(self, 'lm') else None
+                            "model_used": self.lm.model if hasattr(self, 'lm') else None,
+                            "max_context_length": self._get_current_context_length()
                         },
                         "timestamp": time.time()
                     }
@@ -366,6 +372,23 @@ class DynamicBrainHandler:
         """Get cache statistics."""
         return self.cache.get_stats()
     
+    def _get_current_context_length(self) -> int:
+        """Get the current model's context length.
+        
+        Returns:
+            The context length of the current model
+        """
+        from mind_swarm.ai.model_registry import model_registry
+        
+        # Try to get from model registry first
+        if hasattr(self, 'lm') and hasattr(self.lm, 'model'):
+            model_info = model_registry.get_model(self.lm.model)
+            if model_info:
+                return model_info.context_length
+        
+        # Fallback to lm_config max_tokens
+        return self.lm_config.get('max_tokens', 4096)
+    
     async def _switch_to_alternative_model(self, agent_id: str):
         """Switch to an alternative model when rate limited.
         
@@ -398,6 +421,10 @@ class DynamicBrainHandler:
                 }
                 self.lm = configure_dspy_for_mind_swarm(config)
                 self.lm_config['model'] = new_model_info.id
+                
+                # Notify about model switch with actual context length
+                if self.model_switch_callback:
+                    await self.model_switch_callback(agent_id, new_model_info.id, new_model_info.context_length)
             else:
                 # No alternative curated model, fall back to local default
                 self.logger.warning(f"No alternative curated model for agent {agent_id}, falling back to local default")
@@ -415,6 +442,16 @@ class DynamicBrainHandler:
                     self.lm = configure_dspy_for_mind_swarm(config)
                     self.lm_config.update(config)
                     self.logger.info(f"Switched to local model {default_preset.model} for agent {agent_id}")
+                    
+                    # Notify about model switch with local model's context length
+                    if self.model_switch_callback:
+                        # Look up the local model in registry to get its actual context length
+                        local_model_info = model_registry.get_model(default_preset.model)
+                        if local_model_info:
+                            await self.model_switch_callback(agent_id, default_preset.model, local_model_info.context_length)
+                        else:
+                            # Fallback to max_tokens from preset config
+                            await self.model_switch_callback(agent_id, default_preset.model, default_preset.max_tokens)
                 
         except Exception as e:
             self.logger.error(f"Error switching models for agent {agent_id}: {e}")

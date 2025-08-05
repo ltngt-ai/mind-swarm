@@ -200,10 +200,11 @@ class CognitiveLoop:
             
         elif phase == "observe":
             # OBSERVE - Check for high-priority inputs
-            observation = await self.observe()
-            if observation:
-                self.state_manager.set_cycle_state("orient", 
-                    current_observation=observation)
+            await self.observe()
+            # Check if observation was found (stored in cycle state)
+            cycle_state = self._get_cycle_state()
+            if cycle_state and cycle_state.current_observation:
+                self.state_manager.set_cycle_state("orient")
                 await self._save_checkpoint()
                 return True
             else:
@@ -216,74 +217,36 @@ class CognitiveLoop:
                 
         elif phase == "orient":
             # ORIENT - Understand the situation
-            observation = self.state_manager.get_state_value("current_observation")
-            if not observation:
-                self.state_manager.set_cycle_state("perceive")
-                return True
-                
-            orientation = await self.orient(observation)
-            
-            self.state_manager.set_cycle_state("decide",
-                current_orientation=orientation)
+            await self.orient()
+            self.state_manager.set_cycle_state("decide")
             await self._save_checkpoint()
             return True
             
         elif phase == "decide":
             # DECIDE - Choose actions to take
-            orientation = self.state_manager.get_state_value("current_orientation")
-            if not orientation:
-                self.state_manager.set_cycle_state("perceive")
-                return True
-                
-            actions = await self.decide(orientation)
-            
-            # Save actions as serializable data
-            action_data = [{"name": a.name, "params": a.params} for a in actions]
-            self.state_manager.set_cycle_state("instruct",
-                current_actions=action_data)
+            await self.decide()
+            self.state_manager.set_cycle_state("instruct")
             await self._save_checkpoint()
             return True
             
         elif phase == "instruct":
             # INSTRUCT - Prepare and validate actions
-            action_data = self.state_manager.get_state_value("current_actions", [])
-            
-            if not action_data:
+            await self.instruct()
+            # Check if we have actions to execute
+            cycle_state = self._get_cycle_state()
+            if cycle_state and cycle_state.current_actions:
+                self.state_manager.set_cycle_state("act")
+                await self._save_checkpoint()
+                return True
+            else:
                 # No actions, pause briefly and restart
                 await asyncio.sleep(1.0)
                 self.state_manager.set_cycle_state("perceive")
                 return True
-                
-            instructed_actions = await self.instruct(action_data)
-            
-            self.state_manager.set_cycle_state("act",
-                current_actions=instructed_actions)
-            await self._save_checkpoint()
-            return True
             
         elif phase == "act":
             # ACT - Execute actions
-            observation = self.state_manager.get_state_value("current_observation")
-            orientation = self.state_manager.get_state_value("current_orientation")
-            action_data = self.state_manager.get_state_value("current_actions", [])
-            
-            if not all([observation, orientation, action_data]):
-                self.state_manager.set_cycle_state("perceive")
-                return True
-                
-            # Recreate action objects
-            actions = []
-            for data in action_data:
-                action = self.action_coordinator.prepare_action(
-                    data["name"], 
-                    data.get("params", {}),
-                    self.knowledge_manager
-                )
-                if action:
-                    actions.append(action)
-                    
-            await self.act(observation, orientation, actions)
-            
+            await self.act()
             # Cycle complete, restart
             self.state_manager.set_cycle_state("perceive")
             await self._save_checkpoint()
@@ -297,7 +260,7 @@ class CognitiveLoop:
     
     # === CORE OODA LOOP METHODS ===
     
-    async def perceive(self) -> Dict[str, Any]:
+    async def perceive(self) -> None:
         """PERCEIVE - Scan environment and update memory with observations."""
         logger.info("=== PERCEIVE PHASE ===")
         
@@ -315,7 +278,7 @@ class CognitiveLoop:
                     # Handle different memory block types
                     if hasattr(obs, 'observation_type'):
                         # ObservationMemoryBlock
-                        high_priority_items.append(f"{obs.observation_type}: {obs.description[:100]}")
+                        high_priority_items.append(f"{obs.observation_type}: {obs.path[:100]}")
                     elif hasattr(obs, 'from_agent'):
                         # MessageMemoryBlock
                         high_priority_items.append(f"message from {obs.from_agent}: {obs.subject[:100]}")
@@ -330,37 +293,25 @@ class CognitiveLoop:
         else:
             logger.info("📡 Environment scan - no significant changes detected")
             
-        return {"observations_count": len(observations)}
     
-    async def observe(self) -> Optional[Dict[str, Any]]:
+    async def observe(self) -> None:
         """OBSERVE - Intelligently select the most important observation."""
         logger.info("=== OBSERVE PHASE ===")
         
-        # Get recent observations and messages
-        recent_observations = self._get_recent_observations()
-        unread_messages = self.memory_manager.get_unread_messages()
-        
-        if not recent_observations and not unread_messages:
-            logger.info("👁️ No new observations or messages to process")
-            return None
-            
-        logger.info(f"👁️ Evaluating {len(recent_observations)} observations and {len(unread_messages)} messages")
-        
-        # Build context for observation selection
+        # Build full working memory context for the brain to see everything
         selected_memories = self.memory_selector.select_memories(
             symbolic_memory=self.memory_manager.symbolic_memory,
-            max_tokens=self.max_context_tokens // 4,
+            max_tokens=self.max_context_tokens // 2,  # Give more context for better decisions
             current_task="Deciding what to focus on",
             selection_strategy="balanced"
         )
         memory_context = self.context_builder.build_context(selected_memories)
         
-        # Use brain to prioritize
-        observation = await self._select_observation(
-            recent_observations, 
-            unread_messages,
-            memory_context
-        )
+        # Let the AI brain see everything and decide what to focus on
+        observation = await self._select_focus_from_memory(memory_context)
+        
+        # Update cycle state with selected observation
+        self._update_cycle_state(current_observation=observation)
         
         if observation:
             if observation.get("type") == "COMMAND":
@@ -369,15 +320,21 @@ class CognitiveLoop:
                 logger.info(f"👁️ Selected QUERY from {observation.get('from', 'unknown')}: {observation.get('query', 'no query')[:100]}")
             else:
                 logger.info(f"👁️ Selected {observation.get('observation_type', 'observation')}: {str(observation.get('content', observation))[:100]}")
-        
-        return observation
+        else:
+            logger.info("👁️ Brain decided no immediate focus needed")
     
-    async def orient(self, observation: Dict[str, Any]) -> Dict[str, Any]:
+    async def orient(self) -> None:
         """ORIENT - Understand the situation and build context."""
         logger.info("=== ORIENT PHASE ===")
         
-        # Create observation memory
-        self._create_observation_memory(observation)
+        # Get current observation from cycle state
+        cycle_state = self._get_cycle_state()
+        observation = cycle_state.current_observation if cycle_state else None
+        
+        if not observation:
+            logger.warning("No observation found in cycle state, returning to perceive")
+            return
+        
         
         # Use brain to understand the situation
         logger.info("🧠 Analyzing situation and understanding context...")
@@ -390,11 +347,20 @@ class CognitiveLoop:
         if understanding:
             logger.info(f"  💭 {understanding[:200]}")
         
-        return orientation
+        # Update cycle state with orientation
+        self._update_cycle_state(current_orientation=orientation)
     
-    async def decide(self, orientation: Dict[str, Any]) -> List[Action]:
+    async def decide(self) -> None:
         """DECIDE - Choose actions based on orientation."""
         logger.info("=== DECIDE PHASE ===")
+        
+        # Get current orientation from cycle state
+        cycle_state = self._get_cycle_state()
+        orientation = cycle_state.current_orientation if cycle_state else None
+        
+        if not orientation:
+            logger.warning("No orientation found in cycle state, returning to perceive")
+            return
         
         # Build decision context
         decision_context = await self._build_decision_context(orientation)
@@ -422,11 +388,21 @@ class CognitiveLoop:
         else:
             logger.info("🤔 No actions decided")
         
-        return actions
+        # Save actions as serializable data and update cycle state
+        action_data = [{"name": a.name, "params": a.params} for a in actions]
+        self._update_cycle_state(current_actions=action_data)
     
-    async def instruct(self, action_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    async def instruct(self) -> None:
         """INSTRUCT - Prepare and validate actions for execution."""
         logger.info("=== INSTRUCT PHASE ===")
+        
+        # Get current actions from cycle state
+        cycle_state = self._get_cycle_state()
+        action_data = cycle_state.current_actions if cycle_state else []
+        
+        if not action_data:
+            logger.info("📋 No actions to validate")
+            return
         
         logger.info(f"📋 Validating and preparing {len(action_data)} actions...")
         corrected_actions = []
@@ -461,17 +437,41 @@ class CognitiveLoop:
             logger.info(f"📋 Validated {len(corrected_actions)}/{len(action_data)} actions ({validation_errors} failed)")
         else:
             logger.info(f"📋 All {len(corrected_actions)} actions validated successfully")
-                
-        return corrected_actions
+        
+        # Update cycle state with corrected actions
+        self._update_cycle_state(current_actions=corrected_actions)
     
-    async def act(self, observation: Dict[str, Any], 
-                  orientation: Dict[str, Any], 
-                  actions: List[Action]) -> Dict[str, Any]:
+    async def act(self) -> None:
         """ACT - Execute the decided actions."""
         logger.info("=== ACT PHASE ===")
         
+        # Get current state from cycle state
+        cycle_state = self._get_cycle_state()
+        if not cycle_state:
+            logger.warning("No cycle state found, returning to perceive")
+            return
+            
+        observation = cycle_state.current_observation
+        orientation = cycle_state.current_orientation
+        action_data = cycle_state.current_actions or []
+        
+        if not all([observation, orientation, action_data]):
+            logger.warning("Missing data for action execution, returning to perceive")
+            return
+        
         # Build execution context
         context = self._build_execution_context(observation, orientation)
+        
+        # Recreate action objects
+        actions = []
+        for data in action_data:
+            action = self.action_coordinator.prepare_action(
+                data["name"], 
+                data.get("params", {}),
+                self.knowledge_manager
+            )
+            if action:
+                actions.append(action)
         
         # Execute each action
         results = []
@@ -515,8 +515,37 @@ class CognitiveLoop:
         self.action_coordinator.process_action_results(results, self.memory_manager)
         
         logger.info(f"⚡ Action phase complete: {successful_actions}/{len(results)} successful")
-        return {"actions_executed": len(results), "results": results}
     
+    # === CYCLE STATE HELPERS ===
+    
+    def _get_cycle_state(self) -> Optional[CycleStateMemoryBlock]:
+        """Get the current cycle state from memory."""
+        cycle_states = self.memory_manager.get_memories_by_type(MemoryType.CYCLE_STATE)
+        if cycle_states and isinstance(cycle_states[0], CycleStateMemoryBlock):
+            return cycle_states[0]
+        return None
+    
+    def _update_cycle_state(self, **kwargs):
+        """Update the cycle state in memory."""
+        cycle_state = self._get_cycle_state()
+        if not cycle_state:
+            # Create new cycle state if missing
+            cycle_state = CycleStateMemoryBlock(
+                cycle_state=kwargs.get('cycle_state', 'perceive'),
+                cycle_count=kwargs.get('cycle_count', 0)
+            )
+        
+        # Update fields
+        for key, value in kwargs.items():
+            if hasattr(cycle_state, key):
+                setattr(cycle_state, key, value)
+        
+        # Update timestamp
+        cycle_state.timestamp = datetime.now()
+        
+        # Add/update in memory
+        self.memory_manager.add_memory(cycle_state)
+
     # === SUPPORTING METHODS ===
     
     async def maintain(self):
@@ -557,25 +586,7 @@ class CognitiveLoop:
         except Exception as e:
             logger.error(f"Error saving memory: {e}")
     
-    def _get_recent_observations(self, max_age_seconds: int = 300) -> List[ObservationMemoryBlock]:
-        """Get recent observation memories."""
-        recent_cutoff = datetime.now().timestamp() - max_age_seconds
-        return [
-            obs for obs in self.memory_manager.symbolic_memory
-            if isinstance(obs, ObservationMemoryBlock) 
-            and obs.timestamp is not None
-            and obs.timestamp.timestamp() > recent_cutoff
-        ]
     
-    def _create_observation_memory(self, observation: Dict[str, Any]):
-        """Create and store an observation memory."""
-        obs_memory = ObservationMemoryBlock(
-            observation_type="message_received",
-            path="<inbox>",
-            description=f"Received: {json.dumps(observation)}",
-            priority=Priority.HIGH
-        )
-        self.memory_manager.add_memory(obs_memory)
     
     def _build_execution_context(self, observation: Dict[str, Any],
                                orientation: Dict[str, Any]) -> Dict[str, Any]:
@@ -653,39 +664,30 @@ class CognitiveLoop:
                 
             await asyncio.sleep(0.01)
     
-    async def _select_observation(self, observations: List[ObservationMemoryBlock],
-                                messages: List[MessageMemoryBlock],
-                                context: str) -> Optional[Dict[str, Any]]:
-        """Use brain to select most important observation."""
-        # Prepare summaries
-        obs_summaries = self._summarize_observations(observations[:10])
-        msg_summaries = self._summarize_messages(messages[:5])
+    async def _select_focus_from_memory(self, memory_context: str) -> Optional[Dict[str, Any]]:
+        """Use brain to select what to focus on from full memory context."""
         
         thinking_request = {
             "signature": {
-                "task": "What should I focus on right now?",
-                "description": "Review observations and messages to pick the most important",
+                "instruction": "Review your working memory and decide what deserves immediate attention. Look at timestamps, priorities, and your current situation. You can focus on any memory item by returning its ID, or return 'none' if no immediate focus is needed.",
                 "inputs": {
-                    "observations": "Recent environmental observations and action results",
-                    "messages": "Unread messages from other agents", 
-                    "context": "Current working memory context"
+                    "working_memory": "Your current symbolic memory with all observations, messages, tasks, and context"
                 },
                 "outputs": {
-                    "focus": "Either 'message:N' or 'observation:N' where N is the index",
-                    "reasoning": "Why this is most important"
-                }
+                    "memory_id": "The exact memory ID to focus on (e.g. 'message:inbox:from-alice/urgent-request:abc123') or 'none'",
+                    "reasoning": "Why this memory deserves attention right now based on timestamps, priority, and context"
+                },
+                "display_field": "reasoning"
             },
             "input_values": {
-                "observations": json.dumps(obs_summaries),
-                "messages": json.dumps(msg_summaries),
-                "context": context
+                "working_memory": memory_context
             }
         }
         
         response = await self._use_brain(json.dumps(thinking_request, cls=DateTimeEncoder))
         
-        # Parse response and return selected observation
-        return self._parse_observation_selection(response, observations, messages)
+        # Parse response and retrieve the selected memory
+        return self._parse_memory_selection(response)
     
     async def _analyze_situation(self, observation: Dict[str, Any]) -> Dict[str, Any]:
         """Use brain to analyze and orient to the situation."""
@@ -757,56 +759,50 @@ class CognitiveLoop:
     
     # === PARSING HELPER METHODS ===
     
-    def _summarize_observations(self, observations: List[ObservationMemoryBlock]) -> List[Dict]:
-        """Create summaries of observations for brain."""
-        summaries = []
-        for i, obs in enumerate(observations):
-            summaries.append({
-                "index": i,
-                "type": obs.observation_type,
-                "description": obs.description[:100],
-                "age_seconds": int((datetime.now() - obs.timestamp).total_seconds()) if obs.timestamp else 0,
-                "priority": obs.priority.name
-            })
-        return summaries
     
-    def _summarize_messages(self, messages: List[MessageMemoryBlock]) -> List[Dict]:
-        """Create summaries of messages for brain."""
-        summaries = []
-        for i, msg in enumerate(messages):
-            summaries.append({
-                "index": i,
-                "from": msg.from_agent,
-                "subject": msg.subject,
-                "age_seconds": int((datetime.now() - msg.timestamp).total_seconds()) if msg.timestamp else 0
-            })
-        return summaries
-    
-    def _parse_observation_selection(self, response: str, 
-                                   observations: List[ObservationMemoryBlock],
-                                   messages: List[MessageMemoryBlock]) -> Optional[Dict[str, Any]]:
-        """Parse brain response to select observation."""
+    def _parse_memory_selection(self, response: str) -> Optional[Dict[str, Any]]:
+        """Parse brain response to get selected memory ID and retrieve it."""
         try:
             result = json.loads(response)
-            focus = result.get("output_values", {}).get("focus", "")
+            memory_id = result.get("output_values", {}).get("memory_id", "")
             reasoning = result.get("output_values", {}).get("reasoning", "")
             
-            if focus.startswith("message:") and messages:
-                idx = int(focus.split(":")[1])
-                msg = messages[min(idx, len(messages)-1)]
-                return self._process_message(msg, reasoning)
-                
-            elif focus.startswith("observation:") and observations:
-                idx = int(focus.split(":")[1])
-                obs = observations[min(idx, len(observations)-1)]
-                return self._convert_observation(obs, reasoning)
+            if memory_id == "none" or not memory_id:
+                logger.info(f"🧠 Brain reasoning: {reasoning}")
+                return None
+            
+            # Find the memory by ID
+            memory_block = None
+            for memory in self.memory_manager.symbolic_memory:
+                if memory.id == memory_id:
+                    memory_block = memory
+                    break
+            
+            if not memory_block:
+                logger.warning(f"Memory ID not found: {memory_id}")
+                return None
+            
+            logger.info(f"🧠 Brain reasoning: {reasoning}")
+            
+            # Handle different memory types
+            if isinstance(memory_block, MessageMemoryBlock):
+                return self._process_message(memory_block, reasoning)
+            elif isinstance(memory_block, ObservationMemoryBlock):
+                return self._convert_observation(memory_block, reasoning)
+            else:
+                # For other memory types, convert to observation format
+                return {
+                    "from": "memory",
+                    "type": "MEMORY_FOCUS",
+                    "memory_type": memory_block.type.name,
+                    "content": str(memory_block),
+                    "id": memory_id,
+                    "timestamp": memory_block.timestamp.isoformat() if memory_block.timestamp else datetime.now().isoformat(),
+                    "observe_reasoning": reasoning
+                }
                 
         except Exception as e:
-            logger.error(f"Failed to parse observation selection: {e}")
-            
-        # Fallback to first unread message
-        if messages:
-            return self._process_message(messages[0], "Fallback selection")
+            logger.error(f"Failed to parse memory selection: {e}")
             
         return None
     
@@ -840,7 +836,7 @@ class CognitiveLoop:
             "from": "environment",
             "type": "OBSERVATION",
             "observation_type": obs.observation_type,
-            "content": obs.description,
+            "content": obs.path,
             "path": obs.path,
             "timestamp": obs.timestamp.isoformat() if obs.timestamp else datetime.now().isoformat(),
             "id": obs.id,

@@ -197,11 +197,6 @@ class IOCognitiveLoop(CognitiveLoop):
                 )
                 actions.append(send_action)
             
-            # Task complete
-            finish_action = action_registry.create_action('io_gateway', 'finish')
-            if finish_action:
-                actions.append(finish_action)
-            
             return actions
         
         # Handle user message

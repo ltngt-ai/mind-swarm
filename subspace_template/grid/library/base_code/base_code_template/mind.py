@@ -26,20 +26,28 @@ class AgentMind:
     
     def __init__(self):
         """Initialize the agent mind."""
-        # Get identity from environment
-        self.name = os.environ.get("AGENT_NAME", "unknown")
-        self.agent_type = os.environ.get("AGENT_TYPE", "general")
-        
         # Set up paths
         self.home = Path("/home")
         self.grid = Path("/grid")
+        
+        # Load identity from file or fall back to environment
+        self.identity = self._load_identity()
+        self.name = self.identity.get("name", os.environ.get("AGENT_NAME", "unknown"))
+        self.agent_type = self.identity.get("agent_type", os.environ.get("AGENT_TYPE", "general"))
+        self.model = self.identity.get("model", "unknown")
+        self.max_context_length = self.identity.get("max_context_length", 4096)
         
         # Load configuration if it exists
         self.config = self._load_config()
         
         # Initialize cognitive components
         self.boot_rom = BootROM()
-        self.cognitive_loop = CognitiveLoop(self.name, self.home, agent_type=self.agent_type)
+        self.cognitive_loop = CognitiveLoop(
+            self.name, 
+            self.home, 
+            max_context_tokens=self.max_context_length,
+            agent_type=self.agent_type
+        )
         
         # State
         self.running = False
@@ -49,6 +57,7 @@ class AgentMind:
         
         # Log startup
         logger.info(f"Agent mind initializing: {self.name}")
+        logger.info(f"  Model: {self.model}, Context: {self.max_context_length}")
         for line in self.boot_rom.get_boot_sequence():
             logger.info(f"  {line}")
     
@@ -56,6 +65,25 @@ class AgentMind:
         """Request a graceful stop after the current cycle."""
         self.stop_requested = True
         logger.info("Stop requested - will exit after current cycle completes")
+    
+    def _load_identity(self) -> dict:
+        """Load agent identity from file."""
+        identity_file = self.home / "identity.json"
+        if identity_file.exists():
+            try:
+                return json.loads(identity_file.read_text())
+            except Exception as e:
+                logger.error(f"Error loading identity: {e}")
+        
+        # Default identity from environment
+        return {
+            "name": os.environ.get("AGENT_NAME", "unknown"),
+            "agent_type": os.environ.get("AGENT_TYPE", "general"),
+            "model": "unknown",
+            "max_context_length": 4096,
+            "provider": "unknown",
+            "created_at": datetime.now().isoformat()
+        }
     
     def _load_config(self) -> dict:
         """Load agent configuration from file."""

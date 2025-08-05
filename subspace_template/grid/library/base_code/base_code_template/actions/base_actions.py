@@ -181,6 +181,17 @@ class WaitAction(Action):
         try:
             import asyncio
             
+            # Convert duration to float if it's a string
+            if isinstance(duration, str):
+                try:
+                    duration = float(duration)
+                except ValueError:
+                    return ActionResult(
+                        self.name,
+                        ActionStatus.FAILED,
+                        error=f"Invalid duration: {duration} - must be a number"
+                    )
+            
             if condition:
                 # Check condition (simplified)
                 # Real implementation would check memory, files, etc.

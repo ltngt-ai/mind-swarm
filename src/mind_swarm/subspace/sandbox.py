@@ -48,6 +48,8 @@ class BubblewrapSandbox:
         """
         bwrap_cmd = [
             "bwrap",
+            # Die when parent process dies - prevents zombie processes
+            "--die-with-parent",
             # Create new namespaces
             "--unshare-all",
             # No network access - agents think through body files

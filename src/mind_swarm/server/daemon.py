@@ -70,6 +70,38 @@ class ServerDaemon:
             except Exception as e:
                 logger.error(f"Error during server shutdown: {e}")
             
+            # Kill any remaining bwrap processes
+            logger.info("Cleaning up any remaining bwrap processes...")
+            try:
+                import subprocess
+                
+                # Strategy 1: Kill all bwrap processes - this works from command line
+                result = subprocess.run(['pkill', '-9', 'bwrap'], 
+                                      capture_output=True, text=True)
+                if result.returncode == 0:
+                    logger.info("Successfully killed bwrap processes with pkill")
+                
+                # Strategy 2: Kill all processes that have bwrap as parent
+                # This catches any lingering child processes
+                result2 = subprocess.run(['pkill', '-9', '-P', '$(pgrep bwrap)'], 
+                                       shell=True, capture_output=True, text=True)
+                if result2.returncode == 0:
+                    logger.info("Killed child processes of bwrap")
+                
+                # Strategy 3: Final backstop - kill anything with bwrap in the command line
+                # This catches bwrap processes that might have been missed
+                result3 = subprocess.run(['pkill', '-9', '-f', 'bwrap'], 
+                                       capture_output=True, text=True)
+                if result3.returncode == 0:
+                    logger.info("Killed remaining processes with bwrap in command")
+                
+                # Strategy 4: Nuclear option - killall
+                subprocess.run(['killall', '-9', 'bwrap'], 
+                             capture_output=True, text=True, check=False)
+                
+            except Exception as e:
+                logger.error(f"Error killing bwrap processes: {e}")
+            
             # Stop the uvicorn server properly
             if hasattr(self.server, 'server') and self.server.server:
                 logger.info("Shutting down uvicorn server...")

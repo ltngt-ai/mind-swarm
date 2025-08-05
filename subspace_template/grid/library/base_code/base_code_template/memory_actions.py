@@ -68,12 +68,10 @@ class FocusMemoryAction(Action):
                 obs = ObservationMemoryBlock(
                     observation_type="memory_focused",
                     path=memory_id,
-                    description=f"Focused on {existing_memory.type.value}: {memory_id}",
                     priority=Priority.MEDIUM,
                     metadata={
                         "focus_type": focus_type,
-                        "memory_type": existing_memory.type.value,
-                        "content_preview": content[:200] + "..." if len(content) > 200 else content
+                        "memory_type": existing_memory.type.value
                     }
                 )
                 memory_manager.add_memory(obs)
@@ -93,10 +91,12 @@ class FocusMemoryAction(Action):
             # Not in memory, treat as file path
             file_path = Path(memory_id)
             
+            # Get home_dir from context (needed for ContentLoader later)
+            home_dir = context.get("home_dir", Path.home())
+            
             # Resolve path relative to agent's context
             if not file_path.is_absolute():
                 # Try different base paths
-                home_dir = context.get("home_dir", Path.home())
                 possible_paths = [
                     home_dir / file_path,  # Personal memory
                     home_dir.parent / "grid" / file_path,  # Shared memory
@@ -142,13 +142,11 @@ class FocusMemoryAction(Action):
             obs = ObservationMemoryBlock(
                 observation_type="file_focused",
                 path=str(file_path),
-                description=f"Focused on {file_type} file: {file_path.name}",
                 priority=Priority.MEDIUM,
                 metadata={
                     "focus_type": focus_type,
                     "file_type": file_type,
-                    "file_size": file_path.stat().st_size,
-                    "content_preview": content[:200] + "..." if len(content) > 200 else content
+                    "file_size": file_path.stat().st_size
                 }
             )
             memory_manager.add_memory(obs)
@@ -300,8 +298,8 @@ class CreateMemoryAction(Action):
                 obs = ObservationMemoryBlock(
                     observation_type="memory_created",
                     path=str(file_path),
-                    description=f"Created new {memory_type} memory: {file_path.name}",
-                    priority=Priority.MEDIUM
+                    priority=Priority.MEDIUM,
+                    metadata={"memory_type": memory_type}
                 )
                 memory_manager.add_memory(obs)
             
@@ -430,8 +428,7 @@ class SearchMemoryAction(Action):
             if memory_manager:
                 obs = ObservationMemoryBlock(
                     observation_type="memory_search",
-                    path="<search>",
-                    description=f"Searched for '{query}' in {scope} memories, found {len(results)} results",
+                    path="search_results",
                     priority=Priority.LOW,
                     metadata={
                         "query": query,

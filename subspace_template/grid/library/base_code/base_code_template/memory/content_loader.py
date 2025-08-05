@@ -202,7 +202,6 @@ class ContentLoader:
         return (
             f"[OBSERVATION: {memory.observation_type}]\n"
             f"Path: {memory.path}\n"
-            f"Description: {memory.description}\n"
             f"Time: {memory.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
         )
     

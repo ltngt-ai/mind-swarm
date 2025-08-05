@@ -209,8 +209,7 @@ class WorkingMemoryManager:
         elif isinstance(memory, ObservationMemoryBlock):
             fields.update({
                 "observation_type": memory.observation_type,
-                "path": memory.path,
-                "description": memory.description
+                "path": memory.path
             })
         elif hasattr(memory, 'cycle_state'):  # CycleStateMemoryBlock
             fields.update({
@@ -295,7 +294,6 @@ class WorkingMemoryManager:
                         memory = ObservationMemoryBlock(
                             observation_type=mem_data['observation_type'],
                             path=mem_data.get('path', ''),
-                            description=mem_data['description'],
                             confidence=mem_data.get('confidence', 1.0),
                             priority=Priority[mem_data.get('priority', 'MEDIUM')]
                         )

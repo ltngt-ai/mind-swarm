@@ -93,10 +93,15 @@ class AgentProcess:
                 logger.error(f"Strategy 1 failed: {e}")
             
             try:
-                # Strategy 2: Kill process tree using pkill
-                logger.info(f"Strategy 2: Using pkill to kill process tree")
+                # Strategy 2: Kill entire process tree including bwrap
+                logger.info(f"Strategy 2: Killing entire process tree for PID {pid}")
+                # First kill all children of the bwrap process
                 subprocess.run(['pkill', '-KILL', '-P', str(pid)], check=False)
+                # Then kill the bwrap process itself
                 subprocess.run(['kill', '-KILL', str(pid)], check=False)
+                # Also try to kill any processes that match the agent name pattern
+                subprocess.run(['pkill', '-KILL', '-f', f'AGENT_NAME {self.name}'], check=False)
+                subprocess.run(['pkill', '-KILL', '-f', f'bwrap.*{self.name}'], check=False)
             except Exception as e:
                 logger.error(f"Strategy 2 failed: {e}")
             
@@ -163,10 +168,15 @@ class AgentProcess:
             logger.error(f"Strategy 1 failed: {e}")
         
         try:
-            # Strategy 2: Kill process tree using pkill
-            logger.info(f"Strategy 2: Using pkill to kill process tree")
+            # Strategy 2: Kill entire process tree including bwrap
+            logger.info(f"Strategy 2: Killing entire process tree for PID {pid}")
+            # First kill all children of the bwrap process
             subprocess.run(['pkill', '-KILL', '-P', str(pid)], check=False)
+            # Then kill the bwrap process itself
             subprocess.run(['kill', '-KILL', str(pid)], check=False)
+            # Also try to kill any processes that match the agent name pattern
+            subprocess.run(['pkill', '-KILL', '-f', f'AGENT_NAME {self.name}'], check=False)
+            subprocess.run(['pkill', '-KILL', '-f', f'bwrap.*{self.name}'], check=False)
         except Exception as e:
             logger.error(f"Strategy 2 failed: {e}")
         

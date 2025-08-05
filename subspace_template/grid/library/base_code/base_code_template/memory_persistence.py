@@ -179,7 +179,6 @@ class MemoryPersistence:
                     memory = ObservationMemoryBlock(
                         observation_type=mem_data['observation_type'],
                         path=mem_data.get('path', ''),
-                        description=mem_data['description'],
                         confidence=mem_data.get('confidence', 1.0),
                         priority=Priority[mem_data.get('priority', 'MEDIUM')]
                     )

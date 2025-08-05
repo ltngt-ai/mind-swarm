@@ -251,6 +251,16 @@ class ModelRegistry:
                 output_cost=0.0,
                 is_free=True,
             ),
+            ModelInfo(
+                id="qwen/qwen3-30b-a3b-2507",
+                name="Qwen 3 30B A3B 2507 (Local)",
+                provider="qwen",
+                context_length=8192,
+                max_output_tokens=4096,
+                input_cost=0.0,
+                output_cost=0.0,
+                is_free=True,
+            ),
         ]
         
         for model in local_models:
