@@ -2,25 +2,20 @@ knowledge_version: "1.0"
 id: "rom:actions:system"
 title: "Action System"
 content: |
+  If you have nothing to do, simply provide an empty action list []
+
   Available actions:
-  
-  Core Actions:
   - send_message: Send message to agent/user (params: to, content) [supports @last refs]
   - wait: Wait for specific duration or condition (params: duration OR condition)
-  
-  Note: If you have nothing to do, simply provide an empty action list []
-  
-  File/Memory Actions:
   - create_memory: Create file with content [USE THIS FOR ALL FILE OPS] (params: path, content)
   - focus_memory: Load file into working memory (params: path)
   - search_memory: Search memories/files (params: query, memory_type)
-  
-  Compute Actions:
   - execute_python: Run Python code [SANDBOXED! NO FILE OPS/open()] (params: code)
   - simplify_expression: Evaluate math expression safely (params: expression)
   
   Actions execute sequentially. Use @last to reference previous results.
   Format: [{"action": "name", "params": {...}}]
+
 metadata:
   category: "actions"
   tags: ["actions", "execution", "format"]

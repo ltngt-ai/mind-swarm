@@ -82,11 +82,7 @@ class KnowledgeManager:
             Number of ROM items loaded
         """
         rom_items = self.get_rom_content()
-        
-        if not rom_items:
-            logger.warning("No ROM files found, loading legacy BootROM")
-            return self._load_legacy_boot_rom(memory_manager)
-            
+                    
         # Add each ROM item to working memory
         rom_count = 0
         for rom_item in rom_items:
@@ -117,34 +113,7 @@ class KnowledgeManager:
         logger.info(f"Loaded {rom_count} ROM items into working memory")
         return rom_count
     
-    def _load_legacy_boot_rom(self, memory_manager) -> int:
-        """Load legacy BootROM as fallback.
-        
-        Args:
-            memory_manager: The agent's working memory manager
-            
-        Returns:
-            Number of ROM items loaded (1 for legacy ROM)
-        """
-        from ..boot_rom import BootROM
-        from ..memory import FileMemoryBlock, Priority
-        
-        boot_rom = BootROM()
-        
-        rom_memory = FileMemoryBlock(
-            location="<BOOT_ROM>",
-            priority=Priority.CRITICAL,
-            confidence=1.0,
-            metadata={
-                "virtual": True,
-                "content": boot_rom.format_core_knowledge(),
-                "is_rom": True
-            }
-        )
-        memory_manager.add_memory(rom_memory)
-        logger.info("Loaded legacy BootROM into working memory")
-        return 1
-            
+           
     def _load_rom_knowledge(self):
         """Load ROM knowledge into the system."""
         # Load all ROM for this agent type

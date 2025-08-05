@@ -13,9 +13,6 @@ import os
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
-
-from .boot_rom import BootROM
-
 from .cognitive_loop import CognitiveLoop
 
 logger = logging.getLogger("agent.mind")
@@ -41,7 +38,6 @@ class AgentMind:
         self.config = self._load_config()
         
         # Initialize cognitive components
-        self.boot_rom = BootROM()
         self.cognitive_loop = CognitiveLoop(
             self.name, 
             self.home, 
@@ -58,8 +54,6 @@ class AgentMind:
         # Log startup
         logger.info(f"Agent mind initializing: {self.name}")
         logger.info(f"  Model: {self.model}, Context: {self.max_context_length}")
-        for line in self.boot_rom.get_boot_sequence():
-            logger.info(f"  {line}")
     
     def request_stop(self):
         """Request a graceful stop after the current cycle."""
