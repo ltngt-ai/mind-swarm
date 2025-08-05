@@ -10,7 +10,6 @@ from .memory_blocks import (
     KnowledgeMemoryBlock,
     ContextMemoryBlock,
     ObservationMemoryBlock,
-    ROMMemoryBlock,
     CycleStateMemoryBlock,
     IdentityMemoryBlock,
 )
@@ -31,7 +30,6 @@ __all__ = [
     "KnowledgeMemoryBlock",
     "ContextMemoryBlock",
     "ObservationMemoryBlock",
-    "ROMMemoryBlock",
     "CycleStateMemoryBlock",
     "IdentityMemoryBlock",
     # Core components

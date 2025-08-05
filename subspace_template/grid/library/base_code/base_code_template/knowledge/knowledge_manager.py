@@ -70,10 +70,10 @@ class KnowledgeManager:
             return False
     
     def load_rom_into_memory(self, memory_manager) -> int:
-        """Load ROM knowledge into working memory.
+        """Load ROM knowledge into working memory as pinned memories.
         
-        This is the proper way to get ROM into agent memory - delegates to
-        the knowledge manager instead of having ROM logic in cognitive loop.
+        This loads ROM as regular KnowledgeMemoryBlock instances that are pinned,
+        making them behave like ROM but using the standard memory system.
         
         Args:
             memory_manager: The agent's working memory manager
@@ -92,7 +92,7 @@ class KnowledgeManager:
             metadata = rom_item.get("metadata", {})
             content = rom_item.get("content", "")
             
-            # Create knowledge memory block
+            # Create knowledge memory block that is pinned
             knowledge_memory = KnowledgeMemoryBlock(
                 topic=metadata.get("category", "general"),
                 location=rom_item.get("source", "ROM"),
@@ -100,7 +100,8 @@ class KnowledgeManager:
                 relevance_score=1.0,  # ROM is always relevant
                 confidence=1.0,
                 priority=Priority(metadata.get("priority", 1)),  # ROM is critical
-                metadata=metadata
+                metadata=metadata,
+                pinned=True  # ROM is always pinned so it's never removed
             )
             
             # Add content to metadata for brain access
@@ -110,7 +111,7 @@ class KnowledgeManager:
             memory_manager.add_memory(knowledge_memory)
             rom_count += 1
             
-        logger.info(f"Loaded {rom_count} ROM items into working memory")
+        logger.info(f"Loaded {rom_count} ROM items into working memory as pinned memories")
         return rom_count
     
            

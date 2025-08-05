@@ -1,0 +1,42 @@
+id: action_manage_memory
+knowledge_version: '1.0'
+title: Manage Memory Action
+content: "The manage_memory action allows agents to manage memory block properties including priority, pinning, and removal.\n\n## Parameters\n\n- **memory_id** (required): The ID of the memory block to manage\n- **operation** (required): The management operation to perform\n  - 'set_priority': Change the priority level\n  - 'pin': Pin memory so it's never removed\n  - 'unpin': Unpin memory to allow normal management\n  - 'forget': Remove memory from the system\n- **priority** (optional): New priority level when using 'set_priority' operation\n  - 'CRITICAL': Always included, never dropped\n  - 'HIGH': Included unless space critical\n  - 'MEDIUM': Included based on relevance\n  - 'LOW': Background info, often dropped\n\n## Examples\n\n### Pin important memory\n```json\n{\n  \"action\": \"manage_memory\",\n  \"params\": {\n    \"memory_id\": \"knowledge:library:action_system\",\n    \"operation\": \"pin\"\n  }\n}\n```\n\n### Change priority\n```json\n{\n  \"action\": \"manage_memory\",\n  \"params\": {\n    \"memory_id\": \"file:personal:notes/important.md\",\n    \"operation\": \"set_priority\",\n    \"priority\": \"HIGH\"\n  }\n}\n```\n\n### Forget old memory\n```json\n{\n  \"action\": \"manage_memory\",\n  \"params\": {\n    \"memory_id\": \"observation:system:file_change/old_file.txt\",\n    \"operation\": \"forget\"\n  }\n}\n```"
+metadata:
+  category: action_guide
+  tags:
+  - memory
+  - management
+  - priority
+  - pin
+  confidence: 1.0
+  priority: 1
+  parameter_schema:
+    memory_id:
+      type: string
+      required: true
+      description: The ID of the memory block to manage
+      aliases:
+      - id
+      - memory
+    operation:
+      type: string
+      required: true
+      description: The management operation to perform
+      options:
+      - set_priority
+      - pin
+      - unpin
+      - forget
+      aliases:
+      - action
+      - op
+    priority:
+      type: string
+      required: false
+      description: New priority level (for set_priority operation)
+      options:
+      - CRITICAL
+      - HIGH
+      - MEDIUM
+      - LOW

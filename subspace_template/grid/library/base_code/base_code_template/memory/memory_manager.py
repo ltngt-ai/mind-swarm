@@ -120,9 +120,9 @@ class WorkingMemoryManager:
         self.active_topics.discard(topic)
     
     def cleanup_expired(self) -> int:
-        """Remove expired memories and return count removed."""
+        """Remove expired memories and return count removed (except pinned ones)."""
         now = datetime.now()
-        expired = [m for m in self.symbolic_memory if m.expiry and m.expiry < now]
+        expired = [m for m in self.symbolic_memory if m.expiry and m.expiry < now and not m.pinned]
         
         for memory in expired:
             self.remove_memory(memory.id)
@@ -130,11 +130,11 @@ class WorkingMemoryManager:
         return len(expired)
     
     def cleanup_old_observations(self, max_age_seconds: int = 3600) -> int:
-        """Remove old observation entries beyond max age."""
+        """Remove old observation entries beyond max age (except pinned ones)."""
         cutoff = datetime.now() - timedelta(seconds=max_age_seconds)
         old_observations = [
             m for m in self.get_memories_by_type(MemoryType.OBSERVATION)
-            if m.timestamp < cutoff and m.priority == Priority.LOW
+            if m.timestamp < cutoff and m.priority == Priority.LOW and not m.pinned
         ]
         
         for memory in old_observations:
@@ -178,6 +178,7 @@ class WorkingMemoryManager:
                     "priority": memory.priority.name,
                     "timestamp": memory.timestamp.isoformat(),
                     "expiry": memory.expiry.isoformat() if memory.expiry else None,
+                    "pinned": memory.pinned,
                     "metadata": memory.metadata,
                     # Type-specific fields
                     **self._get_type_specific_fields(memory)

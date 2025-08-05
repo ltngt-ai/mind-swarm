@@ -13,7 +13,7 @@ from datetime import datetime
 from .actions.base_actions import Action, ActionResult, ActionStatus, Priority
 from .memory import (
     FileMemoryBlock, ObservationMemoryBlock, KnowledgeMemoryBlock,
-    WorkingMemoryManager, ContentLoader, MemoryType
+    WorkingMemoryManager, ContentLoader, MemoryType, Priority as MemoryPriority
 )
 
 logger = logging.getLogger("agent.memory_actions")
@@ -458,9 +458,154 @@ class SearchMemoryAction(Action):
             )
 
 
+class ManageMemoryAction(Action):
+    """Manage memory block properties including priority, pinning, and removal.
+    
+    This action allows agents to control how their memories are managed,
+    including setting priorities, pinning important memories, and forgetting
+    obsolete ones.
+    """
+    
+    def __init__(self):
+        super().__init__(
+            "manage_memory",
+            "Manage memory properties like priority and pinning",
+            Priority.MEDIUM
+        )
+    
+    async def execute(self, context: Dict[str, Any]) -> ActionResult:
+        """Execute memory management operation."""
+        memory_id = self.params.get("memory_id", "")
+        operation = self.params.get("operation", "")
+        
+        if not memory_id:
+            return ActionResult(
+                self.name,
+                ActionStatus.FAILED,
+                error="No memory_id specified"
+            )
+        
+        if not operation:
+            return ActionResult(
+                self.name,
+                ActionStatus.FAILED,
+                error="No operation specified"
+            )
+        
+        try:
+            memory_manager: WorkingMemoryManager = context.get("memory_manager")
+            if not memory_manager:
+                return ActionResult(
+                    self.name,
+                    ActionStatus.FAILED,
+                    error="No memory manager available"
+                )
+            
+            # Get the memory block
+            memory = memory_manager.access_memory(memory_id)
+            if not memory:
+                return ActionResult(
+                    self.name,
+                    ActionStatus.FAILED,
+                    error=f"Memory {memory_id} not found"
+                )
+            
+            result = {}
+            
+            if operation == "set_priority":
+                # Change memory priority
+                new_priority = self.params.get("priority", "").upper()
+                if not new_priority:
+                    return ActionResult(
+                        self.name,
+                        ActionStatus.FAILED,
+                        error="Priority not specified for set_priority operation"
+                    )
+                
+                try:
+                    memory.priority = MemoryPriority[new_priority]
+                    result = {
+                        "memory_id": memory_id,
+                        "operation": "set_priority",
+                        "old_priority": result.get("old_priority", "UNKNOWN"),
+                        "new_priority": new_priority,
+                        "success": True
+                    }
+                except KeyError:
+                    return ActionResult(
+                        self.name,
+                        ActionStatus.FAILED,
+                        error=f"Invalid priority: {new_priority}. Must be one of: CRITICAL, HIGH, MEDIUM, LOW"
+                    )
+                    
+            elif operation == "pin":
+                # Pin memory so it's never removed
+                memory.pinned = True
+                result = {
+                    "memory_id": memory_id,
+                    "operation": "pin",
+                    "pinned": True,
+                    "success": True
+                }
+                
+            elif operation == "unpin":
+                # Unpin memory to allow normal management
+                memory.pinned = False
+                result = {
+                    "memory_id": memory_id,
+                    "operation": "unpin",
+                    "pinned": False,
+                    "success": True
+                }
+                
+            elif operation == "forget":
+                # Remove memory from the system
+                memory_manager.remove_memory(memory_id)
+                result = {
+                    "memory_id": memory_id,
+                    "operation": "forget",
+                    "removed": True,
+                    "success": True
+                }
+                
+            else:
+                return ActionResult(
+                    self.name,
+                    ActionStatus.FAILED,
+                    error=f"Unknown operation: {operation}. Must be one of: set_priority, pin, unpin, forget"
+                )
+            
+            # Create observation about the management action
+            obs = ObservationMemoryBlock(
+                observation_type="memory_managed",
+                path=memory_id,
+                priority=MemoryPriority.LOW,
+                metadata={
+                    "operation": operation,
+                    "result": result
+                }
+            )
+            memory_manager.add_memory(obs)
+            
+            return ActionResult(
+                self.name,
+                ActionStatus.COMPLETED,
+                result=result
+            )
+            
+        except Exception as e:
+            logger.error(f"Error managing memory: {e}", exc_info=True)
+            return ActionResult(
+                self.name,
+                ActionStatus.FAILED,
+                error=str(e)
+            )
+
+
 # Register memory actions
 def register_memory_actions(registry):
     """Register all memory-focused actions."""
     registry.register_action("base", "focus_memory", FocusMemoryAction)
     registry.register_action("base", "create_memory", CreateMemoryAction)
     registry.register_action("base", "search_memory", SearchMemoryAction)
+    registry.register_action("base", "manage_memory", ManageMemoryAction)

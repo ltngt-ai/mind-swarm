@@ -148,7 +148,8 @@ class MemoryPersistence:
                         current_orientation=mem_data.get('current_orientation'),
                         current_actions=mem_data.get('current_actions'),
                         confidence=mem_data.get('confidence', 1.0),
-                        priority=Priority[mem_data.get('priority', 'CRITICAL')]
+                        priority=Priority[mem_data.get('priority', 'CRITICAL')],
+                        pinned=mem_data.get('pinned', False)
                     )
                     # Update cycle count from saved state
                     cycle_count = memory.cycle_count
@@ -160,7 +161,8 @@ class MemoryPersistence:
                         end_line=mem_data.get('end_line'),
                         digest=mem_data.get('digest'),
                         confidence=mem_data.get('confidence', 1.0),
-                        priority=Priority[mem_data.get('priority', 'MEDIUM')]
+                        priority=Priority[mem_data.get('priority', 'MEDIUM')],
+                        pinned=mem_data.get('pinned', False)
                     )
                     
                 elif memory_type == MemoryType.MESSAGE:
@@ -172,7 +174,8 @@ class MemoryPersistence:
                         full_path=mem_data['full_path'],
                         read=mem_data.get('read', False),
                         confidence=mem_data.get('confidence', 1.0),
-                        priority=Priority[mem_data.get('priority', 'HIGH')]
+                        priority=Priority[mem_data.get('priority', 'HIGH')],
+                        pinned=mem_data.get('pinned', False)
                     )
                     
                 elif memory_type == MemoryType.OBSERVATION:
@@ -180,7 +183,8 @@ class MemoryPersistence:
                         observation_type=mem_data['observation_type'],
                         path=mem_data.get('path', ''),
                         confidence=mem_data.get('confidence', 1.0),
-                        priority=Priority[mem_data.get('priority', 'MEDIUM')]
+                        priority=Priority[mem_data.get('priority', 'MEDIUM')],
+                        pinned=mem_data.get('pinned', False)
                     )
                     
                 elif memory_type == MemoryType.KNOWLEDGE:
@@ -191,7 +195,8 @@ class MemoryPersistence:
                         relevance_score=mem_data.get('relevance_score', 0.8),
                         confidence=mem_data.get('confidence', 1.0),
                         priority=Priority[mem_data.get('priority', 'MEDIUM')],
-                        metadata=mem_data.get('metadata', {})
+                        metadata=mem_data.get('metadata', {}),
+                        pinned=mem_data.get('pinned', False)
                     )
                     
                 else:

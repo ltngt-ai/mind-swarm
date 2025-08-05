@@ -120,9 +120,9 @@ class ContextBuilder:
         
         # Build sections for each type
         type_order = [
-            MemoryType.ROM,      # Always first
-            MemoryType.TASK,     # Current task
-            MemoryType.MESSAGE,  # Messages
+            MemoryType.KNOWLEDGE,  # Knowledge (including pinned ROM)
+            MemoryType.TASK,       # Current task
+            MemoryType.MESSAGE,    # Messages
             MemoryType.OBSERVATION,  # Recent observations
             MemoryType.FILE,     # File content
             MemoryType.KNOWLEDGE,  # Knowledge base
@@ -151,7 +151,7 @@ class ContextBuilder:
         
         # Section headers
         headers = {
-            MemoryType.ROM: "=== CORE KNOWLEDGE (ROM) ===",
+            MemoryType.KNOWLEDGE: "=== KNOWLEDGE ===",
             MemoryType.TASK: "=== CURRENT TASKS ===",
             MemoryType.MESSAGE: "=== MESSAGES ===",
             MemoryType.FILE: "=== FILE CONTENT ===",
@@ -205,11 +205,11 @@ class ContextBuilder:
         """Build a narrative-style context."""
         lines = ["Let me review what I know and what's happening:\n"]
         
-        # ROM first
-        rom_memories = [m for m in memories if m.type == MemoryType.ROM]
-        if rom_memories:
+        # Pinned knowledge first (acting as ROM)
+        pinned_knowledge = [m for m in memories if m.type == MemoryType.KNOWLEDGE and m.pinned]
+        if pinned_knowledge:
             lines.append("My core knowledge tells me:")
-            for memory in rom_memories:
+            for memory in pinned_knowledge:
                 content = self.content_loader.load_content(memory)
                 lines.append(f"- {content}")
             lines.append("")
@@ -246,7 +246,7 @@ class ContextBuilder:
         
         # Other content
         other_memories = [m for m in memories if m.type not in 
-                         [MemoryType.ROM, MemoryType.TASK, MemoryType.OBSERVATION, MemoryType.MESSAGE]]
+                         [MemoryType.KNOWLEDGE, MemoryType.TASK, MemoryType.OBSERVATION, MemoryType.MESSAGE]]
         
         if other_memories:
             lines.append("Additional relevant information:")

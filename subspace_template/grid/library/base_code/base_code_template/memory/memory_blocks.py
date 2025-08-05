@@ -19,13 +19,15 @@ class MemoryBlock:
                  priority: Priority = Priority.MEDIUM,
                  timestamp: Optional[datetime] = None,
                  expiry: Optional[datetime] = None,
-                 metadata: Optional[Dict[str, Any]] = None):
+                 metadata: Optional[Dict[str, Any]] = None,
+                 pinned: bool = False):
         """Initialize base memory block."""
         self.confidence = confidence
         self.priority = priority
         self.timestamp = timestamp or datetime.now()
         self.expiry = expiry
         self.metadata = metadata or {}
+        self.pinned = pinned  # When True, memory is never removed by memory management
         
         # These must be set by subclasses
         self.type: MemoryType
@@ -44,7 +46,9 @@ class FileMemoryBlock(MemoryBlock):
     timestamp: Optional[datetime] = None
     expiry: Optional[datetime] = None
     metadata: Optional[Dict[str, Any]] = None
+    pinned: bool = False
     
+
     def __post_init__(self):
         """Initialize base class and set type."""
         super().__init__(
@@ -52,7 +56,8 @@ class FileMemoryBlock(MemoryBlock):
             priority=self.priority,
             timestamp=self.timestamp,
             expiry=self.expiry,
-            metadata=self.metadata
+            metadata=self.metadata,
+            pinned=self.pinned
         )
         self.type = MemoryType.FILE
         
@@ -93,7 +98,9 @@ class StatusMemoryBlock(MemoryBlock):
     timestamp: Optional[datetime] = None
     expiry: Optional[datetime] = None
     metadata: Optional[Dict[str, Any]] = None
+    pinned: bool = False
     
+
     def __post_init__(self):
         """Initialize base class and set type."""
         super().__init__(
@@ -101,7 +108,8 @@ class StatusMemoryBlock(MemoryBlock):
             priority=self.priority,
             timestamp=self.timestamp,
             expiry=self.expiry,
-            metadata=self.metadata
+            metadata=self.metadata,
+            pinned=self.pinned
         )
         self.type = MemoryType.STATUS
         
@@ -121,6 +129,7 @@ class TaskMemoryBlock(MemoryBlock):
     priority: Priority = Priority.HIGH
     timestamp: Optional[datetime] = None
     expiry: Optional[datetime] = None
+    pinned: bool = False
     metadata: Optional[Dict[str, Any]] = None
     
     def __post_init__(self):
@@ -130,7 +139,8 @@ class TaskMemoryBlock(MemoryBlock):
             priority=self.priority,
             timestamp=self.timestamp,
             expiry=self.expiry,
-            metadata=self.metadata
+            metadata=self.metadata,
+            pinned=self.pinned
         )
         self.type = MemoryType.TASK
         
@@ -160,6 +170,7 @@ class MessageMemoryBlock(MemoryBlock):
     priority: Priority = Priority.MEDIUM
     timestamp: Optional[datetime] = None
     expiry: Optional[datetime] = None
+    pinned: bool = False
     metadata: Optional[Dict[str, Any]] = None
     
     def __post_init__(self):
@@ -195,6 +206,7 @@ class KnowledgeMemoryBlock(MemoryBlock):
     priority: Priority = Priority.MEDIUM
     timestamp: Optional[datetime] = None
     expiry: Optional[datetime] = None
+    pinned: bool = False
     metadata: Optional[Dict[str, Any]] = None
     
     def __post_init__(self):
@@ -204,7 +216,8 @@ class KnowledgeMemoryBlock(MemoryBlock):
             priority=self.priority,
             timestamp=self.timestamp,
             expiry=self.expiry,
-            metadata=self.metadata
+            metadata=self.metadata,
+            pinned=self.pinned
         )
         self.type = MemoryType.KNOWLEDGE
         
@@ -232,6 +245,7 @@ class ContextMemoryBlock(MemoryBlock):
     priority: Priority = Priority.MEDIUM
     timestamp: Optional[datetime] = None
     expiry: Optional[datetime] = None
+    pinned: bool = False
     metadata: Optional[Dict[str, Any]] = None
     
     def __post_init__(self):
@@ -241,7 +255,8 @@ class ContextMemoryBlock(MemoryBlock):
             priority=self.priority,
             timestamp=self.timestamp,
             expiry=self.expiry,
-            metadata=self.metadata
+            metadata=self.metadata,
+            pinned=self.pinned
         )
         self.type = MemoryType.CONTEXT
         
@@ -265,6 +280,7 @@ class ObservationMemoryBlock(MemoryBlock):
     priority: Priority = Priority.HIGH
     timestamp: Optional[datetime] = None
     expiry: Optional[datetime] = None
+    pinned: bool = False
     metadata: Optional[Dict[str, Any]] = None
     
     def __post_init__(self):
@@ -274,7 +290,8 @@ class ObservationMemoryBlock(MemoryBlock):
             priority=self.priority,
             timestamp=self.timestamp,
             expiry=self.expiry,
-            metadata=self.metadata
+            metadata=self.metadata,
+            pinned=self.pinned
         )
         self.type = MemoryType.OBSERVATION
         
@@ -284,34 +301,6 @@ class ObservationMemoryBlock(MemoryBlock):
             self.path
         )
 
-
-@dataclass
-class ROMMemoryBlock(MemoryBlock):
-    """Read-Only Memory - fundamental knowledge from library."""
-    rom_id: str
-    content: str
-    category: str = "general"
-    source: str = "library"
-    confidence: float = 1.0
-    priority: Priority = Priority.LOW  # Background knowledge, not actionable focus
-    timestamp: Optional[datetime] = None
-    expiry: Optional[datetime] = None
-    metadata: Optional[Dict[str, Any]] = None
-    
-    def __post_init__(self):
-        """Initialize base class and set type."""
-        super().__init__(
-            confidence=self.confidence,
-            priority=self.priority,
-            timestamp=self.timestamp,
-            expiry=self.expiry,
-            metadata=self.metadata
-        )
-        self.type = MemoryType.ROM
-        
-        # ROM uses semantic paths based on category and source
-        semantic_path = f"{self.category}/{self.rom_id}"
-        self.id = UnifiedMemoryID.create(MemoryType.ROM, self.source, semantic_path)
 
 
 @dataclass
@@ -327,6 +316,7 @@ class CycleStateMemoryBlock(MemoryBlock):
     priority: Priority = Priority.LOW  # Internal bookkeeping, not actionable for agent
     timestamp: Optional[datetime] = None
     expiry: Optional[datetime] = None
+    pinned: bool = False
     metadata: Optional[Dict[str, Any]] = None
     
     def __post_init__(self):
@@ -336,7 +326,8 @@ class CycleStateMemoryBlock(MemoryBlock):
             priority=self.priority,
             timestamp=self.timestamp,
             expiry=self.expiry,
-            metadata=self.metadata
+            metadata=self.metadata,
+            pinned=self.pinned
         )
         self.type = MemoryType.CYCLE_STATE
         
@@ -358,6 +349,7 @@ class IdentityMemoryBlock(MemoryBlock):
     priority: Priority = Priority.LOW  # Background identity, not actionable focus
     timestamp: Optional[datetime] = None
     expiry: Optional[datetime] = None
+    pinned: bool = False
     metadata: Optional[Dict[str, Any]] = None
     
     def __post_init__(self):
@@ -367,7 +359,8 @@ class IdentityMemoryBlock(MemoryBlock):
             priority=self.priority,
             timestamp=self.timestamp,
             expiry=self.expiry,
-            metadata=self.metadata
+            metadata=self.metadata,
+            pinned=self.pinned
         )
         self.type = MemoryType.IDENTITY
         
