@@ -39,7 +39,7 @@ class AgentMind:
         
         # Initialize cognitive components
         self.boot_rom = BootROM()
-        self.cognitive_loop = CognitiveLoop(self.name, self.home)
+        self.cognitive_loop = CognitiveLoop(self.name, self.home, agent_type=self.agent_type)
         
         # State
         self.running = False

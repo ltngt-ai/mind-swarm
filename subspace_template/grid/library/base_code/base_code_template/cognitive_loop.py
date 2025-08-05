@@ -39,14 +39,14 @@ class CognitiveLoop:
     
     def __init__(self, agent_id: str, home: Path, 
                  max_context_tokens: int = 50000,
-                 agent_type: str = 'base'):
+                 agent_type: str = 'general'):
         """Initialize the cognitive loop with all supporting managers.
         
         Args:
             agent_id: The agent's identifier
             home: Path to agent's home directory
             max_context_tokens: Maximum tokens for LLM context
-            agent_type: Type of agent (base, io_gateway, etc.)
+            agent_type: Type of agent (general, io_gateway, etc.)
         """
         self.agent_id = agent_id
         self.home = Path(home)
@@ -208,6 +208,7 @@ class CognitiveLoop:
                 return True
             else:
                 # No observation, do maintenance and restart
+                logger.debug("😴 No work found, performing maintenance")
                 await self.maintain()
                 self.state_manager.set_cycle_state("perceive")
                 await self._save_checkpoint()
@@ -221,7 +222,6 @@ class CognitiveLoop:
                 return True
                 
             orientation = await self.orient(observation)
-            logger.info(f"Oriented: {orientation.get('task_type')}")
             
             self.state_manager.set_cycle_state("decide",
                 current_orientation=orientation)
@@ -236,7 +236,6 @@ class CognitiveLoop:
                 return True
                 
             actions = await self.decide(orientation)
-            logger.info(f"Decided on {len(actions)} actions")
             
             # Save actions as serializable data
             action_data = [{"name": a.name, "params": a.params} for a in actions]
@@ -307,13 +306,29 @@ class CognitiveLoop:
         
         # Add observations to memory
         significant_count = 0
+        high_priority_items = []
         for obs in observations:
             self.memory_manager.add_memory(obs)
             if obs.priority != Priority.LOW:
                 significant_count += 1
+                if obs.priority == Priority.HIGH:
+                    # Handle different memory block types
+                    if hasattr(obs, 'observation_type'):
+                        # ObservationMemoryBlock
+                        high_priority_items.append(f"{obs.observation_type}: {obs.description[:100]}")
+                    elif hasattr(obs, 'from_agent'):
+                        # MessageMemoryBlock
+                        high_priority_items.append(f"message from {obs.from_agent}: {obs.subject[:100]}")
+                    else:
+                        # Other memory block types
+                        high_priority_items.append(f"{obs.type.name if hasattr(obs, 'type') else 'unknown'}: {str(obs)[:100]}")
                 
         if significant_count > 0:
-            logger.info(f"Perceived {significant_count} significant changes")
+            logger.info(f"📡 Perceived {significant_count} significant changes ({len(observations)} total)")
+            for item in high_priority_items[:3]:  # Show top 3 high priority items
+                logger.info(f"  • {item}")
+        else:
+            logger.info("📡 Environment scan - no significant changes detected")
             
         return {"observations_count": len(observations)}
     
@@ -326,8 +341,11 @@ class CognitiveLoop:
         unread_messages = self.memory_manager.get_unread_messages()
         
         if not recent_observations and not unread_messages:
+            logger.info("👁️ No new observations or messages to process")
             return None
             
+        logger.info(f"👁️ Evaluating {len(recent_observations)} observations and {len(unread_messages)} messages")
+        
         # Build context for observation selection
         selected_memories = self.memory_selector.select_memories(
             symbolic_memory=self.memory_manager.symbolic_memory,
@@ -344,6 +362,14 @@ class CognitiveLoop:
             memory_context
         )
         
+        if observation:
+            if observation.get("type") == "COMMAND":
+                logger.info(f"👁️ Selected MESSAGE from {observation.get('from', 'unknown')}: {observation.get('command', 'no command')}")
+            elif observation.get("type") == "QUERY":
+                logger.info(f"👁️ Selected QUERY from {observation.get('from', 'unknown')}: {observation.get('query', 'no query')[:100]}")
+            else:
+                logger.info(f"👁️ Selected {observation.get('observation_type', 'observation')}: {str(observation.get('content', observation))[:100]}")
+        
         return observation
     
     async def orient(self, observation: Dict[str, Any]) -> Dict[str, Any]:
@@ -354,7 +380,15 @@ class CognitiveLoop:
         self._create_observation_memory(observation)
         
         # Use brain to understand the situation
+        logger.info("🧠 Analyzing situation and understanding context...")
         orientation = await self._analyze_situation(observation)
+        
+        # Log what we understood
+        task_type = orientation.get("task_type", "unknown")
+        understanding = orientation.get("understanding", "")
+        logger.info(f"🧠 Understanding: {task_type}")
+        if understanding:
+            logger.info(f"  💭 {understanding[:200]}")
         
         return orientation
     
@@ -366,7 +400,27 @@ class CognitiveLoop:
         decision_context = await self._build_decision_context(orientation)
         
         # Use brain to decide on actions
+        logger.info("🤔 Making decision based on situation...")
         actions = await self._make_decision(orientation, decision_context)
+        
+        # Log the decision
+        if actions:
+            logger.info(f"🤔 Decided on {len(actions)} actions:")
+            for i, action in enumerate(actions[:5]):  # Show first 5 actions
+                params_str = ""
+                if action.params:
+                    # Show key parameters
+                    key_params = []
+                    for k, v in list(action.params.items())[:3]:
+                        if isinstance(v, str) and len(v) > 50:
+                            key_params.append(f"{k}='{v[:50]}...'")
+                        else:
+                            key_params.append(f"{k}={v}")
+                    if key_params:
+                        params_str = f" ({', '.join(key_params)})"
+                logger.info(f"  {i+1}. {action.name}{params_str}")
+        else:
+            logger.info("🤔 No actions decided")
         
         return actions
     
@@ -374,7 +428,9 @@ class CognitiveLoop:
         """INSTRUCT - Prepare and validate actions for execution."""
         logger.info("=== INSTRUCT PHASE ===")
         
+        logger.info(f"📋 Validating and preparing {len(action_data)} actions...")
         corrected_actions = []
+        validation_errors = 0
         
         for action_spec in action_data:
             # Load action knowledge and apply corrections
@@ -396,8 +452,15 @@ class CognitiveLoop:
                         "name": action.name,
                         "params": action.params
                     })
+                    logger.info(f"  ✅ {action.name} - ready for execution")
             else:
-                logger.warning(f"Invalid action {action_name}: {error}")
+                validation_errors += 1
+                logger.warning(f"  ❌ {action_name} - {error}")
+                
+        if validation_errors > 0:
+            logger.info(f"📋 Validated {len(corrected_actions)}/{len(action_data)} actions ({validation_errors} failed)")
+        else:
+            logger.info(f"📋 All {len(corrected_actions)} actions validated successfully")
                 
         return corrected_actions
     
@@ -412,26 +475,46 @@ class CognitiveLoop:
         
         # Execute each action
         results = []
+        successful_actions = 0
         for i, action in enumerate(actions):
-            logger.info(f"Executing action {i+1}/{len(actions)}: {action.name}")
+            logger.info(f"⚡ Executing action {i+1}/{len(actions)}: {action.name}")
             
             result = await self.action_coordinator.execute_action(action, context)
             results.append(result)
             
-            # Update context with result for subsequent actions
-            if result["success"] and result.get("result"):
+            # Log result
+            if result["success"]:
+                successful_actions += 1
+                if result.get("result"):
+                    # Show a summary of the result
+                    result_str = str(result["result"])
+                    if len(result_str) > 150:
+                        result_str = result_str[:150] + "..."
+                    logger.info(f"  ✅ {action.name} completed: {result_str}")
+                else:
+                    logger.info(f"  ✅ {action.name} completed successfully")
+                    
+                # Update context with result for subsequent actions
                 context[f"action_{i}_result"] = result["result"]
                 context["last_action_result"] = result["result"]
+            else:
+                error_msg = result.get("error", "Unknown error")
+                status = result.get("status", "unknown")
+                logger.warning(f"  ❌ {action.name} failed: {error_msg}")
+                if status != "unknown":
+                    logger.warning(f"    Status: {status}")
+                if result.get("result"):
+                    logger.warning(f"    Details: {str(result['result'])[:200]}")
                 
-            # Stop on critical failure
-            if not result["success"] and action.priority == Priority.HIGH:
-                logger.warning("Critical action failed, stopping sequence")
-                break
+                # Stop on critical failure
+                if action.priority == Priority.HIGH:
+                    logger.warning("Critical action failed, stopping sequence")
+                    break
                 
         # Process results into observations
         self.action_coordinator.process_action_results(results, self.memory_manager)
         
-        logger.info(f"Completed {len(results)} actions")
+        logger.info(f"⚡ Action phase complete: {successful_actions}/{len(results)} successful")
         return {"actions_executed": len(results), "results": results}
     
     # === SUPPORTING METHODS ===
@@ -443,12 +526,15 @@ class CognitiveLoop:
         old_observations = self.memory_manager.cleanup_old_observations(max_age_seconds=1800)
         
         if expired or old_observations:
-            logger.debug(f"Cleaned up {expired} expired, {old_observations} old memories")
+            logger.info(f"🧹 Cleaned up {expired} expired, {old_observations} old memories")
             
         # Save state periodically
         if self.cycle_count % 100 == 0:
+            logger.info(f"💾 Saving checkpoint at cycle {self.cycle_count}")
             await self._save_checkpoint()
             self.execution_tracker.save_execution_state()
+        elif self.cycle_count % 10 == 0:
+            logger.debug(f"Idle maintenance at cycle {self.cycle_count}")
     
     async def _save_checkpoint(self):
         """Save current state and memory."""
@@ -511,7 +597,13 @@ class CognitiveLoop:
     
     async def _use_brain(self, prompt: str) -> str:
         """Use the brain file interface for thinking."""
-        logger.debug("Using brain for thinking...")
+        # Parse the thinking request to get task info
+        try:
+            request_data = json.loads(prompt)
+            task = request_data.get("signature", {}).get("task", "thinking")
+            logger.info(f"🧠 Brain thinking: {task}")
+        except:
+            logger.info("🧠 Brain thinking...")
         
         # Escape markers
         escaped_prompt = prompt.replace("<<<THOUGHT_COMPLETE>>>", "[THOUGHT_COMPLETE]")
@@ -535,6 +627,21 @@ class CognitiveLoop:
                 else:
                     response = content.split("<<<THOUGHT_COMPLETE>>>")[0].strip()
                     
+                # Log brain response summary
+                try:
+                    response_data = json.loads(response)
+                    if "output_values" in response_data:
+                        # Show key output from brain
+                        outputs = response_data["output_values"]
+                        if "reasoning" in outputs:
+                            reasoning = outputs["reasoning"][:100]
+                            logger.info(f"🧠 Brain reasoning: {reasoning}")
+                        elif "understanding" in outputs:
+                            understanding = outputs["understanding"][:100]  
+                            logger.info(f"🧠 Brain understanding: {understanding}")
+                except:
+                    logger.info("🧠 Brain response received")
+                    
                 # Reset brain
                 self.brain_file.write_text("Ready for thinking.")
                 
@@ -542,7 +649,7 @@ class CognitiveLoop:
                 
             wait_count += 1
             if wait_count % 100 == 0:
-                logger.warning(f"Waiting for brain response ({wait_count/100}s)")
+                logger.debug(f"⏳ Waiting for brain response ({wait_count/100:.1f}s)")
                 
             await asyncio.sleep(0.01)
     

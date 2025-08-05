@@ -23,7 +23,7 @@ class KnowledgeManager:
     """Manages all knowledge operations for the cognitive system."""
     
     def __init__(self, library_path: Path = Path("/grid/library"), 
-                 agent_type: str = 'base'):
+                 agent_type: str = 'general'):
         """Initialize knowledge manager.
         
         Args:

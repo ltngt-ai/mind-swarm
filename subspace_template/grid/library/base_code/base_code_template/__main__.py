@@ -10,7 +10,7 @@ import signal
 # Set up logging - only to stdout/stderr which will be captured by subspace
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format='%(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler()  # Only stdout, no file handler
     ]
@@ -18,6 +18,14 @@ logging.basicConfig(
 logger = logging.getLogger("agent")
 
 from .mind import AgentMind
+from .actions import action_registry
+from .memory_actions import register_memory_actions
+from .compute_actions import register_compute_actions
+
+# Register all actions
+register_memory_actions(action_registry)
+register_compute_actions(action_registry)
+logger.info(f"Registered actions: {action_registry._actions}")
 
 # Global variable for the mind instance
 mind_instance = None
@@ -32,6 +40,11 @@ async def main():
         print("ERROR: This must be run inside a Mind-Swarm sandbox")
         sys.exit(1)
     
+    # Session startup marker
+    agent_name = os.environ.get("AGENT_NAME", "unknown")
+    print("=" * 60)
+    print(f"🚀 NEW SESSION: {agent_name} starting...")
+    print("=" * 60)
     logger.info("Agent starting...")
     
     try:

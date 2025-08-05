@@ -12,7 +12,7 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 import traceback
 
-from .actions import Action, ActionResult, ActionStatus, Priority
+from .actions.base_actions import Action, ActionResult, ActionStatus, Priority
 from .memory import ObservationMemoryBlock
 
 logger = logging.getLogger("agent.compute_actions")

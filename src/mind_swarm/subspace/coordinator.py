@@ -648,7 +648,7 @@ class SubspaceCoordinator:
         
         # Give agents time to notice shutdown files and exit gracefully
         logger.info("Waiting for agents to shutdown gracefully...")
-        await asyncio.sleep(2)  # Give agents 2 seconds to exit cleanly
+        await asyncio.sleep(5)  # Give agents 5 seconds to notice shutdown files
         
         # Agents should now have exited gracefully
     

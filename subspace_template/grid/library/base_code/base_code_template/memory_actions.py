@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime
 
-from .actions import Action, ActionResult, ActionStatus, Priority
+from .actions.base_actions import Action, ActionResult, ActionStatus, Priority
 from .memory import (
     FileMemoryBlock, ObservationMemoryBlock, KnowledgeMemoryBlock,
     WorkingMemoryManager, ContentLoader, MemoryType
@@ -60,7 +60,8 @@ class FocusMemoryAction(Action):
             
             if existing_memory:
                 # Memory already loaded, just access it
-                content_loader = ContentLoader(context.get("home_dir", Path.home()).parent)
+                home_dir = context.get("home_dir", Path.home())
+                content_loader = ContentLoader(home_dir.parent)
                 content = content_loader.load_content(existing_memory)
                 
                 # Create observation about focusing

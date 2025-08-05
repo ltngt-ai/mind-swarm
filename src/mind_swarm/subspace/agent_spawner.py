@@ -39,9 +39,9 @@ class AgentProcess:
         
         logger.debug(f"Sent message {msg_id} to agent {self.name}")
     
-    async def terminate(self, timeout: float = 5.0):
-        """Terminate the agent process."""
-        logger.info(f"AgentProcess.terminate() called for {self.name}")
+    async def shutdown(self, timeout: float = 60.0):
+        """Shutdown the agent process gracefully."""
+        logger.info(f"AgentProcess.shutdown() called for {self.name}")
         
         if self.process.returncode is not None:
             logger.info(f"Agent {self.name} already terminated (returncode={self.process.returncode})")
@@ -68,29 +68,47 @@ class AgentProcess:
         
         # Give it another moment to stop after SIGTERM
         try:
-            await asyncio.wait_for(self.process.wait(), timeout=2.0)
+            await asyncio.wait_for(self.process.wait(), timeout=10.0)
             logger.info(f"Agent {self.name} stopped after SIGTERM")
         except asyncio.TimeoutError:
             # Force stop if still not responding
             logger.warning(f"Agent {self.name} still not responding, forcing stop...")
             
-            # Try to kill the entire process group
+            # Try multiple kill strategies for bubblewrap
             import os
             import signal
-            try:
-                # Get the process group id (should be same as pid due to start_new_session)
-                pgid = os.getpgid(self.process.pid)
-                logger.info(f"Force stopping process group {pgid} for agent {self.name}")
-                os.killpg(pgid, signal.SIGKILL)
-            except ProcessLookupError:
-                logger.info(f"Agent {self.name} already stopped")
-            except Exception as e:
-                logger.error(f"Error killing process group: {e}")
-                # Fall back to regular kill
-                self.process.kill()
+            import subprocess
+            
+            pid = self.process.pid
+            logger.info(f"Force stopping agent {self.name} (PID: {pid}) with multiple strategies")
             
             try:
-                await asyncio.wait_for(self.process.wait(), timeout=2.0)
+                # Strategy 1: Kill process group
+                pgid = os.getpgid(pid)
+                logger.info(f"Strategy 1: Killing process group {pgid}")
+                os.killpg(pgid, signal.SIGKILL)
+            except ProcessLookupError:
+                logger.info(f"Process {pid} already stopped")
+            except Exception as e:
+                logger.error(f"Strategy 1 failed: {e}")
+            
+            try:
+                # Strategy 2: Kill process tree using pkill
+                logger.info(f"Strategy 2: Using pkill to kill process tree")
+                subprocess.run(['pkill', '-KILL', '-P', str(pid)], check=False)
+                subprocess.run(['kill', '-KILL', str(pid)], check=False)
+            except Exception as e:
+                logger.error(f"Strategy 2 failed: {e}")
+            
+            try:
+                # Strategy 3: Regular asyncio kill
+                logger.info(f"Strategy 3: Using process.kill()")
+                self.process.kill()
+            except Exception as e:
+                logger.error(f"Strategy 3 failed: {e}")
+            
+            try:
+                await asyncio.wait_for(self.process.wait(), timeout=5.0)
                 logger.info(f"Agent {self.name} stopped (forced)")
             except asyncio.TimeoutError:
                 logger.error(f"Failed to stop agent {self.name} - process may be unresponsive")
@@ -113,6 +131,77 @@ class AgentProcess:
             if not task.done():
                 task.cancel()
                 # Don't wait for the tasks - they might be blocked on readline
+        logger.info(f"AgentProcess.shutdown() complete for {self.name}")
+    
+    async def terminate(self, timeout: float = 5.0):
+        """Terminate (kill) the agent process for deletion - no graceful shutdown."""
+        logger.info(f"AgentProcess.terminate() called for {self.name}")
+        
+        if self.process.returncode is not None:
+            logger.info(f"Agent {self.name} already terminated (returncode={self.process.returncode})")
+            return
+        
+        # For termination (deletion), we kill immediately without graceful shutdown
+        logger.info(f"Force terminating agent {self.name} (deletion)")
+        
+        # Use improved kill strategies for bubblewrap
+        import os
+        import signal
+        import subprocess
+        
+        pid = self.process.pid
+        logger.info(f"Force terminating agent {self.name} (PID: {pid}) with multiple strategies")
+        
+        try:
+            # Strategy 1: Kill process group
+            pgid = os.getpgid(pid)
+            logger.info(f"Strategy 1: Killing process group {pgid}")
+            os.killpg(pgid, signal.SIGKILL)
+        except ProcessLookupError:
+            logger.info(f"Process {pid} already stopped")
+        except Exception as e:
+            logger.error(f"Strategy 1 failed: {e}")
+        
+        try:
+            # Strategy 2: Kill process tree using pkill
+            logger.info(f"Strategy 2: Using pkill to kill process tree")
+            subprocess.run(['pkill', '-KILL', '-P', str(pid)], check=False)
+            subprocess.run(['kill', '-KILL', str(pid)], check=False)
+        except Exception as e:
+            logger.error(f"Strategy 2 failed: {e}")
+        
+        try:
+            # Strategy 3: Regular asyncio kill
+            logger.info(f"Strategy 3: Using process.kill()")
+            self.process.kill()
+        except Exception as e:
+            logger.error(f"Strategy 3 failed: {e}")
+        
+        try:
+            await asyncio.wait_for(self.process.wait(), timeout=5.0)
+            logger.info(f"Agent {self.name} terminated (forced)")
+        except asyncio.TimeoutError:
+            logger.error(f"Failed to terminate agent {self.name} - process may be unresponsive")
+        
+        # Close stdout/stderr to unblock any readers
+        if self.process.stdout:
+            try:
+                self.process.stdout.close()
+            except:
+                pass
+        if self.process.stderr:
+            try:
+                self.process.stderr.close()
+            except:
+                pass
+        
+        # Cancel log tasks
+        logger.info(f"Cancelling {len(self.log_tasks)} log tasks for {self.name}")
+        for task in self.log_tasks:
+            if not task.done():
+                task.cancel()
+                # Don't wait for the tasks - they might be blocked on readline
+        
         logger.info(f"AgentProcess.terminate() complete for {self.name}")
 
 
@@ -206,8 +295,40 @@ class AgentProcessManager:
         logger.info(f"Agent {name} process started with PID {process.pid}")
         return name
     
+    async def shutdown_agent(self, name: str, timeout: float = 60.0):
+        """Shutdown an agent process gracefully."""
+        logger.info(f"shutdown_agent called for {name} with timeout={timeout}")
+        
+        if name not in self.agents:
+            logger.warning(f"Agent {name} not found")
+            return
+        
+        logger.info(f"Shutting down agent {name}")
+        agent = self.agents[name]
+        
+        logger.info(f"Calling agent.shutdown() for {name}")
+        try:
+            await agent.shutdown(timeout)
+            logger.info(f"agent.shutdown() completed for {name}")
+        except Exception as e:
+            logger.error(f"Error shutting down agent {name}: {e}", exc_info=True)
+        
+        # Clean up
+        logger.info(f"Removing {name} from agents dict")
+        if name in self.agents:  # Double check in case monitor removed it
+            del self.agents[name]
+        
+        logger.info(f"Removing sandbox for {name}")
+        try:
+            self.subspace.remove_sandbox(name)
+            logger.info(f"Sandbox removed for {name}")
+        except Exception as e:
+            logger.error(f"Error removing sandbox for {name}: {e}")
+        
+        logger.info(f"shutdown_agent completed for {name}")
+    
     async def terminate_agent(self, name: str, timeout: float = 5.0):
-        """Terminate an agent process."""
+        """Terminate (delete) an agent process permanently."""
         logger.info(f"terminate_agent called for {name} with timeout={timeout}")
         
         if name not in self.agents:
@@ -317,7 +438,7 @@ class AgentProcessManager:
                 logger.error(f"Error in agent monitor: {e}")
                 await asyncio.sleep(5)
     
-    async def shutdown_all(self, timeout: float = 5.0):
+    async def shutdown_all(self, timeout: float = 60.0):
         """Shutdown all agents gracefully."""
         logger.info("Shutting down all agents...")
         
@@ -334,15 +455,15 @@ class AgentProcessManager:
         # Send shutdown to all agents
         shutdown_tasks = []
         for name in list(self.agents.keys()):
-            shutdown_tasks.append(self.terminate_agent(name, timeout))
+            shutdown_tasks.append(self.shutdown_agent(name, timeout))
         
         # Wait for all to complete
         if shutdown_tasks:
-            logger.info(f"Waiting for {len(shutdown_tasks)} agents to terminate...")
+            logger.info(f"Waiting for {len(shutdown_tasks)} agents to shutdown...")
             results = await asyncio.gather(*shutdown_tasks, return_exceptions=True)
             for i, result in enumerate(results):
                 if isinstance(result, Exception):
-                    logger.error(f"Error terminating agent: {result}")
+                    logger.error(f"Error shutting down agent: {result}")
         
         logger.info("All agents shut down")
     

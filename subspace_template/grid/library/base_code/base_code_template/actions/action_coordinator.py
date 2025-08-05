@@ -19,7 +19,7 @@ logger = logging.getLogger("agent.actions.coordinator")
 class ActionCoordinator:
     """Coordinates action loading, validation, and execution."""
     
-    def __init__(self, agent_type: str = 'base'):
+    def __init__(self, agent_type: str = 'general'):
         """Initialize action coordinator.
         
         Args:
@@ -136,7 +136,9 @@ class ActionCoordinator:
         # Create action instance
         action = self.action_registry.create_action(self.agent_type, action_name)
         if not action:
-            logger.error(f"Failed to create action: {action_name}")
+            available_actions = self.action_registry.get_actions_for_agent(self.agent_type)
+            logger.error(f"Failed to create action '{action_name}' for agent type '{self.agent_type}'")
+            logger.error(f"Available actions for {self.agent_type}: {', '.join(available_actions)}")
             return None
             
         # Apply parameter corrections if knowledge available

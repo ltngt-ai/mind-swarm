@@ -1,5 +1,6 @@
 """Base action classes and registry for the cognitive system."""
 
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
@@ -7,6 +8,8 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime
 
 from ..memory import MemoryBlock, Priority
+
+logger = logging.getLogger("agent.actions")
 
 
 class ActionStatus(Enum):
@@ -246,19 +249,3 @@ class ActionRegistry:
 
 # Global action registry
 action_registry = ActionRegistry()
-
-# Import and register compute actions
-try:
-    from ..compute_actions import register_compute_actions
-    register_compute_actions(action_registry)
-except ImportError:
-    # Compute actions not available
-    pass
-
-# Import and register memory actions
-try:
-    from ..memory_actions import register_memory_actions
-    register_memory_actions(action_registry)
-except ImportError:
-    # Memory actions not available
-    pass
