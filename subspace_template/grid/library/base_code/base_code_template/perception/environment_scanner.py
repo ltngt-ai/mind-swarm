@@ -213,14 +213,19 @@ class EnvironmentScanner:
                     )
                     memories.append(message_memory)
                     
-                    # Create observation with deduplication
-                    obs_memory = self._create_observation(
-                        "message_arrived",
-                        str(msg_file),
-                        Priority.HIGH
+                    # Create observation that references the message memory
+                    obs_memory = ObservationMemoryBlock(
+                        observation_type="new_message",
+                        path=message_memory.id,  # Reference to the message memory ID
+                        priority=Priority.HIGH,
+                        metadata={
+                            "message_id": message_memory.id,
+                            "from_agent": msg_data.get("from", "unknown"),
+                            "subject": msg_data.get("subject", "No subject"),
+                            "message_file": str(msg_file)
+                        }
                     )
-                    if obs_memory:
-                        memories.append(obs_memory)
+                    memories.append(obs_memory)
                     
                     self.processed_messages.add(str(msg_file))
                     
