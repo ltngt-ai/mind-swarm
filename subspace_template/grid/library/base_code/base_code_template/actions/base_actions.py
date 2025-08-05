@@ -1,8 +1,4 @@
-"""Action system for agent cognitive loops.
-
-Actions are the formal way agents decide what to do and execute their decisions.
-Each agent type can have its own set of available actions.
-"""
+"""Base action classes and registry for the cognitive system."""
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -10,7 +6,7 @@ from enum import Enum
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
-from .memory import MemoryBlock, Priority
+from ..memory import MemoryBlock, Priority
 
 
 class ActionStatus(Enum):
@@ -203,8 +199,6 @@ class WaitAction(Action):
             )
 
 
-
-
 # Action Registry
 
 class ActionRegistry:
@@ -245,13 +239,17 @@ class ActionRegistry:
             return action_class()
         return None
 
+    def get_actions_for_agent(self, agent_type: str) -> List[str]:
+        """Get list of action names for an agent type."""
+        return list(self.get_available_actions(agent_type).keys())
+
 
 # Global action registry
 action_registry = ActionRegistry()
 
 # Import and register compute actions
 try:
-    from .compute_actions import register_compute_actions
+    from ..compute_actions import register_compute_actions
     register_compute_actions(action_registry)
 except ImportError:
     # Compute actions not available
@@ -259,7 +257,7 @@ except ImportError:
 
 # Import and register memory actions
 try:
-    from .memory_actions import register_memory_actions
+    from ..memory_actions import register_memory_actions
     register_memory_actions(action_registry)
 except ImportError:
     # Memory actions not available

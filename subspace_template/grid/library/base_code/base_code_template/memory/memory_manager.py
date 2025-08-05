@@ -6,11 +6,13 @@ to filesystem content without loading the actual data until needed.
 
 from typing import List, Dict, Optional, Set, Any
 from datetime import datetime, timedelta
+from pathlib import Path
 import logging
 
 from .memory_blocks import (
     MemoryBlock, Priority, MemoryType,
-    FileMemoryBlock, MessageMemoryBlock, ObservationMemoryBlock
+    FileMemoryBlock, MessageMemoryBlock, ObservationMemoryBlock,
+    CycleStateMemoryBlock, KnowledgeMemoryBlock
 )
 
 logger = logging.getLogger("agent.memory")
@@ -221,3 +223,152 @@ class WorkingMemoryManager:
         # Add other types as needed
         
         return fields
+    
+    def restore_from_snapshot(self, snapshot: Dict[str, Any], knowledge_manager=None) -> bool:
+        """Restore memory state from a snapshot.
+        
+        Args:
+            snapshot: Snapshot data to restore from
+            knowledge_manager: Optional knowledge manager to reload ROM
+            
+        Returns:
+            True if successfully restored
+        """
+        try:
+            # Clear current memory
+            self.symbolic_memory.clear()
+            
+            # Restore configuration
+            if 'max_tokens' in snapshot:
+                self.max_tokens = snapshot['max_tokens']
+            if 'current_task_id' in snapshot:
+                self.current_task_id = snapshot['current_task_id']
+            if 'active_topics' in snapshot:
+                self.active_topics = set(snapshot['active_topics'])
+            
+            # Restore memories
+            memories = snapshot.get('memories', [])
+            logger.info(f"Restoring {len(memories)} memories from snapshot")
+            
+            cycle_state_found = False
+            
+            for mem_data in memories:
+                try:
+                    memory_type = MemoryType(mem_data.get('type', 'UNKNOWN'))
+                    
+                    if memory_type == MemoryType.CYCLE_STATE:
+                        # Restore cycle state
+                        memory = CycleStateMemoryBlock(
+                            cycle_state=mem_data.get('cycle_state', 'perceive'),
+                            cycle_count=mem_data.get('cycle_count', 0),
+                            current_observation=mem_data.get('current_observation'),
+                            current_orientation=mem_data.get('current_orientation'),
+                            current_actions=mem_data.get('current_actions'),
+                            confidence=mem_data.get('confidence', 1.0),
+                            priority=Priority[mem_data.get('priority', 'CRITICAL')]
+                        )
+                        cycle_state_found = True
+                        
+                    elif memory_type == MemoryType.FILE:
+                        memory = FileMemoryBlock(
+                            location=mem_data['location'],
+                            start_line=mem_data.get('start_line'),
+                            end_line=mem_data.get('end_line'),
+                            digest=mem_data.get('digest'),
+                            confidence=mem_data.get('confidence', 1.0),
+                            priority=Priority[mem_data.get('priority', 'MEDIUM')]
+                        )
+                        
+                    elif memory_type == MemoryType.MESSAGE:
+                        memory = MessageMemoryBlock(
+                            from_agent=mem_data['from_agent'],
+                            to_agent=mem_data['to_agent'],
+                            subject=mem_data.get('subject', ''),
+                            preview=mem_data.get('preview', ''),
+                            full_path=mem_data['full_path'],
+                            read=mem_data.get('read', False),
+                            confidence=mem_data.get('confidence', 1.0),
+                            priority=Priority[mem_data.get('priority', 'HIGH')]
+                        )
+                        
+                    elif memory_type == MemoryType.OBSERVATION:
+                        memory = ObservationMemoryBlock(
+                            observation_type=mem_data['observation_type'],
+                            path=mem_data.get('path', ''),
+                            description=mem_data['description'],
+                            confidence=mem_data.get('confidence', 1.0),
+                            priority=Priority[mem_data.get('priority', 'MEDIUM')]
+                        )
+                        
+                    elif memory_type == MemoryType.KNOWLEDGE:
+                        memory = KnowledgeMemoryBlock(
+                            topic=mem_data.get('topic', 'general'),
+                            location=mem_data.get('location', 'restored'),
+                            subtopic=mem_data.get('subtopic', ''),
+                            relevance_score=mem_data.get('relevance_score', 1.0),
+                            confidence=mem_data.get('confidence', 1.0),
+                            priority=Priority[mem_data.get('priority', 'MEDIUM')],
+                            metadata=mem_data.get('metadata', {})
+                        )
+                        
+                    else:
+                        # Skip unknown types
+                        logger.warning(f"Unknown memory type: {memory_type}")
+                        continue
+                    
+                    # Restore timestamps
+                    if 'timestamp' in mem_data:
+                        memory.timestamp = datetime.fromisoformat(mem_data['timestamp'])
+                    if 'expiry' in mem_data and mem_data['expiry']:
+                        memory.expiry = datetime.fromisoformat(mem_data['expiry'])
+                    
+                    # Add to memory
+                    self.add_memory(memory)
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to restore memory: {e}")
+                    continue
+            
+            # If no cycle state found, this will be handled by the cognitive loop
+            if not cycle_state_found:
+                logger.info("No cycle state found in snapshot")
+            
+            # Always reload ROM to ensure it's present
+            if knowledge_manager:
+                knowledge_manager.load_rom_into_memory(self)
+            
+            logger.info("Memory successfully restored from snapshot")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to restore memory from snapshot: {e}")
+            return False
+    
+    def load_from_snapshot_file(self, memory_dir: Path, knowledge_manager=None) -> bool:
+        """Load memory from a snapshot file.
+        
+        Args:
+            memory_dir: Directory containing memory snapshot
+            knowledge_manager: Optional knowledge manager to reload ROM
+            
+        Returns:
+            True if successfully loaded, False otherwise
+        """
+        import json
+        
+        memory_snapshot_file = memory_dir / "memory_snapshot.json"
+        
+        if not memory_snapshot_file.exists():
+            return False
+            
+        try:
+            # Load snapshot
+            with open(memory_snapshot_file, 'r') as f:
+                snapshot = json.load(f)
+                
+            # Restore from snapshot
+            return self.restore_from_snapshot(snapshot, knowledge_manager)
+            
+        except Exception as e:
+            logger.error(f"Failed to load memory from snapshot file: {e}")
+            return False
