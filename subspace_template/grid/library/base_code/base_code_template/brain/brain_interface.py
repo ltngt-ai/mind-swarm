@@ -16,6 +16,16 @@ from ..memory import (
     WorkingMemoryManager, MemorySelector, ContextBuilder,
     MessageMemoryBlock, ObservationMemoryBlock, MemoryType
 )
+# Import Protocol for type checking
+from typing import Protocol
+
+class MemoryManagerProtocol(Protocol):
+    """Protocol for memory manager compatibility."""
+    @property
+    def symbolic_memory(self) -> list:
+        ...
+    def mark_message_read(self, memory_id: str) -> None:
+        ...
 from ..actions import Action
 from ..utils import DateTimeEncoder, FileManager
 
@@ -150,7 +160,7 @@ class BrainInterface:
     def retrieve_memory_by_id(
         self, 
         memory_id: str, 
-        memory_manager: WorkingMemoryManager,
+        memory_manager: MemoryManagerProtocol,
         reasoning: str
     ) -> Optional[Dict[str, Any]]:
         """Retrieve a specific memory by ID and convert to observation format.
@@ -440,7 +450,7 @@ class MessageProcessor:
     def process_selected_message(
         self, 
         msg: MessageMemoryBlock, 
-        memory_manager: WorkingMemoryManager,
+        memory_manager: MemoryManagerProtocol,
         environment_scanner
     ) -> Optional[Dict[str, Any]]:
         """Process a selected message (mark as read, move to processed).

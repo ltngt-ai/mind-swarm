@@ -458,6 +458,11 @@ class MemorySystem:
         return self._memory_manager
     
     @property
+    def symbolic_memory(self) -> List[MemoryBlock]:
+        """Access symbolic memory directly (for backward compatibility)."""
+        return self._memory_manager.symbolic_memory
+    
+    @property
     def content_loader(self) -> ContentLoader:
         """Access underlying content loader (use carefully)."""
         return self._content_loader

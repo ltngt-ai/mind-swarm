@@ -116,7 +116,7 @@ class CognitiveLoop:
         # Try to restore memory from snapshot first
         if not self.memory_system.load_from_snapshot_file(self.memory_dir, self.knowledge_manager):
             # No snapshot - load ROM and init fresh
-            self.knowledge_manager.load_rom_into_memory(self.memory_system.memory_manager)
+            self.knowledge_manager.load_rom_into_memory(self.memory_system)
             self._init_cycle_state()
         
         # Load state
@@ -522,7 +522,7 @@ class CognitiveLoop:
                     break
                 
         # Process results into observations
-        self.action_coordinator.process_action_results(results, self.memory_system.memory_manager)
+        self.action_coordinator.process_action_results(results, self.memory_system)
         
         logger.info(f"⚡ Action phase complete: {successful_actions}/{len(results)} successful")
     
@@ -621,16 +621,16 @@ class CognitiveLoop:
         
         # Retrieve the selected memory
         observation = self.brain_interface.retrieve_memory_by_id(
-            memory_id, self.memory_system.memory_manager, reasoning
+            memory_id, self.memory_system, reasoning
         )
         
         # If it's a message that needs processing, handle it
         if observation and "message" in memory_id.lower():
             # Find the message memory block for processing
-            for memory in self.memory_system.memory_manager.symbolic_memory:
+            for memory in self.memory_system.symbolic_memory:
                 if memory.id == memory_id and isinstance(memory, MessageMemoryBlock):
                     processed_msg = self.message_processor.process_selected_message(
-                        memory, self.memory_system.memory_manager, self.environment_scanner
+                        memory, self.memory_system, self.environment_scanner
                     )
                     if processed_msg:
                         processed_msg["observe_reasoning"] = reasoning

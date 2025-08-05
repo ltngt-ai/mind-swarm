@@ -188,7 +188,7 @@ class AgentMind:
         while self.running:
             try:
                 # Get memory system summary
-                wm_summary = self.cognitive_loop.memory_manager.get_memory_stats()
+                wm_summary = self.cognitive_loop.memory_system.get_memory_stats()
                 
                 status = {
                     "name": self.name,
