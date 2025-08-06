@@ -4,9 +4,8 @@ This module provides clean abstractions for AI thinking operations,
 separating brain communication logic from cognitive orchestration.
 """
 
-from .brain_interface import BrainInterface, MessageProcessor
+from .brain_interface import BrainInterface
 
 __all__ = [
-    "BrainInterface",
-    "MessageProcessor"
+    "BrainInterface"
 ]

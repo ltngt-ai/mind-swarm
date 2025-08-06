@@ -6,12 +6,10 @@ from .memory_blocks import (
     FileMemoryBlock,
     StatusMemoryBlock,
     TaskMemoryBlock,
-    MessageMemoryBlock,
     KnowledgeMemoryBlock,
     ContextMemoryBlock,
     ObservationMemoryBlock,
     CycleStateMemoryBlock,
-    IdentityMemoryBlock,
 )
 from .memory_manager import WorkingMemoryManager
 from .content_loader import ContentLoader
@@ -27,12 +25,10 @@ __all__ = [
     "FileMemoryBlock",
     "StatusMemoryBlock",
     "TaskMemoryBlock",
-    "MessageMemoryBlock",
     "KnowledgeMemoryBlock",
     "ContextMemoryBlock",
     "ObservationMemoryBlock",
     "CycleStateMemoryBlock",
-    "IdentityMemoryBlock",
     # Core components (individual - for backward compatibility)
     "WorkingMemoryManager",
     "ContentLoader",

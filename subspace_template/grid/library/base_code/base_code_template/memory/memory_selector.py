@@ -16,7 +16,7 @@ from .memory_types import Priority, MemoryType
 from .memory_blocks import (
     MemoryBlock,
     TaskMemoryBlock, KnowledgeMemoryBlock, FileMemoryBlock,
-    MessageMemoryBlock, ObservationMemoryBlock
+    ObservationMemoryBlock
 )
 from .context_builder import ContextBuilder
 
@@ -108,11 +108,8 @@ class RelevanceScorer:
                     return 0.7
             return 0.4
             
-        elif isinstance(memory, MessageMemoryBlock):
-            # Unread messages are highly relevant
-            if not memory.read:
-                return 1.0
-            return 0.3
+        # No special handling for messages - they're just files
+        # The LLM can read the content and understand it's a message
             
         elif isinstance(memory, ObservationMemoryBlock):
             # Recent observations are important

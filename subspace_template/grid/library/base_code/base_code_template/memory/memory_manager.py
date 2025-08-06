@@ -11,7 +11,7 @@ import logging
 
 from .memory_blocks import (
     MemoryBlock, Priority, MemoryType,
-    FileMemoryBlock, MessageMemoryBlock, ObservationMemoryBlock,
+    FileMemoryBlock, ObservationMemoryBlock,
     CycleStateMemoryBlock, KnowledgeMemoryBlock
 )
 
@@ -94,17 +94,17 @@ class WorkingMemoryManager:
         cutoff = datetime.now() - timedelta(seconds=seconds)
         return [m for m in self.symbolic_memory if m.timestamp > cutoff]
     
-    def get_unread_messages(self) -> List[MessageMemoryBlock]:
-        """Get all unread messages."""
-        messages = self.get_memories_by_type(MemoryType.MESSAGE)
-        return [m for m in messages if isinstance(m, MessageMemoryBlock) and not m.read]
-    
-    def mark_message_read(self, message_id: str) -> None:
-        """Mark a message as read and lower its priority."""
-        memory = self.access_memory(message_id)
-        if memory and isinstance(memory, MessageMemoryBlock):
-            memory.read = True
-            memory.priority = Priority.MEDIUM
+    def mark_message_read(self, memory_id: str) -> None:
+        """Mark an observation as focused/read by lowering its priority.
+        
+        This is used when focusing on observations, especially message notifications.
+        """
+        memory = self.access_memory(memory_id)
+        if memory and isinstance(memory, ObservationMemoryBlock):
+            memory.metadata['focused'] = True
+            memory.metadata['focused_at'] = datetime.now().isoformat()
+            memory.priority = Priority.LOW
+            logger.debug(f"Marked observation {memory_id} as focused")
     
     def set_current_task(self, task_id: str) -> None:
         """Set the current active task."""
@@ -159,8 +159,7 @@ class WorkingMemoryManager:
             "by_type": type_counts,
             "by_priority": priority_counts,
             "current_task": self.current_task_id,
-            "active_topics": list(self.active_topics),
-            "unread_messages": len(self.get_unread_messages())
+            "active_topics": list(self.active_topics)
         }
     
     def create_snapshot(self) -> Dict[str, Any]:
@@ -198,15 +197,7 @@ class WorkingMemoryManager:
                 "end_line": memory.end_line,
                 "digest": memory.digest
             })
-        elif isinstance(memory, MessageMemoryBlock):
-            fields.update({
-                "from_agent": memory.from_agent,
-                "to_agent": memory.to_agent,
-                "subject": memory.subject,
-                "preview": memory.preview,
-                "full_path": memory.full_path,
-                "read": memory.read
-            })
+        # Removed MessageMemoryBlock handling - messages are now FileMemoryBlock
         elif isinstance(memory, ObservationMemoryBlock):
             fields.update({
                 "observation_type": memory.observation_type,
@@ -279,17 +270,10 @@ class WorkingMemoryManager:
                             priority=Priority[mem_data.get('priority', 'MEDIUM')]
                         )
                         
+                    # Skip MESSAGE type - messages are now FileMemoryBlock
                     elif memory_type == MemoryType.MESSAGE:
-                        memory = MessageMemoryBlock(
-                            from_agent=mem_data['from_agent'],
-                            to_agent=mem_data['to_agent'],
-                            subject=mem_data.get('subject', ''),
-                            preview=mem_data.get('preview', ''),
-                            full_path=mem_data['full_path'],
-                            read=mem_data.get('read', False),
-                            confidence=mem_data.get('confidence', 1.0),
-                            priority=Priority[mem_data.get('priority', 'HIGH')]
-                        )
+                        logger.debug("Skipping MESSAGE type - messages are now FileMemoryBlock")
+                        continue
                         
                     elif memory_type == MemoryType.OBSERVATION:
                         memory = ObservationMemoryBlock(

@@ -14,7 +14,7 @@ from typing import Dict, Any, Optional, List, Union
 
 from ..memory import (
     WorkingMemoryManager, MemorySelector, ContextBuilder,
-    MessageMemoryBlock, ObservationMemoryBlock, MemoryType
+    ObservationMemoryBlock, MemoryType, FileMemoryBlock, Priority
 )
 # Import Protocol for type checking
 from typing import Protocol
@@ -25,6 +25,8 @@ class MemoryManagerProtocol(Protocol):
     def symbolic_memory(self) -> list:
         ...
     def mark_message_read(self, memory_id: str) -> None:
+        ...
+    def remove_memory(self, memory_id: str) -> None:
         ...
 from ..actions import Action
 from ..utils import DateTimeEncoder, FileManager
@@ -65,13 +67,14 @@ class BrainInterface:
         """
         thinking_request = {
             "signature": {
-                "instruction": "Review your working memory and decide what deserves immediate attention. Look at timestamps, priorities, and your current situation. You can focus on any memory item by returning its ID, or return 'none' if no immediate focus is needed.",
+                "instruction": "Review your working memory and decide what deserves immediate attention. You can see a file with ID starting with 'file:memory:processed_observations' - its content shows observations you've already handled. Any observation whose memory_id appears in that content has ALREADY BEEN PROCESSED and should NOT be selected again. Instead, list those in obsolete_observations for cleanup. Select an OBSERVATION (ID starting with 'observation:') that is NOT in the processed observations list. If all observations are already processed, return 'none' for memory_id. For obsolete_observations, list any observation IDs that appear in the processed observations content or are duplicates.",
                 "inputs": {
                     "working_memory": "Your current symbolic memory with all observations, messages, tasks, and context"
                 },
                 "outputs": {
-                    "memory_id": "The exact memory ID to focus on (e.g. 'message:inbox:from-alice/urgent-request:abc123') or 'none'",
-                    "reasoning": "Why this memory deserves attention right now based on timestamps, priority, and context"
+                    "memory_id": "The exact memory ID to focus on (e.g. 'observation:personal:new_message/msg_123:abc') or 'none'",
+                    "reasoning": "Why this memory deserves attention right now",
+                    "obsolete_observations": "JSON array of observation IDs that are no longer relevant and can be removed, e.g. ['observation:personal:action_result/old_action:123', 'observation:personal:new_message/already_processed:456']"
                 },
                 "display_field": "reasoning"
             },
@@ -83,79 +86,76 @@ class BrainInterface:
         response = await self._use_brain(json.dumps(thinking_request, cls=DateTimeEncoder))
         return self._parse_memory_selection_response(response)
     
-    async def analyze_situation(self, observation: Dict[str, Any]) -> Dict[str, Any]:
+    async def analyze_situation(self, observation: Dict[str, Any], working_memory: str) -> Dict[str, Any]:
         """Use brain to analyze and orient to the situation.
         
         Args:
-            observation: The observation to analyze
+            observation: The observation from observe phase
+            working_memory: Current working memory context
             
         Returns:
             Orientation data including situation type, understanding, etc.
         """
         thinking_request = {
             "signature": {
-                "task": "What does this mean and how should I handle it?",
-                "description": "Understand the context and meaning of observations",
+                "instruction": "You have observed something that needs your attention. Review your working memory and the specific observation to understand what's happening and how to respond.",
                 "inputs": {
-                    "observations": "What was observed",
+                    "working_memory": "Your current working memory with all context",
+                    "observation": "The specific thing you observed that needs attention"
                 },
                 "outputs": {
-                    "situation_type": "What kind of situation this is",
-                    "understanding": "What I understand about the situation",
-                    "relevant_knowledge": "What knowledge or skills apply"
+                    "situation_type": "What kind of situation this is (e.g., 'message', 'task', 'file_change', 'status_update')",
+                    "understanding": "What you understand about this situation and what it means",
+                    "approach": "How you plan to approach handling this"
                 },
                 "display_field": "understanding"
             },
             "input_values": {
-                "observations": json.dumps(observation),
+                "working_memory": working_memory,
+                "observation": json.dumps(observation)
             },
             "request_id": f"orient_{int(time.time()*1000)}",
             "timestamp": datetime.now().isoformat()
         }
         
         response = await self._use_brain(json.dumps(thinking_request))
-        return self._parse_orientation_response(response, observation)
+        # Just return the raw response - no parsing needed
+        return json.loads(response)
     
     async def make_decision(
         self, 
-        orientation: Dict[str, Any], 
-        context: str
+        working_memory: str
     ) -> List[Dict[str, Any]]:
         """Use brain to decide on actions.
         
         Args:
-            orientation: Current situation understanding
-            context: Decision-making context from memory
+            working_memory: Full working memory context including orientation
             
         Returns:
             List of action specifications as dicts
         """
         thinking_request = {
             "signature": {
-                "task": "What actions should I take?",
-                "description": "Decide what actions to take based on the situation",
+                "instruction": "Review your working memory to understand the current situation. You should see an orientation file that explains what's happening. Based on this understanding and your available actions, decide what to do next.",
                 "inputs": {
-                    "situation": "Current situation and understanding",
-                    "working_memory": "Your memories including available actions",
-                    "goal": "What needs to be accomplished"
+                    "working_memory": "Your complete working memory including the recent orientation and available actions"
                 },
                 "outputs": {
-                    "actions": "JSON array of actions to take",
-                    "reasoning": "Why these actions make sense"
+                    "actions": "JSON array of actions to take, e.g. [{\"action\": \"respond\", \"params\": {\"message\": \"Hello\"}}]",
+                    "reasoning": "Why these actions make sense given the situation"
                 },
                 "display_field": "reasoning"
             },
             "input_values": {
-                "situation": orientation.get("reasoning", "Need to process this request"),
-                "working_memory": context,
-                "goal": orientation.get("content", "unknown request")
+                "working_memory": working_memory
             },
             "request_id": f"decide_{int(time.time()*1000)}",
             "timestamp": datetime.now().isoformat()
         }
         
         response = await self._use_brain(json.dumps(thinking_request))
-        return self._parse_action_decision_response(response)
+        # Just return the raw response - no parsing needed
+        return json.loads(response)
     
     def retrieve_memory_by_id(
         self, 
@@ -163,7 +163,10 @@ class BrainInterface:
         memory_manager: MemoryManagerProtocol,
         reasoning: str
     ) -> Optional[Dict[str, Any]]:
-        """Retrieve a specific memory by ID and convert to observation format.
+        """Retrieve a specific memory by ID and focus on it.
+        
+        For observations, this reads the referenced file.
+        For files, this reads the file content.
         
         Args:
             memory_id: The memory ID to retrieve
@@ -171,7 +174,7 @@ class BrainInterface:
             reasoning: Brain's reasoning for selecting this memory
             
         Returns:
-            Memory converted to observation format, or None if not found
+            Focused content as observation format, or None if not found
         """
         # Find the memory by ID
         memory_block = None
@@ -185,12 +188,15 @@ class BrainInterface:
             return None
         
         logger.info(f"🧠 Brain reasoning: {reasoning}")
+        logger.info(f"Retrieved memory type: {type(memory_block).__name__}, ID: {memory_id}")
         
         # Handle different memory types
-        if isinstance(memory_block, MessageMemoryBlock):
-            return self._process_message_memory(memory_block, reasoning)
-        elif isinstance(memory_block, ObservationMemoryBlock):
-            return self._convert_observation_memory(memory_block, reasoning)
+        if isinstance(memory_block, ObservationMemoryBlock):
+            logger.info(f"Processing ObservationMemoryBlock: {memory_block.observation_type}")
+            return self._focus_on_observation(memory_block, reasoning, memory_manager)
+        elif isinstance(memory_block, FileMemoryBlock):
+            logger.info(f"Processing FileMemoryBlock: {memory_block.location}")
+            return self._focus_on_file(memory_block, reasoning)
         else:
             # For other memory types, convert to observation format
             return {
@@ -202,6 +208,155 @@ class BrainInterface:
                 "timestamp": memory_block.timestamp.isoformat() if memory_block.timestamp else datetime.now().isoformat(),
                 "observe_reasoning": reasoning
             }
+    
+    def _focus_on_observation(
+        self, 
+        obs: ObservationMemoryBlock, 
+        reasoning: str,
+        memory_manager: MemoryManagerProtocol
+    ) -> Optional[Dict[str, Any]]:
+        """Focus on an observation by reading its referenced content.
+        
+        Args:
+            obs: Observation memory block
+            reasoning: Brain's reasoning for focusing
+            
+        Returns:
+            Content of the observation focus, or None if failed
+        """
+        try:
+            file_path = Path(obs.path)
+            
+            # Mark observation as focused
+            if not obs.metadata:
+                obs.metadata = {}
+            obs.metadata["focused"] = True
+            obs.metadata["focused_at"] = datetime.now().isoformat()
+            obs.priority = Priority.LOW  # Lower priority after being focused
+            
+            # Handle different observation types
+            logger.info(f"Focusing on observation type: {obs.observation_type}, path: {obs.path}")
+            if obs.observation_type == "new_message" and file_path.exists():
+                logger.info(f"Processing message file: {file_path}")
+                # Read message file
+                message_content = json.loads(file_path.read_text())
+                
+                # Move to processed folder
+                processed_dir = file_path.parent / "processed"
+                processed_dir.mkdir(exist_ok=True)
+                new_path = processed_dir / file_path.name
+                logger.info(f"Moving message from {file_path} to {new_path}")
+                file_path.rename(new_path)
+                
+                # Remove the observation from memory since message has been processed
+                memory_manager.remove_memory(obs.id)
+                logger.info(f"Removed processed message observation: {obs.id}")
+                
+                # Update the FileMemoryBlock to point to the new location
+                for memory in list(memory_manager.symbolic_memory):
+                    if (isinstance(memory, FileMemoryBlock) and 
+                        memory.location == str(file_path)):
+                        # Remove old reference
+                        memory_manager.remove_memory(memory.id)
+                        
+                        # Create new FileMemoryBlock with updated path
+                        updated_memory = FileMemoryBlock(
+                            location=str(new_path),
+                            priority=Priority.LOW,  # Lower priority since processed
+                            confidence=memory.confidence,
+                            metadata=memory.metadata
+                        )
+                        memory_manager.add_memory(updated_memory)
+                        logger.info(f"Updated message file location: {file_path} -> {new_path}")
+                
+                # Return message as observation
+                return {
+                    "type": message_content.get("type", "MESSAGE"),
+                    "from": message_content.get("from", "unknown"),
+                    "to": message_content.get("to", "me"),
+                    "subject": message_content.get("subject", "No subject"),
+                    "content": message_content.get("content", ""),
+                    "timestamp": message_content.get("timestamp", datetime.now().isoformat()),
+                    "observe_reasoning": reasoning,
+                    "file_moved_to": str(new_path)
+                }
+            
+            elif file_path.exists():
+                # Generic file reading
+                content = file_path.read_text()
+                return {
+                    "type": "FILE_FOCUS",
+                    "id": obs.id,  # Include the memory ID
+                    "observation_type": obs.observation_type,
+                    "path": str(file_path),
+                    "content": content,
+                    "metadata": obs.metadata,
+                    "observe_reasoning": reasoning
+                }
+            else:
+                # Observation without file (e.g., status changes)
+                return {
+                    "type": "OBSERVATION_FOCUS",
+                    "id": obs.id,  # Include the memory ID
+                    "observation_type": obs.observation_type,
+                    "path": obs.path,
+                    "metadata": obs.metadata,
+                    "observe_reasoning": reasoning
+                }
+                
+        except Exception as e:
+            logger.error(f"Error focusing on observation: {e}", exc_info=True)
+            return None
+    
+    def _focus_on_file(
+        self, 
+        file_block: FileMemoryBlock, 
+        reasoning: str
+    ) -> Optional[Dict[str, Any]]:
+        """Focus on a file by reading its content.
+        
+        Args:
+            file_block: File memory block
+            reasoning: Brain's reasoning for focusing
+            
+        Returns:
+            File content as observation, or None if failed
+        """
+        try:
+            file_path = Path(file_block.location)
+            
+            if not file_path.exists():
+                logger.error(f"File not found: {file_path}")
+                return None
+                
+            content = file_path.read_text()
+            
+            # Check if it's a message file
+            if file_block.metadata.get("file_type") == "message":
+                try:
+                    message_data = json.loads(content)
+                    return {
+                        "type": message_data.get("type", "MESSAGE"),
+                        "from": message_data.get("from", "unknown"),
+                        "content": message_data.get("content", ""),
+                        "file_path": str(file_path),
+                        "observe_reasoning": reasoning
+                    }
+                except:
+                    pass
+            
+            # Return generic file content
+            return {
+                "type": "FILE_FOCUS",
+                "file_path": str(file_path),
+                "content": content,
+                "metadata": file_block.metadata,
+                "observe_reasoning": reasoning
+            }
+                
+        except Exception as e:
+            logger.error(f"Error focusing on file: {e}", exc_info=True)
+            return None
     
     # === PRIVATE BRAIN COMMUNICATION METHODS ===
     
@@ -291,12 +446,28 @@ class BrainInterface:
             logger.debug(f"🧠 Brain output_values: {output_values}")
             logger.info(f"🧠 Brain selected: '{memory_id}' - {reasoning}")
             
+            # Parse obsolete observations first (before checking memory_id)
+            obsolete_json = output_values.get("obsolete_observations", "[]")
+            try:
+                if isinstance(obsolete_json, str):
+                    obsolete_observations = json.loads(obsolete_json)
+                else:
+                    obsolete_observations = obsolete_json
+            except:
+                obsolete_observations = []
+            
+            # Even if no focus is needed, we still return obsolete observations
             if memory_id == "none" or not memory_id:
-                return None
+                return {
+                    "memory_id": None,
+                    "reasoning": reasoning,
+                    "obsolete_observations": obsolete_observations
+                }
             
             return {
                 "memory_id": memory_id,
-                "reasoning": reasoning
+                "reasoning": reasoning,
+                "obsolete_observations": obsolete_observations
             }
                 
         except Exception as e:
@@ -386,32 +557,6 @@ class BrainInterface:
     
     # === MEMORY CONVERSION METHODS ===
     
-    def _process_message_memory(
-        self, 
-        msg: MessageMemoryBlock, 
-        reasoning: str
-    ) -> Optional[Dict[str, Any]]:
-        """Process a selected message memory.
-        
-        Args:
-            msg: Message memory block to process
-            reasoning: Brain's reasoning for selecting this message
-            
-        Returns:
-            Processed message as dict, or None if failed
-        """
-        try:
-            msg_path = Path(msg.full_path)
-            if msg_path.exists():
-                message = json.loads(msg_path.read_text())
-                message["observe_reasoning"] = reasoning
-                return message
-                
-        except Exception as e:
-            logger.error(f"Error processing message: {e}")
-            
-        return None
-    
     def _convert_observation_memory(
         self, 
         obs: ObservationMemoryBlock, 
@@ -436,54 +581,3 @@ class BrainInterface:
             "id": obs.id,
             "observe_reasoning": reasoning
         }
-
-
-class MessageProcessor:
-    """Helper class for processing messages selected by the brain."""
-    
-    def __init__(self, inbox_dir: Path, file_manager: FileManager):
-        """Initialize message processor.
-        
-        Args:
-            inbox_dir: Path to agent's inbox directory
-            file_manager: File manager instance
-        """
-        self.inbox_dir = inbox_dir
-        self.file_manager = file_manager
-    
-    def process_selected_message(
-        self, 
-        msg: MessageMemoryBlock, 
-        memory_manager: MemoryManagerProtocol,
-        environment_scanner
-    ) -> Optional[Dict[str, Any]]:
-        """Process a selected message (mark as read, move to processed).
-        
-        Args:
-            msg: Message memory block to process
-            memory_manager: Memory manager instance
-            environment_scanner: Environment scanner instance
-            
-        Returns:
-            Processed message data, or None if failed
-        """
-        try:
-            msg_path = Path(msg.full_path)
-            if msg_path.exists():
-                message = json.loads(msg_path.read_text())
-                
-                # Mark as read
-                memory_manager.mark_message_read(msg.id)
-                environment_scanner.mark_message_processed(str(msg_path))
-                
-                # Move to processed
-                processed_dir = self.inbox_dir / "processed"
-                self.file_manager.ensure_directory(processed_dir)
-                msg_path.rename(processed_dir / msg_path.name)
-                
-                return message
-                
-        except Exception as e:
-            logger.error(f"Error processing message: {e}")
-            
-        return None

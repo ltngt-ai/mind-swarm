@@ -15,7 +15,7 @@ import logging
 from ..memory.memory_types import Priority, MemoryType
 from ..memory.memory_blocks import (
     MemoryBlock,
-    FileMemoryBlock, MessageMemoryBlock, ObservationMemoryBlock,
+    FileMemoryBlock, ObservationMemoryBlock,
     KnowledgeMemoryBlock, StatusMemoryBlock
 )
 from ..memory.unified_memory_id import UnifiedMemoryID
@@ -174,7 +174,8 @@ class EnvironmentScanner:
         
         # Log summary of what was found
         if memories:
-            message_count = len([m for m in memories if isinstance(m, MessageMemoryBlock)])
+            # Count message files by checking metadata
+            message_count = len([m for m in memories if isinstance(m, FileMemoryBlock) and m.metadata.get('file_type') == 'message'])
             file_count = len([m for m in memories if isinstance(m, FileMemoryBlock)])
             obs_count = len([m for m in memories if isinstance(m, ObservationMemoryBlock)])
             logger.debug(f"Scan details: {message_count} messages, {file_count} files, {obs_count} observations")
@@ -197,32 +198,32 @@ class EnvironmentScanner:
                     continue
                 
                 try:
-                    # Read message
+                    # Read message header for metadata
                     msg_data = json.loads(msg_file.read_text())
                     
-                    # Create message memory
-                    message_memory = MessageMemoryBlock(
-                        from_agent=msg_data.get("from", "unknown"),
-                        to_agent=msg_data.get("to", "me"),
-                        subject=msg_data.get("subject", "No subject"),
-                        preview=msg_data.get("content", "")[:100] + "...",
-                        full_path=str(msg_file),
-                        read=False,
+                    # Create file memory for the message file
+                    file_memory = FileMemoryBlock(
+                        location=str(msg_file),
                         priority=Priority.HIGH,
-                        confidence=1.0
+                        confidence=1.0,
+                        metadata={
+                            "file_type": "message",
+                            "from_agent": msg_data.get("from", "unknown"),
+                            "to_agent": msg_data.get("to", "me"),
+                            "subject": msg_data.get("subject", "No subject")
+                        }
                     )
-                    memories.append(message_memory)
+                    memories.append(file_memory)
                     
-                    # Create observation that references the message memory
+                    # Create observation pointing to the message file
                     obs_memory = ObservationMemoryBlock(
                         observation_type="new_message",
-                        path=message_memory.id,  # Reference to the message memory ID
+                        path=str(msg_file),  # Direct path to the file
                         priority=Priority.HIGH,
                         metadata={
-                            "message_id": message_memory.id,
                             "from_agent": msg_data.get("from", "unknown"),
                             "subject": msg_data.get("subject", "No subject"),
-                            "message_file": str(msg_file)
+                            "preview": msg_data.get("content", "")[:100] + "..."
                         }
                     )
                     memories.append(obs_memory)

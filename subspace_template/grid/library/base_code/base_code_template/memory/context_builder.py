@@ -12,7 +12,7 @@ import logging
 from .memory_types import MemoryType, Priority
 from .memory_blocks import (
     MemoryBlock,
-    FileMemoryBlock, MessageMemoryBlock, TaskMemoryBlock,
+    FileMemoryBlock, TaskMemoryBlock,
     KnowledgeMemoryBlock, ObservationMemoryBlock
 )
 from .content_loader import ContentLoader
@@ -83,10 +83,11 @@ class ContextBuilder:
                     essential_meta = {}
                     if isinstance(memory, FileMemoryBlock) and memory.location != "<BOOT_ROM>":
                         essential_meta["loc"] = memory.location
-                    elif isinstance(memory, MessageMemoryBlock):
-                        essential_meta["from"] = memory.from_agent
-                        if not memory.read:
-                            essential_meta["unread"] = True
+                        # Check if it's a message file
+                        if memory.metadata.get('file_type') == 'message':
+                            essential_meta["from"] = memory.metadata.get('from_agent', 'unknown')
+                            if not memory.metadata.get('read', False):
+                                essential_meta["unread"] = True
                     elif isinstance(memory, TaskMemoryBlock):
                         essential_meta["status"] = memory.status
                     
@@ -173,9 +174,11 @@ class ContextBuilder:
                     lines.append(f"\n--- File: {memory.location} ---")
                     if memory.start_line:
                         lines.append(f"Lines {memory.start_line}-{memory.end_line or 'end'}")
-                elif isinstance(memory, MessageMemoryBlock):
-                    status = "UNREAD" if not memory.read else "READ"
-                    lines.append(f"\n--- Message [{status}] ---")
+                elif isinstance(memory, FileMemoryBlock) and memory.metadata.get('file_type') == 'message':
+                    status = "UNREAD" if not memory.metadata.get('read', False) else "READ"
+                    from_agent = memory.metadata.get('from_agent', 'unknown')
+                    subject = memory.metadata.get('subject', 'No subject')
+                    lines.append(f"\n--- Message [{status}] from {from_agent}: {subject} ---")
                 elif isinstance(memory, TaskMemoryBlock):
                     lines.append(f"\n--- Task: {memory.task_id} [{memory.status}] ---")
                 elif isinstance(memory, ObservationMemoryBlock):
@@ -232,14 +235,15 @@ class ContextBuilder:
                     lines.append(f"- {memory.observation_type}: {memory.path}")
             lines.append("")
         
-        # Messages
-        msg_memories = [m for m in memories if m.type == MemoryType.MESSAGE]
-        unread = [m for m in msg_memories if isinstance(m, MessageMemoryBlock) and not m.read]
+        # Messages (now FileMemoryBlock with message metadata)
+        msg_memories = [m for m in memories if isinstance(m, FileMemoryBlock) and m.metadata.get('file_type') == 'message']
+        unread = [m for m in msg_memories if not m.metadata.get('read', False)]
         if unread:
             lines.append(f"I have {len(unread)} unread messages:")
             for memory in unread[:3]:  # First 3
-                if isinstance(memory, MessageMemoryBlock):
-                    lines.append(f"- From {memory.from_agent}: {memory.subject}")
+                from_agent = memory.metadata.get('from_agent', 'unknown')
+                subject = memory.metadata.get('subject', 'No subject')
+                lines.append(f"- From {from_agent}: {subject}")
             if len(unread) > 3:
                 lines.append(f"- ...and {len(unread) - 3} more")
             lines.append("")
@@ -278,10 +282,11 @@ class ContextBuilder:
             if memory.project:
                 metadata["project"] = memory.project
                 
-        elif isinstance(memory, MessageMemoryBlock):
-            metadata["from"] = memory.from_agent
-            metadata["to"] = memory.to_agent
-            metadata["read"] = memory.read
+        # Check if FileMemoryBlock is a message
+        elif isinstance(memory, FileMemoryBlock) and memory.metadata.get('file_type') == 'message':
+            metadata["from"] = memory.metadata.get('from_agent', 'unknown')
+            metadata["to"] = memory.metadata.get('to_agent', 'me')
+            metadata["read"] = memory.metadata.get('read', False)
             
         elif isinstance(memory, KnowledgeMemoryBlock):
             metadata["topic"] = memory.topic

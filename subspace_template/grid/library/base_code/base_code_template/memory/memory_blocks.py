@@ -157,43 +157,7 @@ class TaskMemoryBlock(MemoryBlock):
             self.dependencies = []
 
 
-@dataclass
-class MessageMemoryBlock(MemoryBlock):
-    """Inter-agent messages."""
-    from_agent: str
-    to_agent: str
-    subject: str
-    preview: str
-    full_path: str
-    read: bool = False
-    confidence: float = 1.0
-    priority: Priority = Priority.MEDIUM
-    timestamp: Optional[datetime] = None
-    expiry: Optional[datetime] = None
-    pinned: bool = False
-    metadata: Optional[Dict[str, Any]] = None
-    
-    def __post_init__(self):
-        """Initialize base class and set type."""
-        super().__init__(
-            confidence=self.confidence,
-            priority=self.priority if self.read else Priority.HIGH,
-            timestamp=self.timestamp,
-            expiry=self.expiry,
-            metadata=self.metadata
-        )
-        self.type = MemoryType.MESSAGE
-        
-        # Create semantic path from sender and subject
-        semantic_path = f"from-{self.from_agent}/{self.subject.lower().replace(' ', '-')}"
-        
-        # Determine namespace based on path
-        namespace = 'inbox' if '/inbox/' in self.full_path else 'outbox'
-        
-        # Create ID with content hash based on full message info
-        content = f"{self.from_agent}:{self.to_agent}:{self.subject}:{self.preview}"
-        self.id = UnifiedMemoryID.create(MemoryType.MESSAGE, namespace, semantic_path, content)
-
+# MessageMemoryBlock removed - messages are now FileMemoryBlock with metadata
 
 @dataclass
 class KnowledgeMemoryBlock(MemoryBlock):
@@ -309,7 +273,8 @@ class CycleStateMemoryBlock(MemoryBlock):
     cycle_state: str  # Current state: perceive, observe, orient, decide, act
     cycle_count: int
     current_observation: Optional[Dict[str, Any]] = None
-    current_orientation: Optional[Dict[str, Any]] = None
+    current_orientation: Optional[Dict[str, Any]] = None  # Deprecated - use current_orientation_id
+    current_orientation_id: Optional[str] = None  # Memory ID of orientation file
     current_actions: Optional[List[Dict[str, Any]]] = None
     last_observe_time: Optional[datetime] = None  # Track when observe last ran
     confidence: float = 1.0
@@ -335,37 +300,4 @@ class CycleStateMemoryBlock(MemoryBlock):
         self.id = UnifiedMemoryID.create(MemoryType.CYCLE_STATE, 'system', 'current')
 
 
-@dataclass
-class IdentityMemoryBlock(MemoryBlock):
-    """Agent identity and vital statistics - always included in working memory."""
-    name: str
-    agent_type: str
-    model: str
-    max_context_length: int
-    provider: str
-    created_at: str  # ISO timestamp
-    capabilities: Optional[List[str]] = None
-    confidence: float = 1.0
-    priority: Priority = Priority.LOW  # Background identity, not actionable focus
-    timestamp: Optional[datetime] = None
-    expiry: Optional[datetime] = None
-    pinned: bool = False
-    metadata: Optional[Dict[str, Any]] = None
-    
-    def __post_init__(self):
-        """Initialize base class and set type."""
-        super().__init__(
-            confidence=self.confidence,
-            priority=self.priority,
-            timestamp=self.timestamp,
-            expiry=self.expiry,
-            metadata=self.metadata,
-            pinned=self.pinned
-        )
-        self.type = MemoryType.IDENTITY
-        
-        # Identity is a singleton in system namespace
-        self.id = UnifiedMemoryID.create(MemoryType.IDENTITY, 'system', 'self')
-        
-        if self.capabilities is None:
-            self.capabilities = []
+# IdentityMemoryBlock removed - use pinned FileMemoryBlock for identity.json instead

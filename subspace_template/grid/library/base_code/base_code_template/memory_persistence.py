@@ -12,7 +12,7 @@ from datetime import datetime
 
 from .memory import (
     WorkingMemoryManager, Priority, MemoryType,
-    FileMemoryBlock, MessageMemoryBlock, ObservationMemoryBlock,
+    FileMemoryBlock, ObservationMemoryBlock,
     CycleStateMemoryBlock, KnowledgeMemoryBlock
 )
 
@@ -166,17 +166,9 @@ class MemoryPersistence:
                     )
                     
                 elif memory_type == MemoryType.MESSAGE:
-                    memory = MessageMemoryBlock(
-                        from_agent=mem_data['from_agent'],
-                        to_agent=mem_data['to_agent'],
-                        subject=mem_data.get('subject', ''),
-                        preview=mem_data.get('preview', ''),
-                        full_path=mem_data['full_path'],
-                        read=mem_data.get('read', False),
-                        confidence=mem_data.get('confidence', 1.0),
-                        priority=Priority[mem_data.get('priority', 'HIGH')],
-                        pinned=mem_data.get('pinned', False)
-                    )
+                    # Skip MESSAGE type - messages are now FileMemoryBlock
+                    logger.debug("Skipping MESSAGE type - messages are now FileMemoryBlock")
+                    continue
                     
                 elif memory_type == MemoryType.OBSERVATION:
                     memory = ObservationMemoryBlock(

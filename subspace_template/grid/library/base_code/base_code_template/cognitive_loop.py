@@ -14,7 +14,7 @@ from datetime import datetime
 # Import supporting modules
 from .memory import (
     MemorySystem,
-    ObservationMemoryBlock, MessageMemoryBlock, CycleStateMemoryBlock,
+    ObservationMemoryBlock, CycleStateMemoryBlock,
     KnowledgeMemoryBlock, FileMemoryBlock,
     Priority, MemoryType
 )
@@ -23,7 +23,7 @@ from .knowledge import KnowledgeManager
 from .state import AgentStateManager, ExecutionStateTracker
 from .actions import ActionCoordinator
 from .utils import DateTimeEncoder, CognitiveUtils, FileManager
-from .brain import BrainInterface, MessageProcessor
+from .brain import BrainInterface
 
 logger = logging.getLogger("agent.cognitive")
 
@@ -105,7 +105,6 @@ class CognitiveLoop:
         
         # Brain interface
         self.brain_interface = BrainInterface(self.brain_file, self.agent_id)
-        self.message_processor = MessageProcessor(self.inbox_dir, self.file_manager)
     
     def _initialize_systems(self):
         """Initialize all systems and load initial data."""
@@ -127,6 +126,25 @@ class CognitiveLoop:
         
         # Load execution state
         self.execution_tracker.load_execution_state()
+        
+        # Add identity to memory (pinned so always visible)
+        self._init_identity_memory()
+    
+    def _init_identity_memory(self):
+        """Add agent identity file to working memory as pinned."""
+        identity_file = self.home / "identity.json"
+        if identity_file.exists():
+            identity_memory = FileMemoryBlock(
+                location=str(identity_file),
+                priority=Priority.LOW,  # Low priority since it's pinned
+                confidence=1.0,
+                pinned=True,  # Always in working memory
+                metadata={"file_type": "identity", "description": "My identity and configuration"}
+            )
+            self.memory_system.add_memory(identity_memory)
+            logger.info(f"Added identity.json to pinned memory")
+        else:
+            logger.warning(f"No identity.json file found at {identity_file}")
     
     def _init_cycle_state(self):
         """Initialize a new cycle state."""
@@ -282,9 +300,11 @@ class CognitiveLoop:
                     if hasattr(obs, 'observation_type'):
                         # ObservationMemoryBlock
                         high_priority_items.append(f"{obs.observation_type}: {obs.path[:100]}")
-                    elif hasattr(obs, 'from_agent'):
-                        # MessageMemoryBlock
-                        high_priority_items.append(f"message from {obs.from_agent}: {obs.subject[:100]}")
+                    elif isinstance(obs, FileMemoryBlock) and obs.metadata.get('file_type') == 'message':
+                        # FileMemoryBlock representing a message
+                        from_agent = obs.metadata.get('from_agent', 'unknown')
+                        subject = obs.metadata.get('subject', 'No subject')
+                        high_priority_items.append(f"message from {from_agent}: {subject[:100]}")
                     else:
                         # Other memory block types
                         high_priority_items.append(f"{obs.type.name if hasattr(obs, 'type') else 'unknown'}: {str(obs)[:100]}")
@@ -307,6 +327,12 @@ class CognitiveLoop:
             current_task="Deciding what to focus on",
             selection_strategy="balanced"
         )
+        
+        # Log what's in the context (check if processed_observations.json is included)
+        if "processed_observations.json" in memory_context:
+            logger.info("✓ processed_observations.json is in working memory")
+        else:
+            logger.warning("✗ processed_observations.json NOT in working memory")
         
         # Let the AI brain see everything and decide what to focus on
         observation = await self._select_focus_from_memory(memory_context)
@@ -337,44 +363,88 @@ class CognitiveLoop:
             return
         
         
+        # Build working memory context for orientation
+        working_memory = self.memory_system.build_context(
+            max_tokens=self.max_context_tokens // 2,
+            current_task="Understanding the current situation",
+            selection_strategy="balanced"
+        )
+        
         # Use brain to understand the situation
         logger.info("🧠 Analyzing situation and understanding context...")
-        orientation = await self.brain_interface.analyze_situation(observation)
+        orientation_response = await self.brain_interface.analyze_situation(observation, working_memory)
         
-        # Log what we understood
-        task_type = orientation.get("task_type", "unknown")
-        understanding = orientation.get("understanding", "")
-        logger.info(f"🧠 Understanding: {task_type}")
-        if understanding:
-            logger.info(f"  💭 {understanding[:200]}")
+        # Write the raw orientation response to a file
+        orientations_dir = self.memory_dir / "orientations"
+        self.file_manager.ensure_directory(orientations_dir)
         
-        # Update cycle state with orientation
-        self._update_cycle_state(current_orientation=orientation)
+        timestamp = datetime.now()
+        orientation_file = orientations_dir / f"orient_{timestamp.strftime('%Y%m%d_%H%M%S')}_{self.cycle_count}.json"
+        
+        # Write orientation to file
+        with open(orientation_file, 'w') as f:
+            json.dump(orientation_response, f, indent=2)
+        
+        # Create FileMemoryBlock for the orientation
+        orientation_memory = FileMemoryBlock(
+            location=str(orientation_file),
+            priority=Priority.HIGH,
+            confidence=1.0,
+            metadata={"file_type": "orientation"}
+        )
+        
+        # Add to working memory
+        self.memory_system.add_memory(orientation_memory)
+        logger.info(f"💭 Orientation stored: {orientation_file.name}")
+        
+        # Store just the file reference in cycle state
+        self._update_cycle_state(current_orientation_id=orientation_memory.id)
     
     async def decide(self) -> None:
         """DECIDE - Choose actions based on orientation."""
         logger.info("=== DECIDE PHASE ===")
         
-        # Get current orientation from cycle state
+        # Get orientation ID from cycle state
         cycle_state = self._get_cycle_state()
-        orientation = cycle_state.current_orientation if cycle_state else None
+        orientation_id = getattr(cycle_state, 'current_orientation_id', None)
         
-        if not orientation:
-            logger.warning("No orientation found in cycle state, returning to perceive")
+        if not orientation_id:
+            logger.warning("No orientation ID found in cycle state, returning to perceive")
             return
         
-        # Build decision context
-        decision_context = await self._build_decision_context(orientation)
+        # Build decision context - this will include the orientation file reference
+        decision_context = self.memory_system.build_context(
+            max_tokens=self.max_context_tokens // 2,
+            current_task="Deciding on actions",
+            selection_strategy="balanced"
+        )
         
         # Use brain to decide on actions
         logger.info("🤔 Making decision based on situation...")
-        action_specs = await self.brain_interface.make_decision(orientation, decision_context)
+        # The brain will see the orientation file in working memory and can read it
+        decision_response = await self.brain_interface.make_decision(decision_context)
+        
+        # Extract actions from the response
+        output_values = decision_response.get("output_values", {})
+        actions_json = output_values.get("actions", "[]")
+        
+        # Parse the actions JSON string
+        try:
+            if isinstance(actions_json, str):
+                action_specs = json.loads(actions_json)
+            else:
+                action_specs = actions_json
+        except:
+            logger.error("Failed to parse actions from decision")
+            action_specs = []
         
         # Convert action specs to Action objects
         actions = []
         for spec in action_specs:
             action = self.action_coordinator.prepare_action(
-                spec["name"], spec.get("params", {}), self.knowledge_manager
+                spec.get("action", spec.get("name", "")), 
+                spec.get("params", {}), 
+                self.knowledge_manager
             )
             if action:
                 actions.append(action)
@@ -461,16 +531,21 @@ class CognitiveLoop:
             logger.warning("No cycle state found, returning to perceive")
             return
             
-        observation = cycle_state.current_observation
-        orientation = cycle_state.current_orientation
         action_data = cycle_state.current_actions or []
         
-        if not all([observation, orientation, action_data]):
-            logger.warning("Missing data for action execution, returning to perceive")
+        if not action_data:
+            logger.warning("No actions to execute, returning to perceive")
             return
         
-        # Build execution context
-        context = self._build_execution_context(observation, orientation)
+        # Build execution context with working memory
+        context = {
+            "cognitive_loop": self,
+            "memory_system": self.memory_system,
+            "agent_id": self.agent_id,
+            "home_dir": self.home,
+            "outbox_dir": self.outbox_dir,
+            "memory_dir": self.memory_dir
+        }
         
         # Recreate action objects
         actions = []
@@ -618,27 +693,81 @@ class CognitiveLoop:
             
         memory_id = selection_result["memory_id"]
         reasoning = selection_result["reasoning"]
+        obsolete_observations = selection_result.get("obsolete_observations", [])
+        
+        # Remove obsolete observations from memory
+        if obsolete_observations:
+            logger.info(f"Removing {len(obsolete_observations)} obsolete observations:")
+            for obs_id in obsolete_observations:
+                try:
+                    self.memory_system.remove_memory(obs_id)
+                    logger.info(f"  - Removed: {obs_id}")
+                except Exception as e:
+                    logger.warning(f"  - Failed to remove {obs_id}: {e}")
         
         # Retrieve the selected memory
         observation = self.brain_interface.retrieve_memory_by_id(
             memory_id, self.memory_system, reasoning
         )
         
-        # If it's a message that needs processing, handle it
-        if observation and "message" in memory_id.lower():
-            # Find the message memory block for processing
-            for memory in self.memory_system.symbolic_memory:
-                if memory.id == memory_id and isinstance(memory, MessageMemoryBlock):
-                    processed_msg = self.message_processor.process_selected_message(
-                        memory, self.memory_system, self.environment_scanner
-                    )
-                    if processed_msg:
-                        processed_msg["observe_reasoning"] = reasoning
-                        return processed_msg
-                    break
+        if not observation:
+            logger.warning(f"Failed to retrieve memory {memory_id}")
+            return None
         
+        # Only record if this is actually an observation (not a file or other memory type)
+        if memory_id.startswith("observation:"):
+            self._record_processed_observation(memory_id, observation)
+        else:
+            logger.debug(f"Not recording {memory_id} as it's not an observation")
+            
+        # Return the focused observation
         return observation
     
+    
+    def _record_processed_observation(self, memory_id: str, observation: Dict[str, Any]):
+        """Record that an observation has been processed."""
+        try:
+            # Create a processed observations file in memory
+            processed_file = self.memory_dir / "processed_observations.json"
+            
+            # Load existing records
+            if processed_file.exists():
+                with open(processed_file, 'r') as f:
+                    processed = json.load(f)
+            else:
+                processed = []
+            
+            # Add new record
+            record = {
+                "memory_id": memory_id,
+                "observation_type": observation.get("observation_type", observation.get("type", "unknown")),
+                "processed_at": datetime.now().isoformat(),
+                "cycle_count": self.cycle_count,
+                "path": observation.get("path", "")
+            }
+            processed.append(record)
+            logger.info(f"Recorded processed observation: {memory_id} ({record['observation_type']})")
+            
+            # Keep only last 100 records to avoid unbounded growth
+            if len(processed) > 100:
+                processed = processed[-100:]
+            
+            # Write back
+            with open(processed_file, 'w') as f:
+                json.dump(processed, f, indent=2)
+            
+            # Add a PINNED FileMemoryBlock for this file so the agent always sees it
+            processed_memory = FileMemoryBlock(
+                location=str(processed_file),
+                priority=Priority.LOW,
+                confidence=1.0,
+                pinned=True,  # Always in working memory
+                metadata={"file_type": "processed_observations_log"}
+            )
+            self.memory_system.add_memory(processed_memory)
+            
+        except Exception as e:
+            logger.error(f"Failed to record processed observation: {e}")
     
     async def _build_decision_context(self, orientation: Dict[str, Any]) -> str:
         """Build context for decision making."""
