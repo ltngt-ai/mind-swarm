@@ -176,6 +176,11 @@ class BrainInterface:
         Returns:
             Focused content as observation format, or None if not found
         """
+        # Handle "none" or similar responses gracefully
+        if not memory_id or memory_id.lower() in ["none", "null", "nil", ""]:
+            logger.debug(f"No memory to retrieve (memory_id: {memory_id}), reasoning: {reasoning}")
+            return None
+        
         # Find the memory by ID
         memory_block = None
         for memory in memory_manager.symbolic_memory:

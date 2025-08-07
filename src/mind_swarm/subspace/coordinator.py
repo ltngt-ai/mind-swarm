@@ -38,7 +38,7 @@ class MessageRouter:
         
         try:
             agent_names = await aiofiles.os.listdir(self.agents_dir)
-            logger.debug(f"Checking outboxes for {len(agent_names)} agents: {agent_names}")
+#            logger.debug(f"Checking outboxes for {len(agent_names)} agents: {agent_names}")
         except OSError as e:
             logger.error(f"Failed to list agents directory: {e}")
             return routed_count

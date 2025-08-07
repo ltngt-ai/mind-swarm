@@ -23,6 +23,7 @@ from .knowledge import KnowledgeManager
 from .state import AgentStateManager, ExecutionStateTracker
 from .actions import ActionCoordinator
 from .utils import DateTimeEncoder, CognitiveUtils, FileManager
+from .utils.reference_resolver import ReferenceResolver
 from .brain import BrainInterface
 
 logger = logging.getLogger("agent.cognitive")
@@ -547,9 +548,10 @@ class CognitiveLoop:
             "memory_dir": self.memory_dir
         }
         
-        # Recreate action objects
+        # Recreate action objects (will be updated with resolved params in loop)
         actions = []
         for data in action_data:
+            # Keep original params for now, will resolve @last references during execution
             action = self.action_coordinator.prepare_action(
                 data["name"], 
                 data.get("params", {}),
@@ -561,7 +563,15 @@ class CognitiveLoop:
         # Execute each action
         results = []
         successful_actions = 0
+        reference_resolver = ReferenceResolver()
+        
         for i, action in enumerate(actions):
+            # Resolve @last references in parameters before execution
+            if context.get("last_action_result") and action.params:
+                resolved_params = reference_resolver.resolve_references(action.params, context)
+                action.params = resolved_params
+                logger.debug(f"Resolved params for {action.name}: {resolved_params}")
+            
             logger.info(f"⚡ Executing action {i+1}/{len(actions)}: {action.name}")
             
             result = await self.action_coordinator.execute_action(action, context)
@@ -705,6 +715,12 @@ class CognitiveLoop:
                 except Exception as e:
                     logger.warning(f"  - Failed to remove {obs_id}: {e}")
         
+        # Check if there's actually a memory to retrieve
+        if not memory_id:
+            # Brain decided no focus needed (just cleanup)
+            logger.debug(f"Brain decided no focus needed: {reasoning}")
+            return None
+        
         # Retrieve the selected memory
         observation = self.brain_interface.retrieve_memory_by_id(
             memory_id, self.memory_system, reasoning
@@ -732,8 +748,17 @@ class CognitiveLoop:
             
             # Load existing records
             if processed_file.exists():
-                with open(processed_file, 'r') as f:
-                    processed = json.load(f)
+                try:
+                    with open(processed_file, 'r') as f:
+                        content = f.read().strip()
+                        if content:
+                            processed = json.loads(content)
+                        else:
+                            # File exists but is empty
+                            processed = []
+                except (json.JSONDecodeError, ValueError) as e:
+                    logger.warning(f"Invalid JSON in processed_observations.json, starting fresh: {e}")
+                    processed = []
             else:
                 processed = []
             

@@ -8,6 +8,7 @@ and cognitive-specific helper functions.
 from .json_utils import DateTimeEncoder, safe_json_encode, safe_json_decode, validate_json_structure
 from .file_utils import FileManager
 from .cognitive_utils import CognitiveUtils
+from .reference_resolver import ReferenceResolver
 
 __all__ = [
     'DateTimeEncoder',
@@ -15,5 +16,6 @@ __all__ = [
     'safe_json_decode',
     'validate_json_structure',
     'FileManager',
-    'CognitiveUtils'
+    'CognitiveUtils',
+    'ReferenceResolver'
 ]

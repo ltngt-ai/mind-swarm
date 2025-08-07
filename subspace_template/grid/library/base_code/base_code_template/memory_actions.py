@@ -13,7 +13,7 @@ from datetime import datetime
 from .actions.base_actions import Action, ActionResult, ActionStatus, Priority
 from .memory import (
     FileMemoryBlock, ObservationMemoryBlock, KnowledgeMemoryBlock,
-    WorkingMemoryManager, ContentLoader, MemoryType, Priority as MemoryPriority
+    MemorySystem, ContentLoader, MemoryType, Priority as MemoryPriority
 )
 
 logger = logging.getLogger("agent.memory_actions")
@@ -47,16 +47,16 @@ class FocusMemoryAction(Action):
             )
         
         try:
-            memory_manager: WorkingMemoryManager = context.get("memory_manager")
-            if not memory_manager:
+            memory_system = context.get("memory_system") or context.get("memory_system")
+            if not memory_system:
                 return ActionResult(
                     self.name,
                     ActionStatus.FAILED,
-                    error="No memory manager available"
+                    error="No memory system available"
                 )
             
             # Check if memory_id is already a loaded memory
-            existing_memory = memory_manager.access_memory(memory_id)
+            existing_memory = memory_system.get_memory(memory_id)
             
             if existing_memory:
                 # Memory already loaded, just access it
@@ -74,7 +74,7 @@ class FocusMemoryAction(Action):
                         "memory_type": existing_memory.type.value
                     }
                 )
-                memory_manager.add_memory(obs)
+                memory_system.add_memory(obs)
                 
                 return ActionResult(
                     self.name,
@@ -130,7 +130,7 @@ class FocusMemoryAction(Action):
             )
             
             # Add to working memory
-            memory_manager.add_memory(file_memory)
+            memory_system.add_memory(file_memory)
             
             # Load content
             content_loader = ContentLoader(home_dir.parent)
@@ -149,7 +149,7 @@ class FocusMemoryAction(Action):
                     "file_size": file_path.stat().st_size
                 }
             )
-            memory_manager.add_memory(obs)
+            memory_system.add_memory(obs)
             
             return ActionResult(
                 self.name,
@@ -246,6 +246,21 @@ class CreateMemoryAction(Action):
             # Create full path
             file_path = base_path / location
             
+            # Validate the path
+            if file_path.is_dir():
+                # User provided a directory path, not a file path
+                suggested_path = file_path / f"{memory_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+                return ActionResult(
+                    self.name,
+                    ActionStatus.FAILED,
+                    error=f"Location '{location}' is a directory, not a file. Did you mean '{suggested_path.name}'?",
+                    result={
+                        "provided_path": str(file_path),
+                        "suggested_filename": suggested_path.name,
+                        "suggested_full_path": str(suggested_path)
+                    }
+                )
+            
             # Ensure directory exists
             file_path.parent.mkdir(parents=True, exist_ok=True)
             
@@ -290,9 +305,9 @@ class CreateMemoryAction(Action):
             )
             
             # Add to working memory
-            memory_manager = context.get("memory_manager")
-            if memory_manager:
-                memory_manager.add_memory(file_memory)
+            memory_system = context.get("memory_system")
+            if memory_system:
+                memory_system.add_memory(file_memory)
                 
                 # Create observation about creation
                 obs = ObservationMemoryBlock(
@@ -301,7 +316,7 @@ class CreateMemoryAction(Action):
                     priority=Priority.MEDIUM,
                     metadata={"memory_type": memory_type}
                 )
-                memory_manager.add_memory(obs)
+                memory_system.add_memory(obs)
             
             return ActionResult(
                 self.name,
@@ -315,12 +330,39 @@ class CreateMemoryAction(Action):
                 }
             )
             
-        except Exception as e:
-            logger.error(f"Error creating memory at {location}: {e}", exc_info=True)
+        except IsADirectoryError as e:
+            # This shouldn't happen anymore due to validation above, but just in case
+            suggested_name = f"{memory_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
             return ActionResult(
                 self.name,
                 ActionStatus.FAILED,
-                error=str(e)
+                error=f"Cannot write to directory '{location}'. Please specify a filename, e.g., '{location}/{suggested_name}'",
+                result={"suggested_path": f"{location}/{suggested_name}"}
+            )
+        except PermissionError as e:
+            return ActionResult(
+                self.name,
+                ActionStatus.FAILED,
+                error=f"Permission denied writing to '{location}'. Try a different location or check permissions.",
+                result={"attempted_path": str(file_path)}
+            )
+        except Exception as e:
+            logger.error(f"Error creating memory at {location}: {e}", exc_info=True)
+            
+            # Provide helpful error messages based on common issues
+            error_msg = str(e)
+            if "No such file or directory" in error_msg:
+                error_msg = f"Path '{location}' contains invalid directories. Check the path and try again."
+            elif "File name too long" in error_msg:
+                error_msg = f"Filename is too long. Try a shorter name."
+            else:
+                error_msg = f"Failed to create memory: {error_msg}"
+            
+            return ActionResult(
+                self.name,
+                ActionStatus.FAILED,
+                error=error_msg,
+                result={"attempted_path": str(file_path), "original_error": str(e)}
             )
 
 
@@ -354,7 +396,7 @@ class SearchMemoryAction(Action):
         
         try:
             home_dir = context.get("home_dir", Path.home())
-            memory_manager = context.get("memory_manager")
+            memory_system = context.get("memory_system")
             results = []
             
             # Determine search paths based on scope
@@ -365,8 +407,8 @@ class SearchMemoryAction(Action):
                 search_paths.append(home_dir.parent / "grid")
             
             # Search in loaded memories first
-            if memory_manager:
-                for memory in memory_manager.symbolic_memory:
+            if memory_system:
+                for memory in memory_system.symbolic_memory:
                     if memory.type.value not in memory_types:
                         continue
                     
@@ -411,8 +453,8 @@ class SearchMemoryAction(Action):
                                     }
                                 )
                                 
-                                if memory_manager:
-                                    memory_manager.add_memory(result_memory)
+                                if memory_system:
+                                    memory_system.add_memory(result_memory)
                                 
                                 results.append({
                                     "memory_id": result_memory.id,
@@ -425,7 +467,7 @@ class SearchMemoryAction(Action):
                             pass
             
             # Create observation about search
-            if memory_manager:
+            if memory_system:
                 obs = ObservationMemoryBlock(
                     observation_type="memory_search",
                     path="search_results",
@@ -436,7 +478,7 @@ class SearchMemoryAction(Action):
                         "result_count": len(results)
                     }
                 )
-                memory_manager.add_memory(obs)
+                memory_system.add_memory(obs)
             
             return ActionResult(
                 self.name,
@@ -493,16 +535,16 @@ class ManageMemoryAction(Action):
             )
         
         try:
-            memory_manager: WorkingMemoryManager = context.get("memory_manager")
-            if not memory_manager:
+            memory_system = context.get("memory_system") or context.get("memory_system")
+            if not memory_system:
                 return ActionResult(
                     self.name,
                     ActionStatus.FAILED,
-                    error="No memory manager available"
+                    error="No memory system available"
                 )
             
             # Get the memory block
-            memory = memory_manager.access_memory(memory_id)
+            memory = memory_system.get_memory(memory_id)
             if not memory:
                 return ActionResult(
                     self.name,
@@ -514,7 +556,15 @@ class ManageMemoryAction(Action):
             
             if operation == "set_priority":
                 # Change memory priority
-                new_priority = self.params.get("priority", "").upper()
+                priority_value = self.params.get("priority", "")
+                # Handle both string and numeric priority values
+                if isinstance(priority_value, int):
+                    # Map numeric values to priority names
+                    priority_map = {1: "CRITICAL", 2: "HIGH", 3: "MEDIUM", 4: "LOW"}
+                    new_priority = priority_map.get(priority_value, "")
+                else:
+                    new_priority = str(priority_value).upper()
+                    
                 if not new_priority:
                     return ActionResult(
                         self.name,
@@ -560,7 +610,7 @@ class ManageMemoryAction(Action):
                 
             elif operation == "forget":
                 # Remove memory from the system
-                memory_manager.remove_memory(memory_id)
+                memory_system.remove_memory(memory_id)
                 result = {
                     "memory_id": memory_id,
                     "operation": "forget",
@@ -585,7 +635,7 @@ class ManageMemoryAction(Action):
                     "result": result
                 }
             )
-            memory_manager.add_memory(obs)
+            memory_system.add_memory(obs)
             
             return ActionResult(
                 self.name,

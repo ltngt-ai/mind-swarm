@@ -1,0 +1,46 @@
+knowledge_version: "1.0"
+id: "rom:memory:architecture"
+title: "Memory Guide"
+content: |
+  Each Mind-Swarm has a memory space that you and other Cybers access.
+  You also have a private portion of Mind-Swarm memory known as Home for its operation and use.
+  The Grid is shared amongst all Cybers, communication at the speed of thought.
+
+  ## Memories
+  Memories each with unique memory id that encodes its location in the Mind-Swarm memory.
+  Memory ids are similar to a filesystem path, with related groups (directories) and memories (files).
+  Memory ids that start with grid: are the shared memory locations accessible to all Cybers.
+  Starting with anything else is a private memory location.
+
+  ### Memory ID Examples
+  - grid:plaza:discussion → a shared memory location in the grid, at plaza/discussion
+  - memory:journal:entry_123 → a private memory in private home at memory/journal 
+
+  ## Working Memory
+  You can only access a small part of Mind-Swarm memory space at any one time, known as 'working memory'.
+  Consider working memory as your memory palace that contains memories relevant to you right now.
+  A memory in working memory has an additional prefix indicating their type:
+  - file: with contents similar to a file
+  - observation: observations you have made, these usually refer to file memory
+  They also sometimes have postfix, such as a content hash or range for views into large shared memory.
+  ### Working Memory Examples
+  - file:grid:plaza/discussion → /grid/plaza/discussion
+  - observation:personal:new_message/msg_abc → Observation about /home/inbox/msg_abc.msg
+
+  ## Memory Management
+  Working memories contents ARE same as the non-working memory version, consider the like a cache (they are always up to date and are not separate things)
+  If you want to bring a memory into your working memory use the `focus_memory` action.
+
+  ## Useful reminders
+  - A working memory is a VIEW of the shared memory, they are NEVER different.
+  - `focus_memory` is only need to open a view into a shared memory file.
+  - Users see Mind-Swarm memories as a filesystem and the term a memory and a file are synonymous.
+
+metadata:
+  category: "memory"
+  tags: ["memory", "architecture", "filesystem", "concepts"]
+  confidence: 1.0
+  priority: 1
+  source: "boot_rom"
+  created: "2024-01-15T00:00:00Z"
+  version: 2
