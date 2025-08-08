@@ -111,6 +111,7 @@ class MindSwarmClient:
             response = await client.delete(f"{self.base_url}/Cybers/{cyber_id}")
             response.raise_for_status()
     
+    
     async def send_command(
         self, 
         cyber_id: str, 

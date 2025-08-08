@@ -1,0 +1,80 @@
+# Example configuration for using different API keys with different providers
+# This shows how to configure models from different sources with their own API keys
+
+models:
+  # Azure OpenAI - Uses custom API key
+  - id: "azure/gpt-4"
+    name: "GPT-4 (Azure)"
+    provider: "openai"
+    priority: "primary"
+    cost_type: "paid"
+    context_length: 8192
+    max_tokens: 4096
+    api_settings:
+      host: "https://your-resource.openai.azure.com"
+      api_key_env: "AZURE_OPENAI_KEY"  # Uses AZURE_OPENAI_KEY from .env
+      api_version: "2024-02-15-preview"
+      
+  # Perplexity AI - Uses OpenAI-compatible API with custom key
+  - id: "perplexity/llama-3.1-sonar-large"
+    name: "Llama 3.1 Sonar (Perplexity)"
+    provider: "openai"
+    priority: "normal"
+    cost_type: "paid"
+    context_length: 128000
+    max_tokens: 4096
+    api_settings:
+      host: "https://api.perplexity.ai"
+      api_key_env: "PERPLEXITY_API_KEY"  # Uses PERPLEXITY_API_KEY from .env
+      
+  # Together AI - OpenAI-compatible with custom key
+  - id: "together/mixtral-8x7b"
+    name: "Mixtral 8x7B (Together)"
+    provider: "openai"
+    priority: "normal"
+    cost_type: "paid"
+    context_length: 32768
+    max_tokens: 4096
+    api_settings:
+      host: "https://api.together.xyz/v1"
+      api_key_env: "TOGETHER_API_KEY"  # Uses TOGETHER_API_KEY from .env
+      
+  # Groq - Fast inference with custom key
+  - id: "groq/llama-3.1-70b"
+    name: "Llama 3.1 70B (Groq)"
+    provider: "openai"
+    priority: "normal"
+    cost_type: "paid"
+    context_length: 128000
+    max_tokens: 4096
+    api_settings:
+      host: "https://api.groq.com/openai/v1"
+      api_key_env: "GROQ_API_KEY"  # Uses GROQ_API_KEY from .env
+      
+  # Local LM Studio - No API key needed
+  - id: "local/mistral-7b"
+    name: "Mistral 7B (Local)"
+    provider: "openai"
+    priority: "fallback"
+    cost_type: "free"
+    context_length: 8192
+    max_tokens: 4096
+    api_settings:
+      host: "http://192.168.1.147:1234"  # No api_key_env needed for local
+      
+  # Standard OpenAI - Uses default OPENAI_API_KEY
+  - id: "openai/gpt-4"
+    name: "GPT-4"
+    provider: "openai"
+    priority: "primary"
+    cost_type: "paid"
+    context_length: 8192
+    max_tokens: 4096
+    # No api_settings needed - uses default OPENAI_API_KEY
+
+# Required environment variables in .env:
+# AZURE_OPENAI_KEY=your-azure-key
+# PERPLEXITY_API_KEY=your-perplexity-key
+# TOGETHER_API_KEY=your-together-key
+# GROQ_API_KEY=your-groq-key
+# OPENAI_API_KEY=your-openai-key (for standard OpenAI models)

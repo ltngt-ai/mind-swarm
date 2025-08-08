@@ -10,8 +10,6 @@ from pydantic import BaseModel, Field
 class AIModelConfig(BaseModel):
     """Configuration for AI models."""
     
-    local_preset: str = Field(default="local_explorer", description="Preset name for local/exploration AI")
-    premium_preset: str = Field(default="smart_balanced", description="Preset name for premium/task AI")
     openrouter_api_key: Optional[str] = Field(default=None, description="OpenRouter API key")
     openai_api_key: Optional[str] = Field(default=None, description="OpenAI API key")
     anthropic_api_key: Optional[str] = Field(default=None, description="Anthropic API key")
@@ -44,8 +42,6 @@ class Settings(BaseModel):
         """Create settings from environment variables."""
         return cls(
             ai_models=AIModelConfig(
-                local_preset=os.getenv("LOCAL_AI_PRESET", "local_explorer"),
-                premium_preset=os.getenv("PREMIUM_AI_PRESET", "smart_balanced"),
                 openrouter_api_key=os.getenv("OPENROUTER_API_KEY"),
                 openai_api_key=os.getenv("OPENAI_API_KEY"),
                 anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"),

@@ -96,8 +96,21 @@ class MindSwarmDSPyLM(dspy.LM):
             logger.debug(f"Final api_key: {self.api_key if self.api_key else 'None'}")
         
         elif self.provider == "openai":
-            self.api_key = self.config.get("api_key") or os.getenv("OPENAI_API_KEY")
-            self.api_base = self.config.get("base_url")
+            # Check if this is a local OpenAI-compatible endpoint
+            # Check both api_settings and provider_settings
+            api_settings = self.config.get("api_settings") or self.config.get("provider_settings")
+            logger.info(f"OpenAI setup - api_settings: {api_settings}")
+            
+            if api_settings and isinstance(api_settings, dict) and "host" in api_settings:
+                # This is a local OpenAI-compatible server
+                self.api_base = api_settings["host"]
+                self.api_key = "dummy"  # Local servers don't need real API keys
+                logger.info(f"Using local OpenAI-compatible endpoint: {self.api_base}")
+            else:
+                # This is actual OpenAI API
+                self.api_key = self.config.get("api_key") or os.getenv("OPENAI_API_KEY")
+                self.api_base = self.config.get("base_url") or "https://api.openai.com/v1"
+                logger.info(f"Using standard OpenAI API: {self.api_base}")
         
         elif self.provider == "anthropic":
             self.api_key = self.config.get("api_key") or os.getenv("ANTHROPIC_API_KEY")
@@ -133,6 +146,10 @@ class MindSwarmDSPyLM(dspy.LM):
             # OpenRouter needs site_url and app_name
             settings["site_url"] = "http://mind-swarm:8000"
             settings["app_name"] = "Mind-Swarm"
+        elif self.provider == "openai":
+            # For OpenAI, check if we have a custom host (local server)
+            if hasattr(self, 'api_base') and self.api_base and self.api_base != "https://api.openai.com/v1":
+                settings["host"] = self.api_base
         elif self.provider in ["local", "ollama", "openai_compatible"]:
             # Local providers need the host URL (without /v1)
             if hasattr(self, 'api_base') and self.api_base:
@@ -185,13 +202,16 @@ class MindSwarmDSPyLM(dspy.LM):
         # Build AIExecutionConfig from our config
         logger.debug(f"Creating AIExecutionConfig with api_key: {self.api_key if self.api_key else 'None'}")
         
+        provider_settings = self._get_provider_settings()
+        logger.info(f"Provider settings for {self.provider}: {provider_settings}")
+        
         ai_config = AIExecutionConfig(
             model_id=self.model,
             provider=self.provider,
             api_key=self.api_key,
             temperature=temperature,
             max_tokens=max_tokens,
-            provider_settings=self._get_provider_settings()
+            provider_settings=provider_settings
         )
         
         logger.debug(f"AIExecutionConfig created - provider: {ai_config.provider}, has api_key: {bool(ai_config.api_key)}")
@@ -341,41 +361,47 @@ def configure_dspy_for_mind_swarm(config: Dict[str, Any]) -> dspy.LM:
     return lm
 
 
-def get_dspy_lm_from_preset(preset_name: str) -> Optional[dspy.LM]:
-    """Get a configured DSPy LM from a Mind-Swarm preset.
+def get_dspy_lm_from_model_pool(paid_allowed: bool = False) -> Optional[dspy.LM]:
+    """Get a configured DSPy LM by selecting from the model pool.
     
     Args:
-        preset_name: Name of the AI preset
+        paid_allowed: Whether paid models can be selected
         
     Returns:
-        Configured DSPy LM or None if preset not found
+        Configured DSPy LM or None if no model available
     """
-    from mind_swarm.ai.presets import preset_manager
+    from mind_swarm.ai.model_pool import model_pool
+    from mind_swarm.ai.model_selector import ModelSelector
     
     try:
-        preset_config = preset_manager.get_config(preset_name)
-        if not preset_config:
-            logger.error(f"Preset {preset_name} not found")
+        selector = ModelSelector()
+        model = selector.select_model(paid_allowed=paid_allowed)
+        
+        if not model:
+            logger.error("No model available in pool")
             return None
         
-        # Convert AIExecutionConfig to dict for our DSPy LM
+        # Get execution config
+        config = selector.get_model_config(model)
+        
+        # Convert to dict for DSPy LM
         config_dict = {
-            "provider": preset_config.provider,
-            "model": preset_config.model_id,
-            "api_key": preset_config.api_key,
-            "temperature": preset_config.temperature,
-            "max_tokens": preset_config.max_tokens,
+            "provider": config.provider,
+            "model": config.model_id,
+            "api_key": config.api_key,
+            "temperature": config.temperature,
+            "max_tokens": config.max_tokens,
         }
         
         # Add provider settings if any
-        if preset_config.provider_settings:
-            config_dict.update(preset_config.provider_settings)
+        if config.provider_settings:
+            config_dict.update(config.provider_settings)
             # Map host to base_url for local providers
-            if "host" in preset_config.provider_settings:
-                config_dict["base_url"] = preset_config.provider_settings["host"]
+            if "host" in config.provider_settings:
+                config_dict["base_url"] = config.provider_settings["host"]
         
         return configure_dspy_for_mind_swarm(config_dict)
         
     except Exception as e:
-        logger.error(f"Failed to create DSPy LM from preset {preset_name}: {e}")
+        logger.error(f"Failed to create DSPy LM from model pool: {e}")
         return None

@@ -18,10 +18,7 @@ from mind_swarm.subspace.cyber_registry import CyberRegistry
 from mind_swarm.subspace.developer_registry import DeveloperRegistry
 from mind_swarm.subspace.io_handlers import NetworkBodyHandler, UserIOBodyHandler
 from mind_swarm.schemas.cyber_types import CyberType
-from mind_swarm.ai.presets import preset_manager
 from mind_swarm.ai.providers.factory import create_ai_service
-from mind_swarm.ai.model_registry import model_registry
-from mind_swarm.ai.model_selector import ModelSelector, SelectionStrategy
 from mind_swarm.utils.logging import logger
 
 
@@ -191,9 +188,9 @@ class SubspaceCoordinator:
         # I/O Cyber handlers
         self._io_handlers: Dict[str, Dict[str, Any]] = {}  # cyber_name -> {"network": handler, "user_io": handler}
         
-        # Model registry and selector
-        self.model_selector = ModelSelector(model_registry)
-        self._model_refresh_task: Optional[asyncio.Task] = None
+        # Model selector
+        from mind_swarm.ai.model_selector import ModelSelector
+        self.model_selector = ModelSelector()
         
         # Cache for Cyber model selections (cyber_name -> selected_model_id)
         # This is in-memory only, not persisted
@@ -205,8 +202,6 @@ class SubspaceCoordinator:
         """Start the subspace coordinator."""
         self._running = True
         
-        # Initialize model registry
-        asyncio.create_task(self._initialize_model_registry())
         
         # Start message routing
         self._router_task = asyncio.create_task(self._message_routing_loop())
@@ -234,13 +229,6 @@ class SubspaceCoordinator:
                 pass
         logger.info("Message router stopped")
         
-        # Stop model refresh task
-        if self._model_refresh_task and not self._model_refresh_task.done():
-            self._model_refresh_task.cancel()
-            try:
-                await self._model_refresh_task
-            except asyncio.CancelledError:
-                pass
         
         # Shutdown body system
         logger.info("Shutting down body system...")
@@ -585,6 +573,12 @@ class SubspaceCoordinator:
             
             for cyber_dir in agent_dirs:
                 cyber_name = cyber_dir.name
+                
+                # Skip developer accounts (they don't need brain monitoring or processes)
+                if cyber_name.endswith("_dev"):
+                    logger.info(f"Skipping developer account {cyber_name}")
+                    continue
+                
                 try:
                     logger.info(f"Starting Cyber {cyber_name}")
                     
@@ -752,11 +746,20 @@ class SubspaceCoordinator:
             if selected_model_id:
                 # Use cached model
                 logger.debug(f"Using cached model {selected_model_id} for Cyber {name}")
-                selected_model = model_registry.get_model(selected_model_id)
+                selected_model = self.model_selector.pool.get_model(selected_model_id)
                 if selected_model:
-                    import os
-                    api_key = os.getenv("OPENROUTER_API_KEY")
-                    model_config = self.model_selector.get_model_config(selected_model, api_key)
+                    from dataclasses import asdict
+                    config_obj = self.model_selector.get_model_config(selected_model)
+                    # Convert to dict format expected by DSPy
+                    config_dict = asdict(config_obj)
+                    model_config = {
+                        'provider': config_dict['provider'],
+                        'model': config_dict['model_id'],
+                        'temperature': config_dict['temperature'],
+                        'max_tokens': config_dict['max_tokens'],
+                        'api_key': config_dict.get('api_key'),
+                        'provider_settings': config_dict.get('provider_settings'),
+                    }
                 else:
                     # Cached model no longer available, clear cache
                     logger.warning(f"Cached model {selected_model_id} no longer available, selecting new model")
@@ -768,54 +771,54 @@ class SubspaceCoordinator:
                 import os
                 api_key = os.getenv("OPENROUTER_API_KEY")
                 
-                # Select a model using the configured strategy
-                selected_model = self.model_selector.select_model(
-                    strategy=SelectionStrategy.RANDOM_CURATED
-                )
+                # Select a model from the pool
+                selected_model = self.model_selector.select_model(paid_allowed=False)
                 
                 if selected_model:
-                    model_config = self.model_selector.get_model_config(selected_model, api_key)
+                    from dataclasses import asdict
+                    config_obj = self.model_selector.get_model_config(selected_model)
+                    # Convert to dict format expected by DSPy
+                    config_dict = asdict(config_obj)
+                    model_config = {
+                        'provider': config_dict['provider'],
+                        'model': config_dict['model_id'],
+                        'temperature': config_dict['temperature'],
+                        'max_tokens': config_dict['max_tokens'],
+                        'api_key': config_dict.get('api_key'),
+                        'provider_settings': config_dict.get('provider_settings'),
+                    }
                     selected_model_id = selected_model.id
                     # Cache the selection
                     self._agent_model_cache[name] = selected_model_id
                     logger.info(f"Selected and cached model {selected_model_id} for Cyber {name}")
                 else:
-                    # Fallback to local preset
-                    logger.warning("No suitable model found, using local preset fallback")
-                    import os
-                    from mind_swarm.ai.presets import AIPresetManager
+                    # Ultimate fallback to local model
+                    logger.warning("No suitable model found, using fallback")
+                    from dataclasses import asdict
+                    from mind_swarm.ai.config import AIExecutionConfig
                     
-                    # Get the local preset name from environment or use default
-                    local_preset_name = os.getenv("LOCAL_AI_PRESET", "local_explorer")
-                    preset_manager = AIPresetManager()
-                    local_preset = preset_manager.get_preset(local_preset_name)
+                    config_obj = AIExecutionConfig(
+                        provider="openai",
+                        model_id="local/default",
+                        temperature=0.7,
+                        max_tokens=4096,
+                        api_key=os.getenv("OPENAI_API_KEY", ""),
+                        provider_settings={
+                            "host": "http://192.168.1.209:1234"
+                        }
+                    )
                     
-                    if local_preset:
-                        from dataclasses import asdict
-                        config_obj = local_preset.to_config()
-                        # Convert to dict and rename model_id to model
-                        config_dict = asdict(config_obj)
-                        model_config = {
-                            'provider': config_dict['provider'],
-                            'model': config_dict['model_id'],
-                            'temperature': config_dict['temperature'],
-                            'max_tokens': config_dict['max_tokens'],
-                            'api_key': config_dict.get('api_key'),
-                            'provider_settings': config_dict.get('provider_settings'),
-                        }
-                        selected_model_id = f"{local_preset.provider}/{local_preset.model}"
-                        logger.info(f"Using local preset '{local_preset_name}': {selected_model_id}")
-                    else:
-                        # Ultimate fallback if preset not found
-                        logger.error(f"Local preset '{local_preset_name}' not found, using hardcoded fallback")
-                        model_config = {
-                            "provider": "local",
-                            "model": "openai/gpt-oss-20b",
-                            "temperature": 0.7,
-                            "max_tokens": 2048,
-                            "api_settings": {"host": "http://192.168.1.209:1234"}
-                        }
-                        selected_model_id = "local/openai/gpt-oss-20b"
+                    # Convert to dict format expected by DSPy
+                    config_dict = asdict(config_obj)
+                    model_config = {
+                        'provider': config_dict['provider'],
+                        'model': config_dict['model_id'],
+                        'temperature': config_dict['temperature'],
+                        'max_tokens': config_dict['max_tokens'],
+                        'api_key': config_dict.get('api_key'),
+                        'provider_settings': config_dict.get('provider_settings'),
+                    }
+                    selected_model_id = "local/default"
                     
                     # Cache the fallback
                     self._agent_model_cache[name] = selected_model_id
@@ -857,12 +860,8 @@ class SubspaceCoordinator:
             if selected_model_id:
                 # Estimate tokens (rough approximation)
                 estimated_tokens = len(prompt.split()) + len(response.split())
-                model_registry.update_metrics(
-                    model_id=selected_model_id,
-                    success=True,
-                    time_ms=elapsed_ms,
-                    tokens=estimated_tokens
-                )
+                # Metrics tracking can be added to model pool later if needed
+                logger.debug(f"Model {selected_model_id} succeeded in {elapsed_ms:.0f}ms with ~{estimated_tokens} tokens")
                 
                 # Update Cyber's identity file with current model info
                 await self._update_agent_model_info(name, selected_model_id)
@@ -886,12 +885,8 @@ class SubspaceCoordinator:
             
             # Update model metrics for failure
             if selected_model_id:
-                model_registry.update_metrics(
-                    model_id=selected_model_id,
-                    success=False,
-                    time_ms=0,
-                    error=str(e)
-                )
+                # Metrics tracking can be added to model pool later if needed
+                logger.error(f"Model {selected_model_id} failed: {e}")
             
             # Return a properly formatted error response
             return json.dumps({
@@ -947,9 +942,9 @@ class SubspaceCoordinator:
             True if successful, False otherwise
         """
         # Check if model exists
-        model = model_registry.get_model(model_id)
+        model = self.model_selector.pool.get_model(model_id)
         if not model:
-            logger.error(f"Model {model_id} not found in registry")
+            logger.error(f"Model {model_id} not found in pool")
             return False
         
         # Update the cache
@@ -991,33 +986,18 @@ class SubspaceCoordinator:
             cyber_type: Type of Cyber
         """
         # Select initial model for the Cyber
-        selected_model = self.model_selector.select_model(
-            strategy=SelectionStrategy.RANDOM_CURATED
-        )
+        selected_model = self.model_selector.select_model(paid_allowed=False)
         
         if selected_model:
             model_id = selected_model.id
             provider = selected_model.provider
             max_context_length = selected_model.context_length
         else:
-            # Fallback to local preset
-            import os
-            from mind_swarm.ai.presets import AIPresetManager
-            
-            local_preset_name = os.getenv("LOCAL_AI_PRESET", "local_explorer")
-            preset_manager = AIPresetManager()
-            local_preset = preset_manager.get_preset(local_preset_name)
-            
-            if local_preset:
-                model_id = f"{local_preset.provider}/{local_preset.model}"
-                provider = local_preset.provider
-                max_context_length = local_preset.max_tokens
-                logger.info(f"Using local preset '{local_preset_name}' for identity: {model_id}")
-            else:
-                # Ultimate fallback
-                model_id = "local/openai/gpt-oss-20b"
-                provider = "local"
-                max_context_length = 8192
+            # Ultimate fallback
+            model_id = "local/default"
+            provider = "openai"
+            max_context_length = 8192
+            logger.warning("Using fallback model for identity")
         
         # Determine capabilities based on Cyber type
         capabilities = []
@@ -1105,8 +1085,8 @@ class SubspaceCoordinator:
                 # Load existing identity
                 identity_data = json.loads(identity_file.read_text())
                 
-                # Get model info from registry
-                model_info = model_registry.get_model(model_id)
+                # Get model info from pool
+                model_info = self.model_selector.pool.get_model(model_id)
                 if model_info:
                     # Update model information
                     identity_data["model"] = model_id
@@ -1200,48 +1180,6 @@ class SubspaceCoordinator:
         # The I/O body file monitoring is the main server component
         logger.info(f"I/O Cyber server component initialized for {cyber_name}")
     
-    async def _initialize_model_registry(self):
-        """Initialize the model registry and start periodic updates."""
-        try:
-            # Load environment variables from .env file
-            from dotenv import load_dotenv
-            load_dotenv()
-            
-            # Get OpenRouter API key
-            import os
-            api_key = os.getenv("OPENROUTER_API_KEY")
-            
-            # Initialize registry
-            await model_registry.initialize(api_key)
-            logger.info("Model registry initialized")
-            
-            # Start periodic refresh and grid updates
-            self._model_refresh_task = asyncio.create_task(self._model_registry_loop())
-            
-        except Exception as e:
-            logger.error(f"Failed to initialize model registry: {e}")
-    
-    async def _model_registry_loop(self):
-        """Periodically refresh models and write to grid."""
-        while self._running:
-            try:
-                # Write current state to grid
-                grid_path = self.subspace.root_path / "grid"
-                await model_registry.write_to_grid(grid_path)
-                
-                # Wait 5 minutes before next update
-                await asyncio.sleep(300)
-                
-                # Refresh model list (respects cache TTL)
-                import os
-                api_key = os.getenv("OPENROUTER_API_KEY")
-                await model_registry.refresh_models(api_key)
-                
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error(f"Error in model registry loop: {e}")
-                await asyncio.sleep(60)  # Back off on error
     
     # Developer management methods
     async def register_developer(self, name: str, full_name: Optional[str] = None,

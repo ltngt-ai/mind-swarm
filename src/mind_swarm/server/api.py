@@ -127,20 +127,18 @@ class MindSwarmServer:
                 from mind_swarm.ai.providers.local_llm_check import check_local_llm_server, format_server_status
                 from mind_swarm.core.config import settings
                 
-                # Check if any preset uses local model
+                # Check if any model in pool uses local OpenAI server
                 using_local = False
                 local_url = None
                 try:
-                    from mind_swarm.ai.presets import preset_manager
-                    for preset_name in ["local_explorer", "local_smart", "local_code"]:
-                        preset = preset_manager.get_preset(preset_name)
-                        if preset and preset.provider in ["openai_compatible", "local", "ollama"]:
-                            # Get URL from api_settings
-                            if preset.api_settings and "host" in preset.api_settings:
-                                url = preset.api_settings["host"]
-                                using_local = True
-                                local_url = url
-                                break
+                    from mind_swarm.ai.model_pool import model_pool
+                    for model in model_pool.list_models(include_paid=True):
+                        if model.provider == "openai" and model.api_settings and "host" in model.api_settings:
+                            # This is a local OpenAI-compatible server
+                            url = model.api_settings["host"]
+                            using_local = True
+                            local_url = url
+                            break
                 except:
                     pass
                 
@@ -210,37 +208,35 @@ class MindSwarmServer:
             if check_llm:
                 try:
                     from mind_swarm.ai.providers.local_llm_check import check_local_llm_server
-                    from mind_swarm.ai.presets import preset_manager
+                    from mind_swarm.ai.model_pool import model_pool
                     import asyncio
                     
-                    # Check if using local models
-                    for preset_name in ["local_explorer", "local_smart", "local_code"]:
-                        preset = preset_manager.get_preset(preset_name)
-                        if preset and preset.provider in ["openai_compatible", "local", "ollama"]:
-                            # Get URL from api_settings
-                            if preset.api_settings and "host" in preset.api_settings:
-                                url = preset.api_settings["host"]
-                                logger.info(f"STATUS: Checking local LLM server at {url}")
-                                start_time = time.time()
-                                
-                                # Add timeout to prevent hanging
-                                try:
-                                    is_healthy, model_info = await asyncio.wait_for(
+                    # Check if using local models (OpenAI with custom host)
+                    for model in model_pool.list_models(include_paid=True):
+                        if model.provider == "openai" and model.api_settings and "host" in model.api_settings:
+                            # This is a local OpenAI-compatible server
+                            url = model.api_settings["host"]
+                            logger.info(f"STATUS: Checking local LLM server at {url}")
+                            start_time = time.time()
+                            
+                            # Add timeout to prevent hanging
+                            try:
+                                is_healthy, model_info = await asyncio.wait_for(
                                         check_local_llm_server(url),
                                         timeout=2.0  # 2 second timeout for status checks
-                                    )
-                                    elapsed = time.time() - start_time
-                                    logger.info(f"STATUS: Local LLM check completed in {elapsed:.2f}s - healthy={is_healthy}")
-                                    local_llm_status = {
+                                )
+                                elapsed = time.time() - start_time
+                                logger.info(f"STATUS: Local LLM check completed in {elapsed:.2f}s - healthy={is_healthy}")
+                                local_llm_status = {
                                         "healthy": is_healthy,
                                         "url": url,
                                         **model_info
-                                    } if model_info else {"healthy": is_healthy, "url": url}
-                                except asyncio.TimeoutError:
-                                    elapsed = time.time() - start_time
-                                    logger.warning(f"STATUS: Local LLM check timed out after {elapsed:.2f}s")
-                                    local_llm_status = {"healthy": False, "url": url, "error": "Timeout checking LLM server"}
-                                break
+                                } if model_info else {"healthy": is_healthy, "url": url}
+                            except asyncio.TimeoutError:
+                                elapsed = time.time() - start_time
+                                logger.warning(f"STATUS: Local LLM check timed out after {elapsed:.2f}s")
+                                local_llm_status = {"healthy": False, "url": url, "error": "Timeout checking LLM server"}
+                            break
                 except Exception as e:
                     logger.warning(f"STATUS: Local LLM check failed with exception: {e}")
             

@@ -10,7 +10,7 @@ from mind_swarm.ai.providers.local_llm_check import (
     get_model_capabilities,
     format_server_status
 )
-from mind_swarm.ai.presets import preset_manager
+from mind_swarm.ai.model_pool import model_pool
 
 app = typer.Typer()
 console = Console()
@@ -24,31 +24,28 @@ def check(
     """Check local LLM server status and available models."""
     
     async def run_check(check_url, show_detailed):
-        # Get URL from presets if not provided
+        # Get URLs from model pool if not provided
         if not check_url:
             urls_to_check = []
             
-            # Check all presets for local models
-            for preset_name in preset_manager.list_presets():
-                preset = preset_manager.get_preset(preset_name)
-                if preset and preset.provider in ["openai_compatible", "local", "ollama"]:
-                    # Get URL from api_settings
-                    preset_url = None
-                    if preset.api_settings and "host" in preset.api_settings:
-                        preset_url = preset.api_settings["host"]
+            # Check all models in pool for local providers (OpenAI with custom host)
+            for model in model_pool.list_models(include_paid=True):
+                if model.provider == "openai" and model.api_settings and "host" in model.api_settings:
+                    # This is a local OpenAI-compatible server
+                    model_url = model.api_settings["host"]
                     
-                    if preset_url:
-                        urls_to_check.append((preset_name, preset_url))
+                    if model_url:
+                        urls_to_check.append((model.id, model_url))
             
             if not urls_to_check:
-                console.print("[yellow]No local LLM configurations found in presets[/yellow]")
+                console.print("[yellow]No local LLM configurations found in model pool[/yellow]")
                 return
         else:
             urls_to_check = [("custom", check_url)]
         
         # Check each URL
-        for preset_name, check_url in urls_to_check:
-            console.print(f"\n[bold]Checking {preset_name}: {check_url}[/bold]")
+        for model_id, check_url in urls_to_check:
+            console.print(f"\n[bold]Checking {model_id}: {check_url}[/bold]")
             
             is_healthy, model_info = await check_local_llm_server(check_url)
             status = format_server_status(is_healthy, model_info)

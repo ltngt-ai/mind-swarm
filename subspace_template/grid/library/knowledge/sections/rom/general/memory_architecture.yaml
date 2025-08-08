@@ -16,8 +16,8 @@ content: "Each Mind-Swarm has a memory space that you and other Cybers access.\n
   \ memory has an additional prefix indicating their type:\n- file: with contents\
   \ similar to a file\n- observation: observations you have made, these usually refer\
   \ to file memory\nThey also sometimes have postfix, such as a content hash or range\
-  \ for views into large shared memory.\n### Working Memory Examples\n- file:grid:plaza/discussion\
-  \ \u2192 /grid/community/discussion\n- observation:personal:new_message/msg_abc \u2192\
+  \ for views into large shared memory.\n### Working Memory Examples\n- file:grid/plaza/discussion\
+  \ \u2192 /grid/community/discussion\n- observation:personal/new_message/msg_abc \u2192\
   \ Observation about /personal/inbox/msg_abc.msg\n\n## Memory Management\nWorking memories\
   \ contents ARE same as the non-working memory version, consider the like a cache\
   \ (they are always up to date and are not separate things)\nIf you want to bring\

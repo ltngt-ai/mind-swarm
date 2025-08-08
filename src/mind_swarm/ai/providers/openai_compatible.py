@@ -44,11 +44,24 @@ class OpenAICompatibleService(AIService):
         """
         super().__init__(config)
         
+        # Debug log to see what we're getting
+        logger.debug(f"OpenAI service init - provider: {config.provider}, provider_settings: {config.provider_settings}")
+        
         # Determine API URL based on provider
         if api_url:
             self.api_url = api_url.rstrip("/")
         elif config.provider == "openai":
-            self.api_url = "https://api.openai.com/v1"
+            # Check if this is a local OpenAI-compatible server with custom host
+            if config.provider_settings and "host" in config.provider_settings:
+                host = config.provider_settings["host"].rstrip("/")
+                # Add /v1 if not already present
+                if not host.endswith("/v1"):
+                    self.api_url = f"{host}/v1"
+                else:
+                    self.api_url = host
+            else:
+                # Standard OpenAI API
+                self.api_url = "https://api.openai.com/v1"
         elif config.provider == "ollama":
             # Ollama's OpenAI-compatible endpoint
             host = config.provider_settings.get("host", "http://localhost:11434")
@@ -227,8 +240,12 @@ class OpenAICompatibleService(AIService):
         **kwargs: Any
     ) -> Dict[str, Any]:
         """Build the API payload."""
+        # For local servers, use the model ID as-is
+        # For cloud providers, use the model from config
+        model_id = kwargs.get("model", self.model)
+        
         payload: Dict[str, Any] = {
-            "model": kwargs.get("model", self.model),
+            "model": model_id,
             "messages": messages,
         }
         

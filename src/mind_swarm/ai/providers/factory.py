@@ -12,8 +12,6 @@ from mind_swarm.utils.logging import logger
 # Registry of available providers
 PROVIDERS: Dict[str, Type[AIService]] = {
     "openai": OpenAICompatibleService,
-    "ollama": OpenAICompatibleService,
-    "local": OpenAICompatibleService,
     "openrouter": OpenRouterAIService,
 }
 

@@ -1,0 +1,20 @@
+# OpenAI and OpenAI-compatible models configuration
+# These models use the OpenAI API standard (including local servers)
+#
+# API Key Configuration Options:
+# 1. Default: Uses OPENAI_API_KEY from .env
+# 2. Custom key: Add api_key_env to api_settings
+#    Example: api_settings: { api_key_env: "AZURE_OPENAI_KEY" }
+# 3. Local models: No key needed (automatically uses "dummy")
+
+models:
+  # Local OpenAI-compatible servers
+  # These model IDs must match what's loaded on the server
+  - id: "qwen/qwen3-30b-a3b-2507"
+    name: "Qwen 3 30B (Local)"
+    priority: "fallback"
+    cost_type: "free"
+    context_length: 8192
+    max_tokens: 8192
+    api_settings:
+      host: "http://192.168.1.147:1234"

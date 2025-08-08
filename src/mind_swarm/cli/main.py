@@ -28,6 +28,14 @@ app.add_typer(check_llm_app, name="check-llm", help="Check local LLM server stat
 from mind_swarm.cli.commands.logs import logs
 app.command()(logs)
 
+# Import models command
+from mind_swarm.cli.commands.models import app as models_app
+app.add_typer(models_app, name="models", help="Manage AI models")
+
+# Import sync-openrouter command
+from mind_swarm.cli.commands.sync_openrouter import app as sync_openrouter_app
+app.add_typer(sync_openrouter_app, name="sync-openrouter", help="Sync models from OpenRouter API")
+
 
 class MindSwarmCLI:
     """Main CLI application class."""
@@ -133,41 +141,182 @@ class MindSwarmCLI:
         except Exception as e:
             console.print(f"[red]Error getting status: {e}[/red]")
     
-    def show_presets(self):
-        """Display available AI presets."""
-        from mind_swarm.ai.presets import preset_manager
+    def promote_model(self, model_id: str, priority: str, duration: Optional[float] = None):
+        """Promote a model to a different priority tier."""
+        from mind_swarm.ai.model_pool import model_pool, Priority
         
-        table = Table(title="Available AI Presets")
-        table.add_column("Name", style="cyan")
-        table.add_column("Provider", style="yellow")
-        table.add_column("Model", style="green")
-        table.add_column("Temperature")
-        table.add_column("Max Tokens", justify="right")
-        table.add_column("Current", style="magenta")
-        
-        # Get current presets from settings
-        current_local = settings.ai_models.local_preset
-        current_premium = settings.ai_models.premium_preset
-        
-        for preset_name in preset_manager.list_presets():
-            preset = preset_manager.get_preset(preset_name)
-            if preset:
-                current = ""
-                if preset_name == current_local:
-                    current = "Local"
-                elif preset_name == current_premium:
-                    current = "Premium"
+        try:
+            # Parse priority
+            priority_enum = Priority(priority.lower())
+            
+            # Promote the model
+            model_pool.promote_model(model_id, priority_enum, duration)
+            
+            if duration:
+                console.print(f"[green]✓ Model {model_id} promoted to {priority} for {duration} hours[/green]")
+            else:
+                console.print(f"[green]✓ Model {model_id} permanently promoted to {priority}[/green]")
                 
-                table.add_row(
-                    preset.name,
-                    preset.provider,
-                    preset.model,
-                    str(preset.temperature),
-                    str(preset.max_tokens),
-                    current,
-                )
+        except ValueError as e:
+            console.print(f"[red]✗ Error: {e}[/red]")
+            console.print("Valid priorities: primary, normal, fallback")
+        except Exception as e:
+            console.print(f"[red]✗ Failed to promote model: {e}[/red]")
+    
+    def demote_model(self, model_id: str):
+        """Remove promotion from a model, restoring its original priority."""
+        from mind_swarm.ai.model_pool import model_pool
+        
+        try:
+            model_pool.demote_model(model_id)
+            console.print(f"[green]✓ Model {model_id} demoted to original priority[/green]")
+        except ValueError as e:
+            console.print(f"[red]✗ Error: {e}[/red]")
+        except Exception as e:
+            console.print(f"[red]✗ Failed to demote model: {e}[/red]")
+    
+    async def sync_openrouter_models(self):
+        """Sync OpenRouter models from their API."""
+        import os
+        import subprocess
+        from pathlib import Path
+        
+        # Check for API key
+        api_key = os.getenv("OPENROUTER_API_KEY")
+        if not api_key:
+            console.print("[red]✗ No OPENROUTER_API_KEY found in environment[/red]")
+            console.print("[dim]Set OPENROUTER_API_KEY in .env file to use OpenRouter models[/dim]")
+            return
+        
+        console.print("[cyan]Syncing OpenRouter models...[/cyan]")
+        
+        # Run the sync command with update-only to preserve user settings
+        config_path = Path("config/openrouter_models.yaml")
+        
+        try:
+            # Run sync command in subprocess
+            result = await asyncio.create_subprocess_exec(
+                sys.executable, "-m", "mind_swarm.cli.commands.sync_openrouter",
+                "sync", "--update-only", "--output", str(config_path),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            
+            stdout, stderr = await result.communicate()
+            
+            if result.returncode == 0:
+                # Parse output to show summary
+                output = stdout.decode()
+                if "Updated" in output:
+                    # Extract numbers from output
+                    import re
+                    match = re.search(r"Updated (\d+) existing models", output)
+                    if match:
+                        count = match.group(1)
+                        console.print(f"[green]✓ Updated {count} models with latest context lengths[/green]")
+                    else:
+                        console.print("[green]✓ Models synced successfully[/green]")
+                else:
+                    console.print("[green]✓ Models are up to date[/green]")
+                    
+                # Reload model pool to pick up changes
+                from mind_swarm.ai.model_pool import model_pool
+                model_pool.__init__()  # Reinitialize to reload configs
+                console.print("[dim]Model pool reloaded with updated configurations[/dim]")
+                
+            else:
+                error_msg = stderr.decode() if stderr else "Unknown error"
+                console.print(f"[red]✗ Sync failed: {error_msg}[/red]")
+                
+        except Exception as e:
+            console.print(f"[red]✗ Failed to sync models: {e}[/red]")
+    
+    async def show_model_list(self):
+        """Display full list of available models."""
+        from mind_swarm.ai.model_pool import model_pool, Priority, CostType
+        from datetime import datetime
+        
+        models = model_pool.list_models(include_paid=True)
+        
+        if not models:
+            console.print("[yellow]No models available[/yellow]")
+            return
+        
+        table = Table(title="Available Models")
+        table.add_column("Model ID", style="cyan")
+        table.add_column("Priority", style="magenta")
+        table.add_column("Cost", style="green")
+        table.add_column("Provider")
+        table.add_column("Context", style="dim")
+        table.add_column("Status")
+        
+        for model in models:
+            # Determine status
+            status = ""
+            if model.is_promoted():
+                remaining = model.promoted_until - datetime.now()
+                hours = remaining.total_seconds() / 3600
+                status = f"Promoted ({hours:.1f}h left)"
+            
+            # Format priority with color
+            priority = model.priority.value
+            if model.priority == Priority.PRIMARY:
+                priority = f"[bold green]{priority}[/bold green]"
+            elif model.priority == Priority.NORMAL:
+                priority = f"[yellow]{priority}[/yellow]"
+            else:
+                priority = f"[dim]{priority}[/dim]"
+            
+            # Format cost
+            cost = "FREE" if model.cost_type == CostType.FREE else "PAID"
+            if model.cost_type == CostType.PAID:
+                cost = f"[red]{cost}[/red]"
+            
+            table.add_row(
+                model.id,
+                priority,
+                cost,
+                model.provider,
+                str(model.context_length),
+                status
+            )
         
         console.print(table)
+    
+    def show_model_summary(self):
+        """Display model pool summary."""
+        from mind_swarm.ai.model_pool import model_pool, Priority
+        
+        models = model_pool.list_models(include_paid=True)
+        
+        # Count by priority
+        primary_count = sum(1 for m in models if m.priority == Priority.PRIMARY)
+        normal_count = sum(1 for m in models if m.priority == Priority.NORMAL) 
+        fallback_count = sum(1 for m in models if m.priority == Priority.FALLBACK)
+        
+        table = Table(title="Model Pool Summary")
+        table.add_column("Priority", style="cyan")
+        table.add_column("Count", style="green", justify="right")
+        table.add_column("Description")
+        
+        table.add_row(
+            "PRIMARY",
+            str(primary_count),
+            "Preferred models (selected first)"
+        )
+        table.add_row(
+            "NORMAL",
+            str(normal_count),
+            "Standard models (selected if no primary)"
+        )
+        table.add_row(
+            "FALLBACK",
+            str(fallback_count),
+            "Local models (used as last resort)"
+        )
+        
+        console.print(table)
+        console.print(f"\n[dim]Use 'mind-swarm models list' to see all models[/dim]")
     
     async def run_interactive(self):
         """Run interactive mode."""
@@ -181,11 +330,16 @@ class MindSwarmCLI:
         console.print("  [cyan]command <name> <command> [params][/cyan] - Send command to Cyber")
         console.print("  [cyan]message <name> <text>[/cyan] - Send message to Cyber")
         console.print("  [cyan]question <text>[/cyan] - Create a shared question")
-        console.print("  [cyan]presets[/cyan] - List available AI presets")
+        console.print("  [cyan]models[/cyan] - Show model pool summary")
+        console.print("  [cyan]models list[/cyan] - Show all available models")
+        console.print("  [cyan]models promote <id> <priority> [--duration <hours>][/cyan] - Promote model")
+        console.print("  [cyan]models demote <id>[/cyan] - Demote model to original priority")
+        console.print("  [cyan]models sync[/cyan] - Sync OpenRouter models from API (update context lengths)")
         console.print("  [cyan]dev register <name> [full_name] [email][/cyan] - Register developer")
         console.print("  [cyan]dev current [name][/cyan] - Show/set current developer")
         console.print("  [cyan]dev list[/cyan] - List registered developers")
         console.print("  [cyan]mailbox[/cyan] - Check developer mailbox")
+        console.print("  [cyan]stop[/cyan] - Stop the server")
         console.print("  [cyan]quit[/cyan] - Exit the system")
         console.print("\n[dim]Tip: Use 'quit' or Ctrl+C to exit[/dim]")
         
@@ -214,6 +368,54 @@ class MindSwarmCLI:
                 
                 if cmd == "quit" or cmd == "exit":
                     self._running = False
+                
+                elif cmd == "stop":
+                    # Stop the server using the PID file approach
+                    console.print("[yellow]Stopping the server...[/yellow]")
+                    
+                    import signal
+                    import time
+                    from pathlib import Path
+                    
+                    pid_file = Path("/tmp/mind-swarm-server.pid")
+                    
+                    if not pid_file.exists():
+                        console.print("[yellow]Server not running (no PID file)[/yellow]")
+                    else:
+                        try:
+                            pid = int(pid_file.read_text().strip())
+                            import os
+                            os.kill(pid, signal.SIGTERM)
+                            console.print(f"[green]✓ Sent shutdown signal to server (PID: {pid})[/green]")
+                            
+                            # Wait for shutdown (up to 60 seconds)
+                            console.print("[dim]Waiting for graceful shutdown...[/dim]")
+                            for i in range(120):
+                                await asyncio.sleep(0.5)
+                                try:
+                                    os.kill(pid, 0)
+                                    # Show progress every 5 seconds
+                                    if i > 0 and i % 10 == 0:
+                                        console.print(f"[yellow]Still waiting... ({i//2}s)[/yellow]")
+                                except ProcessLookupError:
+                                    console.print("[green]✓ Server stopped gracefully[/green]")
+                                    console.print("[dim]Exiting client...[/dim]")
+                                    self._running = False
+                                    break
+                            else:
+                                # If we're still here after 60s, force kill
+                                console.print("[red]Server still running after 60s, sending SIGKILL[/red]")
+                                os.kill(pid, signal.SIGKILL)
+                                await asyncio.sleep(1)
+                                console.print("[green]✓ Server force stopped[/green]")
+                                self._running = False
+                                
+                        except (ValueError, ProcessLookupError) as e:
+                            console.print("[yellow]Server not running (stale PID file)[/yellow]")
+                            pid_file.unlink()
+                        except Exception as e:
+                            console.print(f"[red]✗ Failed to stop server: {e}[/red]")
+                            console.print("[dim]You may need to stop the server manually using 'mind-swarm server stop'[/dim]")
                 
                 elif cmd == "status":
                     await self.show_status()
@@ -267,8 +469,49 @@ class MindSwarmCLI:
                     q_id = await self.client.create_community_question(question_text)
                     console.print(f"Posted to Community: {q_id}")
                 
-                elif cmd == "presets":
-                    self.show_presets()
+                elif cmd == "models":
+                    # Check for subcommand
+                    if len(parts) > 1:
+                        subcmd = parts[1].lower()
+                        
+                        if subcmd == "list":
+                            # Show full model list
+                            await self.show_model_list()
+                        
+                        elif subcmd == "promote" and len(parts) >= 4:
+                            # models promote <model_id> <priority> [--duration <hours>]
+                            model_id = parts[2]
+                            priority = parts[3]
+                            
+                            # Check for duration flag
+                            duration = None
+                            if len(parts) > 4:
+                                for i in range(4, len(parts)):
+                                    if parts[i] == "--duration" and i + 1 < len(parts):
+                                        try:
+                                            duration = float(parts[i + 1])
+                                        except ValueError:
+                                            console.print(f"[red]Invalid duration: {parts[i + 1]}[/red]")
+                                            continue
+                            
+                            # Promote the model
+                            self.promote_model(model_id, priority, duration)
+                        
+                        elif subcmd == "demote" and len(parts) >= 3:
+                            # models demote <model_id>
+                            model_id = parts[2]
+                            self.demote_model(model_id)
+                        
+                        elif subcmd == "sync":
+                            # Sync OpenRouter models
+                            await self.sync_openrouter_models()
+                        
+                        else:
+                            console.print(f"[red]Unknown models command: {subcmd}[/red]")
+                            console.print("[dim]Use 'models', 'models list', 'models promote', 'models demote', or 'models sync'[/dim]")
+                    else:
+                        # Show summary
+                        self.show_model_summary()
                 
                 elif cmd == "dev" and len(parts) > 1:
                     # Developer commands
@@ -546,8 +789,6 @@ def status():
     # Check configuration
     console.print(f"\nSubspace root: {settings.subspace.root_path}")
     console.print(f"Max Cybers: {settings.subspace.max_agents}")
-    console.print(f"Local AI preset: {settings.ai_models.local_preset}")
-    console.print(f"Premium AI preset: {settings.ai_models.premium_preset}")
     
     # Check bubblewrap
     try:

@@ -1,232 +1,79 @@
 """Model selection logic for choosing appropriate AI models for Cybers.
 
-This module provides strategies for selecting models based on availability,
-performance metrics, and Cyber requirements.
+This module provides model selection using the priority-based model pool.
 """
 
-import random
-from typing import Dict, List, Optional, Any
-from enum import Enum
+from typing import Optional, Dict, Any
 
-from mind_swarm.ai.model_registry import ModelRegistry, ModelInfo
+from mind_swarm.ai.model_pool import model_pool, ModelConfig
+from mind_swarm.ai.config import AIExecutionConfig
 from mind_swarm.utils.logging import logger
 
 
-class SelectionStrategy(Enum):
-    """Model selection strategies."""
-    RANDOM_CURATED = "random_curated"  # Random from curated free list
-    RANDOM_FREE = "random_free"  # Random from all free models
-    BEST_PERFORMANCE = "best_performance"  # Highest success rate + speed
-    LEAST_USED = "least_used"  # Least recently used for load balancing
-    FALLBACK_LOCAL = "fallback_local"  # Local models only
-
-
 class ModelSelector:
-    """Selects appropriate models for Cybers based on various strategies."""
+    """Selects appropriate models for Cybers using the model pool."""
     
-    def __init__(self, registry: ModelRegistry):
-        """Initialize the model selector.
+    def __init__(self):
+        """Initialize the model selector."""
+        self.pool = model_pool
+        
+    def select_model(self, paid_allowed: bool = False) -> Optional[ModelConfig]:
+        """Select a model from the pool.
         
         Args:
-            registry: Model registry instance
-        """
-        self.registry = registry
-        
-    def select_model(
-        self,
-        strategy: SelectionStrategy = SelectionStrategy.RANDOM_CURATED,
-        constraints: Optional[Dict[str, Any]] = None
-    ) -> Optional[ModelInfo]:
-        """Select a model based on strategy and constraints.
-        
-        Args:
-            strategy: Selection strategy to use
-            constraints: Optional constraints (e.g., min_context_length)
+            paid_allowed: Whether paid models can be selected
             
         Returns:
             Selected model or None if no suitable model found
         """
-        candidates = self._get_candidates(strategy, constraints)
+        model = self.pool.select_model(paid_allowed=paid_allowed)
         
-        if not candidates:
-            logger.warning(f"No models found for strategy {strategy}")
-            return None
+        if not model:
+            logger.warning("No models available for selection")
             
-        if strategy == SelectionStrategy.RANDOM_CURATED:
-            return random.choice(candidates)
-            
-        elif strategy == SelectionStrategy.RANDOM_FREE:
-            return random.choice(candidates)
-            
-        elif strategy == SelectionStrategy.BEST_PERFORMANCE:
-            return self._select_best_performance(candidates)
-            
-        elif strategy == SelectionStrategy.LEAST_USED:
-            return self._select_least_used(candidates)
-            
-        elif strategy == SelectionStrategy.FALLBACK_LOCAL:
-            return candidates[0] if candidates else None
-            
-        else:
-            # Default to random selection
-            return random.choice(candidates)
-            
-    def _get_candidates(
-        self,
-        strategy: SelectionStrategy,
-        constraints: Optional[Dict[str, Any]] = None
-    ) -> List[ModelInfo]:
-        """Get candidate models based on strategy and constraints.
-        
-        Args:
-            strategy: Selection strategy
-            constraints: Optional constraints
-            
-        Returns:
-            List of candidate models
-        """
-        # Start with base candidates based on strategy
-        if strategy == SelectionStrategy.RANDOM_CURATED:
-            candidates = self.registry.get_free_models(curated_only=True)
-        elif strategy == SelectionStrategy.FALLBACK_LOCAL:
-            candidates = [
-                m for m in self.registry.get_free_models()
-                if m.id.startswith("ollama/")
-            ]
-        else:
-            # For other strategies, start with all free models
-            candidates = self.registry.get_free_models()
-            
-        # Apply constraints
-        if constraints:
-            candidates = self._apply_constraints(candidates, constraints)
-            
-        return candidates
-        
-    def _apply_constraints(
-        self,
-        models: List[ModelInfo],
-        constraints: Dict[str, Any]
-    ) -> List[ModelInfo]:
-        """Apply constraints to filter models.
-        
-        Args:
-            models: List of models to filter
-            constraints: Constraints to apply
-            
-        Returns:
-            Filtered list of models
-        """
-        filtered = models
-        
-        # Filter by context length
-        if "min_context_length" in constraints:
-            min_ctx = constraints["min_context_length"]
-            filtered = [m for m in filtered if m.context_length >= min_ctx]
-            
-        # Filter by capabilities
-        if constraints.get("requires_functions"):
-            filtered = [m for m in filtered if m.supports_functions]
-            
-        if constraints.get("requires_vision"):
-            filtered = [m for m in filtered if m.supports_vision]
-            
-        return filtered
-        
-    def _select_best_performance(self, candidates: List[ModelInfo]) -> ModelInfo:
-        """Select model with best performance metrics.
-        
-        Args:
-            candidates: List of candidate models
-            
-        Returns:
-            Best performing model
-        """
-        # Score models based on success rate and speed
-        best_model = None
-        best_score = -1
-        
-        for model in candidates:
-            metrics = self.registry.metrics.get(model.id)
-            if not metrics or metrics.total_requests == 0:
-                # No data, give it a neutral score
-                score = 0.5
-            else:
-                # Combine success rate and speed (normalized)
-                success_score = metrics.success_rate
-                # Normalize speed score (faster is better, cap at 1000ms)
-                speed_score = max(0, 1 - (metrics.avg_time_ms / 1000))
-                score = (success_score * 0.7) + (speed_score * 0.3)
-                
-            if score > best_score:
-                best_score = score
-                best_model = model
-                
-        return best_model or candidates[0]
-        
-    def _select_least_used(self, candidates: List[ModelInfo]) -> ModelInfo:
-        """Select least recently used model for load balancing.
-        
-        Args:
-            candidates: List of candidate models
-            
-        Returns:
-            Least recently used model
-        """
-        # Find model with oldest last success time
-        least_used = None
-        oldest_time = float('inf')
-        
-        for model in candidates:
-            metrics = self.registry.metrics.get(model.id)
-            if not metrics:
-                # Never used, perfect candidate
-                return model
-                
-            last_use = metrics.last_success_time or 0
-            if last_use < oldest_time:
-                oldest_time = last_use
-                least_used = model
-                
-        return least_used or candidates[0]
-        
-        
-    def get_model_config(
-        self,
-        model: ModelInfo,
-        api_key: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """Get configuration dict for a model.
+        return model
+    
+    def get_model_config(self, model: ModelConfig) -> AIExecutionConfig:
+        """Convert ModelConfig to AIExecutionConfig.
         
         Args:
             model: Selected model
-            api_key: API key for the provider
             
         Returns:
-            Configuration dictionary for the model
+            AIExecutionConfig for the model
         """
-        # Determine provider and settings
-        if model.id.startswith("ollama/"):
-            provider = "ollama"
-            model_id = model.id.replace("ollama/", "")
-            # Will use default localhost settings
-            config = {
-                "provider": provider,
-                "model": model_id,
-            }
-        else:
-            # OpenRouter model
-            provider = "openrouter"
-            config = {
-                "provider": provider,
-                "model": model.id,
-                "api_key": api_key,
-            }
-            
-        # Add common settings
-        config.update({
-            "temperature": 0.7,
-            "max_tokens": min(model.max_output_tokens or 4096, 4096),
-        })
+        # Get API key based on provider
+        import os
+        api_key = None
         
-        return config
+        # Check if this is a local model (has a host in api_settings)
+        is_local = model.api_settings and "host" in model.api_settings
+        
+        if is_local:
+            # Local models don't need API keys
+            api_key = "dummy"
+        else:
+            # Check for custom API key environment variable
+            if model.api_settings and "api_key_env" in model.api_settings:
+                # Use custom environment variable for API key
+                custom_key_env = model.api_settings["api_key_env"]
+                api_key = os.getenv(custom_key_env)
+                if not api_key:
+                    logger.warning(f"Custom API key env var {custom_key_env} not found for model {model.id}")
+            else:
+                # Use default based on provider
+                if model.provider == "openrouter":
+                    api_key = os.getenv("OPENROUTER_API_KEY")
+                elif model.provider == "openai":
+                    api_key = os.getenv("OPENAI_API_KEY")
+                elif model.provider == "anthropic":
+                    api_key = os.getenv("ANTHROPIC_API_KEY")
+        
+        return AIExecutionConfig(
+            model_id=model.id,
+            provider=model.provider,
+            api_key=api_key or "",
+            temperature=model.temperature,
+            max_tokens=model.max_tokens,
+            provider_settings=model.api_settings
+        )

@@ -474,6 +474,20 @@ class AgentProcessManager:
                 if isinstance(result, Exception):
                     logger.error(f"Error shutting down Cyber: {result}")
         
+        # Final cleanup: kill any remaining bwrap processes
+        # This is a safety net in case some processes didn't terminate properly
+        import subprocess
+        try:
+            logger.info("Final cleanup: killing any remaining bwrap processes...")
+            # Kill all bwrap processes owned by this user
+            result = subprocess.run(['pkill', '-KILL', '-f', 'bwrap'], capture_output=True, text=True)
+            if result.returncode == 0:
+                logger.warning("Had to force-kill some remaining bwrap processes")
+            else:
+                logger.info("No remaining bwrap processes found")
+        except Exception as e:
+            logger.error(f"Error during final bwrap cleanup: {e}")
+        
         logger.info("All Cybers shut down")
     
     async def _setup_agent_logging(self, agent_process: AgentProcess):

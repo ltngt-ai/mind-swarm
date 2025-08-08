@@ -378,11 +378,11 @@ class DynamicBrainHandler:
         Returns:
             The context length of the current model
         """
-        from mind_swarm.ai.model_registry import model_registry
+        from mind_swarm.ai.model_pool import model_pool
         
-        # Try to get from model registry first
+        # Try to get from model pool first
         if hasattr(self, 'lm') and hasattr(self.lm, 'model'):
-            model_info = model_registry.get_model(self.lm.model)
+            model_info = model_pool.get_model(self.lm.model)
             if model_info:
                 return model_info.context_length
         
@@ -395,30 +395,35 @@ class DynamicBrainHandler:
         Args:
             cyber_id: The Cyber requesting the switch
         """
-        from mind_swarm.ai.model_selector import ModelSelector, SelectionStrategy
-        from mind_swarm.ai.model_registry import model_registry
-        from mind_swarm.ai.presets import preset_manager
+        from mind_swarm.ai.model_selector import ModelSelector
+        from mind_swarm.ai.model_pool import model_pool
         
         try:
-            # Get the model selector with registry
-            selector = ModelSelector(model_registry)
+            # Get the model selector
+            selector = ModelSelector()
             
-            # Try to select a different free model from curated list
-            new_model_info = selector.select_model(
-                strategy=SelectionStrategy.RANDOM_CURATED
-            )
+            # Try to select a different free model
+            new_model_info = selector.select_model(paid_allowed=False)
             
             if new_model_info and new_model_info.id != getattr(self.lm, 'model', None):
                 self.logger.info(f"Switching from {getattr(self.lm, 'model', 'unknown')} to {new_model_info.id} for Cyber {cyber_id}")
                 
-                # Reconfigure DSPy with the new model
+                # Get configuration for the new model
+                config_obj = selector.get_model_config(new_model_info)
+                
+                # Convert to dict for DSPy
+                from dataclasses import asdict
+                config_dict = asdict(config_obj)
                 config = {
-                    'provider': 'openrouter',
-                    'model': new_model_info.id,
-                    'api_key': self.lm_config.get('api_key'),
-                    'temperature': self.lm_config.get('temperature', 0.7),
-                    'max_tokens': self.lm_config.get('max_tokens', 4096)
+                    'provider': config_dict['provider'],
+                    'model': config_dict['model_id'],
+                    'api_key': config_dict.get('api_key'),
+                    'temperature': config_dict.get('temperature', 0.7),
+                    'max_tokens': config_dict.get('max_tokens', 4096)
                 }
+                if config_dict.get('provider_settings'):
+                    config['api_settings'] = config_dict['provider_settings']
+                
                 self.lm = configure_dspy_for_mind_swarm(config)
                 self.lm_config['model'] = new_model_info.id
                 
@@ -426,32 +431,24 @@ class DynamicBrainHandler:
                 if self.model_switch_callback:
                     await self.model_switch_callback(cyber_id, new_model_info.id, new_model_info.context_length)
             else:
-                # No alternative curated model, fall back to local default
-                self.logger.warning(f"No alternative curated model for Cyber {cyber_id}, falling back to local default")
+                # No alternative model, fall back to local default
+                self.logger.warning(f"No alternative model for Cyber {cyber_id}, using fallback configuration")
                 
-                # Get the default preset (local model)
-                default_preset = preset_manager.get_preset("default")
-                if default_preset:
-                    config = {
-                        'provider': default_preset.provider,
-                        'model': default_preset.model,
-                        'temperature': default_preset.temperature,
-                        'max_tokens': default_preset.max_tokens,
-                        'api_settings': default_preset.api_settings
-                    }
-                    self.lm = configure_dspy_for_mind_swarm(config)
-                    self.lm_config.update(config)
-                    self.logger.info(f"Switched to local model {default_preset.model} for Cyber {cyber_id}")
-                    
-                    # Notify about model switch with local model's context length
-                    if self.model_switch_callback:
-                        # Look up the local model in registry to get its actual context length
-                        local_model_info = model_registry.get_model(default_preset.model)
-                        if local_model_info:
-                            await self.model_switch_callback(cyber_id, default_preset.model, local_model_info.context_length)
-                        else:
-                            # Fallback to max_tokens from preset config
-                            await self.model_switch_callback(cyber_id, default_preset.model, default_preset.max_tokens)
+                # Use a fallback configuration
+                config = {
+                    'provider': 'openai',
+                    'model': 'local/default',
+                    'temperature': 0.7,
+                    'max_tokens': 4096,
+                    'api_settings': {'host': 'http://192.168.1.209:1234'}
+                }
+                self.lm = configure_dspy_for_mind_swarm(config)
+                self.lm_config.update(config)
+                self.logger.info(f"Using fallback local model for Cyber {cyber_id}")
+                
+                # Notify about model switch
+                if self.model_switch_callback:
+                    await self.model_switch_callback(cyber_id, 'local/default', 4096)
                 
         except Exception as e:
             self.logger.error(f"Error switching models for Cyber {cyber_id}: {e}")

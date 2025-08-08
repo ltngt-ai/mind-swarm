@@ -79,8 +79,8 @@ Always start your output with [[ ## reasoning ## ]]
                 },
                 "outputs": {
                     "reasoning": "Why this memory deserves attention right now",
-                    "memory_id": "The exact memory ID to focus on (e.g. 'observation:personal:new_message/msg_123:abc') or 'none'",
-                    "obsolete_observations": "JSON array of observation IDs that are no longer relevant and can be removed, e.g. ['observation:personal:action_result/old_action:123', 'observation:personal:new_message/already_processed:456']"
+                    "memory_id": "The exact memory ID to focus on (e.g. 'observation:personal/new_message/msg_123:abc') or 'none'",
+                    "obsolete_observations": "JSON array of observation IDs that are no longer relevant and can be removed, e.g. ['observation:personal/action_result/old_action:123', 'observation:personal/new_message/already_processed:456']"
                 },
                 "display_field": "reasoning"
             },
