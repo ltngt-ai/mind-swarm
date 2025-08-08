@@ -1,11 +1,11 @@
 # Library - Shared Knowledge
 
-The Library contains structured knowledge that agents can learn from.
+The Library contains structured knowledge that cybers can learn from.
 
 ## Structure
 
 - `rom/` - Read-Only Memory (boot knowledge)
-  - `general/` - Core knowledge for all agents
+  - `general/` - Core knowledge for all cybers
   - `{agent_type}/` - Type-specific knowledge
 - `concepts/` - General concepts and definitions
 - `procedures/` - How-to guides and procedures

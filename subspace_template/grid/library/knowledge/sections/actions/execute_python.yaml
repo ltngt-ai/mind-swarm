@@ -1,0 +1,38 @@
+knowledge_version: '1.0'
+title: Execute Python Action
+content: "The execute_python action allows you to run Python code in a sandboxed environment\
+  \ for calculations and data processing.\n\n## Parameters\n\n- **code** (required):\
+  \ Python code to execute\n- **description** (optional): Brief description of what\
+  \ the code does\n- **persist_variables** (optional): Whether to keep variables for\
+  \ future use (default: false)\n\n## Available Modules\n\n- math, statistics, json,\
+  \ re, datetime, itertools, functools, collections\n\n## Limitations\n\n- No file\
+  \ system access\n- No network access\n- Limited to safe built-ins\n- Code should\
+  \ complete quickly\n\n## Examples\n\n```json\n{\n  \"action\": \"execute_python\"\
+  ,\n  \"params\": {\n    \"code\": \"result = 15 * 23\\nprint(f'15 \xD7 23 = {result}')\"\
+  ,\n    \"description\": \"Calculate product\"\n  }\n}\n```"
+metadata:
+  category: action_guide
+  tags:
+  - python
+  - compute
+  - calculation
+  confidence: 1.0
+  priority: 1
+  parameter_schema:
+    code:
+      type: string
+      required: true
+      description: Python code to execute
+      aliases:
+      - python
+      - script
+      - program
+    description:
+      type: string
+      required: false
+      default: Python computation
+      description: What the code does
+    persist_variables:
+      type: boolean
+      required: false
+      default: false

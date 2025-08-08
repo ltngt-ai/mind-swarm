@@ -1,1 +1,1 @@
-"""Subspace sandbox environment for agents."""
+"""Subspace sandbox environment for Cybers."""

@@ -1,6 +1,6 @@
-"""Compute actions for agent cognitive loops.
+"""Compute actions for Cyber cognitive loops.
 
-These actions provide sandboxed computation capabilities to agents,
+These actions provide sandboxed computation capabilities to Cybers,
 allowing them to execute Python code for calculations, data processing,
 and general computation tasks.
 """
@@ -15,7 +15,7 @@ import traceback
 from .actions.base_actions import Action, ActionResult, ActionStatus, Priority
 from .memory import ObservationMemoryBlock
 
-logger = logging.getLogger("agent.compute_actions")
+logger = logging.getLogger("Cyber.compute_actions")
 
 
 class ExecutePythonAction(Action):
@@ -115,7 +115,7 @@ class ExecutePythonAction(Action):
         namespace = {
             '__builtins__': self.safe_builtins,
             '__name__': '__agent_compute__',
-            '__doc__': 'Agent computation environment',
+            '__doc__': 'Cyber computation environment',
         }
         
         # Add safe modules

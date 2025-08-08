@@ -9,7 +9,7 @@ from datetime import datetime
 
 from ..memory import MemoryBlock, Priority
 
-logger = logging.getLogger("agent.actions")
+logger = logging.getLogger("Cyber.actions")
 
 
 class ActionStatus(Enum):
@@ -65,7 +65,7 @@ class Action(ABC):
         """Execute the action.
         
         Args:
-            context: Execution context including agent state, memory, etc.
+            context: Execution context including Cyber state, memory, etc.
             
         Returns:
             ActionResult with outcome
@@ -76,13 +76,13 @@ class Action(ABC):
         return f"{self.__class__.__name__}(name='{self.name}', params={self.params})"
 
 
-# Base Actions available to all agents
+# Base Actions available to all Cybers
 
 class SendMessageAction(Action):
-    """Send a message to another agent."""
+    """Send a message to another Cyber."""
     
     def __init__(self):
-        super().__init__("send_message", "Send message to another agent")
+        super().__init__("send_message", "Send message to another Cyber")
     
     async def execute(self, context: Dict[str, Any]) -> ActionResult:
         """Write message to outbox."""
@@ -130,7 +130,7 @@ class SendMessageAction(Action):
         try:
             # Get outbox from context
             outbox_dir = context.get("outbox_dir")
-            agent_id = context.get("agent_id")
+            cyber_id = context.get("cyber_id")
             
             if not outbox_dir:
                 return ActionResult(
@@ -141,7 +141,7 @@ class SendMessageAction(Action):
             
             # Create message
             message = {
-                "from": agent_id,
+                "from": cyber_id,
                 "to": to_agent,
                 "type": message_type,
                 "content": content,
@@ -151,7 +151,7 @@ class SendMessageAction(Action):
             # Write to outbox
             import json
             from pathlib import Path
-            msg_id = f"{agent_id}_{int(datetime.now().timestamp() * 1000)}"
+            msg_id = f"{cyber_id}_{int(datetime.now().timestamp() * 1000)}"
             msg_file = Path(outbox_dir) / f"{msg_id}.msg"
             msg_file.write_text(json.dumps(message, indent=2))
             
@@ -216,46 +216,46 @@ class WaitAction(Action):
 # Action Registry
 
 class ActionRegistry:
-    """Registry of available actions for different agent types."""
+    """Registry of available actions for different Cyber types."""
     
     def __init__(self):
         self._actions: Dict[str, Dict[str, type[Action]]] = {
-            # Base actions available to all agents
+            # Base actions available to all Cybers
             "base": {
                 "send_message": SendMessageAction,
                 "wait": WaitAction,
             }
         }
     
-    def register_action(self, agent_type: str, action_name: str, action_class: type[Action]):
-        """Register an action for a specific agent type."""
-        if agent_type not in self._actions:
-            self._actions[agent_type] = {}
-        self._actions[agent_type][action_name] = action_class
+    def register_action(self, cyber_type: str, action_name: str, action_class: type[Action]):
+        """Register an action for a specific Cyber type."""
+        if cyber_type not in self._actions:
+            self._actions[cyber_type] = {}
+        self._actions[cyber_type][action_name] = action_class
     
-    def get_available_actions(self, agent_type: str) -> Dict[str, type[Action]]:
-        """Get all available actions for an agent type."""
+    def get_available_actions(self, cyber_type: str) -> Dict[str, type[Action]]:
+        """Get all available actions for an Cyber type."""
         # Start with base actions
         actions = self._actions["base"].copy()
         
         # Add type-specific actions
-        if agent_type in self._actions:
-            actions.update(self._actions[agent_type])
+        if cyber_type in self._actions:
+            actions.update(self._actions[cyber_type])
         
         return actions
     
-    def create_action(self, agent_type: str, action_name: str) -> Optional[Action]:
+    def create_action(self, cyber_type: str, action_name: str) -> Optional[Action]:
         """Create an action instance."""
-        actions = self.get_available_actions(agent_type)
+        actions = self.get_available_actions(cyber_type)
         action_class = actions.get(action_name)
         
         if action_class:
             return action_class()
         return None
 
-    def get_actions_for_agent(self, agent_type: str) -> List[str]:
-        """Get list of action names for an agent type."""
-        return list(self.get_available_actions(agent_type).keys())
+    def get_actions_for_agent(self, cyber_type: str) -> List[str]:
+        """Get list of action names for an Cyber type."""
+        return list(self.get_available_actions(cyber_type).keys())
 
 
 # Global action registry

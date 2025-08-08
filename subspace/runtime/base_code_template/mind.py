@@ -1,8 +1,8 @@
-"""Agent Mind - The main class that coordinates all cognitive components.
+"""Cyber Mind - The main class that coordinates all cognitive components.
 
 This is the primary class that:
 - Manages the cognitive loop
-- Maintains agent state
+- Maintains Cyber state
 - Handles lifecycle (startup, running, shutdown)
 """
 
@@ -13,33 +13,37 @@ import os
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
-
-from .boot_rom import BootROM
-
 from .cognitive_loop import CognitiveLoop
 
-logger = logging.getLogger("agent.mind")
+logger = logging.getLogger("Cyber.mind")
 
 
-class AgentMind:
-    """The complete agent mind - coordinates all cognitive functions."""
+class CyberMind:
+    """The complete Cyber mind - coordinates all cognitive functions."""
     
     def __init__(self):
-        """Initialize the agent mind."""
-        # Get identity from environment
-        self.name = os.environ.get("AGENT_NAME", "unknown")
-        self.agent_type = os.environ.get("AGENT_TYPE", "general")
-        
+        """Initialize the Cyber mind."""
         # Set up paths
-        self.home = Path("/home")
+        self.personal = Path("/personal")
         self.grid = Path("/grid")
+        
+        # Load identity from file or fall back to environment
+        self.identity = self._load_identity()
+        self.name = self.identity.get("name", os.environ.get("CYBER_NAME", "unknown"))
+        self.cyber_type = self.identity.get("cyber_type", os.environ.get("CYBER_TYPE", "general"))
+        self.model = self.identity.get("model", "unknown")
+        self.max_context_length = self.identity.get("max_context_length", 4096)
         
         # Load configuration if it exists
         self.config = self._load_config()
         
         # Initialize cognitive components
-        self.boot_rom = BootROM()
-        self.cognitive_loop = CognitiveLoop(self.name, self.home)
+        self.cognitive_loop = CognitiveLoop(
+            self.name, 
+            self.personal, 
+            max_context_tokens=self.max_context_length,
+            cyber_type=self.cyber_type
+        )
         
         # State
         self.running = False
@@ -48,18 +52,36 @@ class AgentMind:
         self.state = "INITIALIZING"
         
         # Log startup
-        logger.info(f"Agent mind initializing: {self.name}")
-        for line in self.boot_rom.get_boot_sequence():
-            logger.info(f"  {line}")
+        logger.info(f"Cyber mind initializing: {self.name}")
+        logger.info(f"  Model: {self.model}, Context: {self.max_context_length}")
     
     def request_stop(self):
         """Request a graceful stop after the current cycle."""
         self.stop_requested = True
         logger.info("Stop requested - will exit after current cycle completes")
     
+    def _load_identity(self) -> dict:
+        """Load Cyber identity from file."""
+        identity_file = self.personal / "identity.json"
+        if identity_file.exists():
+            try:
+                return json.loads(identity_file.read_text())
+            except Exception as e:
+                logger.error(f"Error loading identity: {e}")
+        
+        # Default identity from environment
+        return {
+            "name": os.environ.get("CYBER_NAME", "unknown"),
+            "cyber_type": os.environ.get("CYBER_TYPE", "general"),
+            "model": "unknown",
+            "max_context_length": 4096,
+            "provider": "unknown",
+            "created_at": datetime.now().isoformat()
+        }
+    
     def _load_config(self) -> dict:
-        """Load agent configuration from file."""
-        config_file = self.home / "config.json"
+        """Load Cyber configuration from file."""
+        config_file = self.personal / "config.json"
         if config_file.exists():
             try:
                 return json.loads(config_file.read_text())
@@ -69,12 +91,12 @@ class AgentMind:
         # Default config
         return {
             "name": self.name,
-            "type": self.agent_type
+            "type": self.cyber_type
         }
     
     async def run(self):
-        """Main agent execution loop."""
-        logger.info(f"Agent {self.name} starting main loop")
+        """Main Cyber execution loop."""
+        logger.info(f"Cyber {self.name} starting main loop")
         self.running = True
         self.state = "RUNNING"
         
@@ -92,7 +114,6 @@ class AgentMind:
             idle_cycles = 0
             
             while self.running and not self.stop_requested:
-                
                 # Run one cognitive cycle
                 was_active = await self.cognitive_loop.run_cycle()
                 
@@ -135,11 +156,11 @@ class AgentMind:
             except asyncio.CancelledError:
                 pass
             
-            logger.info(f"Agent {self.name} shutting down")
+            logger.info(f"Cyber {self.name} shutting down")
     
     async def _heartbeat_loop(self):
         """Maintain heartbeat file for monitoring."""
-        heartbeat_file = self.home / "heartbeat.json"
+        heartbeat_file = self.personal / "heartbeat.json"
         
         while self.running:
             try:
@@ -162,16 +183,16 @@ class AgentMind:
     
     async def _update_status_loop(self):
         """Update detailed status periodically."""
-        status_file = self.home / "status.json"
+        status_file = self.personal / "status.json"
         
         while self.running:
             try:
                 # Get memory system summary
-                wm_summary = self.cognitive_loop.memory_manager.get_memory_stats()
+                wm_summary = self.cognitive_loop.memory_system.get_memory_stats()
                 
                 status = {
                     "name": self.name,
-                    "type": self.agent_type,
+                    "type": self.cyber_type,
                     "state": self.state,
                     "timestamp": datetime.now().isoformat(),
                     "uptime": (datetime.now() - self.start_time).total_seconds(),
@@ -191,7 +212,7 @@ class AgentMind:
     
     async def _shutdown_monitor_loop(self):
         """Monitor for shutdown signal from coordinator."""
-        shutdown_file = self.home / "shutdown"
+        shutdown_file = self.personal / "shutdown"
         
         while self.running:
             try:
@@ -209,7 +230,7 @@ class AgentMind:
     async def _autonomous_action(self):
         """Take autonomous action when idle."""
         # For now, just log that we could explore
-        logger.debug("Agent is idle - could explore the Grid or review memory")
+        logger.debug("Cyber is idle - could explore the Grid or review memory")
         
         # In future: 
         # - Check Plaza for unanswered questions

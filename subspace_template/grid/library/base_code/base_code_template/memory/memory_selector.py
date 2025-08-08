@@ -20,7 +20,7 @@ from .memory_blocks import (
 )
 from .context_builder import ContextBuilder
 
-logger = logging.getLogger("agent.memory.selector")
+logger = logging.getLogger("Cyber.memory.selector")
 
 
 class RelevanceScorer:

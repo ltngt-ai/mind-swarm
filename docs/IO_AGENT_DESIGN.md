@@ -1,20 +1,20 @@
-# I/O Agent Implementation Design
+# I/O cyber Implementation Design
 
 ## Overview
 
-I/O Agents are specialized agents that bridge the subspace (agent world) and the external world (server, users, network). They maintain the clean separation of concerns while providing controlled, intelligent access to external resources.
+I/O cybers are specialized cybers that bridge the subspace (cyber world) and the external world (server, users, network). They maintain the clean separation of concerns while providing controlled, intelligent access to external resources.
 
 ## Architecture
 
-### Dual Nature of I/O Agents
+### Dual Nature of I/O cybers
 
-I/O agents have a unique architecture with components in both worlds:
+I/O cybers have a unique architecture with components in both worlds:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                      External World                          │
 │  ┌─────────────────────────────────────────────────────┐   │
-│  │             I/O Agent Server Component               │   │
+│  │             I/O cyber Server Component               │   │
 │  │  - WebSocket/HTTP handlers                          │   │
 │  │  - Network access                                   │   │
 │  │  - User session management                          │   │
@@ -24,11 +24,11 @@ I/O agents have a unique architecture with components in both worlds:
 ├─────────────────────┼───────────────────────────────────────┤
 │                     │                                        │
 │  ┌──────────────────▼──────────────────────────────────┐   │
-│  │           I/O Agent Sandbox Component               │   │
+│  │           I/O cyber Sandbox Component               │   │
 │  │  - Message routing logic                            │   │
 │  │  - Request validation                               │   │
 │  │  - Response formatting                              │   │
-│  │  - Internal agent communication                     │   │
+│  │  - Internal cyber communication                     │   │
 │  └─────────────────────────────────────────────────────┘   │
 │                       Subspace                              │
 └─────────────────────────────────────────────────────────────┘
@@ -36,14 +36,14 @@ I/O agents have a unique architecture with components in both worlds:
 
 ## Implementation Plan
 
-### 1. Agent Type System Enhancement
+### 1. cyber Type System Enhancement
 
-#### Update Agent Configuration
+#### Update cyber Configuration
 ```python
 # In schemas/agent_config.py
 class AgentType(Enum):
-    GENERAL = "general"      # Current default agents
-    IO_GATEWAY = "io_gateway"  # I/O bridge agents
+    GENERAL = "general"      # Current default cybers
+    IO_GATEWAY = "io_gateway"  # I/O bridge cybers
     # Future: RESEARCHER, CODER, etc.
 
 class AgentConfig:
@@ -54,11 +54,11 @@ class AgentConfig:
     server_component: Optional[ServerComponentConfig] = None
 ```
 
-#### Agent Type Registry
+#### cyber Type Registry
 ```python
 # In subspace/agent_registry.py
 class AgentTypeRegistry:
-    """Registry for different agent types and their configurations."""
+    """Registry for different cyber types and their configurations."""
     
     def __init__(self):
         self.types = {
@@ -67,25 +67,25 @@ class AgentTypeRegistry:
         }
     
     def get_sandbox_config(self, agent_type: AgentType) -> SandboxConfig:
-        """Get sandbox configuration for agent type."""
+        """Get sandbox configuration for cyber type."""
         if agent_type == AgentType.IO_GATEWAY:
-            # I/O agents need special body files but NO network access
+            # I/O cybers need special body files but NO network access
             # Network access is through server component only
             return SandboxConfig(
                 additional_body_files=["network", "user_io"],
                 network_access=False,  # Still sandboxed!
                 memory_limit_mb=1024,  # More memory for buffering
             )
-        return SandboxConfig()  # Default for general agents
+        return SandboxConfig()  # Default for general cybers
 ```
 
-### 2. Special Body Files for I/O Agents
+### 2. Special Body Files for I/O cybers
 
-I/O agents get additional body files beyond `/home/brain`:
+I/O cybers get additional body files beyond `/personal/brain`:
 
-#### `/home/network` - Network Request Interface
+#### `/personal/network` - Network Request Interface
 ```python
-# Request format (agent writes):
+# Request format (cyber writes):
 {
     "request_id": "req_123",
     "method": "GET",
@@ -105,7 +105,7 @@ I/O agents get additional body files beyond `/home/brain`:
 }
 ```
 
-#### `/home/user_io` - User Interaction Interface
+#### `/personal/user_io` - User Interaction Interface
 ```python
 # Incoming user message (subspace writes):
 {
@@ -116,7 +116,7 @@ I/O agents get additional body files beyond `/home/brain`:
     "context": {}
 }
 
-# Outgoing response (agent writes):
+# Outgoing response (cyber writes):
 {
     "session_id": "user_123",
     "reply_to": "msg_456",
@@ -130,7 +130,7 @@ I/O agents get additional body files beyond `/home/brain`:
 ```python
 # In server/io_agent_handler.py
 class IOAgentHandler:
-    """Server-side component for I/O agents."""
+    """Server-side component for I/O cybers."""
     
     def __init__(self, agent_name: str, coordinator: SubspaceCoordinator):
         self.agent_name = agent_name
@@ -139,8 +139,8 @@ class IOAgentHandler:
         self.pending_requests: Dict[str, asyncio.Future] = {}
     
     async def handle_user_message(self, session_id: str, message: str):
-        """Route user message to I/O agent."""
-        # Write to agent's user_io body file
+        """Route user message to I/O cyber."""
+        # Write to cyber's user_io body file
         await self.coordinator.body_system.write_special_file(
             self.agent_name, 
             "user_io",
@@ -153,7 +153,7 @@ class IOAgentHandler:
         )
     
     async def handle_network_request(self, request_data: dict):
-        """Process network request from I/O agent."""
+        """Process network request from I/O cyber."""
         # This runs outside sandbox with full network access
         async with aiohttp.ClientSession() as session:
             response = await session.request(
@@ -172,7 +172,7 @@ class IOAgentHandler:
 
 ### 4. Message Routing Updates
 
-With named I/O agents, routing becomes simpler and more transparent:
+With named I/O cybers, routing becomes simpler and more transparent:
 
 ```python
 # In coordinator.py MessageRouter
@@ -180,26 +180,26 @@ async def route_outbox_messages(self):
     """Standard routing - no special cases needed!"""
     # ... existing code ...
     
-    # All routing is just agent-to-agent
-    # Agents send directly to named I/O agents like:
+    # All routing is just cyber-to-cyber
+    # cybers send directly to named I/O cybers like:
     # - "io-gateway-001" 
     # - "web-bridge"
     # - "user-interface"
     
-    # No special handling needed - just deliver to the named agent
+    # No special handling needed - just deliver to the named cyber
     if await self._agent_exists(to_agent):
         await self._deliver_message(to_agent, message)
     else:
         await self._send_delivery_error(from_agent, message, 
-                                      f"Agent {to_agent} not found")
+                                      f"cyber {to_agent} not found")
 ```
 
-### Agent Directory Service
+### cyber Directory Service
 
-Agents need a way to discover available I/O agents and their capabilities:
+cybers need a way to discover available I/O cybers and their capabilities:
 
 ```python
-# New file: /shared/directory/agents.json
+# New file: /shared/directory/cybers.json
 {
     "io_agents": [
         {
@@ -233,33 +233,33 @@ Agents need a way to discover available I/O agents and their capabilities:
 }
 ```
 
-Agents can read this directory to find who to communicate with:
-- Need user interaction? Send to an I/O agent with "user_interaction" capability
-- Need web access? Send to an I/O agent with "web_access" capability
-- Want to collaborate? Send to other general agents
+cybers can read this directory to find who to communicate with:
+- Need user interaction? Send to an I/O cyber with "user_interaction" capability
+- Need web access? Send to an I/O cyber with "web_access" capability
+- Want to collaborate? Send to other general cybers
 
 ### 5. CLI Updates
 
-Update the CLI to work through I/O agents:
+Update the CLI to work through I/O cybers:
 
 ```python
 # In cli/main.py
 class MindSwarmCLI:
     async def connect(self):
-        """Connect to server and establish I/O agent session."""
+        """Connect to server and establish I/O cyber session."""
         # ... existing connection code ...
         
-        # Request I/O agent assignment
+        # Request I/O cyber assignment
         response = await self.api.request_io_agent()
         self.io_agent = response.get("agent_name")
         self.session_id = response.get("session_id")
         
-        print(f"Connected through I/O Agent: {self.io_agent}")
+        print(f"Connected through I/O cyber: {self.io_agent}")
     
     async def send_command(self, command: str):
-        """Send command through I/O agent."""
+        """Send command through I/O cyber."""
         if not self.io_agent:
-            print("Not connected to I/O agent")
+            print("Not connected to I/O cyber")
             return
         
         # Send through user_io channel
@@ -271,15 +271,15 @@ class MindSwarmCLI:
 
 ### 6. Sandbox Configuration
 
-I/O agents need special sandbox settings:
+I/O cybers need special sandbox settings:
 
 ```python
 # In subspace/sandbox.py
 def _build_bwrap_cmd_for_io_agent(self, cmd: List[str], env: Optional[Dict[str, str]] = None):
-    """Build bubblewrap command for I/O agents."""
+    """Build bubblewrap command for I/O cybers."""
     bwrap_cmd = self._build_bwrap_cmd(cmd, env)
     
-    # I/O agents still have NO direct network access
+    # I/O cybers still have NO direct network access
     # but get additional body file bindings
     
     # Add special body files directory
@@ -288,8 +288,8 @@ def _build_bwrap_cmd_for_io_agent(self, cmd: List[str], env: Optional[Dict[str, 
     
     # Bind special body files
     bwrap_cmd.extend([
-        "--bind", str(io_body_dir / "network"), "/home/network",
-        "--bind", str(io_body_dir / "user_io"), "/home/user_io",
+        "--bind", str(io_body_dir / "network"), "/personal/network",
+        "--bind", str(io_body_dir / "user_io"), "/personal/user_io",
     ])
     
     return bwrap_cmd
@@ -297,11 +297,11 @@ def _build_bwrap_cmd_for_io_agent(self, cmd: List[str], env: Optional[Dict[str, 
 
 ## Migration Path
 
-### Phase 1: Basic I/O Agent (Week 1)
-1. Implement agent type system
-2. Create first I/O agent type with special body files
-3. Update spawner to handle different agent types
-4. Basic message routing through I/O agents
+### Phase 1: Basic I/O cyber (Week 1)
+1. Implement cyber type system
+2. Create first I/O cyber type with special body files
+3. Update spawner to handle different cyber types
+4. Basic message routing through I/O cybers
 
 ### Phase 2: Server Component (Week 2)
 1. Implement IOAgentHandler
@@ -310,38 +310,38 @@ def _build_bwrap_cmd_for_io_agent(self, cmd: List[str], env: Optional[Dict[str, 
 4. WebSocket integration for real-time communication
 
 ### Phase 3: CLI Integration (Week 3)
-1. Update CLI to use I/O agents
+1. Update CLI to use I/O cybers
 2. Session management
 3. Remove direct subspace messaging
 4. Test end-to-end flows
 
 ### Phase 4: Advanced Features (Week 4+)
-1. Multiple I/O agents with load balancing
-2. Specialized I/O agents (web, API, user-facing)
-3. I/O agent failover and redundancy
+1. Multiple I/O cybers with load balancing
+2. Specialized I/O cybers (web, API, user-facing)
+3. I/O cyber failover and redundancy
 4. Performance optimization
 
 ## Security Considerations
 
-1. **Sandbox Integrity**: I/O agents remain fully sandboxed - no direct network access
+1. **Sandbox Integrity**: I/O cybers remain fully sandboxed - no direct network access
 2. **Request Validation**: All external requests validated by server component
 3. **Rate Limiting**: Server component implements rate limiting
-4. **Access Control**: I/O agents can only access approved external resources
+4. **Access Control**: I/O cybers can only access approved external resources
 5. **Audit Trail**: All external interactions logged for security review
 
 ## Benefits
 
-1. **Clean Separation**: Agents remain in their "world" while I/O agents bridge the gap
-2. **Intelligent Routing**: I/O agents can make smart decisions about request handling
-3. **Scalability**: Multiple I/O agents can handle different types of external interaction
+1. **Clean Separation**: cybers remain in their "world" while I/O cybers bridge the gap
+2. **Intelligent Routing**: I/O cybers can make smart decisions about request handling
+3. **Scalability**: Multiple I/O cybers can handle different types of external interaction
 4. **Security**: Better control over external access with intelligent filtering
-5. **Flexibility**: Easy to add new types of I/O agents for different purposes
-6. **Simplicity**: No special addresses - all communication is just agent-to-agent
-7. **Discoverability**: Agents can browse the directory to find who provides what services
+5. **Flexibility**: Easy to add new types of I/O cybers for different purposes
+6. **Simplicity**: No special addresses - all communication is just cyber-to-cyber
+7. **Discoverability**: cybers can browse the directory to find who provides what services
 
-## Agent Mental Model Simplification
+## cyber Mental Model Simplification
 
-From an agent's perspective, the world becomes very simple:
+From an cyber's perspective, the world becomes very simple:
 
 ```python
 # Before (with special cases):
@@ -350,9 +350,9 @@ if need_user_help:
 elif need_web_data:
     send_to("subspace")  # Same address for different things?
 elif collaborate:
-    send_to("agent-007")  # Different pattern
+    send_to("cyber-007")  # Different pattern
 
-# After (everything is just another agent):
+# After (everything is just another cyber):
 if need_user_help:
     send_to("io-gateway-001")  # Clear purpose
 elif need_web_data:
@@ -361,26 +361,26 @@ elif collaborate:
     send_to("Alice")           # Same pattern
 ```
 
-Agents don't need to understand that I/O agents are special - they're just other agents with specific capabilities listed in the directory.
+cybers don't need to understand that I/O cybers are special - they're just other cybers with specific capabilities listed in the directory.
 
-## Example I/O Agent Capabilities
+## Example I/O cyber Capabilities
 
-### Web Access I/O Agent
-- Fetches web pages for research agents
+### Web Access I/O cyber
+- Fetches web pages for research cybers
 - Handles API calls with rate limiting
 - Caches responses to reduce external calls
 - Filters/sanitizes incoming data
 
-### User Interface I/O Agent  
+### User Interface I/O cyber  
 - Manages conversation context
-- Routes questions to appropriate agents
+- Routes questions to appropriate cybers
 - Aggregates responses
 - Handles user session state
 
-### Data Import/Export I/O Agent
+### Data Import/Export I/O cyber
 - Controlled file uploads/downloads
 - Format conversion
 - Data validation
 - Privacy filtering
 
-This design maintains the philosophical purity of the agent world while providing practical external access through intelligent, specialized gatekeepers.
+This design maintains the philosophical purity of the cyber world while providing practical external access through intelligent, specialized gatekeepers.

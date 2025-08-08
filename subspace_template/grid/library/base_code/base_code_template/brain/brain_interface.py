@@ -31,7 +31,7 @@ class MemoryManagerProtocol(Protocol):
 from ..actions import Action
 from ..utils import DateTimeEncoder, FileManager
 
-logger = logging.getLogger("agent.brain")
+logger = logging.getLogger("Cyber.brain")
 
 
 class BrainInterface:
@@ -42,15 +42,15 @@ class BrainInterface:
     Provides high-level thinking methods while abstracting away low-level details.
     """
     
-    def __init__(self, brain_file: Path, agent_id: str):
+    def __init__(self, brain_file: Path, cyber_id: str):
         """Initialize the brain interface.
         
         Args:
             brain_file: Path to the brain file for communication
-            agent_id: The agent's identifier for logging
+            cyber_id: The Cyber's identifier for logging
         """
         self.brain_file = brain_file
-        self.agent_id = agent_id
+        self.cyber_id = cyber_id
         self.file_manager = FileManager()
         
     async def select_focus_from_memory(
@@ -67,13 +67,19 @@ class BrainInterface:
         """
         thinking_request = {
             "signature": {
-                "instruction": "Review your working memory and decide what deserves immediate attention. You can see a file with ID starting with 'file:memory:processed_observations' - its content shows observations you've already handled. Any observation whose memory_id appears in that content has ALREADY BEEN PROCESSED and should NOT be selected again. Instead, list those in obsolete_observations for cleanup. Select an OBSERVATION (ID starting with 'observation:') that is NOT in the processed observations list. If all observations are already processed, return 'none' for memory_id. For obsolete_observations, list any observation IDs that appear in the processed observations content or are duplicates.",
+                "instruction": """
+Review your working memory and decide what deserves immediate attention. 
+You can see a file with ID starting with 'file:memory:processed_observations' - its content shows observations you've already handled. 
+Any observation whose memory_id appears in that content has ALREADY BEEN PROCESSED and should NOT be selected again. Instead, list those in obsolete_observations for cleanup. Select an OBSERVATION (ID starting with 'observation:') that is NOT in the processed observations list. If all observations are already processed, return 'none' for memory_id. 
+For obsolete_observations, list any observation IDs that appear in the processed observations content or are duplicates.
+Always start your output with [[ ## reasoning ## ]]
+""",
                 "inputs": {
                     "working_memory": "Your current symbolic memory with all observations, messages, tasks, and context"
                 },
                 "outputs": {
-                    "memory_id": "The exact memory ID to focus on (e.g. 'observation:personal:new_message/msg_123:abc') or 'none'",
                     "reasoning": "Why this memory deserves attention right now",
+                    "memory_id": "The exact memory ID to focus on (e.g. 'observation:personal:new_message/msg_123:abc') or 'none'",
                     "obsolete_observations": "JSON array of observation IDs that are no longer relevant and can be removed, e.g. ['observation:personal:action_result/old_action:123', 'observation:personal:new_message/already_processed:456']"
                 },
                 "display_field": "reasoning"
@@ -98,14 +104,18 @@ class BrainInterface:
         """
         thinking_request = {
             "signature": {
-                "instruction": "You have observed something that needs your attention. Review your working memory and the specific observation to understand what's happening and how to respond.",
+                "instruction": """
+You have observed something that needs your attention. 
+Review your working memory and the specific observation to understand what's happening and how to respond.
+Always start your output with [[ ## understanding ## ]]
+""",
                 "inputs": {
                     "working_memory": "Your current working memory with all context",
                     "observation": "The specific thing you observed that needs attention"
                 },
                 "outputs": {
-                    "situation_type": "What kind of situation this is (e.g., 'message', 'task', 'file_change', 'status_update')",
                     "understanding": "What you understand about this situation and what it means",
+                    "situation_type": "What kind of situation this is (e.g., 'message', 'task', 'file_change', 'status_update')",
                     "approach": "How you plan to approach handling this"
                 },
                 "display_field": "understanding"
@@ -136,13 +146,18 @@ class BrainInterface:
         """
         thinking_request = {
             "signature": {
-                "instruction": "Review your working memory to understand the current situation. You should see an orientation file that explains what's happening. Based on this understanding and your available actions, decide what to do next.",
+                "instruction": """
+Review your working memory to understand the current situation. 
+You should see an orientation file that explains what's happening. 
+Based on this understanding and your available actions, decide what to do next.
+Always start your output with [[ ## reasoning ## ]]
+""",
                 "inputs": {
                     "working_memory": "Your complete working memory including the recent orientation and available actions"
                 },
                 "outputs": {
+                    "reasoning": "Why these actions make sense given the situation",
                     "actions": "JSON array of actions to take, e.g. [{\"action\": \"respond\", \"params\": {\"message\": \"Hello\"}}]",
-                    "reasoning": "Why these actions make sense given the situation"
                 },
                 "display_field": "reasoning"
             },
@@ -337,7 +352,7 @@ class BrainInterface:
             content = file_path.read_text()
             
             # Check if it's a message file
-            if file_block.metadata.get("file_type") == "message":
+            if file_block.metadata and file_block.metadata.get("file_type") == "message":
                 try:
                     message_data = json.loads(content)
                     return {

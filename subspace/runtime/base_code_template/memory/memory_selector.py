@@ -12,14 +12,15 @@ from datetime import datetime, timedelta
 import logging
 import re
 
+from .memory_types import Priority, MemoryType
 from .memory_blocks import (
-    MemoryBlock, Priority, MemoryType,
+    MemoryBlock,
     TaskMemoryBlock, KnowledgeMemoryBlock, FileMemoryBlock,
-    MessageMemoryBlock, ObservationMemoryBlock
+    ObservationMemoryBlock
 )
 from .context_builder import ContextBuilder
 
-logger = logging.getLogger("agent.memory.selector")
+logger = logging.getLogger("Cyber.memory.selector")
 
 
 class RelevanceScorer:
@@ -82,12 +83,10 @@ class RelevanceScorer:
         decay_rates = {
             MemoryType.OBSERVATION: 300,    # 5 minutes
             MemoryType.MESSAGE: 1800,       # 30 minutes
-            MemoryType.HISTORY: 600,        # 10 minutes
             MemoryType.STATUS: 300,         # 5 minutes
             MemoryType.FILE: 3600,          # 1 hour
             MemoryType.TASK: 7200,          # 2 hours
             MemoryType.KNOWLEDGE: 86400,    # 24 hours
-            MemoryType.ROM: float('inf'),   # Never decays
         }
         
         decay_rate = decay_rates.get(mem_type, 3600)
@@ -109,11 +108,8 @@ class RelevanceScorer:
                     return 0.7
             return 0.4
             
-        elif isinstance(memory, MessageMemoryBlock):
-            # Unread messages are highly relevant
-            if not memory.read:
-                return 1.0
-            return 0.3
+        # No special handling for messages - they're just files
+        # The LLM can read the content and understand it's a message
             
         elif isinstance(memory, ObservationMemoryBlock):
             # Recent observations are important
@@ -205,8 +201,25 @@ class MemorySelector:
             return self._select_balanced(symbolic_memory, max_tokens)
     
     def _select_balanced(self, memories: List[MemoryBlock], max_tokens: int) -> List[MemoryBlock]:
-        """Balanced selection considering priority and relevance."""
-        # Separate by priority
+        """Balanced selection considering priority, relevance, and pinning."""
+        # First, separate pinned memories - they're always included
+        pinned_memories = [m for m in memories if m.pinned]
+        unpinned_memories = [m for m in memories if not m.pinned]
+        
+        # Calculate tokens for pinned memories
+        pinned_tokens = sum(self.context_builder.estimate_tokens(m) for m in pinned_memories)
+        
+        if pinned_tokens > max_tokens:
+            logger.warning(f"Pinned memories alone exceed token budget: {pinned_tokens} > {max_tokens}")
+            # Still include all pinned memories
+            return pinned_memories
+        
+        # Start with all pinned memories
+        selected = pinned_memories.copy()
+        used_tokens = pinned_tokens
+        remaining_tokens = max_tokens - pinned_tokens
+        
+        # Separate unpinned by priority
         priority_groups = {
             Priority.CRITICAL: [],
             Priority.HIGH: [],
@@ -214,10 +227,10 @@ class MemorySelector:
             Priority.LOW: []
         }
         
-        for memory in memories:
+        for memory in unpinned_memories:
             priority_groups[memory.priority].append(memory)
         
-        # Calculate relevance scores
+        # Calculate relevance scores for unpinned
         scored_memories = []
         for priority, group in priority_groups.items():
             for memory in group:
@@ -227,24 +240,20 @@ class MemorySelector:
         # Sort by priority first, then relevance
         scored_memories.sort(key=lambda x: (x[1], -x[2]))
         
-        # Build selection respecting token limit
-        selected = []
-        used_tokens = 0
-        
-        # Reserve space for critical memories
+        # Reserve space for critical unpinned memories
         critical_tokens = sum(
             self.context_builder.estimate_tokens(m) 
             for m in priority_groups[Priority.CRITICAL]
         )
         
-        if critical_tokens > max_tokens:
-            logger.warning(f"Critical memories alone exceed token budget: {critical_tokens} > {max_tokens}")
+        if critical_tokens > remaining_tokens:
+            logger.warning(f"Critical unpinned memories exceed remaining budget: {critical_tokens} > {remaining_tokens}")
         
-        # Add memories in order
+        # Add unpinned memories in order
         for memory, _, score in scored_memories:
             tokens = self.context_builder.estimate_tokens(memory)
             
-            # Always include critical
+            # Always include critical unpinned
             if memory.priority == Priority.CRITICAL:
                 selected.append(memory)
                 used_tokens += tokens
@@ -272,22 +281,34 @@ class MemorySelector:
         return selected
     
     def _select_recent(self, memories: List[MemoryBlock], max_tokens: int) -> List[MemoryBlock]:
-        """Select most recent memories first."""
-        # Sort by timestamp descending
-        sorted_memories = sorted(memories, key=lambda m: m.timestamp, reverse=True)
+        """Select most recent memories first (with pinned always included)."""
+        # First, separate pinned memories
+        pinned_memories = [m for m in memories if m.pinned]
+        unpinned_memories = [m for m in memories if not m.pinned]
         
-        selected = []
-        used_tokens = 0
+        # Calculate tokens for pinned memories
+        pinned_tokens = sum(self.context_builder.estimate_tokens(m) for m in pinned_memories)
         
-        # Always include critical first
-        for memory in sorted_memories:
+        if pinned_tokens > max_tokens:
+            logger.warning(f"Pinned memories alone exceed token budget: {pinned_tokens} > {max_tokens}")
+            return pinned_memories
+        
+        # Start with all pinned memories
+        selected = pinned_memories.copy()
+        used_tokens = pinned_tokens
+        
+        # Sort unpinned by timestamp descending
+        sorted_unpinned = sorted(unpinned_memories, key=lambda m: m.timestamp, reverse=True)
+        
+        # Always include critical unpinned first
+        for memory in sorted_unpinned:
             if memory.priority == Priority.CRITICAL:
                 tokens = self.context_builder.estimate_tokens(memory)
                 selected.append(memory)
                 used_tokens += tokens
         
-        # Then add recent memories
-        for memory in sorted_memories:
+        # Then add recent unpinned memories
+        for memory in sorted_unpinned:
             if memory.priority == Priority.CRITICAL:
                 continue  # Already added
                 
@@ -299,27 +320,39 @@ class MemorySelector:
         return selected
     
     def _select_relevant(self, memories: List[MemoryBlock], max_tokens: int) -> List[MemoryBlock]:
-        """Select most relevant memories based on scoring."""
-        # Score all memories
+        """Select most relevant memories based on scoring (with pinned always included)."""
+        # First, separate pinned memories
+        pinned_memories = [m for m in memories if m.pinned]
+        unpinned_memories = [m for m in memories if not m.pinned]
+        
+        # Calculate tokens for pinned memories
+        pinned_tokens = sum(self.context_builder.estimate_tokens(m) for m in pinned_memories)
+        
+        if pinned_tokens > max_tokens:
+            logger.warning(f"Pinned memories alone exceed token budget: {pinned_tokens} > {max_tokens}")
+            return pinned_memories
+        
+        # Start with all pinned memories
+        selected = pinned_memories.copy()
+        used_tokens = pinned_tokens
+        
+        # Score unpinned memories
         scored = []
-        for memory in memories:
+        for memory in unpinned_memories:
             score = self.relevance_scorer.score_memory(memory)
             scored.append((memory, score))
         
         # Sort by score descending
         scored.sort(key=lambda x: x[1], reverse=True)
         
-        selected = []
-        used_tokens = 0
-        
-        # Add in relevance order, respecting priority minimums
+        # Add unpinned memories in relevance order, respecting priority minimums
         critical_added = False
         high_count = 0
         
         for memory, score in scored:
             tokens = self.context_builder.estimate_tokens(memory)
             
-            # Always include critical
+            # Always include critical unpinned
             if memory.priority == Priority.CRITICAL:
                 selected.append(memory)
                 used_tokens += tokens

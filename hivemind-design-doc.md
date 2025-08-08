@@ -115,7 +115,7 @@ class TaskMemoryBlock(MemoryBlock):
 
 @dataclass
 class MessageMemoryBlock(MemoryBlock):
-    """Inter-agent messages"""
+    """Inter-cyber messages"""
     from_agent: str
     to_agent: str
     subject: str
@@ -143,7 +143,7 @@ class KnowledgeMemoryBlock(MemoryBlock):
 
 @dataclass
 class HistoryMemoryBlock(MemoryBlock):
-    """Recent agent actions/thoughts"""
+    """Recent cyber actions/thoughts"""
     action_type: str
     action_detail: str
     result: Optional[str] = None
@@ -416,7 +416,7 @@ class RelevanceScorer:
 
 ```python
 def create_memory_from_action(action: str, result: Any) -> MemoryBlock:
-    """Create appropriate memory block from agent action"""
+    """Create appropriate memory block from cyber action"""
     
     if action == "read_file":
         return FileMemoryBlock(
@@ -481,7 +481,7 @@ builder = ContextBuilder(loader)
 
 # Add ROM (always critical)
 rom_memory = FileMemoryBlock(
-    location="/hivemind/agents/agent_001/ROM.md",
+    location="/hivemind/cybers/agent_001/ROM.md",
     priority=Priority.CRITICAL,
     confidence=1.0
 )

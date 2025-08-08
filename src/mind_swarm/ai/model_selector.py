@@ -1,7 +1,7 @@
-"""Model selection logic for choosing appropriate AI models for agents.
+"""Model selection logic for choosing appropriate AI models for Cybers.
 
 This module provides strategies for selecting models based on availability,
-performance metrics, and agent requirements.
+performance metrics, and Cyber requirements.
 """
 
 import random
@@ -22,7 +22,7 @@ class SelectionStrategy(Enum):
 
 
 class ModelSelector:
-    """Selects appropriate models for agents based on various strategies."""
+    """Selects appropriate models for Cybers based on various strategies."""
     
     def __init__(self, registry: ModelRegistry):
         """Initialize the model selector.
@@ -50,8 +50,7 @@ class ModelSelector:
         
         if not candidates:
             logger.warning(f"No models found for strategy {strategy}")
-            # Fall back to local models
-            return self._select_fallback_local()
+            return None
             
         if strategy == SelectionStrategy.RANDOM_CURATED:
             return random.choice(candidates)
@@ -191,22 +190,6 @@ class ModelSelector:
                 
         return least_used or candidates[0]
         
-    def _select_fallback_local(self) -> Optional[ModelInfo]:
-        """Select a local fallback model.
-        
-        Returns:
-            Local model or None
-        """
-        local_models = [
-            m for m in self.registry.models.values()
-            if m.id.startswith("ollama/")
-        ]
-        
-        if local_models:
-            # Prefer smaller models for fallback
-            return min(local_models, key=lambda m: m.context_length)
-            
-        return None
         
     def get_model_config(
         self,

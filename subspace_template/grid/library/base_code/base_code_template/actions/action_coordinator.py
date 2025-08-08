@@ -13,19 +13,19 @@ from ..knowledge.knowledge_manager import KnowledgeManager
 from ..memory import ObservationMemoryBlock, Priority
 from ..utils.cognitive_utils import CognitiveUtils
 
-logger = logging.getLogger("agent.actions.coordinator")
+logger = logging.getLogger("Cyber.actions.coordinator")
 
 
 class ActionCoordinator:
     """Coordinates action loading, validation, and execution."""
     
-    def __init__(self, agent_type: str = 'general'):
+    def __init__(self, cyber_type: str = 'general'):
         """Initialize action coordinator.
         
         Args:
-            agent_type: Type of agent for action filtering
+            cyber_type: Type of Cyber for action filtering
         """
-        self.agent_type = agent_type
+        self.cyber_type = cyber_type
         self.cognitive_utils = CognitiveUtils()
         
         # Import action classes here to avoid circular import
@@ -47,12 +47,12 @@ class ActionCoordinator:
         }
         
     def get_available_actions(self) -> List[str]:
-        """Get list of available actions for this agent type.
+        """Get list of available actions for this Cyber type.
         
         Returns:
             List of action names
         """
-        return self.action_registry.get_actions_for_agent(self.agent_type)
+        return self.action_registry.get_actions_for_agent(self.cyber_type)
         
     def validate_action(self, action_name: str, params: Dict[str, Any],
                        knowledge_manager: Optional[KnowledgeManager] = None) -> Tuple[bool, Optional[str]]:
@@ -66,10 +66,10 @@ class ActionCoordinator:
         Returns:
             Tuple of (is_valid, error_message)
         """
-        # Check if action exists for this agent type
+        # Check if action exists for this Cyber type
         available_actions = self.get_available_actions()
         if action_name not in available_actions:
-            return False, f"Action '{action_name}' not available for agent type '{self.agent_type}'"
+            return False, f"Action '{action_name}' not available for Cyber type '{self.cyber_type}'"
             
         # If knowledge manager provided, validate against schema
         if knowledge_manager:
@@ -134,11 +134,11 @@ class ActionCoordinator:
             Prepared Action object or None if failed
         """
         # Create action instance
-        action = self.action_registry.create_action(self.agent_type, action_name)
+        action = self.action_registry.create_action(self.cyber_type, action_name)
         if not action:
-            available_actions = self.action_registry.get_actions_for_agent(self.agent_type)
-            logger.error(f"Failed to create action '{action_name}' for agent type '{self.agent_type}'")
-            logger.error(f"Available actions for {self.agent_type}: {', '.join(available_actions)}")
+            available_actions = self.action_registry.get_actions_for_agent(self.cyber_type)
+            logger.error(f"Failed to create action '{action_name}' for Cyber type '{self.cyber_type}'")
+            logger.error(f"Available actions for {self.cyber_type}: {', '.join(available_actions)}")
             return None
             
         # Apply parameter corrections if knowledge available
@@ -298,7 +298,7 @@ class ActionCoordinator:
             Context summary
         """
         summary = {
-            "agent_id": context.get("agent_id", "unknown"),
+            "cyber_id": context.get("cyber_id", "unknown"),
             "task_id": context.get("task_id"),
             "has_observation": "observation" in context,
             "has_orientation": "orientation" in context

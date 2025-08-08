@@ -29,7 +29,7 @@ Successfully refactored the monolithic `cognitive_loop.py` file from 1372 lines 
 - `rom_loader.py` - ROM data loading and caching
 
 #### 3. `state/` - State Management
-- `agent_state_manager.py` - Agent state persistence and tracking
+- `agent_state_manager.py` - cyber state persistence and tracking
 - `execution_state.py` - Execution tracking and performance metrics
 
 #### 4. `actions/` - Action Coordination

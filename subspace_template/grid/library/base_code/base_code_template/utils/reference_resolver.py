@@ -9,7 +9,7 @@ import json
 import logging
 from typing import Dict, Any, Optional
 
-logger = logging.getLogger("agent.utils.reference_resolver")
+logger = logging.getLogger("Cyber.utils.reference_resolver")
 
 
 class ReferenceResolver:

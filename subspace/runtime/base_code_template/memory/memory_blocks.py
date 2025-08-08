@@ -1,35 +1,14 @@
-"""Memory block definitions for the agent memory system.
+"""Memory block definitions for the Cyber memory system.
 
 Provides the core data structures for symbolic memory representation.
 Each block represents a reference to content in the filesystem.
 """
 
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Optional, Dict, Any, List
 from datetime import datetime
-
-
-class Priority(Enum):
-    """Memory priority levels for selection algorithm."""
-    CRITICAL = 1  # Always included, never dropped
-    HIGH = 2      # Included unless space critical
-    MEDIUM = 3    # Included based on relevance
-    LOW = 4       # Background info, often dropped
-
-
-class MemoryType(Enum):
-    """Types of memory blocks."""
-    ROM = "rom"
-    FILE = "file"
-    STATUS = "status"
-    TASK = "task"
-    MESSAGE = "message"
-    KNOWLEDGE = "knowledge"
-    HISTORY = "history"
-    CONTEXT = "context"
-    OBSERVATION = "observation"
-    CYCLE_STATE = "cycle_state"
+from .memory_types import Priority, MemoryType
+from .unified_memory_id import UnifiedMemoryID
 
 
 class MemoryBlock:
@@ -40,13 +19,15 @@ class MemoryBlock:
                  priority: Priority = Priority.MEDIUM,
                  timestamp: Optional[datetime] = None,
                  expiry: Optional[datetime] = None,
-                 metadata: Optional[Dict[str, Any]] = None):
+                 metadata: Optional[Dict[str, Any]] = None,
+                 pinned: bool = False):
         """Initialize base memory block."""
         self.confidence = confidence
         self.priority = priority
         self.timestamp = timestamp or datetime.now()
         self.expiry = expiry
         self.metadata = metadata or {}
+        self.pinned = pinned  # When True, memory is never removed by memory management
         
         # These must be set by subclasses
         self.type: MemoryType
@@ -65,7 +46,9 @@ class FileMemoryBlock(MemoryBlock):
     timestamp: Optional[datetime] = None
     expiry: Optional[datetime] = None
     metadata: Optional[Dict[str, Any]] = None
+    pinned: bool = False
     
+
     def __post_init__(self):
         """Initialize base class and set type."""
         super().__init__(
@@ -73,13 +56,36 @@ class FileMemoryBlock(MemoryBlock):
             priority=self.priority,
             timestamp=self.timestamp,
             expiry=self.expiry,
-            metadata=self.metadata
+            metadata=self.metadata,
+            pinned=self.pinned
         )
         self.type = MemoryType.FILE
+        
+        # Generate unified ID
+        base_id = UnifiedMemoryID.create_from_path(self.location, MemoryType.FILE)
+        
+        # Add line range to semantic path if specified
         if self.start_line is not None and self.end_line is not None:
-            self.id = f"{self.location}:{self.start_line}-{self.end_line}"
+            parts = UnifiedMemoryID.parse(base_id)
+            semantic_path = f"{parts['semantic_path']}/lines-{self.start_line}-{self.end_line}"
+            self.id = UnifiedMemoryID.create(
+                MemoryType.FILE, 
+                parts['namespace'], 
+                semantic_path,
+                f"{self.location}:{self.start_line}-{self.end_line}"
+            )
         else:
-            self.id = self.location
+            # Add content hash if we have a digest
+            if self.digest:
+                parts = UnifiedMemoryID.parse(base_id)
+                self.id = UnifiedMemoryID.create(
+                    MemoryType.FILE,
+                    parts['namespace'],
+                    parts['semantic_path'],
+                    self.digest
+                )
+            else:
+                self.id = base_id
 
 
 @dataclass
@@ -92,7 +98,9 @@ class StatusMemoryBlock(MemoryBlock):
     timestamp: Optional[datetime] = None
     expiry: Optional[datetime] = None
     metadata: Optional[Dict[str, Any]] = None
+    pinned: bool = False
     
+
     def __post_init__(self):
         """Initialize base class and set type."""
         super().__init__(
@@ -100,10 +108,13 @@ class StatusMemoryBlock(MemoryBlock):
             priority=self.priority,
             timestamp=self.timestamp,
             expiry=self.expiry,
-            metadata=self.metadata
+            metadata=self.metadata,
+            pinned=self.pinned
         )
         self.type = MemoryType.STATUS
-        self.id = f"status:{self.status_type}"
+        
+        # Status is always in system namespace
+        self.id = UnifiedMemoryID.create(MemoryType.STATUS, 'system', self.status_type)
 
 
 @dataclass
@@ -118,6 +129,7 @@ class TaskMemoryBlock(MemoryBlock):
     priority: Priority = Priority.HIGH
     timestamp: Optional[datetime] = None
     expiry: Optional[datetime] = None
+    pinned: bool = False
     metadata: Optional[Dict[str, Any]] = None
     
     def __post_init__(self):
@@ -127,41 +139,25 @@ class TaskMemoryBlock(MemoryBlock):
             priority=self.priority,
             timestamp=self.timestamp,
             expiry=self.expiry,
-            metadata=self.metadata
+            metadata=self.metadata,
+            pinned=self.pinned
         )
         self.type = MemoryType.TASK
-        self.id = f"task:{self.task_id}"
+        
+        # Create semantic path from project and task ID
+        if self.project:
+            semantic_path = f"{self.project}/{self.task_id}"
+        else:
+            semantic_path = f"general/{self.task_id}"
+        
+        # Tasks are in personal namespace
+        self.id = UnifiedMemoryID.create(MemoryType.TASK, 'personal', semantic_path)
+        
         if self.dependencies is None:
             self.dependencies = []
 
 
-@dataclass
-class MessageMemoryBlock(MemoryBlock):
-    """Inter-agent messages."""
-    from_agent: str
-    to_agent: str
-    subject: str
-    preview: str
-    full_path: str
-    read: bool = False
-    confidence: float = 1.0
-    priority: Priority = Priority.MEDIUM
-    timestamp: Optional[datetime] = None
-    expiry: Optional[datetime] = None
-    metadata: Optional[Dict[str, Any]] = None
-    
-    def __post_init__(self):
-        """Initialize base class and set type."""
-        super().__init__(
-            confidence=self.confidence,
-            priority=self.priority if self.read else Priority.HIGH,
-            timestamp=self.timestamp,
-            expiry=self.expiry,
-            metadata=self.metadata
-        )
-        self.type = MemoryType.MESSAGE
-        self.id = f"msg:{self.full_path}"
-
+# MessageMemoryBlock removed - messages are now FileMemoryBlock with metadata
 
 @dataclass
 class KnowledgeMemoryBlock(MemoryBlock):
@@ -174,6 +170,7 @@ class KnowledgeMemoryBlock(MemoryBlock):
     priority: Priority = Priority.MEDIUM
     timestamp: Optional[datetime] = None
     expiry: Optional[datetime] = None
+    pinned: bool = False
     metadata: Optional[Dict[str, Any]] = None
     
     def __post_init__(self):
@@ -183,38 +180,23 @@ class KnowledgeMemoryBlock(MemoryBlock):
             priority=self.priority,
             timestamp=self.timestamp,
             expiry=self.expiry,
-            metadata=self.metadata
+            metadata=self.metadata,
+            pinned=self.pinned
         )
         self.type = MemoryType.KNOWLEDGE
+        
+        # Create semantic path from topic/subtopic
+        semantic_path = self.topic
         if self.subtopic:
-            self.id = f"knowledge:{self.topic}:{self.subtopic}"
-        else:
-            self.id = f"knowledge:{self.topic}"
+            semantic_path = f"{self.topic}/{self.subtopic}"
+        
+        # Determine namespace from location
+        namespace = 'library' if '/library/' in self.location else 'rom'
+        
+        # Create ID with content identifier
+        self.id = UnifiedMemoryID.create(MemoryType.KNOWLEDGE, namespace, semantic_path)
 
 
-@dataclass
-class HistoryMemoryBlock(MemoryBlock):
-    """Recent agent actions/thoughts."""
-    action_type: str
-    action_detail: str
-    result: Optional[str] = None
-    confidence: float = 1.0
-    priority: Priority = Priority.MEDIUM
-    timestamp: Optional[datetime] = None
-    expiry: Optional[datetime] = None
-    metadata: Optional[Dict[str, Any]] = None
-    
-    def __post_init__(self):
-        """Initialize base class and set type."""
-        super().__init__(
-            confidence=self.confidence,
-            priority=self.priority,
-            timestamp=self.timestamp,
-            expiry=self.expiry,
-            metadata=self.metadata
-        )
-        self.type = MemoryType.HISTORY
-        self.id = f"history:{self.action_type}:{self.timestamp.timestamp()}"
 
 
 @dataclass
@@ -227,6 +209,7 @@ class ContextMemoryBlock(MemoryBlock):
     priority: Priority = Priority.MEDIUM
     timestamp: Optional[datetime] = None
     expiry: Optional[datetime] = None
+    pinned: bool = False
     metadata: Optional[Dict[str, Any]] = None
     
     def __post_init__(self):
@@ -236,10 +219,18 @@ class ContextMemoryBlock(MemoryBlock):
             priority=self.priority,
             timestamp=self.timestamp,
             expiry=self.expiry,
-            metadata=self.metadata
+            metadata=self.metadata,
+            pinned=self.pinned
         )
         self.type = MemoryType.CONTEXT
-        self.id = f"context:{self.context_type}:{self.timestamp.timestamp()}"
+        
+        # Create semantic path with context type and timestamp
+        semantic_path = f"{self.context_type}/{self.timestamp.strftime('%Y%m%d-%H%M%S')}"
+        
+        # Context is derived, so in analysis namespace
+        # Include content hash based on summary
+        self.id = UnifiedMemoryID.create(MemoryType.CONTEXT, 'analysis', semantic_path, self.summary)
+        
         if self.related_ids is None:
             self.related_ids = []
 
@@ -249,11 +240,11 @@ class ObservationMemoryBlock(MemoryBlock):
     """Filesystem observations - new files, changes, etc."""
     observation_type: str
     path: str
-    description: str
     confidence: float = 1.0
     priority: Priority = Priority.HIGH
     timestamp: Optional[datetime] = None
     expiry: Optional[datetime] = None
+    pinned: bool = False
     metadata: Optional[Dict[str, Any]] = None
     
     def __post_init__(self):
@@ -263,36 +254,17 @@ class ObservationMemoryBlock(MemoryBlock):
             priority=self.priority,
             timestamp=self.timestamp,
             expiry=self.expiry,
-            metadata=self.metadata
+            metadata=self.metadata,
+            pinned=self.pinned
         )
         self.type = MemoryType.OBSERVATION
-        self.id = f"obs:{self.path}:{self.timestamp.timestamp()}"
-
-
-@dataclass
-class ROMMemoryBlock(MemoryBlock):
-    """Read-Only Memory - fundamental knowledge from library."""
-    rom_id: str
-    content: str
-    category: str = "general"
-    source: str = "library"
-    confidence: float = 1.0
-    priority: Priority = Priority.CRITICAL
-    timestamp: Optional[datetime] = None
-    expiry: Optional[datetime] = None
-    metadata: Optional[Dict[str, Any]] = None
-    
-    def __post_init__(self):
-        """Initialize base class and set type."""
-        super().__init__(
-            confidence=self.confidence,
-            priority=self.priority,
-            timestamp=self.timestamp,
-            expiry=self.expiry,
-            metadata=self.metadata
+        
+        # Use unified ID that prevents duplication
+        self.id = UnifiedMemoryID.create_observation_id(
+            self.observation_type,
+            self.path
         )
-        self.type = MemoryType.ROM
-        self.id = self.rom_id
+
 
 
 @dataclass
@@ -301,12 +273,15 @@ class CycleStateMemoryBlock(MemoryBlock):
     cycle_state: str  # Current state: perceive, observe, orient, decide, act
     cycle_count: int
     current_observation: Optional[Dict[str, Any]] = None
-    current_orientation: Optional[Dict[str, Any]] = None
+    current_orientation: Optional[Dict[str, Any]] = None  # Deprecated - use current_orientation_id
+    current_orientation_id: Optional[str] = None  # Memory ID of orientation file
     current_actions: Optional[List[Dict[str, Any]]] = None
+    last_observe_time: Optional[datetime] = None  # Track when observe last ran
     confidence: float = 1.0
-    priority: Priority = Priority.CRITICAL  # Must always be preserved
+    priority: Priority = Priority.LOW  # Internal bookkeeping, not actionable for Cyber
     timestamp: Optional[datetime] = None
     expiry: Optional[datetime] = None
+    pinned: bool = False
     metadata: Optional[Dict[str, Any]] = None
     
     def __post_init__(self):
@@ -316,7 +291,13 @@ class CycleStateMemoryBlock(MemoryBlock):
             priority=self.priority,
             timestamp=self.timestamp,
             expiry=self.expiry,
-            metadata=self.metadata
+            metadata=self.metadata,
+            pinned=self.pinned
         )
         self.type = MemoryType.CYCLE_STATE
-        self.id = "cycle_state"  # Singleton - only one cycle state at a time
+        
+        # Cycle state is a singleton in system namespace
+        self.id = UnifiedMemoryID.create(MemoryType.CYCLE_STATE, 'system', 'current')
+
+
+# IdentityMemoryBlock removed - use pinned FileMemoryBlock for identity.json instead

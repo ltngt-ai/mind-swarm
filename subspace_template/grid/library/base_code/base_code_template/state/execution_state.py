@@ -15,20 +15,20 @@ from ..utils.json_utils import DateTimeEncoder, safe_json_encode, safe_json_deco
 from ..utils.file_utils import FileManager
 from ..utils.cognitive_utils import CognitiveUtils
 
-logger = logging.getLogger("agent.state.execution")
+logger = logging.getLogger("Cyber.state.execution")
 
 
 class ExecutionStateTracker:
     """Tracks execution state and provides performance insights."""
     
-    def __init__(self, agent_id: str, memory_dir: Path):
+    def __init__(self, cyber_id: str, memory_dir: Path):
         """Initialize execution state tracker.
         
         Args:
-            agent_id: Agent identifier
+            cyber_id: Cyber identifier
             memory_dir: Directory for state persistence
         """
-        self.agent_id = agent_id
+        self.cyber_id = cyber_id
         self.memory_dir = memory_dir
         self.file_manager = FileManager()
         self.cognitive_utils = CognitiveUtils()

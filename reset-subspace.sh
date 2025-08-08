@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # reset-subspace.sh - Reset the subspace to a clean state for development
-# This removes all agent data, messages, and state files
+# This removes all cyber data, messages, and state files
 
 set -euo pipefail
 
@@ -63,14 +63,14 @@ reset_subspace() {
     echo -e "${YELLOW}Resetting subspace at: $SUBSPACE_ROOT${NC}"
     echo ""
     
-    # Clean agents directory
-    if [ -d "$SUBSPACE_ROOT/agents" ]; then
-        echo "Cleaning agents..."
-        for agent_dir in "$SUBSPACE_ROOT/agents"/*; do
-            if [ -d "$agent_dir" ]; then
-                agent_name=$(basename "$agent_dir")
-                echo "  Removing agent: $agent_name"
-                rm -rf "$agent_dir"
+    # Clean cybers directory
+    if [ -d "$SUBSPACE_ROOT/cybers" ]; then
+        echo "Cleaning cybers..."
+        for cyber_dir in "$SUBSPACE_ROOT/cybers"/*; do
+            if [ -d "$cyber_dir" ]; then
+                cyber_name=$(basename "$cyber_dir")
+                echo "  Removing cyber: $cyber_name"
+                rm -rf "$cyber_dir"
             fi
         done
     fi
@@ -78,9 +78,8 @@ reset_subspace() {
     # Clean grid areas
     echo ""
     echo "Cleaning grid areas..."
-    clean_directory "$SUBSPACE_ROOT/grid/plaza"
+    clean_directory "$SUBSPACE_ROOT/grid/community"
     clean_directory "$SUBSPACE_ROOT/grid/library"
-    clean_directory "$SUBSPACE_ROOT/grid/bulletin"
     clean_directory "$SUBSPACE_ROOT/grid/workshop"
     
     # Clean shared directory (includes developer registry)
@@ -88,11 +87,9 @@ reset_subspace() {
     echo "Cleaning shared directory..."
     clean_directory "$SUBSPACE_ROOT/shared/directory"
     
-    # Clean logs
+    # Clean logs (logs are now in cyber personal folders)
     echo ""
-    echo "Cleaning logs..."
-    clean_directory "$SUBSPACE_ROOT/logs"
-    clean_directory "$SUBSPACE_ROOT/logs/agents"
+    echo "Logs are now stored in cyber personal folders and will be removed with cybers"
     
     # Clean state files
     echo ""
@@ -101,40 +98,39 @@ reset_subspace() {
         rm -rf "$SUBSPACE_ROOT/state"
     fi
     
-    # Clean agent states
-    if [ -d "$SUBSPACE_ROOT/agent_states" ]; then
-        echo "  Removing agent state files..."
-        rm -rf "$SUBSPACE_ROOT/agent_states"
-    fi
+    # Note: cyber_states directory no longer used (states stored in cyber personal folders)
     
     # Recreate essential directories
     echo ""
     echo "Recreating directory structure..."
-    mkdir -p "$SUBSPACE_ROOT/agents"
-    mkdir -p "$SUBSPACE_ROOT/grid/plaza"
-    mkdir -p "$SUBSPACE_ROOT/grid/library"
-    mkdir -p "$SUBSPACE_ROOT/grid/bulletin"
+    mkdir -p "$SUBSPACE_ROOT/cybers"
+    mkdir -p "$SUBSPACE_ROOT/grid/community"
+    mkdir -p "$SUBSPACE_ROOT/grid/community/bulletin"
+    mkdir -p "$SUBSPACE_ROOT/grid/library/knowledge/sections/actions"
+    mkdir -p "$SUBSPACE_ROOT/grid/library/knowledge/sections/rom"
+    mkdir -p "$SUBSPACE_ROOT/grid/library/knowledge/schemas"
     mkdir -p "$SUBSPACE_ROOT/grid/workshop"
-    mkdir -p "$SUBSPACE_ROOT/logs/agents"
-    mkdir -p "$SUBSPACE_ROOT/agent_states"
     mkdir -p "$SUBSPACE_ROOT/shared/directory"
     
     # Create placeholder files
-    echo "# Plaza - Community Discussions" > "$SUBSPACE_ROOT/grid/plaza/README.md"
+    echo "# Community - Cyber Discussions and Collaboration" > "$SUBSPACE_ROOT/grid/community/README.md"
+    echo "# Bulletin - Announcements" > "$SUBSPACE_ROOT/grid/community/bulletin/README.md"
     echo "# Library - Shared Knowledge" > "$SUBSPACE_ROOT/grid/library/README.md"
-    echo "# Bulletin - Announcements" > "$SUBSPACE_ROOT/grid/bulletin/README.md"
     echo "# Workshop - Tools and Scripts" > "$SUBSPACE_ROOT/grid/workshop/README.md"
+    
+    # Create cyber directory file
+    echo '{"cybers": []}' > "$SUBSPACE_ROOT/grid/community/cyber_directory.json"
     
     echo ""
     echo -e "${GREEN}Subspace reset complete!${NC}"
     echo ""
     echo "Summary:"
-    echo "  - All agents removed"
+    echo "  - All cybers removed"
     echo "  - Grid areas cleaned"
     echo "  - Developer registry cleared"
-    echo "  - Logs cleared"
+    echo "  - Cyber logs removed (from personal folders)"
     echo "  - State files removed"
-    echo "  - Directory structure recreated"
+    echo "  - Directory structure recreated with new layout"
 }
 
 # Main execution
@@ -142,7 +138,7 @@ echo -e "${YELLOW}=== Mind-Swarm Subspace Reset ===${NC}"
 echo ""
 
 if [ "$CONFIRM_REQUIRED" = true ]; then
-    echo -e "${RED}WARNING: This will delete all agent data, messages, and state!${NC}"
+    echo -e "${RED}WARNING: This will delete all cyber data, messages, and state!${NC}"
     echo "Subspace location: $SUBSPACE_ROOT"
     echo ""
     read -p "Are you sure you want to reset the subspace? (yes/no): " -r

@@ -18,10 +18,10 @@ ai_presets:
     provider: local
     model: qwen/qwen3-30b-a3b-2507
     temperature: 0.7
-    max_tokens: 4096
+    max_tokens: 8192
     api_settings:
-      host: http://192.168.1.147:1234
-    
+      host: http://192.168.1.209:1234
+          
   - name: local_smart
     provider: local
     model: qwen/qwen3-30b-a3b-2507
@@ -66,8 +66,8 @@ ai_presets:
   # Default preset (uses local server)
   - name: default
     provider: local
-    model: qwen/qwen3-30b-a3b-2507
+    model: openai/gpt-oss-20b
     temperature: 0.7
     max_tokens: 8192
     api_settings:
-      host: http://192.168.1.147:1234
+      host: http://192.168.1.209:1234

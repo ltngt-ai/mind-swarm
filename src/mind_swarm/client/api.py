@@ -12,9 +12,9 @@ from pydantic import BaseModel
 from mind_swarm.utils.logging import logger
 
 
-class AgentInfo(BaseModel):
-    """Agent information."""
-    agent_id: str
+class CyberInfo(BaseModel):
+    """Cyber information."""
+    cyber_id: str
     alive: bool
     state: str
     uptime: float
@@ -24,8 +24,8 @@ class AgentInfo(BaseModel):
 
 class ServerStatus(BaseModel):
     """Server status information."""
-    agents: Dict[str, Dict[str, Any]]
-    plaza_questions: int
+    Cybers: Dict[str, Dict[str, Any]]
+    community_questions: int
     server_uptime: float
     server_start_time: str
 
@@ -59,7 +59,7 @@ class MindSwarmClient:
             return False
     
     async def get_status(self) -> ServerStatus:
-        """Get server and agent status.
+        """Get server and Cyber status.
         
         Returns:
             Server status information
@@ -72,55 +72,55 @@ class MindSwarmClient:
     async def create_agent(
         self, 
         name: Optional[str] = None,
-        agent_type: str = "general",
+        cyber_type: str = "general",
         config: Optional[Dict[str, Any]] = None
     ) -> str:
-        """Create a new agent.
+        """Create a new Cyber.
         
         Args:
-            name: Optional agent name
-            agent_type: Type of agent (general, io_gateway)
+            name: Optional Cyber name
+            cyber_type: Type of Cyber (general, io_gateway)
             config: Additional configuration
             
         Returns:
-            Agent ID
+            Cyber ID
         """
         payload = {
             "name": name,
-            "agent_type": agent_type,
+            "cyber_type": cyber_type,
             "config": config or {}
         }
         
         async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
             response = await client.post(
-                f"{self.base_url}/agents/create",
+                f"{self.base_url}/Cybers/create",
                 json=payload
             )
             response.raise_for_status()
             data = response.json()
-            # Server returns 'name' not 'agent_id' now
-            return data.get("name", data.get("agent_id", "unknown"))
+            # Server returns 'name' not 'cyber_id' now
+            return data.get("name", data.get("cyber_id", "unknown"))
     
-    async def terminate_agent(self, agent_id: str):
-        """Terminate an agent.
+    async def terminate_agent(self, cyber_id: str):
+        """Terminate an Cyber.
         
         Args:
-            agent_id: Name of agent to terminate
+            cyber_id: Name of Cyber to terminate
         """
         async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
-            response = await client.delete(f"{self.base_url}/agents/{agent_id}")
+            response = await client.delete(f"{self.base_url}/Cybers/{cyber_id}")
             response.raise_for_status()
     
     async def send_command(
         self, 
-        agent_id: str, 
+        cyber_id: str, 
         command: str, 
         params: Optional[Dict[str, Any]] = None
     ):
-        """Send a command to an agent.
+        """Send a command to an Cyber.
         
         Args:
-            agent_id: Target agent name
+            cyber_id: Target Cyber name
             command: Command to send
             params: Optional command parameters
         """
@@ -131,21 +131,21 @@ class MindSwarmClient:
         
         async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
             response = await client.post(
-                f"{self.base_url}/agents/{agent_id}/command",
+                f"{self.base_url}/Cybers/{cyber_id}/command",
                 json=payload
             )
             response.raise_for_status()
     
     async def send_message(
         self,
-        agent_id: str,
+        cyber_id: str,
         content: str,
         message_type: str = "text"
     ):
-        """Send a message to an agent.
+        """Send a message to an Cyber.
         
         Args:
-            agent_id: Target agent name
+            cyber_id: Target Cyber name
             content: Message content
             message_type: Type of message (default: "text")
         """
@@ -156,13 +156,13 @@ class MindSwarmClient:
         
         async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
             response = await client.post(
-                f"{self.base_url}/agents/{agent_id}/message",
+                f"{self.base_url}/Cybers/{cyber_id}/message",
                 json=payload
             )
             response.raise_for_status()
     
-    async def create_plaza_question(self, text: str, created_by: str = "user") -> str:
-        """Create a new plaza question.
+    async def create_community_question(self, text: str, created_by: str = "user") -> str:
+        """Create a new community question.
         
         Args:
             text: Question text
@@ -178,40 +178,40 @@ class MindSwarmClient:
         
         async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
             response = await client.post(
-                f"{self.base_url}/plaza/questions",
+                f"{self.base_url}/community/questions",
                 json=payload
             )
             response.raise_for_status()
             return response.json()["question_id"]
     
-    async def get_agent_states(self) -> Dict[str, Dict[str, Any]]:
-        """Get states of all agents.
+    async def get_cyber_states(self) -> Dict[str, Dict[str, Any]]:
+        """Get states of all Cybers.
         
         Returns:
-            Dictionary of agent states keyed by agent name
+            Dictionary of Cyber states keyed by Cyber name
         """
         async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
-            response = await client.get(f"{self.base_url}/agents/all")
+            response = await client.get(f"{self.base_url}/Cybers/all")
             response.raise_for_status()
             data = response.json()
             
-            # Convert list of agents to dict keyed by name
-            agents = data.get("agents", [])
+            # Convert list of Cybers to dict keyed by name
+            Cybers = data.get("cybers", [])
             agent_dict = {}
-            for agent in agents:
-                name = agent.get("name", agent.get("agent_id", "unknown"))
-                agent_dict[name] = agent
+            for Cyber in Cybers:
+                name = Cyber.get("name", Cyber.get("cyber_id", "unknown"))
+                agent_dict[name] = Cyber
             
             return agent_dict
     
-    async def get_plaza_questions(self) -> List[Dict[str, Any]]:
-        """Get all plaza questions.
+    async def get_community_questions(self) -> List[Dict[str, Any]]:
+        """Get all community questions.
         
         Returns:
             List of questions
         """
         async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
-            response = await client.get(f"{self.base_url}/plaza/questions")
+            response = await client.get(f"{self.base_url}/community/questions")
             response.raise_for_status()
             return response.json()["questions"]
     
@@ -225,7 +225,7 @@ class MindSwarmClient:
             email: Optional email address
             
         Returns:
-            Developer agent name (e.g., "deano_dev")
+            Developer Cyber name (e.g., "deano_dev")
         """
         payload = {
             "name": name,
@@ -239,7 +239,7 @@ class MindSwarmClient:
                 json=payload
             )
             response.raise_for_status()
-            return response.json()["agent_name"]
+            return response.json()["cyber_name"]
     
     async def set_current_developer(self, name: str) -> bool:
         """Set the current developer.

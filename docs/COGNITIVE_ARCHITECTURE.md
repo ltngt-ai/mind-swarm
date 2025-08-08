@@ -2,18 +2,18 @@
 
 ## Overview
 
-The Mind-Swarm cognitive architecture implements intelligence through structured thinking at every step, not through hardcoded logic. This creates emergent intelligence where agents learn and adapt rather than following fixed patterns.
+The Mind-Swarm cognitive architecture implements intelligence through structured thinking at every step, not through hardcoded logic. This creates emergent intelligence where cybers learn and adapt rather than following fixed patterns.
 
 ## Key Principles
 
 1. **No Hardcoded Intelligence**: Logic emerges from LLM thinking, not if-statements
 2. **Structured Thinking**: Every cognitive step uses DSPy-style signatures
-3. **Sandbox Boundary**: Agents remain simple; intelligence lives server-side
-4. **Time Abstraction**: Agents experience instant responses despite LLM latency
+3. **Sandbox Boundary**: cybers remain simple; intelligence lives server-side
+4. **Time Abstraction**: cybers experience instant responses despite LLM latency
 
 ## Architecture Layers
 
-### 1. Agent Side (Sandboxed)
+### 1. cyber Side (Sandboxed)
 - **Boot ROM**: Fundamental, immutable knowledge
 - **Working Memory**: Current context and temporary storage
 - **Cognitive Loop**: Orchestrates thinking operations
@@ -64,7 +64,7 @@ class ThinkingSignature:
 
 ## Example: Processing "What is 2+2?"
 
-### 1. Agent Observes
+### 1. cyber Observes
 ```json
 {
   "signature": {
@@ -80,7 +80,7 @@ class ThinkingSignature:
 
 **Server responds**: "New query needs attention: arithmetic question"
 
-### 2. Agent Orients
+### 2. cyber Orients
 ```json
 {
   "signature": {
@@ -96,7 +96,7 @@ class ThinkingSignature:
 
 **Server responds**: "This is an arithmetic problem requiring calculation"
 
-### 3. Agent Decides
+### 3. cyber Decides
 ```json
 {
   "signature": {
@@ -112,7 +112,7 @@ class ThinkingSignature:
 
 **Server responds**: "Solve the arithmetic problem step by step"
 
-### 4. Agent Acts
+### 4. cyber Acts
 ```json
 {
   "signature": {
@@ -129,15 +129,15 @@ class ThinkingSignature:
 
 ## Benefits of This Architecture
 
-1. **True Learning**: Agents can learn from experience, not just execute code
+1. **True Learning**: cybers can learn from experience, not just execute code
 2. **Adaptability**: New situations handled intelligently, not through new code
-3. **Upgradeable**: Improve intelligence server-side without touching agents
+3. **Upgradeable**: Improve intelligence server-side without touching cybers
 4. **Emergent Behavior**: Complex behaviors emerge from simple thinking loops
-5. **Debugging**: Can see exactly what agents are thinking at each step
+5. **Debugging**: Can see exactly what cybers are thinking at each step
 
 ## Future Enhancements
 
 1. **Memory Integration**: Long-term memory influences thinking
-2. **Multi-Agent Reasoning**: Agents consult each other during thinking
-3. **Custom Signatures**: Agents develop their own thinking patterns
+2. **Multi-cyber Reasoning**: cybers consult each other during thinking
+3. **Custom Signatures**: cybers develop their own thinking patterns
 4. **Learning from Outcomes**: Reflection improves future performance

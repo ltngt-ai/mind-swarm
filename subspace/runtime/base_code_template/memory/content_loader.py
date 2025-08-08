@@ -5,6 +5,7 @@ Includes caching to avoid repeated file reads.
 """
 
 import json
+import yaml
 import hashlib
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
@@ -12,11 +13,11 @@ from datetime import datetime, timedelta
 import logging
 
 from .memory_blocks import (
-    MemoryBlock, FileMemoryBlock, MessageMemoryBlock, 
+    MemoryBlock, FileMemoryBlock,
     KnowledgeMemoryBlock, ObservationMemoryBlock
 )
 
-logger = logging.getLogger("agent.memory.loader")
+logger = logging.getLogger("Cyber.memory.loader")
 
 
 class ContentCache:
@@ -65,7 +66,7 @@ class ContentLoader:
         """Initialize content loader.
         
         Args:
-            filesystem_root: Root directory of the agent's filesystem
+            filesystem_root: Root directory of the Cyber's filesystem
             cache_ttl: Cache time-to-live in seconds
         """
         self.filesystem_root = Path(filesystem_root)
@@ -82,8 +83,6 @@ class ContentLoader:
         """
         if isinstance(memory, FileMemoryBlock):
             return self.load_file_content(memory)
-        elif isinstance(memory, MessageMemoryBlock):
-            return self.load_message_content(memory)
         elif isinstance(memory, KnowledgeMemoryBlock):
             return self.load_knowledge_content(memory)
         elif isinstance(memory, ObservationMemoryBlock):
@@ -129,36 +128,7 @@ class ContentLoader:
             logger.error(f"Error loading file {memory.location}: {e}")
             return f"[Error loading file: {memory.location} - {str(e)}]"
     
-    def load_message_content(self, memory: MessageMemoryBlock) -> str:
-        """Load message content from file."""
-        cache_key = f"message:{memory.full_path}"
-        
-        # Check cache
-        cached = self.cache.get(cache_key)
-        if cached is not None:
-            return cached
-        
-        try:
-            msg_path = self._resolve_path(memory.full_path)
-            
-            if not msg_path.exists():
-                # Return preview if file not found
-                return f"Subject: {memory.subject}\n\n{memory.preview}"
-            
-            # Load message file
-            msg_data = json.loads(msg_path.read_text())
-            
-            # Format message content
-            content = self._format_message(msg_data, memory)
-            
-            # Cache it
-            self.cache.put(cache_key, content)
-            
-            return content
-            
-        except Exception as e:
-            logger.error(f"Error loading message {memory.full_path}: {e}")
-            return f"Subject: {memory.subject}\n\n{memory.preview}"
+    # Removed load_message_content - messages are just FileMemoryBlock now
     
     def load_knowledge_content(self, memory: KnowledgeMemoryBlock) -> str:
         """Load knowledge content from metadata or file."""
@@ -181,7 +151,8 @@ class ContentLoader:
                 return f"[Knowledge not found: {memory.topic}]"
             
             # Load and parse knowledge file
-            knowledge_data = json.loads(knowledge_path.read_text(encoding='utf-8', errors='replace'))
+            file_content = knowledge_path.read_text(encoding='utf-8', errors='replace')
+            knowledge_data = yaml.safe_load(file_content)
             
             # Extract content from knowledge file
             content = knowledge_data.get("content", "[No content in knowledge file]")
@@ -200,7 +171,6 @@ class ContentLoader:
         return (
             f"[OBSERVATION: {memory.observation_type}]\n"
             f"Path: {memory.path}\n"
-            f"Description: {memory.description}\n"
             f"Time: {memory.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
         )
     
@@ -236,18 +206,7 @@ class ContentLoader:
         
         return '\n'.join(lines[start:end])
     
-    def _format_message(self, msg_data: Dict[str, Any], memory: MessageMemoryBlock) -> str:
-        """Format a message for display."""
-        lines = [
-            f"From: {memory.from_agent}",
-            f"To: {memory.to_agent}",
-            f"Subject: {memory.subject}",
-            f"Time: {msg_data.get('timestamp', 'unknown')}",
-            "",
-            msg_data.get('content', memory.preview)
-        ]
-        
-        return '\n'.join(lines)
+    # Removed _format_message - LLM can read raw JSON
     
     def _default_content(self, memory: MemoryBlock) -> str:
         """Generate default content for unknown memory types."""

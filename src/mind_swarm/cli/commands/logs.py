@@ -1,4 +1,4 @@
-"""CLI commands for viewing agent logs."""
+"""CLI commands for viewing Cyber logs."""
 
 import asyncio
 import os
@@ -15,13 +15,13 @@ console = Console()
 
 
 def logs(
-    agent_name: str = typer.Argument(..., help="Name of the agent"),
+    cyber_name: str = typer.Argument(..., help="Name of the Cyber"),
     tail: int = typer.Option(50, "--tail", "-t", help="Number of lines to show from end"),
     follow: bool = typer.Option(False, "--follow", "-f", help="Follow log output"),
     history: bool = typer.Option(False, "--history", "-h", help="Show rotated logs"),
     subspace: Optional[str] = typer.Option(None, help="Path to subspace root")
 ):
-    """View logs for a specific agent.
+    """View logs for a specific Cyber.
     
     Examples:
         mind-swarm logs Alice           # Show last 50 lines of Alice's log
@@ -37,16 +37,16 @@ def logs(
         subspace_root = settings.subspace.root_path
     
     # Initialize log rotator
-    logs_base_dir = subspace_root / "logs" / "agents"
+    logs_base_dir = subspace_root / "logs" / "cybers"
     log_rotator = AgentLogRotator(logs_base_dir)
     
     if history:
         # Show rotated logs
-        console.print(f"[bold]Log files for agent {agent_name}:[/bold]")
-        all_logs = log_rotator.get_all_logs(agent_name)
+        console.print(f"[bold]Log files for Cyber {cyber_name}:[/bold]")
+        all_logs = log_rotator.get_all_logs(cyber_name)
         
         if not all_logs:
-            console.print(f"[yellow]No logs found for agent {agent_name}[/yellow]")
+            console.print(f"[yellow]No logs found for Cyber {cyber_name}[/yellow]")
             return
         
         for log_file in all_logs:
@@ -55,9 +55,9 @@ def logs(
     
     elif follow:
         # Follow log output
-        log_file = log_rotator.get_current_log_path(agent_name)
+        log_file = log_rotator.get_current_log_path(cyber_name)
         if not log_file.exists():
-            console.print(f"[yellow]No current log for agent {agent_name}[/yellow]")
+            console.print(f"[yellow]No current log for Cyber {cyber_name}[/yellow]")
             return
         
         console.print(f"[green]Following {log_file} (Ctrl+C to stop)...[/green]")
@@ -69,9 +69,9 @@ def logs(
     
     else:
         # Show tail of current log
-        log_file = log_rotator.get_current_log_path(agent_name)
+        log_file = log_rotator.get_current_log_path(cyber_name)
         if not log_file.exists():
-            console.print(f"[yellow]No current log for agent {agent_name}[/yellow]")
+            console.print(f"[yellow]No current log for Cyber {cyber_name}[/yellow]")
             return
         
         # Read last N lines

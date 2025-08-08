@@ -4,23 +4,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Mind-Swarm Overview
 
-Mind-Swarm is a multi-agent AI system creating a "hive mind" through shared filesystem-based memory and distributed problem-solving. Agents are autonomous AI-powered processes running in sandboxed environments, collaborating through shared memory and RFC2822-style messaging.
+Mind-Swarm is a multi-cyber AI system creating a "hive mind" through shared filesystem-based memory and distributed problem-solving. cybers are autonomous AI-powered processes running in sandboxed environments, collaborating through shared memory and RFC2822-style messaging.
 
 ## Architecture
 
 ### Client-Server System
-- **Server Daemon**: Background process managing agents (`python -m mind_swarm.server.daemon`)
+- **Server Daemon**: Background process managing cybers (`python -m mind_swarm.server.daemon`)
 - **CLI Client**: Interactive connection to server (`mind-swarm connect`)
 - **WebSocket + REST API**: Real-time events and HTTP endpoints
 
 ### Three-Layer Design
-1. **Subspace Layer**: Server daemon creating/managing the agent environment
-2. **Agent Processes**: Separate OS processes in bubblewrap sandboxes
-3. **I/O Agents Layer**: Bridge agents with dual nature (inside sandbox + server component)
+1. **Subspace Layer**: Server daemon creating/managing the cyber environment
+2. **cyber Processes**: Separate OS processes in bubblewrap sandboxes
+3. **I/O cybers Layer**: Bridge cybers with dual nature (inside sandbox + server component)
 
-### Agent Types
-- **GENERAL**: Standard agents for thinking and collaboration
-- **IO_GATEWAY**: Special agents bridging internal world with external systems
+### cyber Types
+- **GENERAL**: Standard cybers for thinking and collaboration
+- **IO_GATEWAY**: Special cybers bridging internal world with external systems
 
 ## Commands
 
@@ -83,9 +83,9 @@ mypy src/
 
 ### Interactive CLI Commands
 When connected via `mind-swarm connect`:
-- `status` - Show agent states and system status
-- `spawn [--premium] [--type TYPE] [name]` - Create agent
-- `terminate <agent_id>` - Stop agent
+- `status` - Show cyber states and system status
+- `spawn [--premium] [--type TYPE] [name]` - Create cyber
+- `terminate <agent_id>` - Stop cyber
 - `command <agent_id> <command> [params]` - Send command
 - `question <text>` - Create shared question
 - `presets` - List AI model presets
@@ -95,18 +95,18 @@ When connected via `mind-swarm connect`:
 ### Core Components (`src/mind_swarm/`)
 
 #### Subspace System (`subspace/`)
-- **SubspaceCoordinator**: Main orchestrator managing agent environment
-- **AgentSpawner**: Launches agents with proper sandboxing
-- **AgentRegistry**: Tracks all agents and capabilities (`/shared/directory/agents.json`)
-- **MessageRouter**: Handles agent-to-agent mail delivery
+- **SubspaceCoordinator**: Main orchestrator managing cyber environment
+- **AgentSpawner**: Launches cybers with proper sandboxing
+- **AgentRegistry**: Tracks all cybers and capabilities (`/shared/directory/cybers.json`)
+- **MessageRouter**: Handles cyber-to-cyber mail delivery
 - **BrainHandler**: Manages AI thinking through body files
 
-#### Agent Runtime (`/subspace/runtime/`)
-- **base_code_template/**: General agent implementation
-  - `mind.py`: Main agent class coordinating components
+#### cyber Runtime (`/subspace/runtime/`)
+- **base_code_template/**: General cyber implementation
+  - `mind.py`: Main cyber class coordinating components
   - `cognitive_loop.py`: OODA loop with memory integration
-  - `boot_rom.py`: Core agent knowledge
-- **io_agent_template/**: I/O agent specialization
+  - `boot_rom.py`: Core cyber knowledge
+- **io_agent_template/**: I/O cyber specialization
   - Extends base with network/user_io body files
 
 #### AI Integration (`ai/`)
@@ -117,42 +117,42 @@ When connected via `mind-swarm connect`:
 ### Filesystem Structure
 ```
 /subspace/
-├── agents/{agent-id}/      # Agent home directories
+├── cybers/{cyber-id}/      # cyber home directories
 │   ├── inbox/             # Incoming messages
 │   ├── outbox/            # Outgoing (routed by subspace)
 │   ├── memory/            # Persistent storage
-│   └── base_code/         # Agent's runtime code
+│   └── base_code/         # cyber's runtime code
 ├── grid/                  # Shared collaboration space
 │   ├── plaza/            # Questions and discussions
 │   ├── library/          # Shared knowledge
 │   ├── workshop/         # Tools
 │   └── bulletin/         # Announcements
-└── runtime/              # Agent templates
+└── runtime/              # cyber templates
 ```
 
-### Agent Perspective
-Inside sandbox, agents see:
-- `/home/` - Their private space
-- `/home/brain` - AI thinking interface
-- `/home/network` - Network requests (I/O agents only)
-- `/home/user_io` - User interaction (I/O agents only)
+### cyber Perspective
+Inside sandbox, cybers see:
+- `/personal/` - Their private space
+- `/personal/brain` - AI thinking interface
+- `/personal/network` - Network requests (I/O cybers only)
+- `/personal/user_io` - User interaction (I/O cybers only)
 - `/grid/` - Shared hive mind space
 
 ### Key Design Principles
 
-1. **Agent-First**: Everything through intelligent agents, no hardcoded logic
-2. **Clean World View**: Agents see only their reality, no implementation details
-3. **Process Isolation**: Each agent in separate bubblewrap sandbox
+1. **cyber-First**: Everything through intelligent cybers, no hardcoded logic
+2. **Clean World View**: cybers see only their reality, no implementation details
+3. **Process Isolation**: Each cyber in separate bubblewrap sandbox
 4. **Filesystem IPC**: All communication via filesystem operations
 5. **Dual-Model Architecture**: Premium models for tasks, local for exploration
-6. **Emergent Intelligence**: Let agents self-organize and discover patterns
+6. **Emergent Intelligence**: Let cybers self-organize and discover patterns
 
 ### Message Protocol
 ```json
 {
   "type": "COMMAND",      // COMMAND, QUERY, RESPONSE, SHUTDOWN
-  "from": "agent-123",    // Sender ID
-  "to": "agent-456",      // Recipient ID  
+  "from": "cyber-123",    // Sender ID
+  "to": "cyber-456",      // Recipient ID  
   "command": "think",     // Command name
   "params": {},          // Parameters
   "timestamp": "..."     // ISO timestamp
@@ -190,51 +190,51 @@ AGENT_MEMORY_LIMIT_MB=512
 
 - Server must run before clients can connect
 - Always set SUBSPACE_ROOT for server commands
-- Agents exist only within subspace - can't run standalone
-- All agent capabilities through body files (no network access)
-- Body file operations appear instant to agents
-- Use agent names for routing (no hardcoded "subspace" address)
-- I/O agents use special naming: Ian-io, Ivy-io, etc.
+- cybers exist only within subspace - can't run standalone
+- All cyber capabilities through body files (no network access)
+- Body file operations appear instant to cybers
+- Use cyber names for routing (no hardcoded "subspace" address)
+- I/O cybers use special naming: Ian-io, Ivy-io, etc.
 
-## Runtime System and Agent Code Organization
+## Runtime System and cyber Code Organization
 
 ### How the Runtime Works
-When the server creates or resumes an agent:
-1. **Sandbox Creation**: `SubspaceManager.create_sandbox()` creates a sandbox for the agent
-2. **Runtime Copying**: `_copy_agent_base_code()` copies the entire runtime template to the agent's `base_code` directory
-   - General agents: copies from `subspace/runtime/base_code_template/`
-   - IO agents: copies from `subspace/runtime/io_agent_template/`
-3. **Process Launch**: Agent is launched with `python3 -m base_code` from inside the sandbox
-4. **Inside Sandbox**: The agent sees its code at `/home/base_code/` (mapped from `subspace/agents/{name}/base_code/`)
+When the server creates or resumes an cyber:
+1. **Sandbox Creation**: `SubspaceManager.create_sandbox()` creates a sandbox for the cyber
+2. **Runtime Copying**: `_copy_agent_base_code()` copies the entire runtime template to the cyber's `base_code` directory
+   - General cybers: copies from `subspace/runtime/base_code_template/`
+   - IO cybers: copies from `subspace/runtime/io_agent_template/`
+3. **Process Launch**: cyber is launched with `python3 -m base_code` from inside the sandbox
+4. **Inside Sandbox**: The cyber sees its code at `/personal/base_code/` (mapped from `subspace/cybers/{name}/base_code/`)
 
-### Import Rules for Agent Code
-**CRITICAL**: All imports in agent code must be RELATIVE to the base_code directory:
+### Import Rules for cyber Code
+**CRITICAL**: All imports in cyber code must be RELATIVE to the base_code directory:
 - ✅ CORRECT: `from .cognitive_loop import CognitiveLoop`
 - ✅ CORRECT: `from .base_code_template.actions import Action`
 - ❌ WRONG: `from base_code_template.actions import Action`
 - ❌ WRONG: `from mind_swarm.xxx import anything`
 
-The agent code runs as a module (`python3 -m base_code`), so all imports must use relative imports.
+The cyber code runs as a module (`python3 -m base_code`), so all imports must use relative imports.
 
-### Agent Code Structure
+### cyber Code Structure
 ```
 subspace/runtime/
-├── base_code_template/       # Template for general agents
+├── base_code_template/       # Template for general cybers
 │   ├── __init__.py
 │   ├── __main__.py          # Entry point
 │   ├── cognitive_loop.py    # Core OODA loop
 │   ├── actions.py           # Action system
 │   ├── memory.py            # Memory management
 │   └── ...
-└── io_agent_template/       # Template for IO agents
+└── io_agent_template/       # Template for IO cybers
     ├── __init__.py
     ├── __main__.py          # Entry point (imports from base_code_template)
     ├── io_cognitive_loop.py # Extended loop for IO
     ├── io_actions.py        # IO-specific actions
-    └── io_mind.py           # IO agent mind
+    └── io_mind.py           # IO cyber mind
 
-# When copied to agent:
-subspace/agents/{agent_name}/
+# When copied to cyber:
+subspace/cybers/{agent_name}/
 └── base_code/               # Complete copy of template
     ├── __init__.py
     ├── __main__.py
@@ -242,11 +242,11 @@ subspace/agents/{agent_name}/
 ```
 
 ### Key Points
-- Runtime is copied fresh on each agent start/resume
-- Agents are isolated - they cannot import server code
-- All agent code uses relative imports
-- IO agents inherit from base agents using relative imports
-- The base_code directory is the agent's entire world of code
+- Runtime is copied fresh on each cyber start/resume
+- cybers are isolated - they cannot import server code
+- All cyber code uses relative imports
+- IO cybers inherit from base cybers using relative imports
+- The base_code directory is the cyber's entire world of code
 - **CRITICAL**: NEVER write code directly to the `/subspace` folder - it's the runtime folder that gets reset
-- **ALWAYS** write agent runtime code to `/subspace_template` folder - this is the source template
+- **ALWAYS** write cyber runtime code to `/subspace_template` folder - this is the source template
 - The server copies from `/subspace_template` to `/subspace` on startup

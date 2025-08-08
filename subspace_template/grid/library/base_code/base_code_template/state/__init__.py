@@ -1,13 +1,13 @@
 """State management module for the cognitive loop.
 
 This package provides state persistence and management functionality
-including agent state tracking, execution state, and state transitions.
+including Cyber state tracking, execution state, and state transitions.
 """
 
-from .agent_state_manager import AgentStateManager
+from .cyber_state_manager import CyberStateManager
 from .execution_state import ExecutionStateTracker
 
 __all__ = [
-    'AgentStateManager',
+    'CyberStateManager',
     'ExecutionStateTracker'
 ]

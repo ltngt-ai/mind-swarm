@@ -31,63 +31,63 @@ class InotifyBodyMonitor:
         self.handlers: Dict[str, BodyFileHandler] = {}
         self.loop = asyncio.get_event_loop()
         
-    async def add_agent(self, agent_id: str, agent_home: Path, ai_handler: Callable):
-        """Add an agent to monitor.
+    async def add_agent(self, cyber_id: str, cyber_personal: Path, ai_handler: Callable):
+        """Add an Cyber to monitor.
         
         Args:
-            agent_id: Agent's unique identifier
-            agent_home: Path to agent's home directory
+            cyber_id: Cyber's unique identifier
+            cyber_personal: Path to Cyber's home directory
             ai_handler: Async function to handle AI requests
         """
         if not HAS_WATCHDOG:
             logger.warning("Watchdog not available, falling back to polling")
             return
             
-        # Create handler for this agent
-        handler = BodyFileHandler(agent_id, agent_home, ai_handler, self.loop)
-        self.handlers[agent_id] = handler
+        # Create handler for this Cyber
+        handler = BodyFileHandler(cyber_id, cyber_personal, ai_handler, self.loop)
+        self.handlers[cyber_id] = handler
         
-        # Create observer for the agent's home directory
+        # Create observer for the Cyber's home directory
         observer = Observer()
-        observer.schedule(handler, str(agent_home), recursive=False)
+        observer.schedule(handler, str(cyber_personal), recursive=False)
         observer.start()
         
-        self.observers[agent_id] = observer
-        logger.info(f"Started inotify monitoring for {agent_id}")
+        self.observers[cyber_id] = observer
+        logger.info(f"Started inotify monitoring for {cyber_id}")
     
-    async def remove_agent(self, agent_id: str):
-        """Stop monitoring an agent.
+    async def remove_agent(self, cyber_id: str):
+        """Stop monitoring an Cyber.
         
         Args:
-            agent_id: Agent's unique identifier
+            cyber_id: Cyber's unique identifier
         """
-        if agent_id in self.observers:
-            self.observers[agent_id].stop()
-            self.observers[agent_id].join(timeout=1)
-            del self.observers[agent_id]
-            del self.handlers[agent_id]
-            logger.info(f"Stopped inotify monitoring for {agent_id}")
+        if cyber_id in self.observers:
+            self.observers[cyber_id].stop()
+            self.observers[cyber_id].join(timeout=1)
+            del self.observers[cyber_id]
+            del self.handlers[cyber_id]
+            logger.info(f"Stopped inotify monitoring for {cyber_id}")
     
     async def shutdown(self):
         """Shutdown all monitoring."""
-        for agent_id in list(self.observers.keys()):
-            await self.remove_agent(agent_id)
+        for cyber_id in list(self.observers.keys()):
+            await self.remove_agent(cyber_id)
 
 
 class BodyFileHandler(FileSystemEventHandler):
     """Handles file system events for body files."""
     
-    def __init__(self, agent_id: str, agent_home: Path, ai_handler: Callable, loop):
+    def __init__(self, cyber_id: str, cyber_personal: Path, ai_handler: Callable, loop):
         """Initialize the handler.
         
         Args:
-            agent_id: Agent's unique identifier
-            agent_home: Path to agent's home directory
+            cyber_id: Cyber's unique identifier
+            cyber_personal: Path to Cyber's home directory
             ai_handler: Async function to handle AI requests
             loop: Event loop for async operations
         """
-        self.agent_id = agent_id
-        self.agent_home = agent_home
+        self.cyber_id = cyber_id
+        self.cyber_personal = cyber_personal
         self.ai_handler = ai_handler
         self.loop = loop
         self.processing: Set[str] = set()
@@ -98,7 +98,7 @@ class BodyFileHandler(FileSystemEventHandler):
             file_path = Path(event.src_path)
             
             # Only care about body files
-            if file_path.name == "brain" and file_path.parent == self.agent_home:
+            if file_path.name == "brain" and file_path.parent == self.cyber_personal:
                 # Schedule async processing in the event loop
                 asyncio.run_coroutine_threadsafe(
                     self._process_brain_file(file_path),
@@ -122,10 +122,10 @@ class BodyFileHandler(FileSystemEventHandler):
                 
                 # Extract prompt
                 prompt = content.split("<<<END_THOUGHT>>>")[0].strip()
-                logger.debug(f"Brain activated by {self.agent_id}: {prompt[:50]}...")
+                logger.debug(f"Brain activated by {self.cyber_id}: {prompt[:50]}...")
                 
                 # Process the thought
-                response = await self.ai_handler(self.agent_id, prompt)
+                response = await self.ai_handler(self.cyber_id, prompt)
                 
                 # Write response with completion marker
                 async with aiofiles.open(file_path, 'w') as f:
@@ -136,7 +136,7 @@ class BodyFileHandler(FileSystemEventHandler):
                 self.processing.discard("brain")
                 
         except Exception as e:
-            logger.error(f"Error processing brain file for {self.agent_id}: {e}")
+            logger.error(f"Error processing brain file for {self.cyber_id}: {e}")
             self.processing.discard("brain")
 
 
@@ -145,43 +145,43 @@ class EpollBodyMonitor:
     
     def __init__(self):
         """Initialize the epoll-based monitor."""
-        self.agents: Dict[str, Dict] = {}
+        self.cybers: Dict[str, Dict] = {}
         self._monitor_task: Optional[asyncio.Task] = None
         
     async def start(self):
         """Start the monitoring loop."""
         self._monitor_task = asyncio.create_task(self._monitor_loop())
         
-    async def add_agent(self, agent_id: str, agent_home: Path, ai_handler: Callable):
-        """Add an agent to monitor."""
-        brain_path = agent_home / "brain"
+    async def add_agent(self, cyber_id: str, cyber_personal: Path, ai_handler: Callable):
+        """Add an Cyber to monitor."""
+        brain_path = cyber_personal / "brain"
         
         # Open file for monitoring
         fd = os.open(str(brain_path), os.O_RDONLY | os.O_NONBLOCK)
         
-        self.agents[agent_id] = {
-            'home': agent_home,
+        self.cybers[cyber_id] = {
+            'home': cyber_personal,
             'brain_fd': fd,
             'brain_path': brain_path,
             'ai_handler': ai_handler,
             'processing': False
         }
         
-        logger.info(f"Added {agent_id} to epoll monitoring")
+        logger.info(f"Added {cyber_id} to epoll monitoring")
     
-    async def remove_agent(self, agent_id: str):
-        """Stop monitoring an agent."""
-        if agent_id in self.agents:
-            os.close(self.agents[agent_id]['brain_fd'])
-            del self.agents[agent_id]
+    async def remove_agent(self, cyber_id: str):
+        """Stop monitoring an Cyber."""
+        if cyber_id in self.cybers:
+            os.close(self.cybers[cyber_id]['brain_fd'])
+            del self.cybers[cyber_id]
     
     async def _monitor_loop(self):
         """Main monitoring loop using asyncio."""
         while True:
-            # Check all agents
-            for agent_id, agent_info in self.agents.items():
+            # Check all Cybers
+            for cyber_id, cyber_info in self.cybers.items():
                 try:
-                    brain_path = agent_info['brain_path']
+                    brain_path = cyber_info['brain_path']
                     
                     # Check file modification time
                     # (In production, would use actual epoll or inotify)
@@ -189,52 +189,52 @@ class EpollBodyMonitor:
                         async with aiofiles.open(brain_path, 'r') as f:
                             content = await f.read()
                         
-                        if "<<<END_THOUGHT>>>" in content and not agent_info['processing']:
-                            agent_info['processing'] = True
+                        if "<<<END_THOUGHT>>>" in content and not cyber_info['processing']:
+                            cyber_info['processing'] = True
                             
                             # Process asynchronously
                             asyncio.create_task(
-                                self._process_thought(agent_id, content)
+                                self._process_thought(cyber_id, content)
                             )
                             
                         elif content.startswith("This is your brain"):
-                            agent_info['processing'] = False
+                            cyber_info['processing'] = False
                     except FileNotFoundError:
                         pass
                         
                 except Exception as e:
-                    logger.error(f"Error monitoring {agent_id}: {e}")
+                    logger.error(f"Error monitoring {cyber_id}: {e}")
             
             # Sleep briefly to prevent CPU spinning
             await asyncio.sleep(0.1)
     
-    async def _process_thought(self, agent_id: str, content: str):
-        """Process a thought from an agent."""
-        agent_info = self.agents[agent_id]
+    async def _process_thought(self, cyber_id: str, content: str):
+        """Process a thought from an Cyber."""
+        cyber_info = self.cybers[cyber_id]
         
         try:
             # Extract prompt
             prompt = content.split("<<<END_THOUGHT>>>")[0].strip()
             
             # Call AI handler
-            response = await agent_info['ai_handler'](agent_id, prompt)
+            response = await cyber_info['ai_handler'](cyber_id, prompt)
             
             # Write response
-            async with aiofiles.open(agent_info['brain_path'], 'w') as f:
+            async with aiofiles.open(cyber_info['brain_path'], 'w') as f:
                 await f.write(f"{response}\n<<<THOUGHT_COMPLETE>>>")
             
         except Exception as e:
-            logger.error(f"Error processing thought for {agent_id}: {e}")
+            logger.error(f"Error processing thought for {cyber_id}: {e}")
         finally:
-            agent_info['processing'] = False
+            cyber_info['processing'] = False
     
     async def shutdown(self):
         """Shutdown monitoring."""
         if self._monitor_task:
             self._monitor_task.cancel()
             
-        for agent_id in list(self.agents.keys()):
-            await self.remove_agent(agent_id)
+        for cyber_id in list(self.cybers.keys()):
+            await self.remove_agent(cyber_id)
 
 
 def create_body_monitor() -> 'BodyMonitor':

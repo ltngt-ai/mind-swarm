@@ -2,7 +2,7 @@
 
 ## Overview
 
-We have successfully implemented a sophisticated two-layer memory architecture for Mind-Swarm agents that enables rich filesystem perception and intelligent context management. The system allows agents to "see" their environment through symbolic memory blocks that are lazily loaded and intelligently selected based on relevance and priority.
+We have successfully implemented a sophisticated two-layer memory architecture for Mind-Swarm cybers that enables rich filesystem perception and intelligent context management. The system allows cybers to "see" their environment through symbolic memory blocks that are lazily loaded and intelligently selected based on relevance and priority.
 
 ## Key Components Implemented
 
@@ -10,12 +10,12 @@ We have successfully implemented a sophisticated two-layer memory architecture f
 - **Base MemoryBlock class**: Core structure with priority, confidence, timestamps, and metadata
 - **Specialized memory types**:
   - `FileMemoryBlock`: References to file content with line ranges
-  - `MessageMemoryBlock`: Inter-agent messages with read/unread status
+  - `MessageMemoryBlock`: Inter-cyber messages with read/unread status
   - `ObservationMemoryBlock`: Filesystem observations (new files, changes)
   - `TaskMemoryBlock`: Current tasks with status tracking
   - `KnowledgeMemoryBlock`: Shared knowledge base entries
   - `StatusMemoryBlock`: System status information
-  - `HistoryMemoryBlock`: Agent action history
+  - `HistoryMemoryBlock`: cyber action history
   - `ContextMemoryBlock`: Derived context from activities
 
 ### 2. Working Memory Manager (`memory_manager.py`)
@@ -52,7 +52,7 @@ We have successfully implemented a sophisticated two-layer memory architecture f
 - Creates observation memories for:
   - New messages in inbox
   - Changes to shared areas (plaza, questions, knowledge)
-  - Updates to agent's own memory
+  - Updates to cyber's own memory
   - Available tools
 - Change detection using file state tracking
 - Configurable full vs incremental scans
@@ -71,7 +71,7 @@ We have successfully implemented a sophisticated two-layer memory architecture f
 
 2. **Memory Storage**: All observations are stored as symbolic references in the WorkingMemoryManager without loading actual content.
 
-3. **Task Processing**: When an agent receives a task:
+3. **Task Processing**: When an cyber receives a task:
    - Relevant memories are selected based on the task description
    - The selector respects priority levels and token budgets
    - Only selected memories have their content loaded
@@ -90,7 +90,7 @@ We have successfully implemented a sophisticated two-layer memory architecture f
 ## Benefits
 
 1. **Efficient Resource Usage**: Only loads content when actually needed
-2. **Rich Environmental Awareness**: Agents can perceive their entire filesystem environment
+2. **Rich Environmental Awareness**: cybers can perceive their entire filesystem environment
 3. **Intelligent Context**: Provides relevant information based on current task
 4. **Scalable**: Can handle large numbers of files and observations
 5. **Flexible**: Multiple selection strategies and output formats
@@ -138,10 +138,10 @@ Comprehensive test suite in `/tests/test_memory_system.py` covering:
 
 ## Next Steps
 
-The memory system is now fully integrated and ready for use. Agents using the EnhancedCognitiveLoop will automatically benefit from:
+The memory system is now fully integrated and ready for use. cybers using the EnhancedCognitiveLoop will automatically benefit from:
 - Full filesystem perception
 - Intelligent memory selection
 - Efficient resource usage
 - Rich contextual awareness
 
-This forms the foundation for emergent collaborative behaviors as agents can now perceive and respond to their shared environment.
+This forms the foundation for emergent collaborative behaviors as cybers can now perceive and respond to their shared environment.

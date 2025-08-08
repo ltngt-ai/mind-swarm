@@ -1,10 +1,10 @@
 # Compute Actions Usage Examples
 
-This document demonstrates how agents can use the new compute actions for general-purpose Python computation.
+This document demonstrates how cybers can use the new compute actions for general-purpose Python computation.
 
 ## execute_python Action
 
-The `execute_python` action allows agents to run Python code in a sandboxed environment with access to safe built-ins and common modules.
+The `execute_python` action allows cybers to run Python code in a sandboxed environment with access to safe built-ins and common modules.
 
 ### Basic Examples
 
@@ -78,7 +78,7 @@ Expected output:
 {
   "action": "execute_python",
   "params": {
-    "code": "import json\ndata = {'name': 'Agent', 'tasks': ['think', 'compute', 'respond']}\njson_str = json.dumps(data, indent=2)\nprint('JSON representation:')\nprint(json_str)",
+    "code": "import json\ndata = {'name': 'cyber', 'tasks': ['think', 'compute', 'respond']}\njson_str = json.dumps(data, indent=2)\nprint('JSON representation:')\nprint(json_str)",
     "description": "JSON manipulation"
   }
 }
@@ -193,12 +193,12 @@ Returns:
 
 This action only supports basic arithmetic operations and is faster for simple calculations.
 
-## Integration in Agent Decision Making
+## Integration in cyber Decision Making
 
-Agents can now use these compute actions in their decision-making process:
+cybers can now use these compute actions in their decision-making process:
 
 ```python
-# In the decide() method, agent might choose:
+# In the decide() method, cyber might choose:
 actions = [
     {
         "action": "execute_python",
@@ -221,4 +221,4 @@ actions = [
 ]
 ```
 
-This enables agents to perform complex computations as part of their cognitive processes.
+This enables cybers to perform complex computations as part of their cognitive processes.

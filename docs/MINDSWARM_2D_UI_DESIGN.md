@@ -1,7 +1,7 @@
 # Mind-Swarm 2D Monitoring Interface Design
 
 ## Overview
-A 2D Tron-inspired monitoring interface for Mind-Swarm that provides real-time visualization of agent activities, leveraging existing WebSocket infrastructure.
+A 2D Tron-inspired monitoring interface for Mind-Swarm that provides real-time visualization of cyber activities, leveraging existing WebSocket infrastructure.
 
 ## Technology Stack
 - **Frontend**: React + TypeScript 
@@ -34,7 +34,7 @@ A 2D Tron-inspired monitoring interface for Mind-Swarm that provides real-time v
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
 │  ┌──────────────────┐  ┌────────────────────────────────┐  │
-│  │ AGENTS (5 active)│  │         AGENT GRID              │  │
+│  │ cybers (5 active)│  │         cyber GRID              │  │
 │  ├──────────────────┤  │  ┌────┐  ┌────┐  ┌────┐       │  │
 │  │ ● Alice          │  │  │Alice│  │ Bob │  │Carol│      │  │
 │  │   Thinking...    │  │  │ 🤔 │  │ 💬 │  │ 😴 │      │  │
@@ -61,17 +61,17 @@ A 2D Tron-inspired monitoring interface for Mind-Swarm that provides real-time v
 │  │ MESSAGES (12)    │  │ FILES (48)      │  │ METRICS     │ │
 │  │ ░░░░░░░░░░░░░░  │  │ ▓▓▓▓▓▓░░░░░░░░ │  │ CPU: 45%    │ │
 │  │ Inbox: 8        │  │ Active: 23      │  │ MEM: 2.1GB  │ │
-│  │ Sent: 4         │  │ Total: 48       │  │ Agents: 5   │ │
+│  │ Sent: 4         │  │ Total: 48       │  │ cybers: 5   │ │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘ │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ## Core Components
 
-### 1. Agent Grid View
-- **Visual**: Agents as glowing nodes with status indicators
+### 1. cyber Grid View
+- **Visual**: cybers as glowing nodes with status indicators
 - **Interactions**: 
-  - Click to view agent details
+  - Click to view cyber details
   - Drag to rearrange layout
   - Lines show active communications
 - **States**: 
@@ -81,7 +81,7 @@ A 2D Tron-inspired monitoring interface for Mind-Swarm that provides real-time v
   - 📝 Writing (file icon)
   - 🔍 Searching (scanning animation)
 
-### 2. Agent List Panel
+### 2. cyber List Panel
 - Scrollable list with status indicators
 - Real-time state updates
 - Quick actions (terminate, wake, message)
@@ -97,7 +97,7 @@ A 2D Tron-inspired monitoring interface for Mind-Swarm that provides real-time v
 - Message flow metrics
 - File system activity
 - System resource usage
-- Agent count and states
+- cyber count and states
 
 ## WebSocket Integration
 
@@ -116,7 +116,7 @@ interface MonitoringEvents {
   agent_state_changed: { name: string; old_state: string; new_state: string };
   agent_thinking: { name: string; thought: string; token_count?: number };
   message_sent: { from: string; to: string; subject: string };
-  file_activity: { agent: string; action: string; path: string };
+  file_activity: { cyber: string; action: string; path: string };
   system_metrics: { cpu: number; memory: number; agent_count: number };
 }
 ```
@@ -144,9 +144,9 @@ async def _emit_agent_event(self, event_type: str, data: dict):
 3. Create basic layout with Tron styling
 4. Connect to existing `/ws` endpoint
 
-### Phase 2: Agent Visualization (Days 4-6)
-1. Agent Grid component with D3.js or pure SVG
-2. Agent List with real-time updates
+### Phase 2: cyber Visualization (Days 4-6)
+1. cyber Grid component with D3.js or pure SVG
+2. cyber List with real-time updates
 3. Status indicators and animations
 4. Message trail visualization
 
@@ -171,14 +171,14 @@ async def _emit_agent_event(self, event_type: str, data: dict):
 - Instant message visualization
 
 ### 2. Interactive Elements
-- Click agents for detailed view
-- Filter activity by type/agent
+- Click cybers for detailed view
+- Filter activity by type/cyber
 - Pause/resume activity feed
 - Export activity logs
 
 ### 3. Visual Effects
 - Glowing borders (CSS box-shadow)
-- Pulsing animations for active agents
+- Pulsing animations for active cybers
 - Message trails as animated SVG paths
 - Scanline effect overlay (optional)
 
@@ -218,7 +218,7 @@ src/
 ## Advantages of 2D First Approach
 
 1. **Faster Development**: 2-3 weeks vs 10+ weeks for 3D
-2. **Better Performance**: Handles 50+ agents smoothly
+2. **Better Performance**: Handles 50+ cybers smoothly
 3. **Clearer Information**: Better text readability, easier navigation
 4. **Mobile Compatible**: Works on tablets and large phones
 5. **Easier Maintenance**: Standard React patterns
@@ -228,7 +228,7 @@ src/
 
 1. Create the React project structure
 2. Implement WebSocket connection
-3. Build the Agent Grid component
+3. Build the cyber Grid component
 4. Add minimal server-side event emissions
 5. Style with Tron theme
 

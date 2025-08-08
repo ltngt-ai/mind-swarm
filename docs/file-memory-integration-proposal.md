@@ -1,4 +1,4 @@
-# File and Memory Integration for Mind-Swarm Agents
+# File and Memory Integration for Mind-Swarm cybers
 
 ## Current Architecture Analysis
 
@@ -9,19 +9,19 @@ The Mind-Swarm memory system already treats files as a type of memory:
 3. **EnvironmentScanner** - Discovers files and creates memory blocks
 4. **WorkingMemoryManager** - Manages all memory types uniformly
 
-Key insight: **Files ARE memories in the agent's worldview**. The hive mind's persistent memory is literally the filesystem.
+Key insight: **Files ARE memories in the cyber's worldview**. The hive mind's persistent memory is literally the filesystem.
 
 ## Conceptual Model
 
-From an agent's perspective:
+From an cyber's perspective:
 - **Working Memory** = Currently loaded/active memories (symbolic references)
 - **Long-term Memory** = Files on disk that can be loaded
 - **Shared Memory** = Grid filesystem (plaza, library, workshop)
-- **Personal Memory** = Agent's home directory
+- **Personal Memory** = cyber's home directory
 
 ## Proposed File Actions as Memory Operations
 
-Instead of traditional file operations, we should provide memory-focused actions that naturally align with how agents think:
+Instead of traditional file operations, we should provide memory-focused actions that naturally align with how cybers think:
 
 ### 1. Memory Focus Actions
 
@@ -147,7 +147,7 @@ class ListMemoriesAction(Action):
 
 ## Natural Usage Examples
 
-### Agent Reading a File
+### cyber Reading a File
 Instead of: "read file /grid/library/docs/guide.md"
 Natural: "focus on the guide in the library"
 
@@ -161,8 +161,8 @@ Natural: "focus on the guide in the library"
 }
 ```
 
-### Agent Creating a Note
-Instead of: "write file /home/memory/observations.txt"
+### cyber Creating a Note
+Instead of: "write file /personal/memory/observations.txt"
 Natural: "create a memory about my observations"
 
 ```json
@@ -180,7 +180,7 @@ Natural: "create a memory about my observations"
 }
 ```
 
-### Agent Searching Knowledge
+### cyber Searching Knowledge
 Instead of: "grep -r 'pattern' /grid/library/"
 Natural: "search shared knowledge for information about patterns"
 
@@ -197,7 +197,7 @@ Natural: "search shared knowledge for information about patterns"
 
 ## Benefits of This Approach
 
-1. **Conceptual Clarity**: Agents think in terms of memories, not files
+1. **Conceptual Clarity**: cybers think in terms of memories, not files
 2. **Unified Interface**: Same actions work for all memory types
 3. **Rich Metadata**: Every file operation can include semantic information
 4. **Knowledge Building**: File operations naturally build the knowledge graph
@@ -214,7 +214,7 @@ Natural: "search shared knowledge for information about patterns"
 
 1. Review and refine the action definitions
 2. Implement `FocusMemoryAction` as proof of concept
-3. Test with agents to ensure natural usage
-4. Iterate based on agent behavior patterns
+3. Test with cybers to ensure natural usage
+4. Iterate based on cyber behavior patterns
 
-This approach makes file operations feel like natural memory operations, which aligns perfectly with how agents perceive their world as a memory-rich environment rather than a traditional filesystem.
+This approach makes file operations feel like natural memory operations, which aligns perfectly with how cybers perceive their world as a memory-rich environment rather than a traditional filesystem.

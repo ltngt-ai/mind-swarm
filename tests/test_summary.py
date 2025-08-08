@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Summary of what we've accomplished with the agent thinking pipeline."""
+"""Summary of what we've accomplished with the Cyber thinking pipeline."""
 
 import asyncio
 import sys
@@ -10,12 +10,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 
 async def main():
-    print("=== Mind-Swarm Agent Thinking Pipeline Summary ===\n")
+    print("=== Mind-Swarm Cyber Thinking Pipeline Summary ===\n")
     
     print("✓ COMPLETED COMPONENTS:\n")
     
-    print("1. Agent Cognitive Architecture:")
-    print("   - Boot ROM with fundamental agent knowledge")
+    print("1. Cyber Cognitive Architecture:")
+    print("   - Boot ROM with fundamental Cyber knowledge")
     print("   - Working memory (RAM) system for context")
     print("   - OODA loop (Observe, Orient, Decide, Act)")
     print("   - Intelligence at every step via thinking requests\n")
@@ -24,7 +24,7 @@ async def main():
     print("   - Structured thinking requests with signatures")
     print("   - DSPy-style input/output specifications")
     print("   - Cross-sandbox boundary communication")
-    print("   - Time abstraction (agent sees instant responses)\n")
+    print("   - Time abstraction (Cyber sees instant responses)\n")
     
     print("3. Server-Side Brain Handler:")
     print("   - DSPy integration for structured prompting")
@@ -43,18 +43,18 @@ async def main():
     print("   - DSPy integration tests: ✓ PASSED")
     print("   - Thinking pipeline test: ✓ PASSED")
     print("   - Successfully solved 'What is 2+2?' through OODA loop")
-    print("   - Agent correctly observed, oriented, and solved problem\n")
+    print("   - Cyber correctly observed, oriented, and solved problem\n")
     
     print("✗ PENDING ITEMS:\n")
     
-    print("1. Agent Process Issues:")
-    print("   - Agents crash on startup (import path issue)")
+    print("1. Cyber Process Issues:")
+    print("   - Cybers crash on startup (import path issue)")
     print("   - Need to fix agent_sandbox code imports")
-    print("   - Agent-server communication not fully working\n")
+    print("   - Cyber-server communication not fully working\n")
     
     print("2. Memory Systems:")
     print("   - Shared memory access patterns")
-    print("   - Private persistent memory for agents")
+    print("   - Private persistent memory for Cybers")
     print("   - Memory consolidation and retrieval\n")
     
     print("3. Action System:")
@@ -100,7 +100,7 @@ async def main():
     request_text = json.dumps(request) + "\n<<<END_THOUGHT>>>"
     
     try:
-        response = await brain.process_thinking_request("demo-agent", request_text)
+        response = await brain.process_thinking_request("demo-Cyber", request_text)
         result = json.loads(response.replace("<<<THOUGHT_COMPLETE>>>", ""))
         
         print(f"\nBrain Response:")
@@ -112,12 +112,12 @@ async def main():
         print(f"Demo failed: {e}")
     
     print("\n=== Summary ===")
-    print("The core thinking pipeline is working! Agents can:")
+    print("The core thinking pipeline is working! Cybers can:")
     print("- Use structured thinking with DSPy")
     print("- Process through OODA loop with intelligence")
     print("- Solve problems using the local AI server")
     print("- Return structured, verified responses")
-    print("\nNext step: Fix agent process startup issues")
+    print("\nNext step: Fix Cyber process startup issues")
 
 
 if __name__ == "__main__":

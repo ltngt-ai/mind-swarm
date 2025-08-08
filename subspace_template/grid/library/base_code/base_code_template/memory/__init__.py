@@ -1,4 +1,4 @@
-"""Memory system for agents - filesystem perception and context management."""
+"""Memory system for Cybers - filesystem perception and context management."""
 
 from .memory_types import Priority, MemoryType
 from .memory_blocks import (

@@ -1,28 +1,8 @@
 # Curated list of known good free models for Mind-Swarm
-# These models have been tested and perform well for agent tasks
+# These models have been tested and perform well for cyber tasks
 # Last updated: 2025-08-04
 
-curated_free_models:
-  - id: "google/gemini-2.0-flash-exp:free"
-    name: "Gemini 2.0 Flash Experimental"
-    description: "Fast, capable model from Google with good reasoning"
-    recommended_for: ["general", "reasoning", "analysis"]
-        
-  - id: "meta-llama/llama-3.3-70b-instruct:free"
-    name: "Llama 3.3 70B Instruct"
-    description: "Large, powerful instruction model"
-    recommended_for: ["complex_reasoning", "detailed_analysis"]
-    
-  - id: "qwen/qwen-2.5-72b-instruct:free"
-    name: "Qwen 2.5 72B Instruct"
-    description: "Strong multilingual model with good reasoning"
-    recommended_for: ["general", "multilingual", "reasoning"]
-    
-  - id: "qwen/qwen-2.5-coder-32b-instruct:free"
-    name: "Qwen 2.5 Coder 32B"
-    description: "Specialized for code understanding and generation"
-    recommended_for: ["coding", "technical_analysis"]
-    
+curated_free_models: []
 # Configuration settings
 config:
   # Whether to use only curated models by default

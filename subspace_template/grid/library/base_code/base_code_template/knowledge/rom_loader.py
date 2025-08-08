@@ -1,4 +1,4 @@
-"""ROM (Read-Only Memory) loader for agent knowledge.
+"""ROM (Read-Only Memory) loader for Cyber knowledge.
 
 This module handles loading and parsing of ROM data from
 the library knowledge files.
@@ -9,7 +9,7 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
-logger = logging.getLogger("agent.knowledge.rom")
+logger = logging.getLogger("Cyber.knowledge.rom")
 
 
 class ROMLoader:
@@ -24,12 +24,12 @@ class ROMLoader:
         self.library_path = library_path
         self.rom_cache = {}
         
-    def load_rom_directory(self, rom_dir: Path, agent_type: Optional[str] = None) -> Dict[str, Any]:
+    def load_rom_directory(self, rom_dir: Path, cyber_type: Optional[str] = None) -> Dict[str, Any]:
         """Load all ROM files from a directory.
         
         Args:
             rom_dir: Directory containing ROM files
-            agent_type: Optional agent type for specific ROM
+            cyber_type: Optional Cyber type for specific ROM
             
         Returns:
             Dictionary of loaded ROM data
@@ -85,7 +85,7 @@ class ROMLoader:
             return None
             
     def get_general_rom(self) -> Dict[str, Any]:
-        """Load general ROM files available to all agents.
+        """Load general ROM files available to all Cybers.
         
         Returns:
             Dictionary of general ROM data
@@ -93,28 +93,28 @@ class ROMLoader:
         general_rom_dir = self.library_path / "rom" / "general"
         return self.load_rom_directory(general_rom_dir)
         
-    def get_agent_rom(self, agent_type: str) -> Dict[str, Any]:
-        """Load agent-specific ROM files.
+    def get_agent_rom(self, cyber_type: str) -> Dict[str, Any]:
+        """Load Cyber-specific ROM files.
         
         Args:
-            agent_type: Type of agent (e.g., 'io_gateway')
+            cyber_type: Type of Cyber (e.g., 'io_gateway')
             
         Returns:
-            Dictionary of agent-specific ROM data
+            Dictionary of Cyber-specific ROM data
         """
-        agent_rom_dir = self.library_path / "rom" / agent_type
+        agent_rom_dir = self.library_path / "rom" / cyber_type
         if agent_rom_dir.exists():
-            return self.load_rom_directory(agent_rom_dir, agent_type)
+            return self.load_rom_directory(agent_rom_dir, cyber_type)
         return {}
         
-    def get_all_rom(self, agent_type: Optional[str] = None) -> Dict[str, Any]:
-        """Load all applicable ROM for an agent.
+    def get_all_rom(self, cyber_type: Optional[str] = None) -> Dict[str, Any]:
+        """Load all applicable ROM for an Cyber.
         
         Args:
-            agent_type: Optional agent type for specific ROM
+            cyber_type: Optional Cyber type for specific ROM
             
         Returns:
-            Combined ROM data (general + agent-specific)
+            Combined ROM data (general + Cyber-specific)
         """
         all_rom = {}
         
@@ -122,9 +122,9 @@ class ROMLoader:
         general_rom = self.get_general_rom()
         all_rom.update(general_rom)
         
-        # Load agent-specific ROM if specified
-        if agent_type:
-            agent_rom = self.get_agent_rom(agent_type)
+        # Load Cyber-specific ROM if specified
+        if cyber_type:
+            agent_rom = self.get_agent_rom(cyber_type)
             all_rom.update(agent_rom)
             
         return all_rom

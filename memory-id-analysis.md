@@ -9,18 +9,18 @@ After analyzing the codebase, I've identified several different ID patterns used
 #### FileMemoryBlock IDs
 - Pattern: `{location}` or `{location}:{start_line}-{end_line}`
 - Examples:
-  - `/home/agent/memory/notes.txt`
-  - `/grid/plaza/question-123.md:10-20`
+  - `/personal/cyber/memory/notes.txt`
+  - `/grid/community/question-123.md:10-20`
 - Issues: Uses full filesystem paths, making IDs fragile if files move
 
 #### MessageMemoryBlock IDs
 - Pattern: `msg:{full_path}`
-- Example: `msg:/home/agent/inbox/message-123.json`
+- Example: `msg:/personal/cyber/inbox/message-123.json`
 - Issues: References inbox path, not content
 
 #### ObservationMemoryBlock IDs
 - Pattern: `obs:{path}:{timestamp}`
-- Example: `obs:/grid/plaza/new-file.txt:1735683024.123456`
+- Example: `obs:/grid/community/new-file.txt:1735683024.123456`
 - Issues: Timestamp makes it impossible to reference the same observation later
 
 #### KnowledgeMemoryBlock IDs
@@ -54,15 +54,15 @@ After analyzing the codebase, I've identified several different ID patterns used
 1. **Inconsistent Patterns**: Each memory type uses a different ID scheme
 2. **Path Dependency**: Many IDs depend on filesystem paths that can change
 3. **Timestamp Usage**: Some IDs include timestamps, making them unreferenceable
-4. **Content Disconnect**: IDs don't help agents reason about content
+4. **Content Disconnect**: IDs don't help cybers reason about content
 5. **No Content Hashing**: No way to identify duplicate content
 6. **Fragile References**: Moving files breaks memory references
 7. **Mixed Concerns**: IDs mix location info with identity
 
-### 3. Agent Perspective Issues
+### 3. cyber Perspective Issues
 
-From an agent's perspective:
-- They see IDs like `msg:/home/agent/inbox/message-123.json` but can't tell what the message is about
+From an cyber's perspective:
+- They see IDs like `msg:/personal/cyber/inbox/message-123.json` but can't tell what the message is about
 - They must load content to understand what a memory contains
 - They can't easily find related memories by ID patterns
 - File paths in IDs expose implementation details
@@ -71,11 +71,11 @@ From an agent's perspective:
 
 ### Design Principles
 
-1. **Content-Aware**: IDs should help agents understand what the memory contains
+1. **Content-Aware**: IDs should help cybers understand what the memory contains
 2. **Location-Independent**: IDs shouldn't break when files move
 3. **Hierarchical**: Support natural grouping and navigation
 4. **Deterministic**: Same content should generate same ID
-5. **Human-Readable**: Agents should understand IDs without loading content
+5. **Human-Readable**: cybers should understand IDs without loading content
 6. **Backward Compatible**: Support migration from old system
 
 ### Proposed ID Structure
@@ -187,15 +187,15 @@ class FileMemoryBlock(MemoryBlock):
                 self.id = self.location
 ```
 
-### Benefits for Agents
+### Benefits for cybers
 
 1. **Semantic Understanding**: 
-   - Old: `msg:/home/agent/inbox/message-123.json`
+   - Old: `msg:/personal/cyber/inbox/message-123.json`
    - New: `message:inbox:from-alice/project-update:a7b9c2`
 
 2. **Content Deduplication**:
    - Same content gets same hash suffix
-   - Agents can identify duplicate memories
+   - cybers can identify duplicate memories
 
 3. **Hierarchical Navigation**:
    - `knowledge:rom:cognitive/*` - All cognitive knowledge
@@ -239,7 +239,7 @@ class MemoryIDTranslator:
 {
     "action": "focus_memory",
     "params": {
-        "memory_id": "/home/agent/memory/notes.txt"
+        "memory_id": "/personal/cyber/memory/notes.txt"
     }
 }
 
@@ -284,7 +284,7 @@ class MemoryIDTranslator:
 1. Update actions to generate new IDs
 2. Add migration utility for existing memories
 3. Update search to use semantic paths
-4. Test with existing agents
+4. Test with existing cybers
 
 ### Phase 3: Enhancement (Week 3)
 1. Add content-based queries
@@ -325,7 +325,7 @@ class CreateMemoryAction(Action):
             location=str(file_path),  # For compatibility
             semantic_id=unified_id,    # New unified ID
             metadata={
-                "created_by": "agent",
+                "created_by": "cyber",
                 "semantic_path": unified_id.semantic_path
             }
         )
@@ -336,10 +336,10 @@ class CreateMemoryAction(Action):
 ## Conclusion
 
 This unified memory ID system addresses the current inconsistencies while providing:
-- Better semantic understanding for agents
+- Better semantic understanding for cybers
 - Stable references independent of file locations  
 - Content-aware deduplication
 - Backward compatibility
 - Natural hierarchical organization
 
-The phased implementation allows gradual migration without breaking existing agents, while the semantic approach aligns with how agents naturally think about memories - by meaning, not by filesystem paths.
+The phased implementation allows gradual migration without breaking existing cybers, while the semantic approach aligns with how cybers naturally think about memories - by meaning, not by filesystem paths.

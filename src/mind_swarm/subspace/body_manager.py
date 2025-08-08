@@ -1,7 +1,7 @@
-"""Body file management for agent interfaces.
+"""Body file management for Cyber interfaces.
 
-Body files are special files in an agent's home directory that act as
-interfaces to capabilities. They appear as regular files to agents but
+Body files are special files in an Cyber's home directory that act as
+interfaces to capabilities. They appear as regular files to Cybers but
 trigger actions when written to.
 """
 
@@ -33,22 +33,22 @@ class BodyFile:
 
 
 class BodyManager:
-    """Manages body files for an agent."""
+    """Manages body files for an Cyber."""
     
-    def __init__(self, name: str, agent_home: Path):
-        """Initialize body manager for an agent.
+    def __init__(self, name: str, cyber_personal: Path):
+        """Initialize body manager for an Cyber.
         
         Args:
-            name: Agent's unique name
-            agent_home: Agent's home directory path
+            name: Cyber's unique name
+            cyber_personal: Cyber's home directory path
         """
         self.name = name
-        self.agent_home = agent_home
+        self.cyber_personal = cyber_personal
         self.body_files: Dict[str, BodyFile] = {}
         self._watch_task: Optional[asyncio.Task] = None
         
     async def create_body_files(self):
-        """Create the standard body files for an agent."""
+        """Create the standard body files for an Cyber."""
         # Brain - for thinking
         brain = BodyFile(
             "brain",
@@ -68,13 +68,13 @@ class BodyManager:
         
         # Create the actual files
         for name, body_file in self.body_files.items():
-            file_path = self.agent_home / name
+            file_path = self.cyber_personal / name
             async with aiofiles.open(file_path, 'w') as f:
                 await f.write(body_file.help_text)
-            # Set read-only from agent's perspective
+            # Set read-only from Cyber's perspective
             file_path.chmod(0o644)
             
-        logger.info(f"Created body files for agent {self.name}")
+        logger.info(f"Created body files for Cyber {self.name}")
     
     async def start_monitoring(self, ai_handler: Callable):
         """Start monitoring body files for changes.
@@ -113,7 +113,7 @@ class BodyManager:
                     logger.debug(f"MONITOR: Loop #{loop_count} for {self.name}, processing state: {processing}")
                 
                 for name, body_file in self.body_files.items():
-                    file_path = self.agent_home / name
+                    file_path = self.cyber_personal / name
                     
                     if not await aiofiles.os.path.exists(file_path):
                         if loop_count % 1000 == 0:
@@ -137,7 +137,7 @@ class BodyManager:
                             logger.debug(f"Contains END_THOUGHT: {'<<<END_THOUGHT>>>' in content}")
                         
                         if "<<<END_THOUGHT>>>" in content and not processing.get(name, False):
-                            # Agent has written a thought and is waiting
+                            # Cyber has written a thought and is waiting
                             processing[name] = True
                             
                             # Extract the prompt
@@ -154,7 +154,7 @@ class BodyManager:
                                 logger.debug(f"BODY: Response preview: {response[:200]}..." if len(response) > 200 else f"BODY: Response preview: {response}")
                                 
                                 # Write response with completion marker
-                                # From agent's perspective, this happens instantly
+                                # From Cyber's perspective, this happens instantly
                                 # Check if response already has completion marker
                                 if "<<<THOUGHT_COMPLETE>>>" not in response:
                                     final_response = f"{response}\n<<<THOUGHT_COMPLETE>>>"
@@ -173,8 +173,8 @@ class BodyManager:
                                 logger.error(f"BODY: No handler for brain file of {self.name}")
                         
                         elif content.strip() == body_file.help_text.strip():
-                            # Agent has reset the file, we can process again
-                            logger.debug(f"MONITOR: Agent {self.name} reset brain file, enabling processing")
+                            # Cyber has reset the file, we can process again
+                            logger.debug(f"MONITOR: Cyber {self.name} reset brain file, enabling processing")
                             processing[name] = False
                 
                 # Adaptive delay - longer when nothing is happening
@@ -191,42 +191,42 @@ class BodyManager:
 
 
 class BodySystemManager:
-    """Manages body files for all agents."""
+    """Manages body files for all Cybers."""
     
     def __init__(self):
         """Initialize the body system manager."""
         self.body_managers: Dict[str, BodyManager] = {}
         
-    async def create_agent_body(self, name: str, agent_home: Path) -> BodyManager:
-        """Create body files for a new agent.
+    async def create_agent_body(self, name: str, cyber_personal: Path) -> BodyManager:
+        """Create body files for a new Cyber.
         
         Args:
-            name: Agent's unique name  
-            agent_home: Agent's home directory path
+            name: Cyber's unique name  
+            cyber_personal: Cyber's home directory path
             
         Returns:
-            BodyManager instance for the agent
+            BodyManager instance for the Cyber
         """
-        manager = BodyManager(name, agent_home)
+        manager = BodyManager(name, cyber_personal)
         await manager.create_body_files()
         self.body_managers[name] = manager
         return manager
     
     async def start_agent_monitoring(self, name: str, ai_handler: Callable):
-        """Start monitoring body files for an agent.
+        """Start monitoring body files for an Cyber.
         
         Args:
-            name: Agent's unique name
+            name: Cyber's unique name
             ai_handler: Async function to handle AI requests
         """
         if name in self.body_managers:
             await self.body_managers[name].start_monitoring(ai_handler)
     
     async def stop_agent_monitoring(self, name: str):
-        """Stop monitoring body files for an agent.
+        """Stop monitoring body files for an Cyber.
         
         Args:
-            name: Agent's unique name
+            name: Cyber's unique name
         """
         if name in self.body_managers:
             await self.body_managers[name].stop_monitoring()

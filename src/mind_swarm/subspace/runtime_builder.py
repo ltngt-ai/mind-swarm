@@ -1,4 +1,4 @@
-"""Runtime builder that prepares a clean agent environment."""
+"""Runtime builder that prepares a clean Cyber environment."""
 
 import shutil
 import sys
@@ -9,7 +9,7 @@ from mind_swarm.utils.logging import logger
 
 
 class AgentRuntimeBuilder:
-    """Builds a minimal runtime environment for agents."""
+    """Builds a minimal runtime environment for Cybers."""
     
     def __init__(self, subspace_root: Path):
         """Initialize the runtime builder.
@@ -18,18 +18,18 @@ class AgentRuntimeBuilder:
             subspace_root: Root directory of the subspace
         """
         self.subspace_root = subspace_root
-        self.runtime_dir = subspace_root / "runtime" / "agent"
+        self.runtime_dir = subspace_root / "runtime" / "cyber"
         self.runtime_dir.mkdir(parents=True, exist_ok=True)
         
     def prepare_runtime(self):
-        """Prepare the agent runtime environment."""
-        logger.info("Preparing agent runtime environment...")
+        """Prepare the Cyber runtime environment."""
+        logger.info("Preparing Cyber runtime environment...")
         
-        # The runtime will now be in each agent's home/base_code
+        # The runtime will now be in each Cyber's home/base_code
         # We'll copy the sandbox directory structure there
         self._prepare_agent_base_code()
         
-        logger.info("Agent runtime environment prepared")
+        logger.info("Cyber runtime environment prepared")
     
     def _prepare_agent_base_code(self):
         """Verify the base code template exists in runtime.
@@ -41,7 +41,7 @@ class AgentRuntimeBuilder:
         
         if not base_code_template.exists():
             logger.error(f"Base code template not found at: {base_code_template}")
-            logger.error("Please ensure runtime/base_code_template exists with agent code")
+            logger.error("Please ensure runtime/base_code_template exists with Cyber code")
             return
         
         # Just verify it has content
@@ -51,16 +51,16 @@ class AgentRuntimeBuilder:
         logger.info(f"Base code template found with {len(py_files)} files and {len(subdirs)} subdirectories")
     
     def _copy_minimal_dependencies(self):
-        """Copy only the minimal dependencies agents need."""
-        # Create a minimal set of modules agents actually need
+        """Copy only the minimal dependencies Cybers need."""
+        # Create a minimal set of modules Cybers actually need
         # This should NOT include our implementation details
         
-        # Standard library modules agents might need
+        # Standard library modules Cybers might need
         # (These are already available through Python installation)
         
-        # For now, we'll just ensure the agent can import what it needs
+        # For now, we'll just ensure the Cyber can import what it needs
         # from the standard library. No mind_swarm modules should be
-        # accessible to agents except through the runtime.
+        # accessible to Cybers except through the runtime.
         pass
     
     
@@ -73,15 +73,15 @@ class AgentRuntimeBuilder:
         hello_tool = workshop_dir / "hello"
         hello_tool.write_text('''#!/bin/bash
 echo "Hello from the Grid workshop!"
-echo "Agent ID: $AGENT_ID"
+echo "Cyber ID: $AGENT_ID"
 ''')
         hello_tool.chmod(0o755)
         
-        # Create a tool for agents to check their environment
+        # Create a tool for Cybers to check their environment
         env_tool = workshop_dir / "check_env"
         env_tool.write_text('''#!/bin/bash
-echo "=== Agent Environment ==="
-echo "Agent ID: $AGENT_ID"
+echo "=== Cyber Environment ==="
+echo "Cyber ID: $AGENT_ID"
 echo "Home: $HOME"
 echo "Current Location: $PWD"
 echo "PATH: $PATH"

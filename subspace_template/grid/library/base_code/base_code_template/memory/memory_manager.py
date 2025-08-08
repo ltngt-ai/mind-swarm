@@ -1,4 +1,4 @@
-"""Working Memory Manager - manages symbolic memory for agents.
+"""Working Memory Manager - manages symbolic memory for Cybers.
 
 This is the core memory management system that holds symbolic references
 to filesystem content without loading the actual data until needed.
@@ -15,11 +15,11 @@ from .memory_blocks import (
     CycleStateMemoryBlock, KnowledgeMemoryBlock
 )
 
-logger = logging.getLogger("agent.memory")
+logger = logging.getLogger("Cyber.memory")
 
 
 class WorkingMemoryManager:
-    """Manages the agent's working memory with symbolic references."""
+    """Manages the Cyber's working memory with symbolic references."""
     
     def __init__(self, max_tokens: int = 100000):
         """Initialize the memory manager.

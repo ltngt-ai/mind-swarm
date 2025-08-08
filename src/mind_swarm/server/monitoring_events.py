@@ -20,29 +20,29 @@ class MonitoringEventEmitter:
         """
         self.server = server
         
-    async def emit_agent_state_changed(self, agent_name: str, old_state: str, new_state: str):
-        """Emit an agent state change event."""
+    async def emit_agent_state_changed(self, cyber_name: str, old_state: str, new_state: str):
+        """Emit an Cyber state change event."""
         if not self.server:
             return
             
         await self.server._broadcast_event({
             "type": "agent_state_changed",
             "data": {
-                "name": agent_name,
+                "name": cyber_name,
                 "old_state": old_state,
                 "new_state": new_state
             },
             "timestamp": datetime.now().isoformat()
         })
-        logger.debug(f"Emitted agent_state_changed: {agent_name} {old_state} -> {new_state}")
+        logger.debug(f"Emitted agent_state_changed: {cyber_name} {old_state} -> {new_state}")
         
-    async def emit_agent_thinking(self, agent_name: str, thought: str, token_count: Optional[int] = None):
-        """Emit an agent thinking event."""
+    async def emit_agent_thinking(self, cyber_name: str, thought: str, token_count: Optional[int] = None):
+        """Emit an Cyber thinking event."""
         if not self.server:
             return
             
         data = {
-            "name": agent_name,
+            "name": cyber_name,
             "thought": thought[:200] + "..." if len(thought) > 200 else thought  # Truncate long thoughts
         }
         if token_count is not None:
@@ -70,7 +70,7 @@ class MonitoringEventEmitter:
         })
         logger.debug(f"Emitted message_sent: {from_agent} -> {to_agent}: {subject}")
         
-    async def emit_file_activity(self, agent_name: str, action: str, path: str):
+    async def emit_file_activity(self, cyber_name: str, action: str, path: str):
         """Emit a file activity event."""
         if not self.server:
             return
@@ -78,7 +78,7 @@ class MonitoringEventEmitter:
         await self.server._broadcast_event({
             "type": "file_activity",
             "data": {
-                "agent": agent_name,
+                "cyber": cyber_name,
                 "action": action,  # read, write, create, delete
                 "path": path
             },

@@ -1,7 +1,7 @@
-"""Memory-focused actions for agent file operations.
+"""Memory-focused actions for Cyber file operations.
 
 These actions treat files as memories, providing a natural interface
-for agents to work with persistent storage through their memory system.
+for Cybers to work with persistent storage through their memory system.
 """
 
 import json
@@ -16,14 +16,14 @@ from .memory import (
     MemorySystem, ContentLoader, MemoryType, Priority as MemoryPriority
 )
 
-logger = logging.getLogger("agent.memory_actions")
+logger = logging.getLogger("Cyber.memory_actions")
 
 
 class FocusMemoryAction(Action):
     """Focus attention on a specific memory (file or otherwise).
     
     This loads content into working memory for processing, making it
-    available for the agent's cognitive processes.
+    available for the Cyber's cognitive processes.
     """
     
     def __init__(self):
@@ -60,16 +60,18 @@ class FocusMemoryAction(Action):
             
             if existing_memory:
                 # Memory already loaded, just access it
-                home_dir = context.get("home_dir", Path.home())
-                content_loader = ContentLoader(home_dir.parent)
+                personal_dir = context.get("personal_dir", Path.home())
+                content_loader = ContentLoader(personal_dir.parent)
                 content = content_loader.load_content(existing_memory)
                 
                 # Create observation about focusing
+                # Use a simple path for the observation, store the memory ID in metadata
                 obs = ObservationMemoryBlock(
                     observation_type="memory_focused",
-                    path=memory_id,
+                    path="personal/memory/focused",  # Simple path
                     priority=Priority.MEDIUM,
                     metadata={
+                        "memory_id": memory_id,  # Store actual memory ID here
                         "focus_type": focus_type,
                         "memory_type": existing_memory.type.value
                     }
@@ -91,17 +93,17 @@ class FocusMemoryAction(Action):
             # Not in memory, treat as file path
             file_path = Path(memory_id)
             
-            # Get home_dir from context (needed for ContentLoader later)
-            home_dir = context.get("home_dir", Path.home())
+            # Get personal_dir from context (needed for ContentLoader later)
+            personal_dir = context.get("personal_dir", Path.home())
             
-            # Resolve path relative to agent's context
+            # Resolve path relative to Cyber's context
             if not file_path.is_absolute():
                 # Try different base paths
                 possible_paths = [
-                    home_dir / file_path,  # Personal memory
-                    home_dir.parent / "grid" / file_path,  # Shared memory
-                    home_dir / "memory" / file_path,  # Memory directory
-                    home_dir.parent / file_path  # Relative to subspace
+                    personal_dir / file_path,  # Personal memory
+                    personal_dir.parent / "grid" / file_path,  # Shared memory
+                    personal_dir / "memory" / file_path,  # Memory directory
+                    personal_dir.parent / file_path  # Relative to subspace
                 ]
                 
                 for path in possible_paths:
@@ -133,7 +135,7 @@ class FocusMemoryAction(Action):
             memory_system.add_memory(file_memory)
             
             # Load content
-            content_loader = ContentLoader(home_dir.parent)
+            content_loader = ContentLoader(personal_dir.parent)
             content = content_loader.load_content(file_memory)
             
             # Determine file type and create appropriate observation
@@ -206,7 +208,7 @@ class FocusMemoryAction(Action):
 class CreateMemoryAction(Action):
     """Create a new persistent memory (file).
     
-    This allows agents to store information permanently as files,
+    This allows Cybers to store information permanently as files,
     but thinking of them as memories rather than files.
     """
     
@@ -230,18 +232,18 @@ class CreateMemoryAction(Action):
             location = f"memory/{memory_type}_{timestamp}.txt"
         
         try:
-            home_dir = context.get("home_dir", Path.home())
+            personal_dir = context.get("personal_dir", Path.home())
             
             # Determine base path based on location prefix
             if location.startswith("shared/"):
-                base_path = home_dir.parent / "grid"
+                base_path = personal_dir.parent / "grid"
                 location = location[7:]  # Remove 'shared/' prefix
             elif location.startswith("personal/"):
-                base_path = home_dir
+                base_path = personal_dir
                 location = location[9:]  # Remove 'personal/' prefix
             else:
                 # Default to personal memory
-                base_path = home_dir
+                base_path = personal_dir
             
             # Create full path
             file_path = base_path / location
@@ -268,7 +270,7 @@ class CreateMemoryAction(Action):
             if memory_type in ["knowledge", "observation", "reflection"]:
                 header = {
                     "memory_type": memory_type,
-                    "created_by": context.get("agent_id", "unknown"),
+                    "created_by": context.get("cyber_id", "unknown"),
                     "created_at": datetime.now().isoformat(),
                     "metadata": metadata
                 }
@@ -395,16 +397,16 @@ class SearchMemoryAction(Action):
             )
         
         try:
-            home_dir = context.get("home_dir", Path.home())
+            personal_dir = context.get("personal_dir", Path.home())
             memory_system = context.get("memory_system")
             results = []
             
             # Determine search paths based on scope
             search_paths = []
             if scope in ["personal", "all"]:
-                search_paths.append(home_dir)
+                search_paths.append(personal_dir)
             if scope in ["shared", "all"]:
-                search_paths.append(home_dir.parent / "grid")
+                search_paths.append(personal_dir.parent / "grid")
             
             # Search in loaded memories first
             if memory_system:
@@ -503,7 +505,7 @@ class SearchMemoryAction(Action):
 class ManageMemoryAction(Action):
     """Manage memory block properties including priority, pinning, and removal.
     
-    This action allows agents to control how their memories are managed,
+    This action allows Cybers to control how their memories are managed,
     including setting priorities, pinning important memories, and forgetting
     obsolete ones.
     """

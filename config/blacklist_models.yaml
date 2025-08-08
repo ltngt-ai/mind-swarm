@@ -1,5 +1,5 @@
 # Blacklist of models to avoid in Mind-Swarm
-# These models are known to have issues or are unsuitable for agent tasks
+# These models are known to have issues or are unsuitable for cyber tasks
 # Last updated: 2025-08-04
 
 blacklisted_models:
@@ -8,7 +8,7 @@ blacklisted_models:
     blacklisted_since: "2025-01-15"
     
   - id: "microsoft/phi-2:free"
-    reason: "Too small for complex agent tasks, poor instruction following"
+    reason: "Too small for complex cyber tasks, poor instruction following"
     blacklisted_since: "2025-01-20"
     
   - id: "mistralai/mistral-7b-instruct:free"
@@ -29,10 +29,10 @@ temporary_blacklist:
 # Pattern blacklist - block models matching these patterns
 pattern_blacklist:
   - pattern: ".*-uncensored.*"
-    reason: "Uncensored models may produce inappropriate content for agents"
+    reason: "Uncensored models may produce inappropriate content for cybers"
     
   - pattern: ".*-roleplay.*"
-    reason: "Roleplay models not suitable for task-oriented agents"
+    reason: "Roleplay models not suitable for task-oriented cybers"
     
   - pattern: ".*test.*"
     reason: "Test models are unstable and should not be used in production"

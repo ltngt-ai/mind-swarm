@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class DeveloperRegistry:
-    """Manages developer accounts that can interact with agents."""
+    """Manages developer accounts that can interact with Cybers."""
     
     def __init__(self, subspace_root: Path):
         """Initialize developer registry.
@@ -75,14 +75,14 @@ class DeveloperRegistry:
             email: Optional email address
             
         Returns:
-            The developer agent name (e.g., "deano_dev")
+            The developer Cyber name (e.g., "deano_dev")
         """
         registry = self._load_registry()
         
         # Create developer entry
         developer_id = f"{name}_dev"
         registry[name] = {
-            "agent_name": developer_id,
+            "cyber_name": developer_id,
             "full_name": full_name or name,
             "email": email,
             "registered_at": datetime.now().isoformat(),
@@ -91,7 +91,7 @@ class DeveloperRegistry:
         
         self._save_registry(registry)
         
-        # Create developer agent directory structure
+        # Create developer Cyber directory structure
         self._create_developer_directories(developer_id)
         
         # If this is the first developer, set as current
@@ -102,20 +102,20 @@ class DeveloperRegistry:
         return developer_id
     
     def _create_developer_directories(self, developer_id: str):
-        """Create agent-like directory structure for developer."""
-        # Create main agent directory
-        agent_dir = self.subspace_root / "agents" / developer_id
-        agent_dir.mkdir(parents=True, exist_ok=True)
+        """Create Cyber-like directory structure for developer."""
+        # Create main Cyber directory
+        cyber_dir = self.subspace_root / "cybers" / developer_id
+        cyber_dir.mkdir(parents=True, exist_ok=True)
         
         # Create inbox and outbox
-        inbox_dir = agent_dir / "inbox"
+        inbox_dir = cyber_dir / "inbox"
         inbox_dir.mkdir(exist_ok=True)
         
         # Create processed subdirectory (for read messages)
         processed_dir = inbox_dir / "processed"
         processed_dir.mkdir(exist_ok=True)
         
-        outbox_dir = agent_dir / "outbox"
+        outbox_dir = cyber_dir / "outbox"
         outbox_dir.mkdir(exist_ok=True)
         
         # Create sent subdirectory
@@ -123,7 +123,7 @@ class DeveloperRegistry:
         sent_dir.mkdir(exist_ok=True)
         
         # Create a simple info file
-        info_file = agent_dir / "developer_info.json"
+        info_file = cyber_dir / "developer_info.json"
         info = {
             "type": "developer",
             "name": developer_id,
@@ -182,9 +182,9 @@ class DeveloperRegistry:
             self._save_registry(registry)
     
     def get_agent_entry(self, name: str) -> Optional[Dict[str, Any]]:
-        """Get agent registry entry for a developer.
+        """Get Cyber registry entry for a developer.
         
-        Returns agent-style entry for inclusion in agents.json
+        Returns Cyber-style entry for inclusion in Cybers.json
         """
         dev = self.get_developer(name)
         if not dev:
@@ -216,8 +216,8 @@ class DeveloperRegistry:
         if not dev:
             return []
         
-        agent_name = dev["agent_name"]
-        inbox_dir = self.subspace_root / "agents" / agent_name / "inbox"
+        cyber_name = dev["cyber_name"]
+        inbox_dir = self.subspace_root / "cybers" / cyber_name / "inbox"
         
         messages = []
         
@@ -270,8 +270,8 @@ class DeveloperRegistry:
             if not dev:
                 return False
                 
-            agent_name = dev["agent_name"]
-            processed_dir = self.subspace_root / "agents" / agent_name / "inbox" / "processed"
+            cyber_name = dev["cyber_name"]
+            processed_dir = self.subspace_root / "cybers" / cyber_name / "inbox" / "processed"
             processed_dir.mkdir(exist_ok=True)
             
             # Move the file

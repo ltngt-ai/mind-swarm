@@ -3,16 +3,16 @@
 
 ### Executive Summary
 
-This design document outlines the architecture and implementation strategy for a web-based 3D monitoring interface for the Mind-Swarm multi-agent AI system. The interface will provide real-time visualization of agent activities, inter-agent communication, and system state using a Tron-inspired aesthetic with modern web technologies.
+This design document outlines the architecture and implementation strategy for a web-based 3D monitoring interface for the Mind-Swarm multi-cyber AI system. The interface will provide real-time visualization of cyber activities, inter-cyber communication, and system state using a Tron-inspired aesthetic with modern web technologies.
 
 ### Core Vision
 
 A 3D cyberspace environment where:
-- Agents appear as glowing entities on "The Grid"
+- cybers appear as glowing entities on "The Grid"
 - Their thoughts manifest as floating data streams
-- Messages travel as light trails between agents
+- Messages travel as light trails between cybers
 - The filesystem structure is represented as a luminous cityscape
-- Users can navigate through this digital world and interact with agents
+- Users can navigate through this digital world and interact with cybers
 
 ---
 
@@ -27,8 +27,8 @@ A 3D cyberspace environment where:
 - **WebSocket Client**: Socket.io-client
 
 ### Backend Extensions Needed
-- Enhanced WebSocket API for real-time agent state
-- Agent activity streaming
+- Enhanced WebSocket API for real-time cyber state
+- cyber activity streaming
 - Filesystem change notifications
 - Message queue access
 
@@ -55,20 +55,20 @@ A 3D cyberspace environment where:
 - Infinite plane with glowing grid lines
 - Subtle pulsing animation
 - Perspective fog for depth
-- Reactive to agent activity (brightens near active agents)
+- Reactive to cyber activity (brightens near active cybers)
 
-#### Agent Representation
+#### cyber Representation
 - **Core**: Glowing geometric shape (icosahedron)
 - **State Indicators**:
   - Idle: Slow rotation, dim glow
   - Thinking: Fast spin, bright pulsing
-  - Communicating: Light trails to other agents
+  - Communicating: Light trails to other cybers
   - Learning: Particle effects
-- **Identity**: Unique color based on agent ID
-- **Labels**: Floating text with agent name/ID
+- **Identity**: Unique color based on cyber ID
+- **Labels**: Floating text with cyber name/ID
 
 #### Thought Bubbles
-- Semi-transparent panels floating above agents
+- Semi-transparent panels floating above cybers
 - Scrolling text showing latest thoughts
 - Click to expand into full conversation view
 - Color-coded by thought type (query, discovery, error)
@@ -80,7 +80,7 @@ A 3D cyberspace environment where:
 - **Activity**: Files glow when accessed
 
 #### Message Trails
-- Bezier curves of light between agents
+- Bezier curves of light between cybers
 - Color indicates message type
 - Animation speed reflects urgency
 - Particles traveling along the path
@@ -97,12 +97,12 @@ A 3D cyberspace environment where:
 │                                                         │
 │                    [3D Grid View]                       │
 │                                                         │
-│     🟦 Library        🟨 Agent-1                       │
+│     🟦 Library        🟨 cyber-1                       │
 │       └─ books/        💭 "Analyzing..."               │
 │                                                         │
 │              ↙️ ⚡ ↘️                                    │
 │                                                         │
-│     🟩 Plaza         🟧 Agent-2      🟪 Agent-3       │
+│     🟩 Plaza         🟧 cyber-2      🟪 cyber-3       │
 │       └─ forum/        💭 "Found!"      💭 "Learning"   │
 │                                                         │
 ├─────────────────────────────────────────────────────────┤
@@ -114,19 +114,19 @@ A 3D cyberspace environment where:
 - **WASD/Arrow Keys**: Move camera
 - **Mouse Drag**: Rotate view
 - **Scroll**: Zoom in/out
-- **Click Agent**: Focus and inspect
-- **Double Click**: Enter agent perspective
+- **Click cyber**: Focus and inspect
+- **Double Click**: Enter cyber perspective
 
 ### UI Panels
 
 #### Control Panel (Left Dock)
-- Agent list with status
-- Spawn/terminate agents
+- cyber list with status
+- Spawn/terminate cybers
 - System metrics
 - Quick actions
 
 #### Inspector Panel (Right Dock)
-- Selected agent details
+- Selected cyber details
 - Conversation history
 - File access log
 - Performance metrics
@@ -139,7 +139,7 @@ A 3D cyberspace environment where:
 
 #### Developer Console (Toggle)
 - Server logs
-- Agent logs
+- cyber logs
 - Network activity
 - Debug controls
 
@@ -149,16 +149,16 @@ A 3D cyberspace environment where:
 
 ### 4.1 Real-Time Monitoring
 - WebSocket connection for live updates
-- Agent state changes
+- cyber state changes
 - Message flow visualization
 - File system modifications
 - Performance metrics
 
 ### 4.2 Interactive Elements
-- Click agents to inspect
+- Click cybers to inspect
 - Drag to rearrange grid layout
-- Send messages to agents
-- View agent conversations
+- Send messages to cybers
+- View cyber conversations
 - Browse filesystem
 
 ### 4.3 Mailbox System
@@ -175,7 +175,7 @@ interface MailboxFeatures {
 ### 4.4 Development Tools
 - Log viewer with filtering
 - Performance profiler
-- Agent debugger
+- cyber debugger
 - Network inspector
 - State snapshot/restore
 
@@ -189,7 +189,7 @@ src/
 ├── components/
 │   ├── three/
 │   │   ├── Grid.tsx          # The Grid plane
-│   │   ├── Agent.tsx         # Agent representation
+│   │   ├── cyber.tsx         # cyber representation
 │   │   ├── ThoughtBubble.tsx # Thought visualization
 │   │   ├── MessageTrail.tsx  # Message animations
 │   │   └── FileSystem.tsx    # Filesystem viz
@@ -231,7 +231,7 @@ interface ServerMessage {
 ### 5.3 State Management
 ```typescript
 interface AppState {
-  agents: Map<string, Agent>;
+  cybers: Map<string, cyber>;
   messages: Message[];
   filesystem: FileNode;
   camera: CameraState;
@@ -272,7 +272,7 @@ void main() {
 ### 6.3 Audio Design
 - Ambient grid hum
 - Message transmission sounds
-- Agent activity bleeps
+- cyber activity bleeps
 - UI interaction feedback
 - Alert sounds
 
@@ -284,11 +284,11 @@ void main() {
 - Basic Three.js setup
 - Grid generation
 - Camera controls
-- Simple agent representation
+- Simple cyber representation
 - WebSocket connection
 
-### Phase 2: Agent Visualization (Week 3-4)
-- Agent models and animations
+### Phase 2: cyber Visualization (Week 3-4)
+- cyber models and animations
 - Thought bubble system
 - State visualization
 - Basic interaction
@@ -317,15 +317,15 @@ void main() {
 
 ### 8.1 New WebSocket Endpoints
 ```python
-# Agent state streaming
-@websocket.route('/agent_states')
-async def agent_states_stream():
-    # Stream agent state changes
+# cyber state streaming
+@websocket.route('/cyber_states')
+async def cyber_states_stream():
+    # Stream cyber state changes
     
 # Message queue access
 @websocket.route('/messages')
 async def message_stream():
-    # Stream inter-agent messages
+    # Stream inter-cyber messages
     
 # Filesystem events
 @websocket.route('/filesystem')
@@ -340,18 +340,18 @@ async def metrics_stream():
 
 ### 8.2 REST API Extensions
 ```python
-# Get agent history
-GET /api/agents/{id}/history
+# Get cyber history
+GET /api/cybers/{id}/history
 
-# Send message to agent
-POST /api/agents/{id}/message
+# Send message to cyber
+POST /api/cybers/{id}/message
 
 # Get filesystem snapshot
 GET /api/filesystem
 
 # System controls
 POST /api/system/spawn
-DELETE /api/system/agents/{id}
+DELETE /api/system/cybers/{id}
 ```
 
 ---
@@ -359,14 +359,14 @@ DELETE /api/system/agents/{id}
 ## 9. Performance Considerations
 
 ### 9.1 Optimization Strategies
-- Level-of-detail (LOD) for distant agents
+- Level-of-detail (LOD) for distant cybers
 - Frustum culling
 - Object pooling for particles
 - Texture atlasing
 - Instanced rendering for repeated elements
 
 ### 9.2 Scalability
-- Support 50+ agents smoothly
+- Support 50+ cybers smoothly
 - Efficient message rendering
 - Progressive filesystem loading
 - Pagination for logs
@@ -376,7 +376,7 @@ DELETE /api/system/agents/{id}
 ## 10. Future Enhancements
 
 ### 10.1 Advanced Visualizations
-- Agent relationship graphs
+- cyber relationship graphs
 - Knowledge network visualization
 - Time-based playback
 - Multi-dimensional data views
@@ -419,9 +419,9 @@ mkdir -p src/{hooks,stores,utils}
 
 Key visual elements to implement:
 1. **Grid**: Infinite blue grid with glow lines
-2. **Agents**: Geometric shapes with particle auras
+2. **cybers**: Geometric shapes with particle auras
 3. **Data Streams**: Flowing text and light trails
 4. **UI Panels**: Semi-transparent with neon borders
 5. **Transitions**: Smooth, tech-inspired animations
 
-Remember: The goal is to create a sense of being inside a living digital organism where AI agents exist and interact in a visually stunning cyberspace.
+Remember: The goal is to create a sense of being inside a living digital organism where AI cybers exist and interact in a visually stunning cyberspace.

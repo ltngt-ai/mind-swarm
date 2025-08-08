@@ -34,8 +34,8 @@ class TestMemoryBlocks:
     def test_message_memory_block(self):
         """Test MessageMemoryBlock with unread status."""
         memory = MessageMemoryBlock(
-            from_agent="agent-001",
-            to_agent="agent-002",
+            from_agent="Cyber-001",
+            to_agent="Cyber-002",
             subject="Test Message",
             preview="This is a test...",
             full_path="/inbox/msg.json",
@@ -88,7 +88,7 @@ class TestWorkingMemoryManager:
         
         # Add unread message
         msg1 = MessageMemoryBlock(
-            from_agent="agent-001",
+            from_agent="Cyber-001",
             to_agent="me",
             subject="Test 1",
             preview="...",
@@ -99,7 +99,7 @@ class TestWorkingMemoryManager:
         
         # Add read message
         msg2 = MessageMemoryBlock(
-            from_agent="agent-002",
+            from_agent="Cyber-002",
             to_agent="me",
             subject="Test 2",
             preview="...",
@@ -173,8 +173,8 @@ class TestContentLoader:
             # Create message file
             msg_file = Path(tmpdir) / "message.msg"
             msg_data = {
-                "from": "agent-001",
-                "to": "agent-002",
+                "from": "Cyber-001",
+                "to": "Cyber-002",
                 "subject": "Test Subject",
                 "content": "This is the message content",
                 "timestamp": datetime.now().isoformat()
@@ -186,16 +186,16 @@ class TestContentLoader:
             
             # Test message load
             memory = MessageMemoryBlock(
-                from_agent="agent-001",
-                to_agent="agent-002",
+                from_agent="Cyber-001",
+                to_agent="Cyber-002",
                 subject="Test Subject",
                 preview="This is...",
                 full_path=str(msg_file)
             )
             content = loader.load_message_content(memory)
             
-            assert "From: agent-001" in content
-            assert "To: agent-002" in content
+            assert "From: Cyber-001" in content
+            assert "To: Cyber-002" in content
             assert "Subject: Test Subject" in content
             assert "This is the message content" in content
 
@@ -255,7 +255,7 @@ class TestEnvironmentScanner:
     def test_scan_inbox(self):
         """Test scanning inbox for messages."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            home = Path(tmpdir) / "agent-001"
+            home = Path(tmpdir) / "Cyber-001"
             shared = Path(tmpdir) / "shared"
             inbox = home / "inbox"
             inbox.mkdir(parents=True)
@@ -265,7 +265,7 @@ class TestEnvironmentScanner:
             msg_file = inbox / "msg001.msg"
             msg_data = {
                 "from": "subspace",
-                "to": "agent-001",
+                "to": "Cyber-001",
                 "subject": "Test Task",
                 "content": "Please analyze this"
             }

@@ -15,7 +15,7 @@ echo "Subspace root: $SUBSPACE_ROOT"
 echo ""
 
 # Confirm with user
-read -p "This will DELETE all agents and data in the subspace. Continue? (y/N) " -n 1 -r
+read -p "This will DELETE all cybers and data in the subspace. Continue? (y/N) " -n 1 -r
 echo
 if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     echo "Cancelled."

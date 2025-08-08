@@ -17,7 +17,7 @@ from .memory_blocks import (
 )
 from .content_loader import ContentLoader
 
-logger = logging.getLogger("agent.memory.context")
+logger = logging.getLogger("Cyber.memory.context")
 
 
 class ContextBuilder:

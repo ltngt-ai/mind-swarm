@@ -1,4 +1,4 @@
-"""Working Memory Manager - manages symbolic memory for agents.
+"""Working Memory Manager - manages symbolic memory for Cybers.
 
 This is the core memory management system that holds symbolic references
 to filesystem content without loading the actual data until needed.
@@ -6,18 +6,20 @@ to filesystem content without loading the actual data until needed.
 
 from typing import List, Dict, Optional, Set, Any
 from datetime import datetime, timedelta
+from pathlib import Path
 import logging
 
 from .memory_blocks import (
     MemoryBlock, Priority, MemoryType,
-    FileMemoryBlock, MessageMemoryBlock, ObservationMemoryBlock
+    FileMemoryBlock, ObservationMemoryBlock,
+    CycleStateMemoryBlock, KnowledgeMemoryBlock
 )
 
-logger = logging.getLogger("agent.memory")
+logger = logging.getLogger("Cyber.memory")
 
 
 class WorkingMemoryManager:
-    """Manages the agent's working memory with symbolic references."""
+    """Manages the Cyber's working memory with symbolic references."""
     
     def __init__(self, max_tokens: int = 100000):
         """Initialize the memory manager.
@@ -92,17 +94,17 @@ class WorkingMemoryManager:
         cutoff = datetime.now() - timedelta(seconds=seconds)
         return [m for m in self.symbolic_memory if m.timestamp > cutoff]
     
-    def get_unread_messages(self) -> List[MessageMemoryBlock]:
-        """Get all unread messages."""
-        messages = self.get_memories_by_type(MemoryType.MESSAGE)
-        return [m for m in messages if isinstance(m, MessageMemoryBlock) and not m.read]
-    
-    def mark_message_read(self, message_id: str) -> None:
-        """Mark a message as read and lower its priority."""
-        memory = self.access_memory(message_id)
-        if memory and isinstance(memory, MessageMemoryBlock):
-            memory.read = True
-            memory.priority = Priority.MEDIUM
+    def mark_message_read(self, memory_id: str) -> None:
+        """Mark an observation as focused/read by lowering its priority.
+        
+        This is used when focusing on observations, especially message notifications.
+        """
+        memory = self.access_memory(memory_id)
+        if memory and isinstance(memory, ObservationMemoryBlock):
+            memory.metadata['focused'] = True
+            memory.metadata['focused_at'] = datetime.now().isoformat()
+            memory.priority = Priority.LOW
+            logger.debug(f"Marked observation {memory_id} as focused")
     
     def set_current_task(self, task_id: str) -> None:
         """Set the current active task."""
@@ -118,27 +120,27 @@ class WorkingMemoryManager:
         self.active_topics.discard(topic)
     
     def cleanup_expired(self) -> int:
-        """Remove expired memories and return count removed."""
+        """Remove expired memories and return count removed (except pinned ones)."""
         now = datetime.now()
-        expired = [m for m in self.symbolic_memory if m.expiry and m.expiry < now]
+        expired = [m for m in self.symbolic_memory if m.expiry and m.expiry < now and not m.pinned]
         
         for memory in expired:
             self.remove_memory(memory.id)
         
         return len(expired)
     
-    def cleanup_old_history(self, max_age_seconds: int = 3600) -> int:
-        """Remove old history entries beyond max age."""
+    def cleanup_old_observations(self, max_age_seconds: int = 3600) -> int:
+        """Remove old observation entries beyond max age (except pinned ones)."""
         cutoff = datetime.now() - timedelta(seconds=max_age_seconds)
-        old_history = [
-            m for m in self.get_memories_by_type(MemoryType.HISTORY)
-            if m.timestamp < cutoff and m.priority != Priority.HIGH
+        old_observations = [
+            m for m in self.get_memories_by_type(MemoryType.OBSERVATION)
+            if m.timestamp < cutoff and m.priority == Priority.LOW and not m.pinned
         ]
         
-        for memory in old_history:
+        for memory in old_observations:
             self.remove_memory(memory.id)
         
-        return len(old_history)
+        return len(old_observations)
     
     def get_memory_stats(self) -> Dict[str, Any]:
         """Get statistics about current memory state."""
@@ -157,8 +159,7 @@ class WorkingMemoryManager:
             "by_type": type_counts,
             "by_priority": priority_counts,
             "current_task": self.current_task_id,
-            "active_topics": list(self.active_topics),
-            "unread_messages": len(self.get_unread_messages())
+            "active_topics": list(self.active_topics)
         }
     
     def create_snapshot(self) -> Dict[str, Any]:
@@ -176,6 +177,7 @@ class WorkingMemoryManager:
                     "priority": memory.priority.name,
                     "timestamp": memory.timestamp.isoformat(),
                     "expiry": memory.expiry.isoformat() if memory.expiry else None,
+                    "pinned": memory.pinned,
                     "metadata": memory.metadata,
                     # Type-specific fields
                     **self._get_type_specific_fields(memory)
@@ -195,20 +197,11 @@ class WorkingMemoryManager:
                 "end_line": memory.end_line,
                 "digest": memory.digest
             })
-        elif isinstance(memory, MessageMemoryBlock):
-            fields.update({
-                "from_agent": memory.from_agent,
-                "to_agent": memory.to_agent,
-                "subject": memory.subject,
-                "preview": memory.preview,
-                "full_path": memory.full_path,
-                "read": memory.read
-            })
+        # Removed MessageMemoryBlock handling - messages are now FileMemoryBlock
         elif isinstance(memory, ObservationMemoryBlock):
             fields.update({
                 "observation_type": memory.observation_type,
-                "path": memory.path,
-                "description": memory.description
+                "path": memory.path
             })
         elif hasattr(memory, 'cycle_state'):  # CycleStateMemoryBlock
             fields.update({
@@ -221,3 +214,144 @@ class WorkingMemoryManager:
         # Add other types as needed
         
         return fields
+    
+    def restore_from_snapshot(self, snapshot: Dict[str, Any], knowledge_manager=None) -> bool:
+        """Restore memory state from a snapshot.
+        
+        Args:
+            snapshot: Snapshot data to restore from
+            knowledge_manager: Optional knowledge manager to reload ROM
+            
+        Returns:
+            True if successfully restored
+        """
+        try:
+            # Clear current memory
+            self.symbolic_memory.clear()
+            
+            # Restore configuration
+            if 'max_tokens' in snapshot:
+                self.max_tokens = snapshot['max_tokens']
+            if 'current_task_id' in snapshot:
+                self.current_task_id = snapshot['current_task_id']
+            if 'active_topics' in snapshot:
+                self.active_topics = set(snapshot['active_topics'])
+            
+            # Restore memories
+            memories = snapshot.get('memories', [])
+            logger.info(f"Restoring {len(memories)} memories from snapshot")
+            
+            cycle_state_found = False
+            
+            for mem_data in memories:
+                try:
+                    memory_type = MemoryType(mem_data.get('type', 'UNKNOWN'))
+                    
+                    if memory_type == MemoryType.CYCLE_STATE:
+                        # Restore cycle state
+                        memory = CycleStateMemoryBlock(
+                            cycle_state=mem_data.get('cycle_state', 'perceive'),
+                            cycle_count=mem_data.get('cycle_count', 0),
+                            current_observation=mem_data.get('current_observation'),
+                            current_orientation=mem_data.get('current_orientation'),
+                            current_actions=mem_data.get('current_actions'),
+                            confidence=mem_data.get('confidence', 1.0),
+                            priority=Priority[mem_data.get('priority', 'CRITICAL')]
+                        )
+                        cycle_state_found = True
+                        
+                    elif memory_type == MemoryType.FILE:
+                        memory = FileMemoryBlock(
+                            location=mem_data['location'],
+                            start_line=mem_data.get('start_line'),
+                            end_line=mem_data.get('end_line'),
+                            digest=mem_data.get('digest'),
+                            confidence=mem_data.get('confidence', 1.0),
+                            priority=Priority[mem_data.get('priority', 'MEDIUM')]
+                        )
+                        
+                    # Skip MESSAGE type - messages are now FileMemoryBlock
+                    elif memory_type == MemoryType.MESSAGE:
+                        logger.debug("Skipping MESSAGE type - messages are now FileMemoryBlock")
+                        continue
+                        
+                    elif memory_type == MemoryType.OBSERVATION:
+                        memory = ObservationMemoryBlock(
+                            observation_type=mem_data['observation_type'],
+                            path=mem_data.get('path', ''),
+                            confidence=mem_data.get('confidence', 1.0),
+                            priority=Priority[mem_data.get('priority', 'MEDIUM')]
+                        )
+                        
+                    elif memory_type == MemoryType.KNOWLEDGE:
+                        memory = KnowledgeMemoryBlock(
+                            topic=mem_data.get('topic', 'general'),
+                            location=mem_data.get('location', 'restored'),
+                            subtopic=mem_data.get('subtopic', ''),
+                            relevance_score=mem_data.get('relevance_score', 1.0),
+                            confidence=mem_data.get('confidence', 1.0),
+                            priority=Priority[mem_data.get('priority', 'MEDIUM')],
+                            metadata=mem_data.get('metadata', {})
+                        )
+                        
+                    else:
+                        # Skip unknown types
+                        logger.warning(f"Unknown memory type: {memory_type}")
+                        continue
+                    
+                    # Restore timestamps
+                    if 'timestamp' in mem_data:
+                        memory.timestamp = datetime.fromisoformat(mem_data['timestamp'])
+                    if 'expiry' in mem_data and mem_data['expiry']:
+                        memory.expiry = datetime.fromisoformat(mem_data['expiry'])
+                    
+                    # Add to memory
+                    self.add_memory(memory)
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to restore memory: {e}")
+                    continue
+            
+            # If no cycle state found, this will be handled by the cognitive loop
+            if not cycle_state_found:
+                logger.info("No cycle state found in snapshot")
+            
+            # Always reload ROM to ensure it's present
+            if knowledge_manager:
+                knowledge_manager.load_rom_into_memory(self)
+            
+            logger.info("Memory successfully restored from snapshot")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to restore memory from snapshot: {e}")
+            return False
+    
+    def load_from_snapshot_file(self, memory_dir: Path, knowledge_manager=None) -> bool:
+        """Load memory from a snapshot file.
+        
+        Args:
+            memory_dir: Directory containing memory snapshot
+            knowledge_manager: Optional knowledge manager to reload ROM
+            
+        Returns:
+            True if successfully loaded, False otherwise
+        """
+        import json
+        
+        memory_snapshot_file = memory_dir / "memory_snapshot.json"
+        
+        if not memory_snapshot_file.exists():
+            return False
+            
+        try:
+            # Load snapshot
+            with open(memory_snapshot_file, 'r') as f:
+                snapshot = json.load(f)
+                
+            # Restore from snapshot
+            return self.restore_from_snapshot(snapshot, knowledge_manager)
+            
+        except Exception as e:
+            logger.error(f"Failed to load memory from snapshot file: {e}")
+            return False

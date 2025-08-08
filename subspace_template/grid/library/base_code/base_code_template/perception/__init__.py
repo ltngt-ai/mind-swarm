@@ -1,4 +1,4 @@
-"""Perception system for agents - filesystem monitoring and awareness."""
+"""Perception system for Cybers - filesystem monitoring and awareness."""
 
 from .environment_scanner import EnvironmentScanner
 

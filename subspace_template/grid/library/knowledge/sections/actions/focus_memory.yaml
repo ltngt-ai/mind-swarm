@@ -1,0 +1,42 @@
+knowledge_version: '1.0'
+title: Focus Memory Action
+content: "The focus_memory action loads a memory (file) into your working memory for\
+  \ processing.\n\n## Parameters\n\n- **memory_id** (required): Memory ID or file\
+  \ path to focus on\n- **focus_type** (optional): Type of focus - 'read', 'edit',\
+  \ 'analyze' (default: 'read')\n- **line_range** (optional): Tuple of [start_line,\
+  \ end_line] for partial focus\n\n## Path Resolution\n\n- Relative paths are searched\
+  \ in: home dir, grid, memory dir\n- Use 'personal/' prefix for personal memories\n\
+  - Use 'shared/' prefix for grid memories\n\n## Examples\n\n```json\n{\n  \"action\"\
+  : \"focus_memory\",\n  \"params\": {\n    \"memory_id\": \"/grid/library/docs/guide.md\"\
+  ,\n    \"focus_type\": \"read\"\n  }\n}\n```\n"
+metadata:
+  category: action_guide
+  tags:
+  - memory
+  - file
+  - read
+  confidence: 1.0
+  priority: 1
+  parameter_schema:
+    memory_id:
+      type: string
+      required: true
+      description: Memory ID or file path
+      aliases:
+      - path
+      - file
+      - location
+      - memory
+    focus_type:
+      type: string
+      required: false
+      default: read
+      options:
+      - read
+      - edit
+      - analyze
+    line_range:
+      type: array
+      required: false
+      item_type: integer
+      length: 2

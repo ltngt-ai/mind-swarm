@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Integration test for the complete thinking pipeline.
 
-This simulates what happens when an agent thinks through the brain interface.
+This simulates what happens when an Cyber thinks through the brain interface.
 """
 
 import asyncio
@@ -74,7 +74,7 @@ def create_thinking_request(signature_type: str, inputs: dict) -> str:
 
 
 async def simulate_agent_thinking():
-    """Simulate an agent thinking through a problem."""
+    """Simulate an Cyber thinking through a problem."""
     
     print("=== Mind-Swarm Thinking Integration Test ===\n")
     
@@ -111,8 +111,8 @@ async def simulate_agent_thinking():
     # Create brain handler
     brain = BrainHandlerV2(lm_config)
     
-    # Simulate agent receiving "What is 2+2?" question
-    print("Agent receives question: 'What is 2+2?'\n")
+    # Simulate Cyber receiving "What is 2+2?" question
+    print("Cyber receives question: 'What is 2+2?'\n")
     
     # Step 1: OBSERVE - What's new?
     print("=== Step 1: OBSERVE ===")
@@ -132,7 +132,7 @@ async def simulate_agent_thinking():
         }
         print(f"Mock Response: {json.dumps(observe_response, indent=2)}\n")
     else:
-        response = await brain.process_thinking_request("agent-001", observe_request)
+        response = await brain.process_thinking_request("Cyber-001", observe_request)
         print(f"Response: {response}\n")
         observe_response = json.loads(response.replace("<<<THOUGHT_COMPLETE>>>", ""))
     
@@ -161,7 +161,7 @@ async def simulate_agent_thinking():
         }
         print(f"Mock Response: {json.dumps(orient_response, indent=2)}\n")
     else:
-        response = await brain.process_thinking_request("agent-001", orient_request)
+        response = await brain.process_thinking_request("Cyber-001", orient_request)
         print(f"Response: {response}\n")
         orient_response = json.loads(response.replace("<<<THOUGHT_COMPLETE>>>", ""))
     
@@ -183,7 +183,7 @@ async def simulate_agent_thinking():
         }
         print(f"Mock Response: {json.dumps(arithmetic_response, indent=2)}\n")
     else:
-        response = await brain.process_thinking_request("agent-001", arithmetic_request)
+        response = await brain.process_thinking_request("Cyber-001", arithmetic_request)
         print(f"Response: {response}\n")
         arithmetic_response = json.loads(response.replace("<<<THOUGHT_COMPLETE>>>", ""))
     

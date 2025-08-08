@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional, Tuple
 import logging
 
-logger = logging.getLogger("agent.utils.cognitive")
+logger = logging.getLogger("Cyber.utils.cognitive")
 
 
 class CognitiveUtils:

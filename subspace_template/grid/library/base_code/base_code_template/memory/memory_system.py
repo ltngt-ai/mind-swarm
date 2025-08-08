@@ -17,7 +17,7 @@ from .memory_selector import MemorySelector, RelevanceScorer
 from .context_builder import ContextBuilder
 from .content_loader import ContentLoader
 
-logger = logging.getLogger("agent.memory.system")
+logger = logging.getLogger("Cyber.memory.system")
 
 
 class MemorySystem:

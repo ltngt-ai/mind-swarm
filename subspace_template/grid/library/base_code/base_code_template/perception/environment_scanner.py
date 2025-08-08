@@ -1,6 +1,6 @@
 """Environment scanner for filesystem perception.
 
-Scans the agent's filesystem environment and creates memory blocks
+Scans the Cyber's filesystem environment and creates memory blocks
 for relevant changes and observations.
 """
 
@@ -20,7 +20,7 @@ from ..memory.memory_blocks import (
 )
 from ..memory.unified_memory_id import UnifiedMemoryID
 
-logger = logging.getLogger("agent.perception")
+logger = logging.getLogger("Cyber.perception")
 
 
 class FileState:
@@ -60,20 +60,20 @@ class FileState:
 class EnvironmentScanner:
     """Scans filesystem environment and creates memory blocks."""
     
-    def __init__(self, home_path: Path, grid_path: Path):
+    def __init__(self, personal_path: Path, grid_path: Path):
         """Initialize scanner.
         
         Args:
-            home_path: Agent's home directory
+            personal_path: Cyber's personal directory
             grid_path: Grid directory containing shared spaces
         """
-        self.home_path = Path(home_path)
+        self.personal_path = Path(personal_path)
         self.grid_path = Path(grid_path)
         
         # Directories to monitor
-        self.inbox_path = self.home_path / "inbox"
-        self.memory_path = self.home_path / "memory"
-        self.plaza_path = self.grid_path / "plaza"
+        self.inbox_path = self.personal_path / "inbox"
+        self.memory_path = self.personal_path / "memory"
+        self.community_path = self.grid_path / "community"
         self.library_path = self.grid_path / "library"
         self.bulletin_path = self.grid_path / "bulletin"
         self.workshop_path = self.grid_path / "workshop"
@@ -97,7 +97,7 @@ class EnvironmentScanner:
         """Initialize file state tracking for all existing files to prevent startup flood.
         
         This establishes a baseline of existing files so only actual changes
-        after agent startup are reported as observations.
+        after Cyber startup are reported as observations.
         """
         logger.debug("Initializing environment baseline...")
         
@@ -106,8 +106,8 @@ class EnvironmentScanner:
         # Add grid paths that we monitor
         if self.library_path and self.library_path.exists():
             paths_to_baseline.append(self.library_path)
-        if self.plaza_path and self.plaza_path.exists():
-            paths_to_baseline.append(self.plaza_path)
+        if self.community_path and self.community_path.exists():
+            paths_to_baseline.append(self.community_path)
         if self.bulletin_path and self.bulletin_path.exists():
             paths_to_baseline.append(self.bulletin_path)
         if self.workshop_path and self.workshop_path.exists():
@@ -242,12 +242,12 @@ class EnvironmentScanner:
         """Scan grid areas for updates."""
         memories = []
         
-        # Scan plaza (community discussions)
-        if self.plaza_path and self.plaza_path.exists():
+        # Scan community (discussions)
+        if self.community_path and self.community_path.exists():
             memories.extend(self._scan_directory(
-                self.plaza_path,
-                "plaza_discussion",
-                "Plaza discussion"
+                self.community_path,
+                "community_discussion",
+                "Community discussion"
             ))
         
         # Scan library (shared knowledge) - only YAML files
@@ -320,7 +320,7 @@ class EnvironmentScanner:
         return memories
     
     def _scan_memory_dir(self) -> List[MemoryBlock]:
-        """Scan agent's memory directory for important files only."""
+        """Scan Cyber's memory directory for important files only."""
         memories = []
         
         if not self.memory_path.exists():

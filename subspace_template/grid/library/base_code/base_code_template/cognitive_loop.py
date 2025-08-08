@@ -20,13 +20,13 @@ from .memory import (
 )
 from .perception import EnvironmentScanner
 from .knowledge import KnowledgeManager
-from .state import AgentStateManager, ExecutionStateTracker
+from .state import CyberStateManager, ExecutionStateTracker
 from .actions import ActionCoordinator
 from .utils import DateTimeEncoder, CognitiveUtils, FileManager
 from .utils.reference_resolver import ReferenceResolver
 from .brain import BrainInterface
 
-logger = logging.getLogger("agent.cognitive")
+logger = logging.getLogger("Cyber.cognitive")
 
 
 class CognitiveLoop:
@@ -38,27 +38,27 @@ class CognitiveLoop:
     keeping this class focused purely on cognitive orchestration.
     """
     
-    def __init__(self, agent_id: str, home: Path, 
+    def __init__(self, cyber_id: str, personal: Path, 
                  max_context_tokens: int = 50000,
-                 agent_type: str = 'general'):
+                 cyber_type: str = 'general'):
         """Initialize the cognitive loop with all supporting managers.
         
         Args:
-            agent_id: The agent's identifier
-            home: Path to agent's home directory
+            cyber_id: The Cyber's identifier
+            personal: Path to Cyber's personal directory
             max_context_tokens: Maximum tokens for LLM context
-            agent_type: Type of agent (general, io_gateway, etc.)
+            cyber_type: Type of Cyber (general, io_gateway, etc.)
         """
-        self.agent_id = agent_id
-        self.home = Path(home)
+        self.cyber_id = cyber_id
+        self.personal = Path(personal)
         self.max_context_tokens = max_context_tokens
-        self.agent_type = agent_type
+        self.cyber_type = cyber_type
         
         # Core file interfaces - define these first
-        self.brain_file = self.home / "brain"
-        self.inbox_dir = self.home / "inbox"
-        self.outbox_dir = self.home / "outbox"
-        self.memory_dir = self.home / "memory"
+        self.brain_file = self.personal / "brain"
+        self.inbox_dir = self.personal / "inbox"
+        self.outbox_dir = self.personal / "outbox"
+        self.memory_dir = self.personal / "memory"
         
         # Initialize all managers
         self._initialize_managers()
@@ -79,24 +79,24 @@ class CognitiveLoop:
         """Initialize all supporting managers."""
         # Unified memory system
         self.memory_system = MemorySystem(
-            filesystem_root=self.home.parent,
+            filesystem_root=self.personal.parent,
             max_tokens=self.max_context_tokens
         )
         
         # Knowledge system
-        self.knowledge_manager = KnowledgeManager(agent_type=self.agent_type)
+        self.knowledge_manager = KnowledgeManager(cyber_type=self.cyber_type)
         
         # State management
-        self.state_manager = AgentStateManager(self.agent_id, self.memory_dir)
-        self.execution_tracker = ExecutionStateTracker(self.agent_id, self.memory_dir)
+        self.state_manager = CyberStateManager(self.cyber_id, self.memory_dir)
+        self.execution_tracker = ExecutionStateTracker(self.cyber_id, self.memory_dir)
         
         # Action coordination
-        self.action_coordinator = ActionCoordinator(agent_type=self.agent_type)
+        self.action_coordinator = ActionCoordinator(cyber_type=self.cyber_type)
         
         # Perception system
-        grid_path = self.home.parent.parent / "grid"
+        grid_path = self.personal.parent.parent / "grid"
         self.environment_scanner = EnvironmentScanner(
-            home_path=self.home,
+            personal_path=self.personal,
             grid_path=grid_path
         )
         
@@ -105,7 +105,7 @@ class CognitiveLoop:
         self.file_manager = FileManager()
         
         # Brain interface
-        self.brain_interface = BrainInterface(self.brain_file, self.agent_id)
+        self.brain_interface = BrainInterface(self.brain_file, self.cyber_id)
     
     def _initialize_systems(self):
         """Initialize all systems and load initial data."""
@@ -132,8 +132,8 @@ class CognitiveLoop:
         self._init_identity_memory()
     
     def _init_identity_memory(self):
-        """Add agent identity file to working memory as pinned."""
-        identity_file = self.home / "identity.json"
+        """Add Cyber identity file to working memory as pinned."""
+        identity_file = self.personal / "identity.json"
         if identity_file.exists():
             identity_memory = FileMemoryBlock(
                 location=str(identity_file),
@@ -171,7 +171,7 @@ class CognitiveLoop:
         # Start execution tracking
         exec_id = self.execution_tracker.start_execution("cognitive_cycle", {
             "cycle_count": self.cycle_count,
-            "agent_type": self.agent_type
+            "cyber_type": self.cyber_type
         })
         
         try:
@@ -542,8 +542,8 @@ class CognitiveLoop:
         context = {
             "cognitive_loop": self,
             "memory_system": self.memory_system,
-            "agent_id": self.agent_id,
-            "home_dir": self.home,
+            "cyber_id": self.cyber_id,
+            "personal_dir": self.personal,
             "outbox_dir": self.outbox_dir,
             "memory_dir": self.memory_dir
         }
@@ -683,8 +683,8 @@ class CognitiveLoop:
         return {
             "cognitive_loop": self,
             "memory_system": self.memory_system,
-            "agent_id": self.agent_id,
-            "home_dir": self.home,
+            "cyber_id": self.cyber_id,
+            "personal_dir": self.personal,
             "outbox_dir": self.outbox_dir,
             "memory_dir": self.memory_dir,
             "observation": observation,
@@ -781,7 +781,7 @@ class CognitiveLoop:
             with open(processed_file, 'w') as f:
                 json.dump(processed, f, indent=2)
             
-            # Add a PINNED FileMemoryBlock for this file so the agent always sees it
+            # Add a PINNED FileMemoryBlock for this file so the Cyber always sees it
             processed_memory = FileMemoryBlock(
                 location=str(processed_file),
                 priority=Priority.LOW,

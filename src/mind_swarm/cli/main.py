@@ -17,7 +17,7 @@ from mind_swarm.core.config import settings
 from mind_swarm.client import MindSwarmClient
 from mind_swarm.utils.logging import logger, setup_logging
 
-app = typer.Typer(name="mind-swarm", help="Mind-Swarm: Multi-agent AI system")
+app = typer.Typer(name="mind-swarm", help="Mind-Swarm: Multi-Cyber AI system")
 console = Console()
 
 # Import subcommands
@@ -46,11 +46,11 @@ class MindSwarmCLI:
         # Display certain events immediately
         event_type = event.get("type", "")
         if event_type == "agent_created":
-            console.print(f"[green]Agent created: {event.get('agent_name')}[/green]")
+            console.print(f"[green]Cyber created: {event.get('cyber_name')}[/green]")
         elif event_type == "agent_terminated":
-            console.print(f"[yellow]Agent terminated: {event.get('agent_name')}[/yellow]")
+            console.print(f"[yellow]Cyber terminated: {event.get('cyber_name')}[/yellow]")
         elif event_type == "agent_state_change":
-            console.print(f"[blue]Agent {event.get('agent_name')} state: {event.get('new_state')}[/blue]")
+            console.print(f"[blue]Cyber {event.get('cyber_name')} state: {event.get('new_state')}[/blue]")
     
     async def check_server(self) -> bool:
         """Check if the server is running and accessible."""
@@ -86,36 +86,36 @@ class MindSwarmCLI:
         console.print("[bold green]Mind-Swarm initialized successfully![/bold green]")
     
     async def create_initial_agents(self, count: int = 3):
-        """Create initial set of agents."""
-        console.print(f"[cyan]Creating {count} initial agents...[/cyan]")
+        """Create initial set of Cybers."""
+        console.print(f"[cyan]Creating {count} initial Cybers...[/cyan]")
         
         for i in range(count):
             try:
-                agent_id = await self.client.create_agent(
+                cyber_id = await self.client.create_agent(
                     name=f"Explorer-{i+1}",
                 )
-                console.print(f"  ✓ Created Explorer-{i+1} ({agent_id})")
+                console.print(f"  ✓ Created Explorer-{i+1} ({cyber_id})")
             except Exception as e:
-                console.print(f"  ✗ Failed to create agent: {e}", style="red")
+                console.print(f"  ✗ Failed to create Cyber: {e}", style="red")
     
     async def show_status(self):
         """Display current system status."""
         try:
-            # Get agent states from server
-            states = await self.client.get_agent_states()
+            # Get Cyber states from server
+            states = await self.client.get_cyber_states()
             
             # Create status table
             table = Table(title="Mind-Swarm Status")
-            table.add_column("Agent Name", style="cyan")
+            table.add_column("Cyber Name", style="cyan")
             table.add_column("Alive", style="green")
             table.add_column("State")
             table.add_column("Uptime", justify="right")
             table.add_column("Inbox", justify="right")
             table.add_column("Outbox", justify="right")
             
-            for agent_name, info in states.items():
+            for cyber_name, info in states.items():
                 table.add_row(
-                    agent_name,
+                    cyber_name,
                     "✓" if info.get("alive", False) else "✗",
                     info.get("state", "UNKNOWN"),
                     f"{info.get('uptime', 0):.1f}s",
@@ -126,9 +126,9 @@ class MindSwarmCLI:
             console.print(table)
             
             # Show shared questions
-            questions = await self.client.get_plaza_questions()
+            questions = await self.client.get_community_questions()
             if questions:
-                console.print(f"\n[bold]Plaza Questions:[/bold] {len(questions)}")
+                console.print(f"\n[bold]Community Questions:[/bold] {len(questions)}")
                 
         except Exception as e:
             console.print(f"[red]Error getting status: {e}[/red]")
@@ -175,11 +175,11 @@ class MindSwarmCLI:
         
         console.print("[bold]Mind-Swarm Interactive Mode[/bold]")
         console.print("Commands:")
-        console.print("  [cyan]status[/cyan] - Show agent status")
-        console.print("  [cyan]create [--io] [name][/cyan] - Create a new AI agent")
-        console.print("  [cyan]terminate <name>[/cyan] - Terminate an agent")
-        console.print("  [cyan]command <name> <command> [params][/cyan] - Send command to agent")
-        console.print("  [cyan]message <name> <text>[/cyan] - Send message to agent")
+        console.print("  [cyan]status[/cyan] - Show Cyber status")
+        console.print("  [cyan]create [--io] [name][/cyan] - Create a new AI Cyber")
+        console.print("  [cyan]terminate <name>[/cyan] - Terminate an Cyber")
+        console.print("  [cyan]command <name> <command> [params][/cyan] - Send command to Cyber")
+        console.print("  [cyan]message <name> <text>[/cyan] - Send message to Cyber")
         console.print("  [cyan]question <text>[/cyan] - Create a shared question")
         console.print("  [cyan]presets[/cyan] - List available AI presets")
         console.print("  [cyan]dev register <name> [full_name] [email][/cyan] - Register developer")
@@ -221,51 +221,51 @@ class MindSwarmCLI:
                 elif cmd == "create":
                     # Parse create options: create [--io] [name]
                     is_io_agent = False
-                    agent_name = None
+                    cyber_name = None
                     
                     for i, part in enumerate(parts[1:], 1):
                         if part == "--io":
                             is_io_agent = True
                         else:
-                            agent_name = part
+                            cyber_name = part
                     
-                    # Determine agent type
-                    agent_type = "io_gateway" if is_io_agent else "general"
+                    # Determine Cyber type
+                    cyber_type = "io_gateway" if is_io_agent else "general"
                     
                     agent_name_result = await self.client.create_agent(
-                        name=agent_name,
-                        agent_type=agent_type,
+                        name=cyber_name,
+                        cyber_type=cyber_type,
                     )
                     type_str = "I/O Gateway" if is_io_agent else "General"
                     console.print(f"Created {agent_name_result} [{type_str}]")
                 
                 elif cmd == "terminate" and len(parts) > 1:
-                    agent_name = parts[1]
-                    await self.client.terminate_agent(agent_name)
-                    console.print(f"Terminated agent {agent_name}")
+                    cyber_name = parts[1]
+                    await self.client.terminate_agent(cyber_name)
+                    console.print(f"Terminated Cyber {cyber_name}")
                 
                 elif cmd == "command" and len(parts) >= 3:
-                    # command <agent_name> <command> [params]
-                    agent_name = parts[1]
+                    # command <cyber_name> <command> [params]
+                    cyber_name = parts[1]
                     command = parts[2]
                     params = {"input": " ".join(parts[3:])} if len(parts) > 3 else {}
                     
-                    await self.client.send_command(agent_name, command, params)
-                    console.print(f"Command '{command}' sent to {agent_name}")
+                    await self.client.send_command(cyber_name, command, params)
+                    console.print(f"Command '{command}' sent to {cyber_name}")
                 
                 elif cmd == "message" and len(parts) >= 3:
-                    # message <agent_name> <text>
-                    agent_name = parts[1]
+                    # message <cyber_name> <text>
+                    cyber_name = parts[1]
                     message_text = " ".join(parts[2:])
                     
-                    await self.client.send_message(agent_name, message_text)
-                    console.print(f"Message sent to {agent_name}")
+                    await self.client.send_message(cyber_name, message_text)
+                    console.print(f"Message sent to {cyber_name}")
                 
                 elif cmd == "question" and len(parts) > 1:
-                    # Post a question to the Plaza
+                    # Post a question to the Community
                     question_text = " ".join(parts[1:])
-                    q_id = await self.client.create_plaza_question(question_text)
-                    console.print(f"Posted to Plaza: {q_id}")
+                    q_id = await self.client.create_community_question(question_text)
+                    console.print(f"Posted to Community: {q_id}")
                 
                 elif cmd == "presets":
                     self.show_presets()
@@ -281,8 +281,8 @@ class MindSwarmCLI:
                         email = parts[4] if len(parts) > 4 else None
                         
                         try:
-                            agent_name = await self.client.register_developer(name, full_name, email)
-                            console.print(f"[green]Registered developer {name} as {agent_name}[/green]")
+                            cyber_name = await self.client.register_developer(name, full_name, email)
+                            console.print(f"[green]Registered developer {name} as {cyber_name}[/green]")
                         except Exception as e:
                             console.print(f"[red]Failed to register developer: {e}[/red]")
                     
@@ -303,7 +303,7 @@ class MindSwarmCLI:
                             try:
                                 dev = await self.client.get_current_developer()
                                 if dev:
-                                    console.print(f"Current developer: {dev['agent_name']} ({dev.get('full_name', 'N/A')})")
+                                    console.print(f"Current developer: {dev['cyber_name']} ({dev.get('full_name', 'N/A')})")
                                 else:
                                     console.print("No current developer set")
                             except Exception as e:
@@ -316,7 +316,7 @@ class MindSwarmCLI:
                             if developers:
                                 table = Table(title="Registered Developers")
                                 table.add_column("Username", style="cyan")
-                                table.add_column("Agent Name", style="green")
+                                table.add_column("Cyber Name", style="green")
                                 table.add_column("Full Name")
                                 table.add_column("Email")
                                 table.add_column("Last Active")
@@ -324,7 +324,7 @@ class MindSwarmCLI:
                                 for name, info in developers.items():
                                     table.add_row(
                                         name,
-                                        info["agent_name"],
+                                        info["cyber_name"],
                                         info.get("full_name", "N/A"),
                                         info.get("email", "N/A"),
                                         info.get("last_active", "N/A")[:19]  # Trim timestamp
@@ -438,7 +438,7 @@ class MindSwarmCLI:
 
 @app.command()
 def connect(
-    create_agents: int = typer.Option(0, "--create", "-c", help="Number of agents to create on connect"),
+    create_agents: int = typer.Option(0, "--create", "-c", help="Number of Cybers to create on connect"),
     interactive: bool = typer.Option(True, "--interactive/--no-interactive", "-i/-n", help="Run in interactive mode"),
     debug: bool = typer.Option(False, "--debug", "-d", help="Enable debug logging"),
 ):
@@ -472,7 +472,7 @@ def connect(
             # Connect WebSocket for real-time updates
             await cli.client.connect_websocket(cli.handle_ws_event)
             
-            # Create initial agents if requested
+            # Create initial Cybers if requested
             if create_agents > 0:
                 await cli.create_initial_agents(create_agents)
             
@@ -517,8 +517,8 @@ def status():
                 console.print("[green]✓ Server is responding[/green]")
                 try:
                     status = await client.get_status()
-                    console.print(f"  Agents: {len(status.agents)}")
-                    console.print(f"  Plaza questions: {status.plaza_questions}")
+                    console.print(f"  Cybers: {len(status.Cybers)}")
+                    console.print(f"  Community questions: {status.community_questions}")
                     console.print(f"  Server uptime: {status.server_uptime:.1f}s")
                     
                     # Show local LLM status if available
@@ -545,7 +545,7 @@ def status():
     
     # Check configuration
     console.print(f"\nSubspace root: {settings.subspace.root_path}")
-    console.print(f"Max agents: {settings.subspace.max_agents}")
+    console.print(f"Max Cybers: {settings.subspace.max_agents}")
     console.print(f"Local AI preset: {settings.ai_models.local_preset}")
     console.print(f"Premium AI preset: {settings.ai_models.premium_preset}")
     

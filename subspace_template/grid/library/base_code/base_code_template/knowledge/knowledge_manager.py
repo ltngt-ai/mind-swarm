@@ -16,22 +16,22 @@ from ..utils.file_utils import FileManager
 from ..utils.cognitive_utils import CognitiveUtils
 from ..memory import Priority
 
-logger = logging.getLogger("agent.knowledge")
+logger = logging.getLogger("Cyber.knowledge")
 
 
 class KnowledgeManager:
     """Manages all knowledge operations for the cognitive system."""
     
     def __init__(self, library_path: Path = Path("/grid/library"), 
-                 agent_type: str = 'general'):
+                 cyber_type: str = 'general'):
         """Initialize knowledge manager.
         
         Args:
             library_path: Path to the library directory
-            agent_type: Type of agent for specific knowledge
+            cyber_type: Type of Cyber for specific knowledge
         """
         self.library_path = library_path
-        self.agent_type = agent_type
+        self.cyber_type = cyber_type
         self.rom_loader = ROMLoader(library_path)
         self.file_manager = FileManager()
         self.cognitive_utils = CognitiveUtils()
@@ -76,7 +76,7 @@ class KnowledgeManager:
         making them behave like ROM but using the standard memory system.
         
         Args:
-            memory_manager: The agent's working memory manager
+            memory_manager: The Cyber's working memory manager
             
         Returns:
             Number of ROM items loaded
@@ -117,8 +117,8 @@ class KnowledgeManager:
            
     def _load_rom_knowledge(self):
         """Load ROM knowledge into the system."""
-        # Load all ROM for this agent type
-        rom_data = self.rom_loader.get_all_rom(self.agent_type)
+        # Load all ROM for this Cyber type
+        rom_data = self.rom_loader.get_all_rom(self.cyber_type)
         
         for rom_id, rom_content in rom_data.items():
             # Extract content and metadata

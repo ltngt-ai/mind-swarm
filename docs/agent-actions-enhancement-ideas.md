@@ -1,17 +1,17 @@
-# Agent Actions and Python Usage Enhancement Ideas
+# cyber Actions and Python Usage Enhancement Ideas
 
-This document outlines ideas for enhancing the Mind-Swarm agent action system and Python integration capabilities.
+This document outlines ideas for enhancing the Mind-Swarm cyber action system and Python integration capabilities.
 
 ## Current State
 
 ### Existing Actions
-- **Base Actions** (all agents):
-  - `send_message` - Send messages to other agents
-  - `update_memory` - Update agent's memory
+- **Base Actions** (all cybers):
+  - `send_message` - Send messages to other cybers
+  - `update_memory` - Update cyber's memory
   - `wait` - Wait for condition or timeout
   - `finish` - Complete task and exit loop
 
-- **IO Agent Actions**:
+- **IO cyber Actions**:
   - `make_network_request` - HTTP requests through body file
   - `check_network_response` - Check for responses
   - `process_network_response` - Process HTTP responses
@@ -20,13 +20,13 @@ This document outlines ideas for enhancing the Mind-Swarm agent action system an
 ### Current Limitations
 - Actions are quite basic - mainly messaging and simple operations
 - No code execution, file manipulation, or complex tool usage
-- IO agents have network capabilities but limited other abilities
+- IO cybers have network capabilities but limited other abilities
 - No direct Python execution capabilities
 
 ## Enhancement Ideas
 
 ### 1. Code Execution Action
-Allow agents to write and execute Python code in a sandboxed environment.
+Allow cybers to write and execute Python code in a sandboxed environment.
 
 **Implementation Details:**
 - `execute_python` action that runs code in a restricted namespace
@@ -42,14 +42,14 @@ Allow agents to write and execute Python code in a sandboxed environment.
 - Testing hypotheses
 
 ### 2. File System Actions
-Enable agents to interact with their file system within allowed boundaries.
+Enable cybers to interact with their file system within allowed boundaries.
 
 **Proposed Actions:**
 - `read_file` - Read files from allowed directories
   - Parameters: path, encoding, lines_limit
   - Returns: content, metadata (size, modified time)
   
-- `write_file` - Write files to agent's workspace
+- `write_file` - Write files to cyber's workspace
   - Parameters: path, content, mode (overwrite/append)
   - Automatic backup before overwrite
   
@@ -62,13 +62,13 @@ Enable agents to interact with their file system within allowed boundaries.
   - Returns: matches with context
 
 **Security Considerations:**
-- Restrict to agent's home directory and shared grid
+- Restrict to cyber's home directory and shared grid
 - Path traversal prevention
 - File size limits
 - Allowed file type restrictions
 
 ### 3. Tool Integration Framework
-Create a flexible system for agents to use various tools.
+Create a flexible system for cybers to use various tools.
 
 **Core Design:**
 - `use_tool` action that can invoke registered tools
@@ -85,27 +85,27 @@ Create a flexible system for agents to use various tools.
 - Text processing (summarization, extraction)
 - Code formatter and linter
 
-### 4. Agent Collaboration Actions
-Enhance multi-agent cooperation capabilities.
+### 4. cyber Collaboration Actions
+Enhance multi-cyber cooperation capabilities.
 
 **Proposed Actions:**
-- `delegate_task` - Assign subtasks to other agents
+- `delegate_task` - Assign subtasks to other cybers
   - Parameters: agent_name, task_description, context
   - Tracks delegation status
   
-- `request_capability` - Ask other agents for help
+- `request_capability` - Ask other cybers for help
   - Parameters: capability_needed, context
-  - Automatic agent discovery based on capabilities
+  - Automatic cyber discovery based on capabilities
   
 - `share_knowledge` - Publish findings to grid library
   - Parameters: knowledge_type, content, tags
   - Automatic formatting to knowledge schema
   
-- `form_workgroup` - Create temporary agent teams
-  - Parameters: agents, shared_goal, coordination_type
+- `form_workgroup` - Create temporary cyber teams
+  - Parameters: cybers, shared_goal, coordination_type
 
 ### 5. Learning and Memory Actions
-Enable agents to learn from experience and build knowledge.
+Enable cybers to learn from experience and build knowledge.
 
 **Proposed Actions:**
 - `create_knowledge_entry` - Convert discoveries into reusable knowledge
@@ -125,7 +125,7 @@ Enable agents to learn from experience and build knowledge.
   - Relationship traversal
 
 ### 6. Enhanced Decision Making
-Improve agent planning and decision capabilities.
+Improve cyber planning and decision capabilities.
 
 **Features:**
 - Multi-step planning with `create_plan` and `execute_plan` actions
@@ -143,7 +143,7 @@ Improve agent planning and decision capabilities.
 ### 7. Python Integration Ideas
 
 **Dynamic Module Loading:**
-- Agents can load Python modules from the grid
+- cybers can load Python modules from the grid
 - Version management for modules
 - Dependency resolution
 - Security sandboxing for loaded code
@@ -155,19 +155,19 @@ Improve agent planning and decision capabilities.
 - Code explanation generation
 
 **REPL Integration:**
-- Give agents access to an IPython-like REPL
+- Give cybers access to an IPython-like REPL
 - Session management and history
 - Variable persistence across REPL calls
 - Rich output support (tables, plots)
 
 **Jupyter-style Notebooks:**
-- Agents can create/execute notebook cells
+- cybers can create/execute notebook cells
 - Markdown documentation cells
 - Code cell execution with output capture
-- Notebook sharing between agents
+- Notebook sharing between cybers
 
 ### 8. Advanced IO Capabilities
-Extend IO agent abilities beyond HTTP.
+Extend IO cyber abilities beyond HTTP.
 
 **Additional Protocols:**
 - WebSocket support for real-time communication
@@ -176,7 +176,7 @@ Extend IO agent abilities beyond HTTP.
 - Database query capabilities (read-only initially)
 
 ### 9. Monitoring and Debugging Actions
-Help agents understand their own behavior.
+Help cybers understand their own behavior.
 
 **Proposed Actions:**
 - `profile_performance` - Measure execution times
@@ -187,7 +187,7 @@ Help agents understand their own behavior.
 ### 10. User Suggestions
 [Space for additional ideas from user feedback]
 
-- **Memory-Centric File Operations**: Files should be treated as memories in the agent worldview. The hive mind's memory IS the filesystem, so file operations should feel like memory operations. Implemented through FocusMemoryAction, CreateMemoryAction, and SearchMemoryAction.
+- **Memory-Centric File Operations**: Files should be treated as memories in the cyber worldview. The hive mind's memory IS the filesystem, so file operations should feel like memory operations. Implemented through FocusMemoryAction, CreateMemoryAction, and SearchMemoryAction.
 - 
 
 ## Implementation Priority
@@ -198,7 +198,7 @@ Help agents understand their own behavior.
 3. Basic Tool Framework - IN PROGRESS
 
 ### Phase 2 (Collaboration)
-4. Agent Collaboration Actions
+4. cyber Collaboration Actions
 5. Enhanced Decision Making
 6. Knowledge Sharing
 
@@ -225,7 +225,7 @@ Help agents understand their own behavior.
 ### Extensibility
 - Plugin architecture for new actions
 - Action composition and chaining
-- Custom action development by agents
+- Custom action development by cybers
 - Version compatibility management
 
 ## Next Steps
@@ -233,4 +233,4 @@ Help agents understand their own behavior.
 2. Design detailed specifications for Phase 1 actions
 3. Implement proof-of-concept for code execution
 4. Test security implications
-5. Gather feedback from agent behaviors
+5. Gather feedback from cyber behaviors

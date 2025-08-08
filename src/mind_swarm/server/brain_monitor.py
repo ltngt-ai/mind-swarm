@@ -1,6 +1,6 @@
 """Brain activity monitor for WebSocket events.
 
-This module monitors agent brain activity and emits events for visualization.
+This module monitors Cyber brain activity and emits events for visualization.
 """
 
 import json
@@ -19,18 +19,18 @@ except ImportError:
 
 
 class BrainMonitor:
-    """Monitors agent brain activity and emits events."""
+    """Monitors Cyber brain activity and emits events."""
     
     def __init__(self):
         """Initialize the brain monitor."""
         self.logger = logger
         self._pending_requests: Dict[str, Dict[str, Any]] = {}
         
-    async def on_brain_request(self, agent_id: str, request_text: str):
-        """Called when an agent makes a brain request.
+    async def on_brain_request(self, cyber_id: str, request_text: str):
+        """Called when an Cyber makes a brain request.
         
         Args:
-            agent_id: The agent making the request
+            cyber_id: The Cyber making the request
             request_text: The thinking request text
         """
         if not _has_monitoring:
@@ -42,23 +42,23 @@ class BrainMonitor:
             request_data = json.loads(request_text)
             
             # Store the signature info for when we get the response
-            self._pending_requests[agent_id] = {
+            self._pending_requests[cyber_id] = {
                 'signature': request_data.get('signature', {}),
                 'task': request_data.get('signature', {}).get('task', 'Thinking'),
                 'display_field': request_data.get('signature', {}).get('display_field', None),
                 'timestamp': time.time()
             }
             
-            self.logger.debug(f"Stored brain request from {agent_id}, display_field: {self._pending_requests[agent_id].get('display_field')}")
+            self.logger.debug(f"Stored brain request from {cyber_id}, display_field: {self._pending_requests[cyber_id].get('display_field')}")
             
         except Exception as e:
             self.logger.debug(f"Failed to parse brain request: {e}")
     
-    async def on_brain_response(self, agent_id: str, response_text: str):
-        """Called when an agent receives a brain response.
+    async def on_brain_response(self, cyber_id: str, response_text: str):
+        """Called when an Cyber receives a brain response.
         
         Args:
-            agent_id: The agent receiving the response
+            cyber_id: The Cyber receiving the response
             response_text: The response text
         """
         if not _has_monitoring:
@@ -66,7 +66,7 @@ class BrainMonitor:
             
         try:
             # Get the pending request info
-            request_info = self._pending_requests.get(agent_id)
+            request_info = self._pending_requests.get(cyber_id)
             if not request_info:
                 return
                 
@@ -101,20 +101,20 @@ class BrainMonitor:
             if thought:
                 # Emit the thought bubble event
                 emitter = get_event_emitter()
-                await emitter.emit_agent_thinking(agent_id, thought)
-                self.logger.debug(f"Emitted thought for {agent_id}: {thought}")
+                await emitter.emit_agent_thinking(cyber_id, thought)
+                self.logger.debug(f"Emitted thought for {cyber_id}: {thought}")
             
             # Clean up the pending request
-            del self._pending_requests[agent_id]
+            del self._pending_requests[cyber_id]
             
         except Exception as e:
             self.logger.debug(f"Failed to process brain response: {e}")
     
-    async def on_file_activity(self, agent_id: str, path: str, action: str):
-        """Called when an agent accesses files.
+    async def on_file_activity(self, cyber_id: str, path: str, action: str):
+        """Called when an Cyber accesses files.
         
         Args:
-            agent_id: The agent accessing files
+            cyber_id: The Cyber accessing files
             path: The file path
             action: The action (read, write, etc.)
         """
@@ -123,7 +123,7 @@ class BrainMonitor:
             
         try:
             emitter = get_event_emitter()
-            await emitter.emit_file_activity(agent_id, action, path)
+            await emitter.emit_file_activity(cyber_id, action, path)
         except Exception as e:
             self.logger.debug(f"Failed to emit file activity: {e}")
 

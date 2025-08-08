@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Optional, List, Union, Dict
 import logging
 
-logger = logging.getLogger("agent.utils.file")
+logger = logging.getLogger("Cyber.utils.file")
 
 
 class FileManager:

@@ -1,0 +1,1 @@
+"""I/O Gateway Cyber Template - Bridge between internal and external worlds."""

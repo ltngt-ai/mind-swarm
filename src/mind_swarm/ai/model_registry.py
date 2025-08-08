@@ -393,7 +393,7 @@ class ModelRegistry:
             metrics.last_error_time = time.time()
             
     async def write_to_grid(self, grid_path: Path):
-        """Write model information to the grid for agent visibility.
+        """Write model information to the grid for Cyber visibility.
         
         Args:
             grid_path: Path to grid root

@@ -9,31 +9,29 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 import logging
 
+from .memory_types import MemoryType, Priority
 from .memory_blocks import (
-    MemoryBlock, MemoryType, Priority,
-    FileMemoryBlock, MessageMemoryBlock, TaskMemoryBlock,
-    KnowledgeMemoryBlock, HistoryMemoryBlock, ObservationMemoryBlock
+    MemoryBlock,
+    FileMemoryBlock, TaskMemoryBlock,
+    KnowledgeMemoryBlock, ObservationMemoryBlock
 )
 from .content_loader import ContentLoader
 
-logger = logging.getLogger("agent.memory.context")
+logger = logging.getLogger("Cyber.memory.context")
 
 
 class ContextBuilder:
     """Builds LLM context from symbolic memory blocks."""
     
     def __init__(self, content_loader: ContentLoader, 
-                 max_content_length: int = 2000,
                  include_metadata: bool = True):
         """Initialize context builder.
         
         Args:
             content_loader: Loader for fetching actual content
-            max_content_length: Maximum length for individual content pieces
             include_metadata: Whether to include metadata in context
         """
         self.content_loader = content_loader
-        self.max_content_length = max_content_length
         self.include_metadata = include_metadata
     
     def build_context(self, selected_memories: List[MemoryBlock], 
@@ -58,9 +56,8 @@ class ContextBuilder:
             try:
                 content = self.content_loader.load_content(memory)
                 
-                # Truncate if needed
-                if len(content) > self.max_content_length:
-                    content = content[:self.max_content_length] + "\n[...truncated...]"
+                # Don't truncate - we need full context
+                # User explicitly requested no truncation anywhere in the system
                 
                 # Compact format - only include non-default values
                 entry = {
@@ -86,10 +83,11 @@ class ContextBuilder:
                     essential_meta = {}
                     if isinstance(memory, FileMemoryBlock) and memory.location != "<BOOT_ROM>":
                         essential_meta["loc"] = memory.location
-                    elif isinstance(memory, MessageMemoryBlock):
-                        essential_meta["from"] = memory.from_agent
-                        if not memory.read:
-                            essential_meta["unread"] = True
+                        # Check if it's a message file
+                        if memory.metadata.get('file_type') == 'message':
+                            essential_meta["from"] = memory.metadata.get('from_agent', 'unknown')
+                            if not memory.metadata.get('read', False):
+                                essential_meta["unread"] = True
                     elif isinstance(memory, TaskMemoryBlock):
                         essential_meta["status"] = memory.status
                     
@@ -123,14 +121,13 @@ class ContextBuilder:
         
         # Build sections for each type
         type_order = [
-            MemoryType.ROM,      # Always first
-            MemoryType.TASK,     # Current task
-            MemoryType.MESSAGE,  # Messages
+            MemoryType.KNOWLEDGE,  # Knowledge (including pinned ROM)
+            MemoryType.TASK,       # Current task
+            MemoryType.MESSAGE,    # Messages
             MemoryType.OBSERVATION,  # Recent observations
             MemoryType.FILE,     # File content
             MemoryType.KNOWLEDGE,  # Knowledge base
             MemoryType.CONTEXT,  # Derived context
-            MemoryType.HISTORY,  # History last
         ]
         
         for mem_type in type_order:
@@ -155,13 +152,12 @@ class ContextBuilder:
         
         # Section headers
         headers = {
-            MemoryType.ROM: "=== CORE KNOWLEDGE (ROM) ===",
+            MemoryType.KNOWLEDGE: "=== KNOWLEDGE ===",
             MemoryType.TASK: "=== CURRENT TASKS ===",
             MemoryType.MESSAGE: "=== MESSAGES ===",
             MemoryType.FILE: "=== FILE CONTENT ===",
             MemoryType.KNOWLEDGE: "=== KNOWLEDGE BASE ===",
             MemoryType.OBSERVATION: "=== OBSERVATIONS ===",
-            MemoryType.HISTORY: "=== RECENT HISTORY ===",
             MemoryType.CONTEXT: "=== CONTEXT ===",
             MemoryType.STATUS: "=== STATUS ===",
         }
@@ -178,9 +174,11 @@ class ContextBuilder:
                     lines.append(f"\n--- File: {memory.location} ---")
                     if memory.start_line:
                         lines.append(f"Lines {memory.start_line}-{memory.end_line or 'end'}")
-                elif isinstance(memory, MessageMemoryBlock):
-                    status = "UNREAD" if not memory.read else "READ"
-                    lines.append(f"\n--- Message [{status}] ---")
+                elif isinstance(memory, FileMemoryBlock) and memory.metadata.get('file_type') == 'message':
+                    status = "UNREAD" if not memory.metadata.get('read', False) else "READ"
+                    from_agent = memory.metadata.get('from_agent', 'unknown')
+                    subject = memory.metadata.get('subject', 'No subject')
+                    lines.append(f"\n--- Message [{status}] from {from_agent}: {subject} ---")
                 elif isinstance(memory, TaskMemoryBlock):
                     lines.append(f"\n--- Task: {memory.task_id} [{memory.status}] ---")
                 elif isinstance(memory, ObservationMemoryBlock):
@@ -197,9 +195,7 @@ class ContextBuilder:
                         meta_parts.append(f"priority: {memory.priority.name}")
                     lines.append(f"[{', '.join(meta_parts)}]")
                 
-                # Add content
-                if len(content) > self.max_content_length:
-                    content = content[:self.max_content_length] + "\n[...truncated...]"
+                # Add content - no truncation
                 lines.append(content)
                 
             except Exception as e:
@@ -212,13 +208,13 @@ class ContextBuilder:
         """Build a narrative-style context."""
         lines = ["Let me review what I know and what's happening:\n"]
         
-        # ROM first
-        rom_memories = [m for m in memories if m.type == MemoryType.ROM]
-        if rom_memories:
+        # Pinned knowledge first (acting as ROM)
+        pinned_knowledge = [m for m in memories if m.type == MemoryType.KNOWLEDGE and m.pinned]
+        if pinned_knowledge:
             lines.append("My core knowledge tells me:")
-            for memory in rom_memories:
+            for memory in pinned_knowledge:
                 content = self.content_loader.load_content(memory)
-                lines.append(f"- {content[:200]}...")
+                lines.append(f"- {content}")
             lines.append("")
         
         # Current situation
@@ -236,32 +232,32 @@ class ContextBuilder:
             lines.append("I've recently observed:")
             for memory in obs_memories:
                 if isinstance(memory, ObservationMemoryBlock):
-                    lines.append(f"- {memory.description}")
+                    lines.append(f"- {memory.observation_type}: {memory.path}")
             lines.append("")
         
-        # Messages
-        msg_memories = [m for m in memories if m.type == MemoryType.MESSAGE]
-        unread = [m for m in msg_memories if isinstance(m, MessageMemoryBlock) and not m.read]
+        # Messages (now FileMemoryBlock with message metadata)
+        msg_memories = [m for m in memories if isinstance(m, FileMemoryBlock) and m.metadata.get('file_type') == 'message']
+        unread = [m for m in msg_memories if not m.metadata.get('read', False)]
         if unread:
             lines.append(f"I have {len(unread)} unread messages:")
             for memory in unread[:3]:  # First 3
-                if isinstance(memory, MessageMemoryBlock):
-                    lines.append(f"- From {memory.from_agent}: {memory.subject}")
+                from_agent = memory.metadata.get('from_agent', 'unknown')
+                subject = memory.metadata.get('subject', 'No subject')
+                lines.append(f"- From {from_agent}: {subject}")
             if len(unread) > 3:
                 lines.append(f"- ...and {len(unread) - 3} more")
             lines.append("")
         
         # Other content
         other_memories = [m for m in memories if m.type not in 
-                         [MemoryType.ROM, MemoryType.TASK, MemoryType.OBSERVATION, MemoryType.MESSAGE]]
+                         [MemoryType.KNOWLEDGE, MemoryType.TASK, MemoryType.OBSERVATION, MemoryType.MESSAGE]]
         
         if other_memories:
             lines.append("Additional relevant information:")
             for memory in other_memories[:5]:  # Limit to avoid too long
                 try:
                     content = self.content_loader.load_content(memory)
-                    preview = content.split('\n')[0][:100]
-                    lines.append(f"- {memory.type.value}: {preview}...")
+                    lines.append(f"- {memory.type.value}: {content}")
                 except Exception:
                     pass
         
@@ -286,10 +282,11 @@ class ContextBuilder:
             if memory.project:
                 metadata["project"] = memory.project
                 
-        elif isinstance(memory, MessageMemoryBlock):
-            metadata["from"] = memory.from_agent
-            metadata["to"] = memory.to_agent
-            metadata["read"] = memory.read
+        # Check if FileMemoryBlock is a message
+        elif isinstance(memory, FileMemoryBlock) and memory.metadata.get('file_type') == 'message':
+            metadata["from"] = memory.metadata.get('from_agent', 'unknown')
+            metadata["to"] = memory.metadata.get('to_agent', 'me')
+            metadata["read"] = memory.metadata.get('read', False)
             
         elif isinstance(memory, KnowledgeMemoryBlock):
             metadata["topic"] = memory.topic

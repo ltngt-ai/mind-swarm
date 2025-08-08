@@ -1,4 +1,4 @@
-"""Sandbox implementation using bubblewrap for agent isolation."""
+"""Sandbox implementation using bubblewrap for Cyber isolation."""
 
 import asyncio
 from pathlib import Path
@@ -9,30 +9,30 @@ from mind_swarm.utils.logging import logger
 
 
 class BubblewrapSandbox:
-    """Manages sandboxed agent execution using bubblewrap."""
+    """Manages sandboxed Cyber execution using bubblewrap."""
     
-    def __init__(self, name: str, subspace_root: Path, agent_type: str = "general"):
-        """Initialize sandbox for an agent.
+    def __init__(self, name: str, subspace_root: Path, cyber_type: str = "general"):
+        """Initialize sandbox for an Cyber.
         
         Args:
-            name: Unique name for the agent
+            name: Unique name for the Cyber
             subspace_root: Root directory of the subspace
-            agent_type: Type of agent (general, io_gateway)
+            cyber_type: Type of Cyber (general, io_gateway)
         """
         self.name = name
         self.subspace_root = subspace_root
-        self.agent_home = subspace_root / "agents" / name
+        self.cyber_personal = subspace_root / "cybers" / name
         self.grid_root = subspace_root / "grid"
         self.tools_dir = subspace_root / "grid" / "workshop"
-        self.agent_type = agent_type
+        self.cyber_type = cyber_type
         
         # Ensure directories exist
-        self.agent_home.mkdir(parents=True, exist_ok=True)
+        self.cyber_personal.mkdir(parents=True, exist_ok=True)
         self.grid_root.mkdir(parents=True, exist_ok=True)
         self.tools_dir.mkdir(parents=True, exist_ok=True)
         
         # Create Grid structure
-        (self.grid_root / "plaza").mkdir(exist_ok=True)
+        (self.grid_root / "community").mkdir(exist_ok=True)
         (self.grid_root / "library").mkdir(exist_ok=True)
         (self.grid_root / "bulletin").mkdir(exist_ok=True)
     
@@ -52,7 +52,7 @@ class BubblewrapSandbox:
             "--die-with-parent",
             # Create new namespaces
             "--unshare-all",
-            # No network access - agents think through body files
+            # No network access - Cybers think through body files
             
             # Create a minimal root filesystem
             # Only bind what's absolutely necessary for Python to run
@@ -79,9 +79,9 @@ class BubblewrapSandbox:
             "--dev", "/dev",
             
             # Their Mind - their private space (just "home" to them)
-            "--bind", str(self.agent_home), "/home",
+            "--bind", str(self.cyber_personal), "/personal",
             
-            # The Grid - where agents meet and collaborate
+            # The Grid - where Cybers meet and collaborate
             "--bind", str(self.grid_root), "/grid",
             
             # Grid tools are part of the workshop
@@ -91,19 +91,19 @@ class BubblewrapSandbox:
             "--tmpfs", "/tmp",
             
             # Set working directory to home
-            "--chdir", "/home",
+            "--chdir", "/personal",
             
             # Clean environment
-            "--setenv", "AGENT_NAME", self.name,
-            "--setenv", "HOME", "/home",
+            "--setenv", "CYBER_NAME", self.name,
+            "--setenv", "HOME", "/personal",
             "--setenv", "PATH", "/grid/workshop:/usr/bin:/bin",
-            "--setenv", "PYTHONPATH", "/home",
-            "--setenv", "AGENT_TYPE", self.agent_type,
+            "--setenv", "PYTHONPATH", "/personal",
+            "--setenv", "CYBER_TYPE", self.cyber_type,
         ]
         
-        # Add special body files for I/O agents
-        if self.agent_type == "io_gateway":
-            io_bodies_dir = self.agent_home / ".io_bodies"
+        # Add special body files for I/O Cybers
+        if self.cyber_type == "io_gateway":
+            io_bodies_dir = self.cyber_personal / ".io_bodies"
             io_bodies_dir.mkdir(exist_ok=True)
             
             # Create body files if they don't exist
@@ -117,8 +117,8 @@ class BubblewrapSandbox:
             
             # Bind special body files
             bwrap_cmd.extend([
-                "--bind", str(network_file), "/home/network",
-                "--bind", str(user_io_file), "/home/user_io",
+                "--bind", str(network_file), "/personal/network",
+                "--bind", str(user_io_file), "/personal/user_io",
             ])
         
         # Add custom environment variables
@@ -149,7 +149,7 @@ class BubblewrapSandbox:
         """
         bwrap_cmd = self._build_bwrap_cmd(cmd, env)
         
-        logger.debug(f"Running sandboxed command for {self.agent_id}: {' '.join(cmd)}")
+        logger.debug(f"Running sandboxed command for {self.cyber_id}: {' '.join(cmd)}")
         
         proc = None  # Ensure proc is always defined
         try:
@@ -167,7 +167,7 @@ class BubblewrapSandbox:
             return proc.returncode or 0, stdout.decode(), stderr.decode()
             
         except asyncio.TimeoutError:
-            logger.warning(f"Command timed out for agent {self.agent_id}")
+            logger.warning(f"Command timed out for Cyber {self.cyber_id}")
             if proc:
                 proc.terminate()
                 await proc.wait()
@@ -187,12 +187,12 @@ class BubblewrapSandbox:
             Dictionary with execution results
         """
         # Write code to temporary file
-        code_file = self.agent_home / ".tmp_code.py"
+        code_file = self.cyber_personal / ".tmp_code.py"
         code_file.write_text(code)
         
         # Run the code
         returncode, stdout, stderr = await self.run_command(
-            ["python3", "/home/agent/.tmp_code.py"],
+            ["python3", "/personal/Cyber/.tmp_code.py"],
             timeout=timeout,
         )
         
@@ -208,9 +208,9 @@ class BubblewrapSandbox:
     
     def cleanup(self):
         """Clean up sandbox resources."""
-        # Note: We don't delete agent_home as it contains persistent data
+        # Note: We don't delete cyber_personal as it contains persistent data
         # Only clean temporary files
-        for tmp_file in self.agent_home.glob(".tmp_*"):
+        for tmp_file in self.cyber_personal.glob(".tmp_*"):
             tmp_file.unlink(missing_ok=True)
 
 
@@ -228,12 +228,12 @@ class SubspaceManager:
         self.root_path.mkdir(parents=True, exist_ok=True)
         
         # Create standard directories
-        self.agents_dir = self.root_path / "agents"
+        self.agents_dir = self.root_path / "cybers"
         self.grid_dir = self.root_path / "grid"
         self.runtime_dir = self.root_path / "runtime"
         
         # Grid subdirectories
-        self.plaza_dir = self.grid_dir / "plaza"  # Questions and discussions
+        self.community_dir = self.grid_dir / "community"  # Questions and discussions
         self.library_dir = self.grid_dir / "library"  # Shared knowledge
         self.workshop_dir = self.grid_dir / "workshop"  # Tools
         self.bulletin_dir = self.grid_dir / "bulletin"  # Announcements
@@ -241,7 +241,7 @@ class SubspaceManager:
         for directory in [
             self.agents_dir,
             self.grid_dir,
-            self.plaza_dir,
+            self.community_dir,
             self.library_dir,
             self.workshop_dir,
             self.bulletin_dir,
@@ -254,7 +254,7 @@ class SubspaceManager:
         # Initialize from template if needed
         self._initialize_from_template()
         
-        # Prepare the agent runtime environment
+        # Prepare the Cyber runtime environment
         from mind_swarm.subspace.runtime_builder import AgentRuntimeBuilder
         self.runtime_builder = AgentRuntimeBuilder(self.root_path)
         self.runtime_builder.prepare_runtime()
@@ -286,7 +286,8 @@ class SubspaceManager:
         if grid_template.exists():
             # Always sync ROM from template (for development)
             rom_dir = self.library_dir / "rom"
-            src_rom = grid_template / "library" / "rom"
+            # ROM is now in knowledge/sections/rom in the template
+            src_rom = grid_template / "library" / "knowledge" / "sections" / "rom"
             if src_rom.exists():
                 if rom_dir.exists():
                     logger.info("Updating ROM knowledge from template")
@@ -294,6 +295,8 @@ class SubspaceManager:
                 else:
                     logger.info("Copying ROM knowledge from template")
                 shutil.copytree(src_rom, rom_dir)
+            else:
+                logger.warning(f"ROM source not found at {src_rom}")
             
             # Always sync base_code from template (for development)
             base_code_dir = self.library_dir / "base_code"
@@ -315,7 +318,8 @@ class SubspaceManager:
             
             # Copy actions directory if missing or update it
             actions_dir = self.library_dir / "actions"
-            src_actions = grid_template / "library" / "actions"
+            # Actions are now in knowledge/sections/actions in the template
+            src_actions = grid_template / "library" / "knowledge" / "sections" / "actions"
             if src_actions.exists():
                 if actions_dir.exists():
                     logger.info("Updating actions knowledge from template")
@@ -323,89 +327,100 @@ class SubspaceManager:
                 else:
                     logger.info("Copying actions knowledge to library")
                 shutil.copytree(src_actions, actions_dir)
+            else:
+                logger.warning(f"Actions source not found at {src_actions}")
             
             # Copy README files
-            for subdir in ["plaza", "workshop", "library"]:
+            for subdir in ["community", "workshop", "library"]:
                 readme = getattr(self, f"{subdir}_dir") / "README.md"
                 if not readme.exists():
                     src_readme = grid_template / subdir / "README.md"
                     if src_readme.exists():
                         shutil.copy2(src_readme, readme)
         
-        # Initialize agent directory in plaza
-        agent_dir_file = self.plaza_dir / "agent_directory.json"
+        # Initialize Cyber directory in plaza
+        agent_dir_file = self.community_dir / "cyber_directory.json"
         if not agent_dir_file.exists():
-            src_agent_dir = grid_template / "plaza" / "agent_directory.json"
+            src_agent_dir = grid_template / "community" / "cyber_directory.json"
             if src_agent_dir.exists():
-                logger.info("Copying initial agent_directory.json to plaza")
+                logger.info("Copying initial cyber_directory.json to plaza")
                 shutil.copy2(src_agent_dir, agent_dir_file)
     
-    def create_sandbox(self, name: str, agent_type: str = "general") -> BubblewrapSandbox:
-        """Create a sandbox for an agent.
+    def create_sandbox(self, name: str, cyber_type: str = "general") -> BubblewrapSandbox:
+        """Create a sandbox for an Cyber.
         
         Args:
-            name: Unique agent name
-            agent_type: Type of agent (general, io_gateway)
+            name: Unique Cyber name
+            cyber_type: Type of Cyber (general, io_gateway)
             
         Returns:
             Configured sandbox instance
         """
-        # Check if agent already exists (on disk or in memory)
+        # Check if Cyber already exists (on disk or in memory)
         agent_exists = name in self.sandboxes or (self.agents_dir / name).exists()
         
         if name in self.sandboxes:
-            # Agent already in memory
+            # Cyber already in memory
             sandbox = self.sandboxes[name]
         else:
             # Create new sandbox instance
-            sandbox = BubblewrapSandbox(name, self.root_path, agent_type)
+            sandbox = BubblewrapSandbox(name, self.root_path, cyber_type)
             self.sandboxes[name] = sandbox
         
-        # For existing agents, update their base_code
+        # For existing Cybers, update their base_code
         if agent_exists:
-            base_code = sandbox.agent_home / "base_code"
-            if base_code.exists():
-                logger.info(f"Updating base_code for existing agent {name}")
-                self._copy_agent_base_code(base_code, agent_type)
+            base_code = sandbox.cyber_personal / "base_code"
+            if not base_code.exists():
+                # Create base_code directory if it doesn't exist
+                logger.info(f"Creating base_code directory for existing Cyber {name}")
+                base_code.mkdir(exist_ok=True)
+            logger.info(f"Updating base_code for existing Cyber {name}")
+            self._copy_agent_base_code(base_code, cyber_type)
+            
+            # Ensure other essential directories exist
+            for directory in ["inbox", "outbox", "drafts", "memory"]:
+                dir_path = sandbox.cyber_personal / directory
+                dir_path.mkdir(exist_ok=True)
+            
             return sandbox
         
-        # Initialize agent directories
-        inbox = sandbox.agent_home / "inbox"
-        outbox = sandbox.agent_home / "outbox"
-        drafts = sandbox.agent_home / "drafts"
-        memory = sandbox.agent_home / "memory"
-        base_code = sandbox.agent_home / "base_code"
+        # Initialize Cyber directories
+        inbox = sandbox.cyber_personal / "inbox"
+        outbox = sandbox.cyber_personal / "outbox"
+        drafts = sandbox.cyber_personal / "drafts"
+        memory = sandbox.cyber_personal / "memory"
+        base_code = sandbox.cyber_personal / "base_code"
         
         for directory in [inbox, outbox, drafts, memory, base_code]:
             directory.mkdir(exist_ok=True)
         
-        # Copy agent code to base_code directory
-        self._copy_agent_base_code(base_code, agent_type)
+        # Copy Cyber code to base_code directory
+        self._copy_agent_base_code(base_code, cyber_type)
         
-        logger.info(f"Created sandbox for agent {name}")
+        logger.info(f"Created sandbox for Cyber {name}")
         return sandbox
     
     def remove_sandbox(self, name: str):
         """Remove a sandbox and clean up resources.
         
         Args:
-            name: Agent name
+            name: Cyber name
         """
         if name in self.sandboxes:
             self.sandboxes[name].cleanup()
             del self.sandboxes[name]
-            logger.info(f"Removed sandbox for agent {name}")
+            logger.info(f"Removed sandbox for Cyber {name}")
     
-    def _copy_agent_base_code(self, base_code_dir: Path, agent_type: str = "general"):
-        """Copy agent base code to the agent's home directory.
+    def _copy_agent_base_code(self, base_code_dir: Path, cyber_type: str = "general"):
+        """Copy Cyber base code to the Cyber's home directory.
         
         Args:
-            base_code_dir: The base_code directory in agent's home
-            agent_type: Type of agent (general, io_gateway)
+            base_code_dir: The base_code directory in Cyber's home
+            cyber_type: Type of Cyber (general, io_gateway)
         """
-        # Choose template from library/base_code based on agent type
-        if agent_type == "io_gateway":
-            template_dir = self.library_dir / "base_code" / "io_agent_template"
+        # Choose template from library/base_code based on Cyber type
+        if cyber_type == "io_gateway":
+            template_dir = self.library_dir / "base_code" / "io_cyber_template"
         else:
             template_dir = self.library_dir / "base_code" / "base_code_template"
         
@@ -413,8 +428,8 @@ class SubspaceManager:
             # Copy entire directory structure from template
             import shutil
             
-            # For I/O agents, first copy base template as dependency
-            if agent_type == "io_gateway":
+            # For I/O Cybers, first copy base template as dependency
+            if cyber_type == "io_gateway":
                 base_template = self.library_dir / "base_code" / "base_code_template"
                 if base_template.exists():
                     # Create base_code_template subdirectory
@@ -422,13 +437,13 @@ class SubspaceManager:
                     if base_dest.exists():
                         shutil.rmtree(base_dest)
                     shutil.copytree(base_template, base_dest)
-                    logger.debug("Copied base_code_template for I/O agent")
+                    logger.debug("Copied base_code_template for I/O Cyber")
             
             # First copy all .py files in the root
             for py_file in template_dir.glob("*.py"):
                 dst_file = base_code_dir / py_file.name
                 shutil.copy2(py_file, dst_file)
-                logger.debug(f"Copied {py_file.name} to agent base_code")
+                logger.debug(f"Copied {py_file.name} to Cyber base_code")
             
             # Then copy all subdirectories
             for subdir in template_dir.iterdir():
@@ -437,7 +452,7 @@ class SubspaceManager:
                     if dst_subdir.exists():
                         shutil.rmtree(dst_subdir)
                     shutil.copytree(subdir, dst_subdir)
-                    logger.debug(f"Copied directory {subdir.name} to agent base_code")
+                    logger.debug(f"Copied directory {subdir.name} to Cyber base_code")
         else:
             # Fallback: copy directly from source
             src_dir = Path(__file__).parent.parent / "agent_sandbox"
@@ -446,9 +461,9 @@ class SubspaceManager:
                 for py_file in src_dir.glob("*.py"):
                     dst_file = base_code_dir / py_file.name
                     shutil.copy2(py_file, dst_file)
-                    logger.debug(f"Copied {py_file.name} to agent base_code")
+                    logger.debug(f"Copied {py_file.name} to Cyber base_code")
             else:
-                logger.error("No agent base code found to copy!")
+                logger.error("No Cyber base code found to copy!")
     
     async def check_bubblewrap(self) -> bool:
         """Check if bubblewrap is installed and available.

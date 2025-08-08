@@ -9,30 +9,28 @@ This module provides a semantic ID system that:
 
 import hashlib
 import re
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any
 from pathlib import Path
 from .memory_types import MemoryType
 
 
 class UnifiedMemoryID:
-    """Manages unified memory IDs with format: type:namespace:semantic_path[:hash]"""
+    """Manages unified memory IDs with format: type:path[:hash]"""
     
-    # Pattern for parsing IDs
-    ID_PATTERN = re.compile(r'^([^:]+):([^:]+):([^:]+)(?::([a-f0-9]{6}))?$')
+    # Pattern for parsing IDs: type:path[:hash]
+    ID_PATTERN = re.compile(r'^([^:]+):([^:]+)(?::([a-f0-9]{6}))?$')
     
     @staticmethod
     def create(
         mem_type: MemoryType,
-        namespace: str,
-        semantic_path: str,
+        path: str,
         content: Optional[str] = None
     ) -> str:
         """Create a new unified memory ID.
         
         Args:
             mem_type: Type of memory (MemoryType enum)
-            namespace: Namespace (personal, shared, inbox, etc.)
-            semantic_path: Semantic path describing content
+            path: Path to the memory (should include personal/ or grid/ prefix)
             content: Optional content for hash generation
             
         Returns:
@@ -41,15 +39,15 @@ class UnifiedMemoryID:
         # Get string value from enum
         type_str = mem_type.value
         
-        # Clean up semantic path
-        semantic_path = semantic_path.strip('/')
+        # Clean up path - remove leading slash if present
+        path = path.lstrip('/')
         
         # Generate content hash if content provided
         if content:
             content_hash = hashlib.sha256(content.encode()).hexdigest()[:6]
-            return f"{type_str}:{namespace}:{semantic_path}:{content_hash}"
+            return f"{type_str}:{path}:{content_hash}"
         else:
-            return f"{type_str}:{namespace}:{semantic_path}"
+            return f"{type_str}:{path}"
     
     @staticmethod
     def parse(memory_id: str) -> Dict[str, str]:
@@ -59,18 +57,34 @@ class UnifiedMemoryID:
             memory_id: The ID to parse
             
         Returns:
-            Dict with keys: type, namespace, semantic_path, hash (optional)
+            Dict with keys: type, path, hash (optional), namespace (derived)
         """
         match = UnifiedMemoryID.ID_PATTERN.match(memory_id)
         if not match:
-            raise ValueError(f"Invalid memory ID format: {memory_id}")
+            # Invalid format, return empty result
+            return {
+                'type': 'unknown',
+                'path': memory_id,
+                'namespace': 'unknown'
+            }
         
-        mem_type, namespace, semantic_path, content_hash = match.groups()
+        mem_type, path, content_hash = match.groups()
+        
+        # Derive namespace from path for backwards compatibility
+        if path.startswith('personal/'):
+            namespace = 'personal'
+        elif path.startswith('grid/'):
+            namespace = 'grid'
+        elif path.startswith('inbox/') or path.startswith('outbox/'):
+            namespace = 'personal'
+        else:
+            # Default to personal if unclear
+            namespace = 'personal'
         
         result = {
             'type': mem_type,
-            'namespace': namespace,
-            'semantic_path': semantic_path
+            'path': path,
+            'namespace': namespace  # Derived for compatibility
         }
         
         if content_hash:
@@ -87,27 +101,25 @@ class UnifiedMemoryID:
         - ** matches any number of segments
         
         Examples:
-        - "file:personal:*" matches any personal file
-        - "file:personal:notes/*" matches any note
-        - "message:inbox:**" matches any inbox message
+        - "file:personal/*" matches any personal file
+        - "file:personal/notes/*" matches any note
+        - "message:personal/inbox/**" matches any inbox message
         """
         # Convert pattern to regex
         pattern_parts = pattern.split(':')
         id_parts = memory_id.split(':')
         
-        # Must have same number of main parts (type:namespace:path)
-        if len(pattern_parts) < 3 or len(id_parts) < 3:
+        # Must have at least type:path
+        if len(pattern_parts) < 2 or len(id_parts) < 2:
             return False
         
-        # Check type and namespace
+        # Check type
         if pattern_parts[0] != '*' and pattern_parts[0] != id_parts[0]:
             return False
-        if pattern_parts[1] != '*' and pattern_parts[1] != id_parts[1]:
-            return False
         
-        # Check semantic path
-        pattern_path = pattern_parts[2]
-        id_path = id_parts[2]
+        # Check path
+        pattern_path = pattern_parts[1] if len(pattern_parts) > 1 else ''
+        id_path = id_parts[1] if len(id_parts) > 1 else ''
         
         # Handle ** wildcard
         if '**' in pattern_path:
@@ -137,30 +149,33 @@ class UnifiedMemoryID:
         parts = UnifiedMemoryID.parse(memory_id)
         info = {
             'type': parts['type'],
-            'namespace': parts['namespace'],
-            'path_segments': parts['semantic_path'].split('/'),
-            'depth': len(parts['semantic_path'].split('/')),
+            'namespace': parts.get('namespace', 'unknown'),
+            'path_segments': parts['path'].split('/'),
+            'depth': len(parts['path'].split('/')),
             'has_content_hash': 'hash' in parts
         }
         
         # Add type-specific interpretations
         if parts['type'] == 'message':
             segments = info['path_segments']
-            if len(segments) >= 2:
-                info['from_agent'] = segments[0].replace('from-', '')
-                info['subject_hint'] = segments[1]
+            # Skip the personal/grid prefix
+            if len(segments) > 2:
+                info['from_agent'] = segments[-2].replace('from-', '')
+                info['subject_hint'] = segments[-1]
         
         elif parts['type'] == 'file':
-            if info['namespace'] == 'personal':
+            if 'personal' in parts['path']:
                 info['is_private'] = True
-            elif info['namespace'] == 'shared':
+            elif 'grid' in parts['path']:
                 info['is_shared'] = True
         
         elif parts['type'] == 'knowledge':
-            if len(info['path_segments']) >= 1:
-                info['topic'] = info['path_segments'][0]
-                if len(info['path_segments']) >= 2:
-                    info['subtopic'] = info['path_segments'][1]
+            # Skip personal/grid prefix
+            relevant_segments = [s for s in info['path_segments'] if s not in ['personal', 'grid', 'library']]
+            if len(relevant_segments) >= 1:
+                info['topic'] = relevant_segments[0]
+                if len(relevant_segments) >= 2:
+                    info['subtopic'] = relevant_segments[1]
         
         return info
     
@@ -175,50 +190,29 @@ class UnifiedMemoryID:
         Returns:
             Unified memory ID
         """
-        path_obj = Path(path)
+        # Clean up the path
+        path_str = str(path)
         
-        # Determine namespace from path
-        if '/home/' in str(path):
-            if '/memory/' in str(path):
-                namespace = 'personal'
-                # Extract semantic path from memory directory
-                semantic_parts = str(path).split('/memory/')[-1]
-            elif '/inbox/' in str(path):
-                namespace = 'inbox'
-                semantic_parts = path_obj.stem  # Just filename without extension
-            elif '/outbox/' in str(path):
-                namespace = 'outbox'
-                semantic_parts = path_obj.stem
-            else:
-                namespace = 'personal'
-                semantic_parts = path_obj.name
-        elif '/grid/' in str(path):
-            if '/plaza/' in str(path):
-                namespace = 'plaza'
-            elif '/library/' in str(path):
-                namespace = 'library'
-            elif '/workshop/' in str(path):
-                namespace = 'workshop'
-            elif '/bulletin/' in str(path):
-                namespace = 'bulletin'
-            else:
-                namespace = 'shared'
-            
-            # Extract path after grid area
-            for area in ['plaza', 'library', 'workshop', 'bulletin']:
-                if f'/{area}/' in str(path):
-                    semantic_parts = str(path).split(f'/{area}/')[-1]
-                    break
-            else:
-                semantic_parts = path_obj.name
+        # Remove leading slash if present
+        if path_str.startswith('/'):
+            path_str = path_str[1:]
+        
+        # If path already starts with personal/ or grid/, use as-is
+        if path_str.startswith('personal/') or path_str.startswith('grid/'):
+            return UnifiedMemoryID.create(mem_type, path_str)
+        
+        # Otherwise, try to extract the meaningful part
+        if '/personal/' in path_str:
+            # Extract everything after /personal/
+            path_str = 'personal/' + path_str.split('/personal/')[-1]
+        elif '/grid/' in path_str:
+            # Extract everything after /grid/
+            path_str = 'grid/' + path_str.split('/grid/')[-1]
         else:
-            namespace = 'unknown'
-            semantic_parts = path_obj.name
+            # Default to personal if we can't determine
+            path_str = 'personal/' + path_str
         
-        # Keep the full filename including extension
-        semantic_path = semantic_parts
-        
-        return UnifiedMemoryID.create(mem_type, namespace, semantic_path)
+        return UnifiedMemoryID.create(mem_type, path_str)
     
     @staticmethod
     def create_observation_id(obs_type: str, path: str) -> str:
@@ -226,17 +220,56 @@ class UnifiedMemoryID:
         
         Uses content hash of type+path to ensure unique observations.
         """
-        # Create semantic path from observation type and path
-        path_obj = Path(path)
-        semantic_path = f"{obs_type}/{path_obj.name}"
+        # If path is a memory ID, extract just the path part
+        if ':' in path and not '/' in path.split(':')[0]:
+            # This looks like a memory ID (type:path format)
+            try:
+                parts = UnifiedMemoryID.parse(path)
+                path = parts['path']
+            except:
+                # If parsing fails, use as-is
+                pass
         
-        # Determine namespace
-        if '/grid/' in path:
-            namespace = 'shared'
+        # Clean up the path
+        path_str = str(path)
+        if path_str.startswith('/'):
+            path_str = path_str[1:]
+        
+        # Create observation path
+        if path_str.startswith('personal/') or path_str.startswith('grid/'):
+            # Path already has namespace prefix
+            obs_path = f"{obs_type}/{Path(path_str).name}"
+            if path_str.startswith('grid/'):
+                obs_path = f"grid/{obs_type}/{Path(path_str).name}"
+            else:
+                obs_path = f"personal/{obs_type}/{Path(path_str).name}"
         else:
-            namespace = 'personal'
+            # Determine from path content
+            if '/grid/' in path_str:
+                obs_path = f"grid/{obs_type}/{Path(path_str).name}"
+            else:
+                obs_path = f"personal/{obs_type}/{Path(path_str).name}"
         
         # Create content hash from identifying information
-        content = f"{obs_type}:{path}"
+        content = f"{obs_type}:{path_str}"
         
-        return UnifiedMemoryID.create(MemoryType.OBSERVATION, namespace, semantic_path, content)
+        return UnifiedMemoryID.create(MemoryType.OBSERVATION, obs_path, content)
+    
+    @staticmethod
+    def to_filesystem_path(memory_id: str, base_path: Optional[Path] = None) -> Path:
+        """Convert a memory ID to a filesystem path.
+        
+        Args:
+            memory_id: The memory ID to convert
+            base_path: Optional base path to prepend
+            
+        Returns:
+            Filesystem path
+        """
+        parts = UnifiedMemoryID.parse(memory_id)
+        path = parts['path']
+        
+        if base_path:
+            return base_path / path
+        else:
+            return Path(path)

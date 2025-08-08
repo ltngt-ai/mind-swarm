@@ -109,19 +109,19 @@ def patch_cognitive_loop(file_path: Path):
 def main():
     """Patch all cognitive_loop_v2.py files."""
     
-    # Find all cognitive_loop_v2.py files in runtime and agent directories
-    base_path = Path("/home/deano/projects/mind-swarm")
+    # Find all cognitive_loop_v2.py files in runtime and Cyber directories
+    base_path = Path("/personal/deano/projects/mind-swarm")
     
     files_to_patch = [
         base_path / "subspace/runtime/base_code_template/cognitive_loop_v2.py",
     ]
     
-    # Also find any in agent directories
-    agent_base = base_path / "subspace/agents"
+    # Also find any in Cyber directories
+    agent_base = base_path / "subspace/Cybers"
     if agent_base.exists():
-        for agent_dir in agent_base.iterdir():
-            if agent_dir.is_dir():
-                cognitive_file = agent_dir / "base_code" / "cognitive_loop_v2.py"
+        for cyber_dir in agent_base.iterdir():
+            if cyber_dir.is_dir():
+                cognitive_file = cyber_dir / "base_code" / "cognitive_loop_v2.py"
                 if cognitive_file.exists():
                     files_to_patch.append(cognitive_file)
     

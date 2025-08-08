@@ -105,8 +105,17 @@ class MindSwarmDSPyLM(dspy.LM):
         elif self.provider in ["openai_compatible", "local", "ollama"]:
             # Local or custom OpenAI-compatible endpoint
             self.api_key = self.config.get("api_key", "dummy")
-            # Use base_url directly from config
-            base_url = self.config.get("base_url", "http://192.168.1.147:1234")
+            
+            # Check for base_url in config or provider_settings/api_settings
+            base_url = self.config.get("base_url")
+            if not base_url:
+                # Check provider_settings or api_settings for host
+                settings = self.config.get("provider_settings") or self.config.get("api_settings")
+                if settings and isinstance(settings, dict) and "host" in settings:
+                    base_url = settings["host"]
+                else:
+                    base_url = "http://192.168.1.147:1234"
+            
             # For local providers, base_url is the host URL, api_base is used by openai_compatible
             self.api_base = base_url
             logger.info(f"Configured local provider with base URL: {self.api_base}")

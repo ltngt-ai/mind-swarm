@@ -18,26 +18,26 @@ from mind_swarm.server.monitoring_events import set_server_reference, get_event_
 
 # API Models
 class CreateAgentRequest(BaseModel):
-    """Request to create a new agent."""
+    """Request to create a new Cyber."""
     name: Optional[str] = None
-    agent_type: str = "general"
+    cyber_type: str = "general"
     config: Optional[Dict[str, Any]] = None
 
 
 class CommandRequest(BaseModel):
-    """Request to send a command to an agent."""
+    """Request to send a command to an Cyber."""
     command: str
     params: Optional[Dict[str, Any]] = None
 
 
 class MessageRequest(BaseModel):
-    """Request to send a message to an agent."""
+    """Request to send a message to an Cyber."""
     content: str
     message_type: str = "text"
 
 
 class QuestionRequest(BaseModel):
-    """Request to create a plaza question."""
+    """Request to create a community question."""
     text: str
     created_by: str = "user"
 
@@ -61,8 +61,8 @@ class MarkMessageReadRequest(BaseModel):
 
 class StatusResponse(BaseModel):
     """Server status response."""
-    agents: Dict[str, Dict[str, Any]]
-    plaza_questions: int
+    Cybers: Dict[str, Dict[str, Any]]
+    community_questions: int
     server_uptime: float
     server_start_time: str
     local_llm_status: Optional[Dict[str, Any]] = None
@@ -150,7 +150,7 @@ class MindSwarmServer:
                     logger.info(f"Local LLM check: {status}")
                     
                     if not is_healthy:
-                        logger.warning("Local LLM server not available - agents using local models may not function properly")
+                        logger.warning("Local LLM server not available - Cybers using local models may not function properly")
                 
                 await self.coordinator.start()
                 self._coordinator_ready = True
@@ -179,7 +179,7 @@ class MindSwarmServer:
         
         @self.app.get("/status", response_model=StatusResponse)
         async def get_status(check_llm: bool = True):
-            """Get server and agent status.
+            """Get server and Cyber status.
             
             Args:
                 check_llm: Whether to check local LLM status (can be slow)
@@ -193,15 +193,15 @@ class MindSwarmServer:
             # If coordinator is not ready yet, return minimal status
             if not getattr(self, '_coordinator_ready', False):
                 return StatusResponse(
-                    agents={},
-                    plaza_questions=0,
+                    Cybers={},
+                    community_questions=0,
                     server_uptime=(datetime.now() - self.start_time).total_seconds(),
                     server_start_time=self.start_time.isoformat(),
                     local_llm_status=None
                 )
             
-            agent_states = await self.coordinator.get_agent_states()
-            questions = await self.coordinator.get_plaza_questions()
+            cyber_states = await self.coordinator.get_cyber_states()
+            questions = await self.coordinator.get_community_questions()
             
             uptime = (datetime.now() - self.start_time).total_seconds()
             
@@ -245,8 +245,8 @@ class MindSwarmServer:
                     logger.warning(f"STATUS: Local LLM check failed with exception: {e}")
             
             response = StatusResponse(
-                agents=agent_states,
-                plaza_questions=len(questions),
+                Cybers=cyber_states,
+                community_questions=len(questions),
                 server_uptime=uptime,
                 server_start_time=self.start_time.isoformat(),
                 local_llm_status=local_llm_status
@@ -254,9 +254,9 @@ class MindSwarmServer:
             logger.info(f"STATUS: /status endpoint completed in {time.time() - endpoint_start:.2f}s total")
             return response
         
-        @self.app.post("/agents/create")
+        @self.app.post("/Cybers/create")
         async def create_agent(request: CreateAgentRequest):
-            """Create a new agent."""
+            """Create a new Cyber."""
             if not self.coordinator:
                 raise HTTPException(status_code=503, detail="Server not initialized")
             if not getattr(self, '_coordinator_ready', False):
@@ -265,7 +265,7 @@ class MindSwarmServer:
             try:
                 name = await self.coordinator.create_agent(
                     name=request.name,
-                    agent_type=request.agent_type,
+                    cyber_type=request.cyber_type,
                     config=request.config
                 )
                 
@@ -279,13 +279,13 @@ class MindSwarmServer:
                 return {"name": name}
             except Exception as e:
                 import traceback
-                logger.error(f"Failed to create agent: {e}")
+                logger.error(f"Failed to create Cyber: {e}")
                 logger.error(f"Traceback: {traceback.format_exc()}")
                 raise HTTPException(status_code=500, detail=str(e))
         
-        @self.app.delete("/agents/{name}")
+        @self.app.delete("/Cybers/{name}")
         async def terminate_agent(name: str):
-            """Terminate an agent."""
+            """Terminate an Cyber."""
             if not self.coordinator:
                 raise HTTPException(status_code=503, detail="Server not initialized")
             if not getattr(self, '_coordinator_ready', False):
@@ -301,14 +301,14 @@ class MindSwarmServer:
                     "timestamp": datetime.now().isoformat()
                 })
                 
-                return {"message": f"Agent {name} terminated"}
+                return {"message": f"Cyber {name} terminated"}
             except Exception as e:
-                logger.error(f"Failed to terminate agent {name}: {e}")
+                logger.error(f"Failed to terminate Cyber {name}: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
-        @self.app.post("/agents/{name}/command")
+        @self.app.post("/Cybers/{name}/command")
         async def send_command(name: str, request: CommandRequest):
-            """Send a command to an agent."""
+            """Send a command to an Cyber."""
             if not self.coordinator:
                 raise HTTPException(status_code=503, detail="Server not initialized")
             if not getattr(self, '_coordinator_ready', False):
@@ -325,9 +325,9 @@ class MindSwarmServer:
                 logger.error(f"Failed to send command: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
-        @self.app.post("/agents/{name}/message")
+        @self.app.post("/Cybers/{name}/message")
         async def send_message(name: str, request: MessageRequest):
-            """Send a message to an agent."""
+            """Send a message to an Cyber."""
             if not self.coordinator:
                 raise HTTPException(status_code=503, detail="Server not initialized")
             if not getattr(self, '_coordinator_ready', False):
@@ -344,16 +344,16 @@ class MindSwarmServer:
                 logger.error(f"Failed to send message: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
-        @self.app.post("/plaza/questions")
+        @self.app.post("/community/questions")
         async def create_question(request: QuestionRequest):
-            """Create a new plaza question."""
+            """Create a new community question."""
             if not self.coordinator:
                 raise HTTPException(status_code=503, detail="Server not initialized")
             if not getattr(self, '_coordinator_ready', False):
                 raise HTTPException(status_code=503, detail="Server still initializing, please wait")
             
             try:
-                question_id = await self.coordinator.create_plaza_question(
+                question_id = await self.coordinator.create_community_question(
                     request.text, 
                     request.created_by
                 )
@@ -372,27 +372,27 @@ class MindSwarmServer:
                 logger.error(f"Failed to create question: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
-        @self.app.get("/plaza/questions")
+        @self.app.get("/community/questions")
         async def get_questions():
-            """Get all plaza questions."""
+            """Get all community questions."""
             if not self.coordinator:
                 raise HTTPException(status_code=503, detail="Server not initialized")
             if not getattr(self, '_coordinator_ready', False):
                 return {"questions": []}
             
-            questions = await self.coordinator.get_plaza_questions()
+            questions = await self.coordinator.get_community_questions()
             return {"questions": questions}
         
-        @self.app.get("/agents/all")
+        @self.app.get("/Cybers/all")
         async def list_all_agents():
-            """List all known agents including hibernating ones."""
+            """List all known Cybers including hibernating ones."""
             if not self.coordinator:
                 raise HTTPException(status_code=503, detail="Server not initialized")
             if not getattr(self, '_coordinator_ready', False):
-                return {"agents": []}
+                return {"cybers": []}
             
-            agents = await self.coordinator.list_all_agents()
-            return {"agents": agents}
+            Cybers = await self.coordinator.list_all_agents()
+            return {"cybers": Cybers}
         
         @self.app.post("/developers/register")
         async def register_developer(request: RegisterDeveloperRequest):
@@ -403,7 +403,7 @@ class MindSwarmServer:
                 raise HTTPException(status_code=503, detail="Server still initializing, please wait")
             
             try:
-                agent_name = await self.coordinator.register_developer(
+                cyber_name = await self.coordinator.register_developer(
                     request.name,
                     request.full_name,
                     request.email
@@ -413,11 +413,11 @@ class MindSwarmServer:
                 await self._broadcast_event({
                     "type": "developer_registered",
                     "name": request.name,
-                    "agent_name": agent_name,
+                    "cyber_name": cyber_name,
                     "timestamp": datetime.now().isoformat()
                 })
                 
-                return {"agent_name": agent_name}
+                return {"cyber_name": cyber_name}
             except Exception as e:
                 logger.error(f"Failed to register developer: {e}")
                 raise HTTPException(status_code=500, detail=str(e))

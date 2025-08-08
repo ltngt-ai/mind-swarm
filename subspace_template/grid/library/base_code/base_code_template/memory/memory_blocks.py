@@ -1,4 +1,4 @@
-"""Memory block definitions for the agent memory system.
+"""Memory block definitions for the Cyber memory system.
 
 Provides the core data structures for symbolic memory representation.
 Each block represents a reference to content in the filesystem.
@@ -62,30 +62,25 @@ class FileMemoryBlock(MemoryBlock):
         self.type = MemoryType.FILE
         
         # Generate unified ID
-        base_id = UnifiedMemoryID.create_from_path(self.location, MemoryType.FILE)
+        self.id = UnifiedMemoryID.create_from_path(self.location, MemoryType.FILE)
         
-        # Add line range to semantic path if specified
+        # Add line range suffix if specified
         if self.start_line is not None and self.end_line is not None:
-            parts = UnifiedMemoryID.parse(base_id)
-            semantic_path = f"{parts['semantic_path']}/lines-{self.start_line}-{self.end_line}"
+            parts = UnifiedMemoryID.parse(self.id)
+            path_with_lines = f"{parts['path']}/lines-{self.start_line}-{self.end_line}"
             self.id = UnifiedMemoryID.create(
-                MemoryType.FILE, 
-                parts['namespace'], 
-                semantic_path,
+                MemoryType.FILE,
+                path_with_lines,
                 f"{self.location}:{self.start_line}-{self.end_line}"
             )
-        else:
+        elif self.digest:
             # Add content hash if we have a digest
-            if self.digest:
-                parts = UnifiedMemoryID.parse(base_id)
-                self.id = UnifiedMemoryID.create(
-                    MemoryType.FILE,
-                    parts['namespace'],
-                    parts['semantic_path'],
-                    self.digest
-                )
-            else:
-                self.id = base_id
+            parts = UnifiedMemoryID.parse(self.id)
+            self.id = UnifiedMemoryID.create(
+                MemoryType.FILE,
+                parts['path'],
+                self.digest
+            )
 
 
 @dataclass
@@ -114,7 +109,7 @@ class StatusMemoryBlock(MemoryBlock):
         self.type = MemoryType.STATUS
         
         # Status is always in system namespace
-        self.id = UnifiedMemoryID.create(MemoryType.STATUS, 'system', self.status_type)
+        self.id = UnifiedMemoryID.create(MemoryType.STATUS, f"personal/system/{self.status_type}")
 
 
 @dataclass
@@ -144,14 +139,13 @@ class TaskMemoryBlock(MemoryBlock):
         )
         self.type = MemoryType.TASK
         
-        # Create semantic path from project and task ID
+        # Create path from project and task ID
         if self.project:
-            semantic_path = f"{self.project}/{self.task_id}"
+            path = f"personal/tasks/{self.project}/{self.task_id}"
         else:
-            semantic_path = f"general/{self.task_id}"
+            path = f"personal/tasks/general/{self.task_id}"
         
-        # Tasks are in personal namespace
-        self.id = UnifiedMemoryID.create(MemoryType.TASK, 'personal', semantic_path)
+        self.id = UnifiedMemoryID.create(MemoryType.TASK, path)
         
         if self.dependencies is None:
             self.dependencies = []
@@ -185,16 +179,20 @@ class KnowledgeMemoryBlock(MemoryBlock):
         )
         self.type = MemoryType.KNOWLEDGE
         
-        # Create semantic path from topic/subtopic
-        semantic_path = self.topic
-        if self.subtopic:
-            semantic_path = f"{self.topic}/{self.subtopic}"
+        # Create path from location and topic/subtopic
+        if '/library/' in self.location:
+            if self.subtopic:
+                path = f"grid/library/{self.topic}/{self.subtopic}"
+            else:
+                path = f"grid/library/{self.topic}"
+        else:
+            # ROM or other knowledge
+            if self.subtopic:
+                path = f"personal/knowledge/{self.topic}/{self.subtopic}"
+            else:
+                path = f"personal/knowledge/{self.topic}"
         
-        # Determine namespace from location
-        namespace = 'library' if '/library/' in self.location else 'rom'
-        
-        # Create ID with content identifier
-        self.id = UnifiedMemoryID.create(MemoryType.KNOWLEDGE, namespace, semantic_path)
+        self.id = UnifiedMemoryID.create(MemoryType.KNOWLEDGE, path)
 
 
 
@@ -224,12 +222,11 @@ class ContextMemoryBlock(MemoryBlock):
         )
         self.type = MemoryType.CONTEXT
         
-        # Create semantic path with context type and timestamp
-        semantic_path = f"{self.context_type}/{self.timestamp.strftime('%Y%m%d-%H%M%S')}"
+        # Create path with context type and timestamp
+        path = f"personal/analysis/{self.context_type}/{self.timestamp.strftime('%Y%m%d-%H%M%S')}"
         
-        # Context is derived, so in analysis namespace
         # Include content hash based on summary
-        self.id = UnifiedMemoryID.create(MemoryType.CONTEXT, 'analysis', semantic_path, self.summary)
+        self.id = UnifiedMemoryID.create(MemoryType.CONTEXT, path, self.summary)
         
         if self.related_ids is None:
             self.related_ids = []
@@ -278,7 +275,7 @@ class CycleStateMemoryBlock(MemoryBlock):
     current_actions: Optional[List[Dict[str, Any]]] = None
     last_observe_time: Optional[datetime] = None  # Track when observe last ran
     confidence: float = 1.0
-    priority: Priority = Priority.LOW  # Internal bookkeeping, not actionable for agent
+    priority: Priority = Priority.LOW  # Internal bookkeeping, not actionable for Cyber
     timestamp: Optional[datetime] = None
     expiry: Optional[datetime] = None
     pinned: bool = False
@@ -297,7 +294,7 @@ class CycleStateMemoryBlock(MemoryBlock):
         self.type = MemoryType.CYCLE_STATE
         
         # Cycle state is a singleton in system namespace
-        self.id = UnifiedMemoryID.create(MemoryType.CYCLE_STATE, 'system', 'current')
+        self.id = UnifiedMemoryID.create(MemoryType.CYCLE_STATE, "personal/system/cycle_state")
 
 
 # IdentityMemoryBlock removed - use pinned FileMemoryBlock for identity.json instead

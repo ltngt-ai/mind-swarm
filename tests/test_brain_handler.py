@@ -54,7 +54,7 @@ async def test_brain_handler():
     request_text = json.dumps(arithmetic_request) + "\n<<<END_THOUGHT>>>"
     
     try:
-        response = await brain.process_thinking_request("test-agent-001", request_text)
+        response = await brain.process_thinking_request("test-Cyber-001", request_text)
         print(f"Response:\n{response}\n")
     except Exception as e:
         print(f"Error: {e}\n")
@@ -85,7 +85,7 @@ async def test_brain_handler():
     request_text = json.dumps(observe_request) + "\n<<<END_THOUGHT>>>"
     
     try:
-        response = await brain.process_thinking_request("test-agent-001", request_text)
+        response = await brain.process_thinking_request("test-Cyber-001", request_text)
         print(f"Response:\n{response}\n")
     except Exception as e:
         print(f"Error: {e}\n")
@@ -95,7 +95,7 @@ async def test_brain_handler():
     legacy_request = "What is the capital of France?\n<<<END_THOUGHT>>>"
     
     try:
-        response = await brain.process_thinking_request("test-agent-001", legacy_request)
+        response = await brain.process_thinking_request("test-Cyber-001", legacy_request)
         print(f"Response:\n{response}\n")
     except Exception as e:
         print(f"Error: {e}\n")

@@ -1,7 +1,7 @@
 """Dynamic DSPy Signature Server - Server-side brain handler with dynamic signature creation.
 
 This module provides the server-side functionality for creating and executing
-DSPy signatures dynamically based on generic protocol requests from agents.
+DSPy signatures dynamically based on generic protocol requests from Cybers.
 """
 
 import json
@@ -194,7 +194,7 @@ class DynamicBrainHandler:
             lm_config: Language model configuration for DSPy
             cache_size: Maximum number of signatures to cache
             cache_ttl: Cache time-to-live in seconds
-            model_switch_callback: Optional callback when model switches (agent_id, model_id, max_context_length)
+            model_switch_callback: Optional callback when model switches (cyber_id, model_id, max_context_length)
         """
         self.ai_service = ai_service
         self.lm_config = lm_config
@@ -212,11 +212,11 @@ class DynamicBrainHandler:
         self.lm = configure_dspy_for_mind_swarm(self.lm_config)
         self.logger.info(f"Configured DSPy with Mind-Swarm LM: {self.lm_config.get('model')}")
     
-    async def process_thinking_request(self, agent_id: str, request_text: str) -> str:
-        """Process a thinking request from an agent.
+    async def process_thinking_request(self, cyber_id: str, request_text: str) -> str:
+        """Process a thinking request from an Cyber.
         
         Args:
-            agent_id: The agent making the request
+            cyber_id: The Cyber making the request
             request_text: The thinking request in JSON format
             
         Returns:
@@ -226,7 +226,7 @@ class DynamicBrainHandler:
         if _has_brain_monitor:
             try:
                 monitor = get_brain_monitor()
-                await monitor.on_brain_request(agent_id, request_text)
+                await monitor.on_brain_request(cyber_id, request_text)
             except Exception as e:
                 self.logger.debug(f"Failed to emit brain activity: {e}")
         
@@ -291,7 +291,7 @@ class DynamicBrainHandler:
                             "cached": cached is not None,
                             "execution_time": time.time(),
                             "instruction": signature_spec['instruction'][:100],
-                            "agent_id": agent_id,
+                            "cyber_id": cyber_id,
                             "retry_count": retry_count,
                             "model_used": self.lm.model if hasattr(self, 'lm') else None,
                             "max_context_length": self._get_current_context_length()
@@ -299,7 +299,7 @@ class DynamicBrainHandler:
                         "timestamp": time.time()
                     }
                     
-                    self.logger.info(f"Successfully processed request {request_id} for agent {agent_id}")
+                    self.logger.info(f"Successfully processed request {request_id} for Cyber {cyber_id}")
                     return json.dumps(response_data, indent=2) + "\n<<<THOUGHT_COMPLETE>>>"
                     
                 except Exception as e:
@@ -310,10 +310,10 @@ class DynamicBrainHandler:
                     if "rate limit" in error_str.lower() or "429" in error_str:
                         retry_count += 1
                         if retry_count < max_retries:
-                            self.logger.warning(f"Rate limit hit for agent {agent_id}, attempt {retry_count}/{max_retries}")
+                            self.logger.warning(f"Rate limit hit for Cyber {cyber_id}, attempt {retry_count}/{max_retries}")
                             
                             # Try to switch to a different model
-                            await self._switch_to_alternative_model(agent_id)
+                            await self._switch_to_alternative_model(cyber_id)
                             
                             # Brief delay before retry
                             await asyncio.sleep(1.0)
@@ -324,7 +324,7 @@ class DynamicBrainHandler:
                     return self._create_error_response(request_id, f"Signature execution failed: {e}")
             
             # All retries exhausted
-            self.logger.error(f"All retries exhausted for agent {agent_id}: {last_error}")
+            self.logger.error(f"All retries exhausted for Cyber {cyber_id}: {last_error}")
             return self._create_error_response(request_id, f"Rate limit persists after {max_retries} retries: {last_error}")
             
         except json.JSONDecodeError as e:
@@ -389,11 +389,11 @@ class DynamicBrainHandler:
         # Fallback to lm_config max_tokens
         return self.lm_config.get('max_tokens', 4096)
     
-    async def _switch_to_alternative_model(self, agent_id: str):
+    async def _switch_to_alternative_model(self, cyber_id: str):
         """Switch to an alternative model when rate limited.
         
         Args:
-            agent_id: The agent requesting the switch
+            cyber_id: The Cyber requesting the switch
         """
         from mind_swarm.ai.model_selector import ModelSelector, SelectionStrategy
         from mind_swarm.ai.model_registry import model_registry
@@ -409,7 +409,7 @@ class DynamicBrainHandler:
             )
             
             if new_model_info and new_model_info.id != getattr(self.lm, 'model', None):
-                self.logger.info(f"Switching from {getattr(self.lm, 'model', 'unknown')} to {new_model_info.id} for agent {agent_id}")
+                self.logger.info(f"Switching from {getattr(self.lm, 'model', 'unknown')} to {new_model_info.id} for Cyber {cyber_id}")
                 
                 # Reconfigure DSPy with the new model
                 config = {
@@ -424,10 +424,10 @@ class DynamicBrainHandler:
                 
                 # Notify about model switch with actual context length
                 if self.model_switch_callback:
-                    await self.model_switch_callback(agent_id, new_model_info.id, new_model_info.context_length)
+                    await self.model_switch_callback(cyber_id, new_model_info.id, new_model_info.context_length)
             else:
                 # No alternative curated model, fall back to local default
-                self.logger.warning(f"No alternative curated model for agent {agent_id}, falling back to local default")
+                self.logger.warning(f"No alternative curated model for Cyber {cyber_id}, falling back to local default")
                 
                 # Get the default preset (local model)
                 default_preset = preset_manager.get_preset("default")
@@ -441,17 +441,17 @@ class DynamicBrainHandler:
                     }
                     self.lm = configure_dspy_for_mind_swarm(config)
                     self.lm_config.update(config)
-                    self.logger.info(f"Switched to local model {default_preset.model} for agent {agent_id}")
+                    self.logger.info(f"Switched to local model {default_preset.model} for Cyber {cyber_id}")
                     
                     # Notify about model switch with local model's context length
                     if self.model_switch_callback:
                         # Look up the local model in registry to get its actual context length
                         local_model_info = model_registry.get_model(default_preset.model)
                         if local_model_info:
-                            await self.model_switch_callback(agent_id, default_preset.model, local_model_info.context_length)
+                            await self.model_switch_callback(cyber_id, default_preset.model, local_model_info.context_length)
                         else:
                             # Fallback to max_tokens from preset config
-                            await self.model_switch_callback(agent_id, default_preset.model, default_preset.max_tokens)
+                            await self.model_switch_callback(cyber_id, default_preset.model, default_preset.max_tokens)
                 
         except Exception as e:
-            self.logger.error(f"Error switching models for agent {agent_id}: {e}")
+            self.logger.error(f"Error switching models for Cyber {cyber_id}: {e}")

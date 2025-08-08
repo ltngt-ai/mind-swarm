@@ -1,4 +1,4 @@
-"""Handlers for I/O agent body files."""
+"""Handlers for I/O Cyber body files."""
 
 import asyncio
 import json
@@ -13,16 +13,16 @@ from mind_swarm.utils.logging import logger
 
 
 class NetworkBodyHandler:
-    """Handles network requests from I/O agents through the network body file."""
+    """Handles network requests from I/O Cybers through the network body file."""
     
-    def __init__(self, agent_name: str, network_file: Path):
+    def __init__(self, cyber_name: str, network_file: Path):
         """Initialize the network handler.
         
         Args:
-            agent_name: Name of the I/O agent
+            cyber_name: Name of the I/O Cyber
             network_file: Path to the network body file
         """
-        self.agent_name = agent_name
+        self.cyber_name = cyber_name
         self.network_file = network_file
         self.client = httpx.AsyncClient(
             timeout=httpx.Timeout(30.0),
@@ -44,7 +44,7 @@ class NetworkBodyHandler:
             request = json.loads(content)
             request_id = request.get("request_id", "unknown")
             
-            logger.info(f"Network request from {self.agent_name}: {request.get('method')} {request.get('url')}")
+            logger.info(f"Network request from {self.cyber_name}: {request.get('method')} {request.get('url')}")
             
             # Validate request
             if not request.get("url"):
@@ -80,7 +80,7 @@ class NetworkBodyHandler:
                     "timestamp": datetime.now().isoformat()
                 }
                 
-                logger.info(f"Network response for {self.agent_name}: {response.status_code} from {url}")
+                logger.info(f"Network response for {self.cyber_name}: {response.status_code} from {url}")
                 
                 return json.dumps(result, indent=2)
                 
@@ -106,7 +106,7 @@ class NetworkBodyHandler:
                 "timestamp": datetime.now().isoformat()
             })
         except Exception as e:
-            logger.error(f"Error handling network request for {self.agent_name}: {e}")
+            logger.error(f"Error handling network request for {self.cyber_name}: {e}")
             return json.dumps({
                 "error": f"Internal error: {str(e)}",
                 "status": 500,
@@ -119,16 +119,16 @@ class NetworkBodyHandler:
 
 
 class UserIOBodyHandler:
-    """Handles user I/O requests from I/O agents through the user_io body file."""
+    """Handles user I/O requests from I/O Cybers through the user_io body file."""
     
-    def __init__(self, agent_name: str, user_io_file: Path):
+    def __init__(self, cyber_name: str, user_io_file: Path):
         """Initialize the user I/O handler.
         
         Args:
-            agent_name: Name of the I/O agent
+            cyber_name: Name of the I/O Cyber
             user_io_file: Path to the user_io body file
         """
-        self.agent_name = agent_name
+        self.cyber_name = cyber_name
         self.user_io_file = user_io_file
         self.sessions: Dict[str, Dict[str, Any]] = {}
         
@@ -147,7 +147,7 @@ class UserIOBodyHandler:
             session_id = message.get("session_id", "default")
             message_type = message.get("type", "response")
             
-            logger.info(f"User I/O from {self.agent_name}: type={message_type}, session={session_id}")
+            logger.info(f"User I/O from {self.cyber_name}: type={message_type}, session={session_id}")
             
             # For now, just acknowledge the message
             # In the future, this would interface with actual user connections
@@ -164,7 +164,7 @@ class UserIOBodyHandler:
                 "timestamp": datetime.now().isoformat()
             })
         except Exception as e:
-            logger.error(f"Error handling user I/O for {self.agent_name}: {e}")
+            logger.error(f"Error handling user I/O for {self.cyber_name}: {e}")
             return json.dumps({
                 "error": f"Internal error: {str(e)}",
                 "status": "error", 

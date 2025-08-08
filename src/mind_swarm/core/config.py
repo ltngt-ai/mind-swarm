@@ -21,9 +21,9 @@ class SubspaceConfig(BaseModel):
     """Configuration for the subspace environment."""
     
     root_path: Path = Field(default=Path("./subspace"), description="Root path for subspace")
-    max_agents: int = Field(default=5, description="Maximum number of concurrent agents")
-    agent_memory_limit_mb: int = Field(default=512, description="Memory limit per agent in MB")
-    agent_cpu_limit_percent: float = Field(default=20.0, description="CPU limit per agent as percentage")
+    max_agents: int = Field(default=5, description="Maximum number of concurrent Cybers")
+    agent_memory_limit_mb: int = Field(default=512, description="Memory limit per Cyber in MB")
+    agent_cpu_limit_percent: float = Field(default=20.0, description="CPU limit per Cyber as percentage")
 
 
 class Settings(BaseModel):
@@ -51,7 +51,7 @@ class Settings(BaseModel):
                 anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"),
             ),
             subspace=SubspaceConfig(
-                root_path=Path(os.getenv("SUBSPACE_ROOT", "/home/deano/projects/mind-swarm/subspace")),
+                root_path=Path(os.getenv("SUBSPACE_ROOT", "/personal/deano/projects/mind-swarm/subspace")),
                 max_agents=int(os.getenv("MAX_AGENTS", "5")),
                 agent_memory_limit_mb=int(os.getenv("AGENT_MEMORY_LIMIT_MB", "512")),
                 agent_cpu_limit_percent=float(os.getenv("AGENT_CPU_LIMIT_PERCENT", "20.0")),

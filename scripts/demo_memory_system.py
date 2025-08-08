@@ -22,20 +22,20 @@ def demo_memory_system():
     """Demonstrate the memory system capabilities."""
     print("=== Mind-Swarm Memory System Demo ===\n")
     
-    # Create temporary directories to simulate agent environment
+    # Create temporary directories to simulate Cyber environment
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)
         
         # Set up directory structure
-        agent_home = tmpdir / "agents" / "agent-001"
+        cyber_personal = tmpdir / "cybers" / "Cyber-001"
         shared_dir = tmpdir / "shared"
-        inbox = agent_home / "inbox"
+        inbox = cyber_personal / "inbox"
         
-        for d in [agent_home, shared_dir, inbox, shared_dir / "plaza", shared_dir / "knowledge"]:
+        for d in [cyber_personal, shared_dir, inbox, shared_dir / "community", shared_dir / "knowledge"]:
             d.mkdir(parents=True, exist_ok=True)
         
         # Create some test files
-        code_file = agent_home / "project.py"
+        code_file = cyber_personal / "project.py"
         code_file.write_text("""def hello_world():
     print("Hello from the Mind Swarm!")
     
@@ -47,7 +47,7 @@ def process_data(data):
         msg_file = inbox / "msg001.msg"
         msg_data = {
             "from": "subspace",
-            "to": "agent-001",
+            "to": "Cyber-001",
             "subject": "Analyze the project code",
             "content": "Please analyze the project.py file and explain what it does.",
             "timestamp": datetime.now().isoformat()
@@ -68,7 +68,7 @@ def process_data(data):
         
         # Initialize environment scanner
         scanner = EnvironmentScanner(
-            home_path=agent_home,
+            home_path=cyber_personal,
             shared_path=shared_dir
         )
         

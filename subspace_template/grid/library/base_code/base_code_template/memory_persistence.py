@@ -1,4 +1,4 @@
-"""Memory persistence module for saving and restoring agent memory snapshots.
+"""Memory persistence module for saving and restoring Cyber memory snapshots.
 
 This module handles all memory snapshot operations, separating persistence
 logic from the core cognitive loop.
@@ -16,7 +16,7 @@ from .memory import (
     CycleStateMemoryBlock, KnowledgeMemoryBlock
 )
 
-logger = logging.getLogger("agent.memory_persistence")
+logger = logging.getLogger("Cyber.memory_persistence")
 
 
 class DateTimeEncoder(json.JSONEncoder):

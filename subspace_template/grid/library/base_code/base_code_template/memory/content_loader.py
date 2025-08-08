@@ -17,7 +17,7 @@ from .memory_blocks import (
     KnowledgeMemoryBlock, ObservationMemoryBlock
 )
 
-logger = logging.getLogger("agent.memory.loader")
+logger = logging.getLogger("Cyber.memory.loader")
 
 
 class ContentCache:
@@ -66,7 +66,7 @@ class ContentLoader:
         """Initialize content loader.
         
         Args:
-            filesystem_root: Root directory of the agent's filesystem
+            filesystem_root: Root directory of the Cyber's filesystem
             cache_ttl: Cache time-to-live in seconds
         """
         self.filesystem_root = Path(filesystem_root)
