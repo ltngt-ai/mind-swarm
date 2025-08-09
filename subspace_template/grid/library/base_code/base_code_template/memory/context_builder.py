@@ -23,16 +23,13 @@ logger = logging.getLogger("Cyber.memory.context")
 class ContextBuilder:
     """Builds LLM context from symbolic memory blocks."""
     
-    def __init__(self, content_loader: ContentLoader, 
-                 include_metadata: bool = True):
+    def __init__(self, content_loader: ContentLoader):
         """Initialize context builder.
         
         Args:
             content_loader: Loader for fetching actual content
-            include_metadata: Whether to include metadata in context
         """
         self.content_loader = content_loader
-        self.include_metadata = include_metadata
     
     def build_context(self, selected_memories: List[MemoryBlock], 
                      format_type: str = "json") -> str:
@@ -77,22 +74,9 @@ class ContextBuilder:
                 if memory.priority != Priority.MEDIUM:
                     entry["priority"] = memory.priority.value
                 
-                # Add minimal metadata if needed
-                if self.include_metadata and memory.metadata:
-                    # Only include essential metadata
-                    essential_meta = {}
-                    if isinstance(memory, FileMemoryBlock) and memory.location != "<BOOT_ROM>":
-                        essential_meta["loc"] = memory.location
-                        # Check if it's a message file
-                        if memory.metadata.get('file_type') == 'message':
-                            essential_meta["from"] = memory.metadata.get('from_agent', 'unknown')
-                            if not memory.metadata.get('read', False):
-                                essential_meta["unread"] = True
-                    elif isinstance(memory, TaskMemoryBlock):
-                        essential_meta["status"] = memory.status
-                    
-                    if essential_meta:
-                        entry["meta"] = essential_meta
+                # Metadata is for system use, not for Cyber's working memory
+                # The Cyber gets all needed info from the content and ID
+                # Exception: message sender is actually useful content, but include it in the content, not metadata
                 
                 context_entries.append(entry)
                 
@@ -105,6 +89,17 @@ class ContextBuilder:
                     "content": f"[Error loading content: {str(e)}]",
                     "error": True
                 })
+        
+        # Add system context at the beginning
+        from datetime import datetime
+        system_context = {
+            "id": "system:current_time",
+            "type": "system",
+            "content": f"Current time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        }
+        
+        # Insert system context at the beginning
+        context_entries.insert(0, system_context)
         
         return json.dumps(context_entries, indent=2)
     
@@ -307,8 +302,8 @@ class ContextBuilder:
         """
         try:
             content = self.content_loader.load_content(memory)
-            # Include metadata overhead if enabled
-            overhead = 50 if self.include_metadata else 20
+            # Simple overhead for JSON structure
+            overhead = 20
             return (len(content) // 4) + overhead
         except Exception:
             # Default estimate for errors

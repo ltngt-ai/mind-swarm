@@ -93,9 +93,10 @@ class KnowledgeManager:
             content = rom_item.get("content", "")
             
             # Create knowledge memory block that is pinned
+            # ROMs are just normal knowledge from the library, use their actual ID/path
             knowledge_memory = KnowledgeMemoryBlock(
                 topic=metadata.get("category", "general"),
-                location=rom_item.get("source", "ROM"),
+                location=f"/grid/library/knowledge/rom/{rom_item.get('id', 'unknown')}",  # Use actual path
                 subtopic=rom_item.get("id", ""),
                 relevance_score=1.0,  # ROM is always relevant
                 confidence=1.0,

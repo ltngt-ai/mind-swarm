@@ -71,7 +71,7 @@ class EnvironmentScanner:
         self.grid_path = Path(grid_path)
         
         # Directories to monitor
-        self.inbox_path = self.personal_path / "inbox"
+        self.inbox_path = self.personal_path / "comms" / "inbox"
         self.memory_path = self.personal_path / "memory"
         self.community_path = self.grid_path / "community"
         self.library_path = self.grid_path / "library"
@@ -413,15 +413,8 @@ class EnvironmentScanner:
         except Exception:
             pass
         
-        # Scan timing status
-        memories.append(StatusMemoryBlock(
-            status_type="last_scan",
-            value={
-                "timestamp": self.last_scan.isoformat(),
-                "seconds_ago": (datetime.now() - self.last_scan).total_seconds()
-            },
-            priority=Priority.LOW
-        ))
+        # Removed last_scan status as it's not useful for decision-making
+        # The cyber doesn't need to know when the last scan was done
         
         return memories
     

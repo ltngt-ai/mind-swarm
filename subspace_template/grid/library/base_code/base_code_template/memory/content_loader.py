@@ -168,11 +168,9 @@ class ContentLoader:
     
     def format_observation(self, memory: ObservationMemoryBlock) -> str:
         """Format an observation for context."""
-        return (
-            f"[OBSERVATION: {memory.observation_type}]\n"
-            f"Path: {memory.path}\n"
-            f"Time: {memory.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
-        )
+        # Observations are just notifications that something changed
+        # All the info is already in the ID
+        return "Memory has changed"
     
     def _resolve_path(self, path_str: str) -> Path:
         """Resolve a path relative to filesystem root."""

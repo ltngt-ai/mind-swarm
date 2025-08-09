@@ -235,20 +235,23 @@ class UnifiedMemoryID:
         if path_str.startswith('/'):
             path_str = path_str[1:]
         
-        # Create observation path
+        # Use the actual path for the observation ID - don't inject obs_type into path
         if path_str.startswith('personal/') or path_str.startswith('grid/'):
-            # Path already has namespace prefix
-            obs_path = f"{obs_type}/{Path(path_str).name}"
-            if path_str.startswith('grid/'):
-                obs_path = f"grid/{obs_type}/{Path(path_str).name}"
-            else:
-                obs_path = f"personal/{obs_type}/{Path(path_str).name}"
+            # Path already has namespace prefix, use as-is
+            obs_path = path_str
         else:
             # Determine from path content
             if '/grid/' in path_str:
-                obs_path = f"grid/{obs_type}/{Path(path_str).name}"
+                # Extract the grid-relative path
+                grid_idx = path_str.find('grid/')
+                obs_path = path_str[grid_idx:]
+            elif '/personal/' in path_str:
+                # Extract the personal-relative path
+                personal_idx = path_str.find('personal/')
+                obs_path = path_str[personal_idx:]
             else:
-                obs_path = f"personal/{obs_type}/{Path(path_str).name}"
+                # Default to personal namespace
+                obs_path = f"personal/{path_str}"
         
         # Create content hash from identifying information
         content = f"{obs_type}:{path_str}"

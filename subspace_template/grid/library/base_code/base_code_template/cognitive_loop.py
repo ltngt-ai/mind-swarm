@@ -56,8 +56,8 @@ class CognitiveLoop:
         
         # Core file interfaces - define these first
         self.brain_file = self.personal / "brain"
-        self.inbox_dir = self.personal / "inbox"
-        self.outbox_dir = self.personal / "outbox"
+        self.inbox_dir = self.personal / "comms" / "inbox"
+        self.outbox_dir = self.personal / "comms" / "outbox"
         self.memory_dir = self.personal / "memory"
         
         # Initialize all managers
@@ -130,6 +130,30 @@ class CognitiveLoop:
         
         # Add identity to memory (pinned so always visible)
         self._init_identity_memory()
+        
+        # Ensure processed_observations.json exists and is in memory
+        self._init_processed_observations()
+    
+    def _init_processed_observations(self):
+        """Ensure processed_observations.json exists and is in memory."""
+        processed_file = self.memory_dir / "processed_observations.json"
+        
+        # Create file if it doesn't exist
+        if not processed_file.exists():
+            with open(processed_file, 'w') as f:
+                json.dump([], f, indent=2)
+            logger.info("Created empty processed_observations.json")
+        
+        # Add to memory as pinned so Cyber always sees it
+        processed_memory = FileMemoryBlock(
+            location=str(processed_file),
+            priority=Priority.LOW,
+            confidence=1.0,
+            pinned=True,  # Always in working memory
+            metadata={"file_type": "processed_observations_log"}
+        )
+        self.memory_system.add_memory(processed_memory)
+        logger.info("Added processed_observations.json to pinned memory")
     
     def _init_identity_memory(self):
         """Add Cyber identity file to working memory as pinned."""
@@ -386,7 +410,25 @@ class CognitiveLoop:
         with open(orientation_file, 'w') as f:
             json.dump(orientation_response, f, indent=2)
         
-        # Create FileMemoryBlock for the orientation
+        # Create an ObservationMemoryBlock for the orientation
+        # This allows the cyber to observe and reflect on its own analysis patterns
+        orientation_observation = ObservationMemoryBlock(
+            observation_type="self_orientation",
+            path=str(orientation_file),
+            priority=Priority.MEDIUM,  # Medium priority so it doesn't dominate immediate attention
+            confidence=1.0,
+            metadata={
+                "file_type": "orientation",
+                "cycle_count": self.cycle_count,
+                "timestamp": timestamp.isoformat()
+            }
+        )
+        
+        # Add observation to memory system
+        self.memory_system.add_memory(orientation_observation)
+        logger.info(f"💭 Orientation stored as observation: {orientation_file.name}")
+        
+        # Also create FileMemoryBlock for immediate access
         orientation_memory = FileMemoryBlock(
             location=str(orientation_file),
             priority=Priority.HIGH,
@@ -396,7 +438,6 @@ class CognitiveLoop:
         
         # Add to working memory
         self.memory_system.add_memory(orientation_memory)
-        logger.info(f"💭 Orientation stored: {orientation_file.name}")
         
         # Store just the file reference in cycle state
         self._update_cycle_state(current_orientation_id=orientation_memory.id)
@@ -714,6 +755,9 @@ class CognitiveLoop:
                     logger.info(f"  - Removed: {obs_id}")
                 except Exception as e:
                     logger.warning(f"  - Failed to remove {obs_id}: {e}")
+            
+            # Also remove from processed_observations.json
+            self._remove_obsolete_from_processed(obsolete_observations)
         
         # Check if there's actually a memory to retrieve
         if not memory_id:
@@ -732,6 +776,7 @@ class CognitiveLoop:
         
         # Only record if this is actually an observation (not a file or other memory type)
         if memory_id.startswith("observation:"):
+            logger.info(f"Recording processed observation: {memory_id}")
             self._record_processed_observation(memory_id, observation)
         else:
             logger.debug(f"Not recording {memory_id} as it's not an observation")
@@ -762,16 +807,16 @@ class CognitiveLoop:
             else:
                 processed = []
             
-            # Add new record
+            # Add new record - simplified without redundant information
             record = {
                 "memory_id": memory_id,
-                "observation_type": observation.get("observation_type", observation.get("type", "unknown")),
-                "processed_at": datetime.now().isoformat(),
-                "cycle_count": self.cycle_count,
-                "path": observation.get("path", "")
+                "processed_at": datetime.now().isoformat()
             }
             processed.append(record)
-            logger.info(f"Recorded processed observation: {memory_id} ({record['observation_type']})")
+            
+            # Extract type from observation for logging only
+            obs_type = observation.get("observation_type", observation.get("type", "unknown"))
+            logger.info(f"Recorded processed observation: {memory_id} ({obs_type})")
             
             # Keep only last 100 records to avoid unbounded growth
             if len(processed) > 100:
@@ -780,6 +825,8 @@ class CognitiveLoop:
             # Write back
             with open(processed_file, 'w') as f:
                 json.dump(processed, f, indent=2)
+            
+            logger.info(f"Wrote {len(processed)} records to processed_observations.json")
             
             # Add a PINNED FileMemoryBlock for this file so the Cyber always sees it
             processed_memory = FileMemoryBlock(
@@ -793,6 +840,54 @@ class CognitiveLoop:
             
         except Exception as e:
             logger.error(f"Failed to record processed observation: {e}")
+    
+    def _remove_obsolete_from_processed(self, obsolete_ids: List[str]):
+        """Remove obsolete observations from the processed_observations.json file."""
+        try:
+            processed_file = self.memory_dir / "processed_observations.json"
+            
+            if not processed_file.exists():
+                return
+            
+            # Load existing records
+            try:
+                with open(processed_file, 'r') as f:
+                    content = f.read().strip()
+                    if content:
+                        processed = json.loads(content)
+                    else:
+                        processed = []
+            except (json.JSONDecodeError, ValueError) as e:
+                logger.warning(f"Invalid JSON in processed_observations.json: {e}")
+                return
+            
+            # Filter out obsolete observations
+            original_count = len(processed)
+            processed = [
+                record for record in processed 
+                if record.get("memory_id") not in obsolete_ids
+            ]
+            
+            removed_count = original_count - len(processed)
+            if removed_count > 0:
+                logger.info(f"Removed {removed_count} obsolete observations from processed_observations.json")
+                
+                # Write back the filtered list
+                with open(processed_file, 'w') as f:
+                    json.dump(processed, f, indent=2)
+                
+                # Update the FileMemoryBlock for this file
+                processed_memory = FileMemoryBlock(
+                    location=str(processed_file),
+                    priority=Priority.LOW,
+                    confidence=1.0,
+                    pinned=True,  # Always in working memory
+                    metadata={"file_type": "processed_observations_log"}
+                )
+                self.memory_system.add_memory(processed_memory)
+            
+        except Exception as e:
+            logger.error(f"Failed to remove obsolete observations from processed file: {e}")
     
     async def _build_decision_context(self, orientation: Dict[str, Any]) -> str:
         """Build context for decision making."""

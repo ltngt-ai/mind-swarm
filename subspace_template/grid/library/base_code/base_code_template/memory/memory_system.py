@@ -44,7 +44,7 @@ class MemorySystem:
         
         # Initialize components
         self._content_loader = ContentLoader(filesystem_root, cache_ttl)
-        self._context_builder = ContextBuilder(self._content_loader, include_metadata=True)
+        self._context_builder = ContextBuilder(self._content_loader)
         self._memory_manager = WorkingMemoryManager(max_tokens)
         self._memory_selector = MemorySelector(self._context_builder)
         

@@ -302,15 +302,12 @@ Always start your output with [[ ## reasoning ## ]]
                 }
             
             elif file_path.exists():
-                # Generic file reading
-                content = file_path.read_text()
+                # Observation is just a notification that something changed
+                # All info is already in the observation ID
                 return {
-                    "type": "FILE_FOCUS",
-                    "id": obs.id,  # Include the memory ID
-                    "observation_type": obs.observation_type,
-                    "path": str(file_path),
-                    "content": content,
-                    "metadata": obs.metadata,
+                    "type": "OBSERVATION_NOTICE",
+                    "id": obs.id,
+                    "notification": "Memory has changed",
                     "observe_reasoning": reasoning
                 }
             else:
