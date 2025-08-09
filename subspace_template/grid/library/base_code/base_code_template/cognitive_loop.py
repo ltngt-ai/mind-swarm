@@ -47,7 +47,7 @@ class CognitiveLoop:
             cyber_id: The Cyber's identifier
             personal: Path to Cyber's personal directory
             max_context_tokens: Maximum tokens for LLM context
-            cyber_type: Type of Cyber (general, io_gateway, etc.)
+            cyber_type: Type of Cyber (general, io_cyber, etc.)
         """
         self.cyber_id = cyber_id
         self.personal = Path(personal)

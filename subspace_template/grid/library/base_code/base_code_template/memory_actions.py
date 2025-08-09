@@ -468,15 +468,37 @@ class SearchMemoryAction(Action):
                             # Skip files that can't be read as text
                             pass
             
-            # Create observation about search
+            # Create observation about search - write results to file
             if memory_system:
+                from datetime import datetime
+                import json
+                
+                # Write search results to file
+                obs_dir = Path("/personal/memory/observations/searches")
+                obs_dir.mkdir(parents=True, exist_ok=True)
+                
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:20]
+                filename = f"search_{timestamp}.json"
+                filepath = obs_dir / filename
+                
+                search_data = {
+                    "observation_type": "memory_search",
+                    "timestamp": datetime.now().isoformat(),
+                    "query": query,
+                    "scope": scope,
+                    "result_count": len(results),
+                    "results": results[:max_results]
+                }
+                
+                with open(filepath, 'w') as f:
+                    json.dump(search_data, f, indent=2, default=str)
+                
                 obs = ObservationMemoryBlock(
                     observation_type="memory_search",
-                    path="search_results",
+                    path=str(filepath),  # Path to actual file
                     priority=Priority.LOW,
                     metadata={
                         "query": query,
-                        "scope": scope,
                         "result_count": len(results)
                     }
                 )
@@ -627,14 +649,35 @@ class ManageMemoryAction(Action):
                     error=f"Unknown operation: {operation}. Must be one of: set_priority, pin, unpin, forget"
                 )
             
-            # Create observation about the management action
+            # Create observation about the management action - write to file
+            from datetime import datetime
+            import json
+            
+            obs_dir = Path("/personal/memory/observations/management")
+            obs_dir.mkdir(parents=True, exist_ok=True)
+            
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:20]
+            filename = f"manage_{timestamp}_{operation}.json"
+            filepath = obs_dir / filename
+            
+            manage_data = {
+                "observation_type": "memory_managed",
+                "timestamp": datetime.now().isoformat(),
+                "memory_id": memory_id,
+                "operation": operation,
+                "result": result
+            }
+            
+            with open(filepath, 'w') as f:
+                json.dump(manage_data, f, indent=2, default=str)
+            
             obs = ObservationMemoryBlock(
                 observation_type="memory_managed",
-                path=memory_id,
+                path=str(filepath),  # Path to actual file
                 priority=MemoryPriority.LOW,
                 metadata={
                     "operation": operation,
-                    "result": result
+                    "memory_id": memory_id
                 }
             )
             memory_system.add_memory(obs)

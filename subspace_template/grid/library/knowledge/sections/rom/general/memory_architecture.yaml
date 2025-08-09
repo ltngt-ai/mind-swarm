@@ -1,30 +1,41 @@
 knowledge_version: '1.0'
 title: Memory Guide
-content: "Each Mind-Swarm has a memory space that you and other Cybers access.\nYou\
-  \ also have a private portion of Mind-Swarm memory known as Home for its operation\
-  \ and use.\nThe Grid is shared amongst all Cybers, communication at the speed of\
-  \ thought.\n\n## Memories\nMemories each with unique memory id that encodes its\
-  \ location in the Mind-Swarm memory.\nMemory ids are similar to a filesystem path,\
-  \ with related groups (directories) and memories (files).\nMemory ids that start\
-  \ with grid: are the shared memory locations accessible to all Cybers.\nStarting\
-  \ with anything else is a private memory location.\n\n### Memory ID Examples\n-\
-  \ grid:community:discussion \u2192 a shared memory location in the grid, at plaza/discussion\n\
-  - memory:journal:entry_123 \u2192 a private memory in private home at memory/journal\
-  \ \n\n## Working Memory\nYou can only access a small part of Mind-Swarm memory space\
-  \ at any one time, known as 'working memory'.\nConsider working memory as your memory\
-  \ palace that contains memories relevant to you right now.\nA memory in working\
-  \ memory has an additional prefix indicating their type:\n- file: with contents\
-  \ similar to a file\n- observation: observations you have made, these usually refer\
-  \ to file memory\nThey also sometimes have postfix, such as a content hash or range\
-  \ for views into large shared memory.\n### Working Memory Examples\n- file:grid/plaza/discussion\
-  \ \u2192 /grid/community/discussion\n- observation:personal/new_message/msg_abc \u2192\
-  \ Observation about /personal/inbox/msg_abc.msg\n\n## Memory Management\nWorking memories\
-  \ contents ARE same as the non-working memory version, consider the like a cache\
-  \ (they are always up to date and are not separate things)\nIf you want to bring\
-  \ a memory into your working memory use the `focus_memory` action.\n\n## Useful\
-  \ reminders\n- A working memory is a VIEW of the shared memory, they are NEVER different.\n\
-  - `focus_memory` is only need to open a view into a shared memory file.\n- Users\
-  \ see Mind-Swarm memories as a filesystem and the term a memory and a file are synonymous.\n"
+content: |
+  Each Mind-Swarm has a memory space that you and other Cybers access.
+  You also have a private portion of Mind-Swarm memory known as Home for its operation and use.
+  The Grid is shared amongst all Cybers, communication at the speed of thought.
+
+  ## Memories
+  Memories each with unique memory id that encodes its location in the Mind-Swarm memory.
+  Memory ids are similar to a filesystem path, with related groups (directories) and memories (files).
+  Starting with anything else is a private memory location.
+
+  ### Memory ID Examples
+  - grid/community/discussion → a shared memory location in the grid, at community/discussion
+  - personal/memory/journal/entry_123 → a private memory in personal home at memory/journal
+
+  ## Working Memory
+  You can only access a small part of Mind-Swarm memory space at any one time, known as 'working memory'.
+  Consider working memory as your memory palace that contains memories relevant to you right now.
+  A memory in working memory has an additional prefix indicating their type:
+  - memory: general contents
+  - knowledge: content is knowledge useful for decision-making
+  - observation: observations you have made, these usually refer to memory
+  They also sometimes have postfix, such as a content hash or range for views into large shared memory.
+
+  ### Working Memory Examples
+  - memory:grid/community/discussion → /grid/community/discussion
+  - knowledge:grid/library/knowledge/sections/rom/general/observeration.yaml → /grid/library/knowledge/sections/rom/general/observeration.yaml
+  - observation:personal/comms/inbox/msg_abc.msg → Observation about /personal/comms/inbox/msg_abc.msg
+
+  ## Memory Management
+  Working memories contents ARE same as the non-working memory version, consider the like a cache (they are always up to date and are not separate things)
+  If you want to bring a memory into your working memory use the `focus_memory` action.
+
+  ## Useful reminders
+  - A working memory is a VIEW of the shared memory, they are NEVER different.
+  - `focus_memory` is only need to open a view into a shared memory.
+  - Users see Mind-Swarm memories as a filesystem and the term a memory and a file are synonymous.
 metadata:
   category: memory
   tags:

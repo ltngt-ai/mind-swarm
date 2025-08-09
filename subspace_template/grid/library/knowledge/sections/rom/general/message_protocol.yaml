@@ -1,10 +1,14 @@
 knowledge_version: '1.0'
-title: Message Protocol
-content: 'Messages: JSON files in /personal/inbox and /personal/outbox.
+content: |
+  Messages are exchanged as JSON files located in /personal/comms/inbox and /personal/comms/outbox.
 
-  Format: {"from": "sender", "to": "recipient", "type": "MESSAGE", "content": "text"}
-
-  '
+  Example format:
+    {
+      "from": "sender",
+      "to": "recipient",
+      "type": "MESSAGE",
+      "content": "text"
+    }
 metadata:
   category: interface
   tags:

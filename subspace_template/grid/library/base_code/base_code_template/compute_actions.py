@@ -189,23 +189,48 @@ class ExecutePythonAction(Action):
             
             # Store in memory if requested
             if context.get("memory_manager") and (output_lines or result_vars):
+                # Write computation result to file
+                from pathlib import Path
+                from datetime import datetime
+                import json
+                
+                obs_dir = Path("/personal/memory/observations/computations")
+                obs_dir.mkdir(parents=True, exist_ok=True)
+                
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:20]
+                filename = f"compute_{timestamp}.json"
+                filepath = obs_dir / filename
+                
+                # Write complete computation result to file
+                compute_data = {
+                    "observation_type": "computation_result",
+                    "timestamp": datetime.now().isoformat(),
+                    "description": description,
+                    "code": code,
+                    "output": '\n'.join(output_lines),
+                    "variables": result_vars,
+                    "has_variables": bool(result_vars),
+                    "namespace": {k: v for k, v in namespace.items() 
+                                if k not in self.safe_builtins 
+                                and k not in self.safe_modules
+                                and not k.startswith('__')
+                                and self._is_safe_value(v, for_storage=True)},
+                    "execution_time": duration,
+                    "code_lines": len(code.strip().split('\n'))
+                }
+                
+                with open(filepath, 'w') as f:
+                    json.dump(compute_data, f, indent=2, default=str)
+                
+                # Create observation pointing to the file
                 memory_block = ObservationMemoryBlock(
                     observation_type="computation_result",
-                    path="computation",
+                    path=str(filepath),  # Path to the actual file
                     priority=Priority.MEDIUM,
                     metadata={
                         "description": description,
                         "result_summary": output_lines[0] if output_lines else 'Computed variables',
-                        "code": code if len(code) < 1000 else code[:1000] + "...",
-                        "output": '\n'.join(output_lines),
-                        "variables": result_vars,
-                        "has_variables": bool(result_vars),
-                        "namespace": {k: v for k, v in namespace.items() 
-                                    if k not in self.safe_builtins 
-                                    and k not in self.safe_modules
-                                    and not k.startswith('__')
-                                    and self._is_safe_value(v, for_storage=True)},
-                        "execution_time": duration
+                        "has_variables": bool(result_vars)
                     }
                 )
                 context["memory_manager"].add_memory(memory_block)

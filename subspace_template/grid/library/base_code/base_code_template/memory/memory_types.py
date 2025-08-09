@@ -16,7 +16,7 @@ class Priority(Enum):
 
 class MemoryType(Enum):
     """Types of memory blocks."""
-    FILE = "file"
+    FILE = "memory"
     STATUS = "status"
     TASK = "task"
     MESSAGE = "message"

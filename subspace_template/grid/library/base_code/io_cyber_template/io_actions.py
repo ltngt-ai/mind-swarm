@@ -6,15 +6,15 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-from .base_code_template.actions import Action, ActionResult, ActionStatus, Priority
-from .base_code_template.memory import TaskMemoryBlock
+from .base_code_template.actions import Action, ActionResult, ActionStatus
+from .base_code_template.memory import TaskMemoryBlock, Priority
 
 
 class MakeNetworkRequestAction(Action):
     """Make an HTTP request through the network body file."""
     
     def __init__(self):
-        super().__init__("make_network_request", "Make HTTP request to external URL", Priority.HIGH)
+        super().__init__("make_network_request", "Make HTTP request to external URL")
     
     async def execute(self, context: Dict[str, Any]) -> ActionResult:
         """Write network request to body file."""
@@ -114,7 +114,7 @@ class CheckNetworkResponseAction(Action):
     """Check if network response has arrived."""
     
     def __init__(self):
-        super().__init__("check_network_response", "Check for network response", Priority.HIGH)
+        super().__init__("check_network_response", "Check for network response")
     
     async def execute(self, context: Dict[str, Any]) -> ActionResult:
         """Check if response is available in network body file."""
@@ -253,7 +253,7 @@ class SendUserResponseAction(Action):
 # Register I/O Cyber actions
 def register_io_actions(registry):
     """Register all I/O Cyber actions."""
-    registry.register_action("io_gateway", "make_network_request", MakeNetworkRequestAction)
-    registry.register_action("io_gateway", "check_network_response", CheckNetworkResponseAction)
-    registry.register_action("io_gateway", "process_network_response", ProcessNetworkResponseAction)
-    registry.register_action("io_gateway", "send_user_response", SendUserResponseAction)
+    registry.register_action("io_cyber", "make_network_request", MakeNetworkRequestAction)
+    registry.register_action("io_cyber", "check_network_response", CheckNetworkResponseAction)
+    registry.register_action("io_cyber", "process_network_response", ProcessNetworkResponseAction)
+    registry.register_action("io_cyber", "send_user_response", SendUserResponseAction)

@@ -8,6 +8,7 @@ import logging
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Tuple
+import json
 
 from ..knowledge.knowledge_manager import KnowledgeManager
 from ..memory import ObservationMemoryBlock, Priority
@@ -338,6 +339,8 @@ class ActionCoordinator:
                              memory_manager: Any) -> List[ObservationMemoryBlock]:
         """Process action results and create memory observations.
         
+        All observations are backed by actual files in the filesystem.
+        
         Args:
             results: List of action results
             memory_manager: Memory manager for storing observations
@@ -347,21 +350,44 @@ class ActionCoordinator:
         """
         observations = []
         
+        # Ensure action_results directory exists (similar to orientations)
+        results_dir = Path("/personal/memory/action_results")
+        results_dir.mkdir(parents=True, exist_ok=True)
+        
         for i, result in enumerate(results):
-            # Create observation for each result
+            # Create unique filename for this action result
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            action_name = result['action_name'].replace(' ', '_').replace('/', '_')
+            filename = f"action_{timestamp}_{i}_{action_name}.json"
+            filepath = results_dir / filename
+            
+            # Write the complete result to file
+            result_data = {
+                "observation_type": "action_result",
+                "timestamp": datetime.now().isoformat(),
+                "action_name": result["action_name"],
+                "action_index": i,
+                "status": result["status"],
+                "success": result["success"],
+                "duration": result["duration"],
+                "result": result.get("result"),
+                "error": result.get("error"),
+                "parameters": result.get("parameters", {})
+            }
+            
+            # Write to file
+            with open(filepath, 'w') as f:
+                json.dump(result_data, f, indent=2, default=str)
+            
+            # Create observation pointing to the file
             obs = ObservationMemoryBlock(
                 observation_type="action_result",
-                path=f"action_{i}_{result['action_name']}",
+                path=str(filepath),  # Path to the actual file
                 priority=Priority.HIGH if result["success"] else Priority.MEDIUM,
                 metadata={
                     "action_name": result["action_name"],
-                    "action_index": i,
-                    "status": result["status"],
                     "success": result["success"],
-                    "duration": result["duration"],
-                    "result_summary": self._format_result_summary(result),
-                    "full_result": result.get("result"),
-                    "error": result.get("error")
+                    "result_summary": self._format_result_summary(result)
                 }
             )
             

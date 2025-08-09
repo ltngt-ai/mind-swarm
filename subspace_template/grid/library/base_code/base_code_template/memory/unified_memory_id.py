@@ -101,8 +101,8 @@ class UnifiedMemoryID:
         - ** matches any number of segments
         
         Examples:
-        - "file:personal/*" matches any personal file
-        - "file:personal/notes/*" matches any note
+        - "memory:personal/*" matches any personal file
+        - "memory:personal/notes/*" matches any note
         - "message:personal/inbox/**" matches any inbox message
         """
         # Convert pattern to regex

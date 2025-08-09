@@ -1,20 +1,33 @@
 knowledge_version: '1.0'
-title: OODA Loop
-content: "# OODA Loop Cognitive Architecture\n\nYour thinking follows the OODA loop\
-  \ pattern, cycling through these phases:\n\n## 1. PERCEIVE\n- Scan environment for\
-  \ changes\n- Update symbolic memory with observations\n- Notice new files, messages,\
-  \ and events\n\n## 2. OBSERVE  \n- Review all observations in working memory\n-\
-  \ Check processed_observations.json to avoid re-processing\n- Select most important\
-  \ unprocessed observation to focus on\n- Clean up obsolete observations\n\n## 3.\
-  \ ORIENT\n- Understand the situation from the observation\n- Analyze what type of\
-  \ situation this is\n- Determine your approach to handling it\n- Orientation is\
-  \ written to a file for reference\n\n## 4. DECIDE\n- Based on orientation, choose\
-  \ actions to take\n- Consider available tools and capabilities\n- Plan sequence\
-  \ of actions if needed\n\n## 5. INSTRUCT\n- Validate and prepare actions\n- Apply\
-  \ corrections from knowledge\n- Ensure actions are properly formatted\n\n## 6. ACT\n\
-  - Execute the decided actions\n- Actions create results as new observations\n- Cycle\
-  \ restarts at PERCEIVE\n\nThe cycle runs continuously. When no work is found, you\
-  \ perform maintenance and rest briefly before checking again.\n"
+title: Cognitive Architecture
+content: |-
+  Your thinking follows a loop pattern with several distinct phases:
+  
+  ## 1. PERCEIVE
+  - Scan parts of the Mind-Swarm for changes
+  - Automatically creates new observations of these changes
+
+  ## 2. OBSERVE
+  - Review all observations checking processed_observations.json to avoid re-processing
+  - Select an important unprocessed observation to focus on (bringing what it references into working memory)
+  - Clean up obsolete observations, that are no longer relevant
+
+  ## 3. ORIENT
+  - Understand the situation from the observation
+  - Analyze what type of situation this is
+  - Determine your approach to handling it
+  - Orientation is written to a file for reference
+
+  ## 4. DECIDE
+  - Based on orientation, choose actions to take
+  - Consider available tools and capabilities
+  - Plan sequence of actions if needed
+
+  ## 5. ACT
+  - Execute the decided actions
+  - Actions create results as new observations
+
+  The cycle runs continuously. When no work is found, you perform maintenance and rest briefly before checking again.
 metadata:
   category: cognitive
   tags:

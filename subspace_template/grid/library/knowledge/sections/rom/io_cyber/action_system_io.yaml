@@ -1,0 +1,30 @@
+knowledge_version: '1.0'
+title: I/O Cyber Additional Actions
+content: |
+  I/O cybers have additional actions for external communication:
+
+  Available I/O actions:
+  - make_network_request: Make HTTP request through network body file (params: url, method?, headers?, body?)
+  - check_network_response: Check for network response in body file (params: request_id)
+  - process_network_response: Process HTTP response data (params: response_data)
+  - send_user_response: Send response to user through user_io body file (params: session_id, content)
+
+  Body Files:
+  - /personal/network: For network requests/responses
+  - /personal/user_io: For user interaction
+
+  IMPORTANT: 
+  - Still SANDBOXED for direct file access - use create_memory for file operations!
+  - Network requests go through body files, not direct network access
+  - User interactions also use body files for controlled communication
+metadata:
+  category: actions
+  tags:
+  - actions
+  - io
+  - network
+  confidence: 1.0
+  priority: 1
+  source: boot_rom
+  created: '2024-01-01T00:00:00Z'
+  version: 1

@@ -12,7 +12,7 @@ content: "The manage_memory action allows cybers to manage memory block properti
   \n## Examples\n\n### Pin important memory\n```json\n{\n  \"action\": \"manage_memory\"\
   ,\n  \"params\": {\n    \"memory_id\": \"knowledge:library/action_system\",\n  \
   \  \"operation\": \"pin\"\n  }\n}\n```\n\n### Change priority\n```json\n{\n  \"\
-  action\": \"manage_memory\",\n  \"params\": {\n    \"memory_id\": \"file:personal/notes/important.md\"\
+  action\": \"manage_memory\",\n  \"params\": {\n    \"memory_id\": \"memory:personal/notes/important.md\"\
   ,\n    \"operation\": \"set_priority\",\n    \"priority\": \"HIGH\"\n  }\n}\n```\n\
   \n### Forget old memory\n```json\n{\n  \"action\": \"manage_memory\",\n  \"params\"\
   : {\n    \"memory_id\": \"observation:system/file_change/old_file.txt\",\n    \"\

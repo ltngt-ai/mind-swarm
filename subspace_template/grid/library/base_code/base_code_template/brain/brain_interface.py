@@ -69,7 +69,7 @@ class BrainInterface:
             "signature": {
                 "instruction": """
 Review your working memory and decide what deserves immediate attention. 
-You can see a file with ID starting with 'file:memory:processed_observations' - its content shows observations you've already handled. 
+You can see a file with ID starting with 'memory:personal/memory/processed_observations.json' - its content shows observations you've already handled. 
 Any observation whose memory_id appears in that content has ALREADY BEEN PROCESSED and should NOT be selected again. Instead, list those in obsolete_observations for cleanup. Select an OBSERVATION (ID starting with 'observation:') that is NOT in the processed observations list. If all observations are already processed, return 'none' for memory_id. 
 For obsolete_observations, list any observation IDs that appear in the processed observations content or are duplicates.
 Always start your output with [[ ## reasoning ## ]]
@@ -80,7 +80,7 @@ Always start your output with [[ ## reasoning ## ]]
                 "outputs": {
                     "reasoning": "Why this memory deserves attention right now",
                     "memory_id": "The exact memory ID to focus on (e.g. 'observation:personal/new_message/msg_123:abc') or 'none'",
-                    "obsolete_observations": "JSON array of observation IDs that are no longer relevant and can be removed, e.g. ['observation:personal/action_result/old_action:123', 'observation:personal/new_message/already_processed:456']"
+                    "obsolete_observations": "JSON array of observation IDs that are no longer relevant and can be removed, e.g. [\"observation:personal/action_result/old_action:123\", \"observation:personal/new_message/already_processed:456\"]"
                 },
                 "display_field": "reasoning"
             },

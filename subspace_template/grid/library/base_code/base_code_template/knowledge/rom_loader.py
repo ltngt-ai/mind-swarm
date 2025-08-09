@@ -46,6 +46,8 @@ class ROMLoader:
             for rom_file in rom_dir.glob(pattern):
                 rom_content = self.load_rom_file(rom_file)
                 if rom_content:
+                    # Store the file path relative to library path in the content
+                    rom_content['file_path'] = str(rom_file.relative_to(self.library_path.parent.parent))
                     rom_data[rom_file.stem] = rom_content
                     rom_count += 1
                     
@@ -97,7 +99,7 @@ class ROMLoader:
         """Load Cyber-specific ROM files.
         
         Args:
-            cyber_type: Type of Cyber (e.g., 'io_gateway')
+            cyber_type: Type of Cyber (e.g., 'io_cyber')
             
         Returns:
             Dictionary of Cyber-specific ROM data

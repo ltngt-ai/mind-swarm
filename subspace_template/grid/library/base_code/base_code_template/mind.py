@@ -62,7 +62,7 @@ class CyberMind:
     
     def _load_identity(self) -> dict:
         """Load Cyber identity from file."""
-        identity_file = self.personal / "identity.json"
+        identity_file = self.personal / ".internal" / "identity.json"
         if identity_file.exists():
             try:
                 return json.loads(identity_file.read_text())
@@ -81,7 +81,7 @@ class CyberMind:
     
     def _load_config(self) -> dict:
         """Load Cyber configuration from file."""
-        config_file = self.personal / "config.json"
+        config_file = self.personal / ".internal" / "config.json"
         if config_file.exists():
             try:
                 return json.loads(config_file.read_text())
@@ -160,7 +160,7 @@ class CyberMind:
     
     async def _heartbeat_loop(self):
         """Maintain heartbeat file for monitoring."""
-        heartbeat_file = self.personal / "heartbeat.json"
+        heartbeat_file = self.personal / ".internal" / "heartbeat.json"
         
         while self.running:
             try:
@@ -183,7 +183,7 @@ class CyberMind:
     
     async def _update_status_loop(self):
         """Update detailed status periodically."""
-        status_file = self.personal / "status.json"
+        status_file = self.personal / ".internal" / "status.json"
         
         while self.running:
             try:
@@ -212,7 +212,7 @@ class CyberMind:
     
     async def _shutdown_monitor_loop(self):
         """Monitor for shutdown signal from coordinator."""
-        shutdown_file = self.personal / "shutdown"
+        shutdown_file = self.personal / ".internal" / "shutdown"
         
         while self.running:
             try:

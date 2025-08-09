@@ -1,0 +1,22 @@
+knowledge_version: '1.0'
+title: Observations
+content: |
+  Observations are the references to memories through the entire shared memory of Mind-Swarm.
+  They play a crucial role in the cognitive processes by providing context and information for decision-making.
+  They are created when your internal systems detect changes in the environment or in your own state.
+  A memory /personal/memory/processed_observations.json is maintained to track which observations have been recently processed.
+  Observations are autonomous functions of your system, including updating what have been processed.
+  The OBSERVE phase allows you to focus on a observation of interest and remove any that are obselete.
+  The ACT phase produces a observation for each Action as well as the result. Usually this is just for reference, but can be ignored if not needed.
+
+metadata:
+  category: observations
+  tags:
+  - observation
+  - thinking
+  - pattern
+  confidence: 1.0
+  priority: 1
+  source: boot_rom
+  created: '2024-01-01T00:00:00Z'
+  version: 1
