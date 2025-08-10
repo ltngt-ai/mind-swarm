@@ -10,10 +10,10 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime
 
-from .actions.base_actions import Action, ActionResult, ActionStatus, Priority
+from .actions.base_actions import Action, ActionResult, ActionStatus, Priority as ActionPriority
 from .memory import (
     FileMemoryBlock, ObservationMemoryBlock, KnowledgeMemoryBlock,
-    MemorySystem, ContentLoader, MemoryType, Priority as MemoryPriority
+    MemorySystem, ContentLoader, MemoryType, Priority
 )
 
 logger = logging.getLogger("Cyber.memory_actions")
@@ -65,16 +65,14 @@ class FocusMemoryAction(Action):
                 content = content_loader.load_content(existing_memory)
                 
                 # Create observation about focusing
-                # Use a simple path for the observation, store the memory ID in metadata
+                cognitive_loop = context.get("cognitive_loop")
+                cycle_count = cognitive_loop.cycle_count if cognitive_loop else 0
                 obs = ObservationMemoryBlock(
                     observation_type="memory_focused",
                     path="personal/memory/focused",  # Simple path
-                    priority=Priority.MEDIUM,
-                    metadata={
-                        "memory_id": memory_id,  # Store actual memory ID here
-                        "focus_type": focus_type,
-                        "memory_type": existing_memory.type.value
-                    }
+                    message=f"Focused on {existing_memory.type.value} memory: {memory_id}",
+                    cycle_count=cycle_count,
+                    priority=Priority.MEDIUM
                 )
                 memory_system.add_memory(obs)
                 
@@ -676,7 +674,7 @@ class ManageMemoryAction(Action):
                     )
                 
                 try:
-                    memory.priority = MemoryPriority[new_priority]
+                    memory.priority = Priority[new_priority]
                     result = {
                         "memory_id": memory_id,
                         "operation": "set_priority",
@@ -759,7 +757,7 @@ class ManageMemoryAction(Action):
                 path=str(filepath),  # Path to actual memory file
                 message=f"Memory management: {operation} on {memory_id}",
                 cycle_count=cycle_count,
-                priority=MemoryPriority.LOW
+                priority=Priority.LOW
             )
             memory_system.add_memory(obs)
             
