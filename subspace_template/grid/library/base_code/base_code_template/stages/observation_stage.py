@@ -31,6 +31,16 @@ class ObservationStage:
     - Understanding the situation (Orient)
     """
     
+    # Knowledge tags to exclude during observation stage
+    # We don't need action implementation details when observing
+    KNOWLEDGE_BLACKLIST = {
+        "action_guide", 
+        "action_implementation", 
+        "execution", 
+        "procedures", 
+        "tools"
+    }
+    
     def __init__(self, cognitive_loop):
         """Initialize the observation stage.
         
@@ -120,8 +130,8 @@ class ObservationStage:
         """
         logger.info("👁️ Observing what needs attention...")
         
-        # Create tag filter for observation stage
-        tag_filter = TagFilter.for_observation_stage()
+        # Create tag filter for observation stage with our blacklist
+        tag_filter = TagFilter(blacklist=self.KNOWLEDGE_BLACKLIST)
         
         # Build full working memory context with filtering
         memory_context = self.memory_system.build_context(
@@ -164,8 +174,8 @@ class ObservationStage:
         """
         logger.info("🧭 Orienting to understand situation...")
         
-        # Create tag filter for observation stage
-        tag_filter = TagFilter.for_observation_stage()
+        # Create tag filter for observation stage with our blacklist
+        tag_filter = TagFilter(blacklist=self.KNOWLEDGE_BLACKLIST)
         
         # Build working memory context for orientation with filtering
         working_memory = self.memory_system.build_context(

@@ -29,6 +29,14 @@ class ExecutionStage:
     - Processing results
     """
     
+    # Knowledge tags to exclude during execution stage
+    # We don't need observation/perception details when executing
+    KNOWLEDGE_BLACKLIST = {
+        "observation_details",
+        "raw_perception",
+        "perception"
+    }
+    
     def __init__(self, cognitive_loop):
         """Initialize the execution stage.
         
@@ -134,8 +142,8 @@ class ExecutionStage:
         """
         logger.info(f"⚡ Executing {len(action_data)} actions...")
         
-        # Create tag filter for execution stage
-        tag_filter = TagFilter.for_execution_stage()
+        # Create tag filter for execution stage with our blacklist
+        tag_filter = TagFilter(blacklist=self.KNOWLEDGE_BLACKLIST)
         
         # Build execution context with working memory
         context = {

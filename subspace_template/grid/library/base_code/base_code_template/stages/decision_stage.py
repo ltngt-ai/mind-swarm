@@ -27,6 +27,14 @@ class DecisionStage:
     - Returning a list of actions for execution
     """
     
+    # Knowledge tags to exclude during decision stage
+    # We don't need low-level implementation details when deciding
+    KNOWLEDGE_BLACKLIST = {
+        "action_implementation",
+        "procedures", 
+        "low_level_details"
+    }
+    
     def __init__(self, cognitive_loop):
         """Initialize the decision stage.
         
@@ -58,8 +66,8 @@ class DecisionStage:
             logger.warning("No orientation ID found in cycle state")
             return []
         
-        # Create tag filter for decision stage
-        tag_filter = TagFilter.for_decision_stage()
+        # Create tag filter for decision stage with our blacklist
+        tag_filter = TagFilter(blacklist=self.KNOWLEDGE_BLACKLIST)
         
         # Build decision context - this will include the orientation file reference
         decision_context = self.memory_system.build_context(
