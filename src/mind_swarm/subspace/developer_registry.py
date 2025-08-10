@@ -107,20 +107,32 @@ class DeveloperRegistry:
         cyber_dir = self.subspace_root / "cybers" / developer_id
         cyber_dir.mkdir(parents=True, exist_ok=True)
         
-        # Create inbox and outbox
-        inbox_dir = cyber_dir / "inbox"
+        # Create organized directory structure matching new Cyber layout
+        # Communications directory
+        comms_dir = cyber_dir / "comms"
+        comms_dir.mkdir(exist_ok=True)
+        
+        # Create inbox and outbox under comms
+        inbox_dir = comms_dir / "inbox"
         inbox_dir.mkdir(exist_ok=True)
         
-        # Create processed subdirectory (for read messages)
-        processed_dir = inbox_dir / "processed"
-        processed_dir.mkdir(exist_ok=True)
-        
-        outbox_dir = cyber_dir / "outbox"
+        outbox_dir = comms_dir / "outbox"
         outbox_dir.mkdir(exist_ok=True)
         
-        # Create sent subdirectory
-        sent_dir = outbox_dir / "sent"
+        # Create drafts and sent directories
+        drafts_dir = comms_dir / "drafts"
+        drafts_dir.mkdir(exist_ok=True)
+        
+        sent_dir = comms_dir / "sent"
         sent_dir.mkdir(exist_ok=True)
+        
+        # Create memory directory (developers might have memory too)
+        memory_dir = cyber_dir / "memory"
+        memory_dir.mkdir(exist_ok=True)
+        
+        # Create .internal directory for system files
+        internal_dir = cyber_dir / ".internal"
+        internal_dir.mkdir(exist_ok=True)
         
         # Create a simple info file
         info_file = cyber_dir / "developer_info.json"

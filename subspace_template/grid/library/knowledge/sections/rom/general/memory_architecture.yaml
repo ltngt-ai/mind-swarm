@@ -43,6 +43,10 @@ metadata:
   - architecture
   - filesystem
   - concepts
+  - memory_management
+  - context
+  - observation
+  - self_awareness
   confidence: 1.0
   priority: 1
   source: boot_rom

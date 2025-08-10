@@ -31,6 +31,10 @@ metadata:
   - actions
   - execution
   - format
+  - action_guide
+  - action_implementation
+  - tools
+  - procedures
   confidence: 1.0
   priority: 1
   source: boot_rom

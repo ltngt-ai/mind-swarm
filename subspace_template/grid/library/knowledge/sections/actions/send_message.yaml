@@ -14,6 +14,10 @@ metadata:
   tags:
   - message
   - communication
+  - action_guide
+  - action_implementation
+  - execution
+  - tools
   confidence: 1.0
   priority: 1
   parameter_schema:

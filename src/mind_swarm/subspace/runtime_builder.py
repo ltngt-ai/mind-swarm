@@ -18,35 +18,38 @@ class AgentRuntimeBuilder:
             subspace_root: Root directory of the subspace
         """
         self.subspace_root = subspace_root
-        self.runtime_dir = subspace_root / "runtime" / "cyber"
-        self.runtime_dir.mkdir(parents=True, exist_ok=True)
+        self.library_dir = subspace_root / "grid" / "library"
         
     def prepare_runtime(self):
         """Prepare the Cyber runtime environment."""
         logger.info("Preparing Cyber runtime environment...")
         
-        # The runtime will now be in each Cyber's home/base_code
-        # We'll copy the sandbox directory structure there
-        self._prepare_agent_base_code()
+        # Verify the base code templates exist in library
+        self._verify_base_code_templates()
         
         logger.info("Cyber runtime environment prepared")
     
-    def _prepare_agent_base_code(self):
-        """Verify the base code template exists in runtime.
+    def _verify_base_code_templates(self):
+        """Verify the base code templates exist in library.
         
-        The base_code_template is maintained manually in the runtime directory
-        to ensure complete separation from the server code.
+        The base_code templates are maintained in grid/library/base_code
+        and copied to each Cyber's home directory when they are created.
         """
-        base_code_template = self.runtime_dir.parent / "base_code_template"
+        base_code_dir = self.library_dir / "base_code"
+        base_template = base_code_dir / "base_code_template"
+        io_template = base_code_dir / "io_cyber_template"
         
-        if not base_code_template.exists():
-            logger.error(f"Base code template not found at: {base_code_template}")
-            logger.error("Please ensure runtime/base_code_template exists with Cyber code")
+        if not base_template.exists():
+            logger.error(f"Base code template not found at: {base_template}")
+            logger.error("Please ensure grid/library/base_code/base_code_template exists")
             return
         
-        # Just verify it has content
-        py_files = list(base_code_template.glob("*.py"))
-        subdirs = [d for d in base_code_template.iterdir() if d.is_dir() and not d.name.startswith('.')]
+        if not io_template.exists():
+            logger.warning(f"IO template not found at: {io_template}")
+        
+        # Verify content
+        py_files = list(base_template.glob("*.py"))
+        subdirs = [d for d in base_template.iterdir() if d.is_dir() and not d.name.startswith('.')]
         
         logger.info(f"Base code template found with {len(py_files)} files and {len(subdirs)} subdirectories")
     

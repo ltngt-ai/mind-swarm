@@ -21,6 +21,9 @@ metadata:
   - core
   - self
   - purpose
+  - identity
+  - context
+  - environment
   confidence: 1.0
   priority: 1
   source: boot_rom

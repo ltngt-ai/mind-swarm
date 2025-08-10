@@ -34,6 +34,11 @@ metadata:
   - ooda
   - thinking
   - pattern
+  - observation
+  - decision_making
+  - execution
+  - context
+  - self_awareness
   confidence: 1.0
   priority: 1
   source: boot_rom

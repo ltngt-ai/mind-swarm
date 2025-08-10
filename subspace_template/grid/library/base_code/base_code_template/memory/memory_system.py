@@ -119,7 +119,8 @@ class MemorySystem:
                      max_tokens: Optional[int] = None,
                      current_task: Optional[str] = None,
                      selection_strategy: str = "balanced",
-                     format_type: str = "json") -> str:
+                     format_type: str = "json",
+                     tag_filter: Optional['TagFilter'] = None) -> str:
         """Build LLM context from current memories.
         
         Args:
@@ -127,15 +128,24 @@ class MemorySystem:
             current_task: Current task for relevance scoring
             selection_strategy: Selection strategy ("balanced", "recent", "relevant")
             format_type: Output format ("json", "structured", "narrative")
+            tag_filter: Optional TagFilter to apply stage-specific filtering
             
         Returns:
             Formatted context string ready for LLM
         """
         token_budget = max_tokens or self.max_tokens
         
+        # Get memories to consider
+        memories_to_select = self._memory_manager.symbolic_memory
+        
+        # Apply tag filter if provided
+        if tag_filter:
+            memories_to_select = tag_filter.filter_memories(memories_to_select)
+            logger.debug(f"Tag filter reduced memories from {len(self._memory_manager.symbolic_memory)} to {len(memories_to_select)}")
+        
         # Select memories
         selected_memories = self._memory_selector.select_memories(
-            symbolic_memory=self._memory_manager.symbolic_memory,
+            symbolic_memory=memories_to_select,
             max_tokens=token_budget,
             current_task=current_task,
             selection_strategy=selection_strategy

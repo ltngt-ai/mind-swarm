@@ -16,6 +16,11 @@ metadata:
   - python
   - compute
   - calculation
+  - action_guide
+  - action_implementation
+  - execution
+  - tools
+  - procedures
   confidence: 1.0
   priority: 1
   parameter_schema:

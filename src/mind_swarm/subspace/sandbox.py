@@ -90,14 +90,14 @@ class BubblewrapSandbox:
             # Temp directory
             "--tmpfs", "/tmp",
             
-            # Set working directory to home
-            "--chdir", "/personal",
+            # Set working directory to .internal where base_code is
+            "--chdir", "/personal/.internal",
             
             # Clean environment
             "--setenv", "CYBER_NAME", self.name,
             "--setenv", "HOME", "/personal",
             "--setenv", "PATH", "/grid/workshop:/usr/bin:/bin",
-            "--setenv", "PYTHONPATH", "/personal",
+            "--setenv", "PYTHONPATH", "/personal/.internal",
             "--setenv", "CYBER_TYPE", self.cyber_type,
         ]
         
@@ -230,7 +230,6 @@ class SubspaceManager:
         # Create standard directories
         self.agents_dir = self.root_path / "cybers"
         self.grid_dir = self.root_path / "grid"
-        self.runtime_dir = self.root_path / "runtime"
         
         # Grid subdirectories
         self.community_dir = self.grid_dir / "community"  # Questions and discussions
@@ -245,7 +244,6 @@ class SubspaceManager:
             self.library_dir,
             self.workshop_dir,
             self.bulletin_dir,
-            self.runtime_dir,
         ]:
             directory.mkdir(parents=True, exist_ok=True)
         
@@ -274,12 +272,7 @@ class SubspaceManager:
             logger.warning(f"Template directory not found at {template_dir}")
             return
         
-        # Copy base_code from library to runtime if it doesn't exist
-        if not self.runtime_dir.exists() or not list(self.runtime_dir.iterdir()):
-            src_base_code = template_dir / "grid" / "library" / "base_code"
-            if src_base_code.exists():
-                logger.info("Copying base_code from template library")
-                shutil.copytree(src_base_code, self.runtime_dir, dirs_exist_ok=True)
+        # Note: Removed redundant runtime directory copying - base_code is accessed directly from library
         
         # Copy grid structure if needed
         grid_template = template_dir / "grid"
@@ -367,32 +360,70 @@ class SubspaceManager:
             sandbox = BubblewrapSandbox(name, self.root_path, cyber_type)
             self.sandboxes[name] = sandbox
         
-        # For existing Cybers, update their base_code
+        # For existing Cybers, update their base_code and structure
         if agent_exists:
-            base_code = sandbox.cyber_personal / "base_code"
+            # Create new organized directory structure
+            internal_dir = sandbox.cyber_personal / ".internal"
+            internal_dir.mkdir(exist_ok=True)
+            
+            base_code = internal_dir / "base_code"
             if not base_code.exists():
-                # Create base_code directory if it doesn't exist
                 logger.info(f"Creating base_code directory for existing Cyber {name}")
                 base_code.mkdir(exist_ok=True)
             logger.info(f"Updating base_code for existing Cyber {name}")
             self._copy_agent_base_code(base_code, cyber_type)
             
-            # Ensure other essential directories exist
-            for directory in ["inbox", "outbox", "drafts", "memory"]:
-                dir_path = sandbox.cyber_personal / directory
-                dir_path.mkdir(exist_ok=True)
+            # Create organized directory structure
+            # Communications
+            comms_dir = sandbox.cyber_personal / "comms"
+            comms_dir.mkdir(exist_ok=True)
+            for subdir in ["inbox", "outbox", "drafts", "sent"]:
+                (comms_dir / subdir).mkdir(exist_ok=True)
+            
+            # Memory areas
+            memory_dir = sandbox.cyber_personal / "memory"
+            memory_dir.mkdir(exist_ok=True)
+            for subdir in ["observations", "orientations", "knowledge", "workspace"]:
+                (memory_dir / subdir).mkdir(exist_ok=True)
+            
+            # Observation subdirectories
+            obs_dir = memory_dir / "observations"
+            for subdir in ["actions", "computations", "searches", "management"]:
+                (obs_dir / subdir).mkdir(exist_ok=True)
+            
+            # Internal logs
+            (internal_dir / "logs").mkdir(exist_ok=True)
             
             return sandbox
         
-        # Initialize Cyber directories
-        inbox = sandbox.cyber_personal / "inbox"
-        outbox = sandbox.cyber_personal / "outbox"
-        drafts = sandbox.cyber_personal / "drafts"
-        memory = sandbox.cyber_personal / "memory"
-        base_code = sandbox.cyber_personal / "base_code"
+        # Initialize organized Cyber directory structure
+        # Internal system files (hidden from Cyber's conscious view)
+        internal_dir = sandbox.cyber_personal / ".internal"
+        internal_dir.mkdir(exist_ok=True)
         
-        for directory in [inbox, outbox, drafts, memory, base_code]:
-            directory.mkdir(exist_ok=True)
+        # Base code goes in internal
+        base_code = internal_dir / "base_code"
+        base_code.mkdir(exist_ok=True)
+        
+        # Internal logs
+        (internal_dir / "logs").mkdir(exist_ok=True)
+        
+        # Communications directory
+        comms_dir = sandbox.cyber_personal / "comms"
+        comms_dir.mkdir(exist_ok=True)
+        for subdir in ["inbox", "outbox", "drafts", "sent"]:
+            (comms_dir / subdir).mkdir(exist_ok=True)
+        
+        # Memory directory with subdirectories
+        memory_dir = sandbox.cyber_personal / "memory"
+        memory_dir.mkdir(exist_ok=True)
+        for subdir in ["observations", "orientations", "knowledge", "workspace"]:
+            (memory_dir / subdir).mkdir(exist_ok=True)
+        
+        # Observation subdirectories
+        obs_dir = memory_dir / "observations"
+        for subdir in ["actions", "computations", "searches", "management"]:
+            (obs_dir / subdir).mkdir(exist_ok=True)
         
         # Copy Cyber code to base_code directory
         self._copy_agent_base_code(base_code, cyber_type)

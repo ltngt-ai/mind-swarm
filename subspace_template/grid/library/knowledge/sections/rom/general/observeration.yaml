@@ -15,6 +15,10 @@ metadata:
   - observation
   - thinking
   - pattern
+  - perception
+  - environment
+  - self_awareness
+  - memory_management
   confidence: 1.0
   priority: 1
   source: boot_rom

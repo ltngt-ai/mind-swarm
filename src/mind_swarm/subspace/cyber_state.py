@@ -135,7 +135,7 @@ class CyberStateManager:
         # Look for state files in each cyber's directory
         for cyber_dir in self.cybers_dir.iterdir():
             if cyber_dir.is_dir():
-                state_file = cyber_dir / "state.json"
+                state_file = cyber_dir / ".internal" / "state.json"
                 if state_file.exists():
                     try:
                         async with aiofiles.open(state_file, 'r') as f:
@@ -232,7 +232,10 @@ class CyberStateManager:
         # Save to cyber's personal folder
         cyber_dir = self.cybers_dir / state.name
         cyber_dir.mkdir(parents=True, exist_ok=True)
-        state_file = cyber_dir / "state.json"
+        # Ensure .internal directory exists
+        internal_dir = cyber_dir / ".internal"
+        internal_dir.mkdir(parents=True, exist_ok=True)
+        state_file = internal_dir / "state.json"
         async with aiofiles.open(state_file, 'w') as f:
             await f.write(json.dumps(state.to_dict(), indent=2))
     
@@ -245,7 +248,7 @@ class CyberStateManager:
             # Remove from disk - state is in cyber's personal folder
             cyber_dir = self.cybers_dir / name
             if cyber_dir.exists():
-                state_file = cyber_dir / "state.json"
+                state_file = cyber_dir / ".internal" / "state.json"
                 if state_file.exists():
                     state_file.unlink()
             logger.info(f"Deleted Cyber state for {name}")

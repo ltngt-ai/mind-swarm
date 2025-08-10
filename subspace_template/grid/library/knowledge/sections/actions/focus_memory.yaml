@@ -15,6 +15,11 @@ metadata:
   - memory
   - file
   - read
+  - action_guide
+  - action_implementation
+  - execution
+  - tools
+  - memory_management
   confidence: 1.0
   priority: 1
   parameter_schema:

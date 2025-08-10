@@ -33,7 +33,7 @@ class AgentProcess:
         msg_id = f"{message.get('from', 'subspace')}_{int(asyncio.get_event_loop().time() * 1000)}"
         message['id'] = msg_id
         
-        inbox_dir = self.sandbox.cyber_personal / "inbox"
+        inbox_dir = self.sandbox.cyber_personal / "comms" / "inbox"
         msg_file = inbox_dir / f"{msg_id}.msg"
         msg_file.write_text(json.dumps(message, indent=2))
         
@@ -48,7 +48,7 @@ class AgentProcess:
             return
         
         # First create shutdown file to signal Cyber to exit gracefully
-        shutdown_file = self.sandbox.cyber_personal / "shutdown"
+        shutdown_file = self.sandbox.cyber_personal / ".internal" / "shutdown"
         try:
             shutdown_file.write_text("SHUTDOWN")
             logger.info(f"Created shutdown file for Cyber {self.name}")
@@ -254,7 +254,7 @@ class AgentProcessManager:
             "type": cyber_type,
             **(config or {})
         }
-        config_file = sandbox.cyber_personal / "config.json"
+        config_file = sandbox.cyber_personal / ".internal" / "config.json"
         config_file.write_text(json.dumps(cyber_config, indent=2))
         
         # Prepare environment
@@ -265,7 +265,7 @@ class AgentProcessManager:
         }
         
         # Clean up any leftover shutdown file from previous runs
-        shutdown_file = sandbox.cyber_personal / "shutdown"
+        shutdown_file = sandbox.cyber_personal / ".internal" / "shutdown"
         if shutdown_file.exists():
             shutdown_file.unlink()
             logger.debug(f"Removed old shutdown file for {name}")
@@ -389,7 +389,7 @@ class AgentProcessManager:
         
         for name, Cyber in self.cybers.items():
             # Check heartbeat file
-            heartbeat_file = Cyber.sandbox.cyber_personal / "heartbeat.json"
+            heartbeat_file = Cyber.sandbox.cyber_personal / ".internal" / "heartbeat.json"
             if heartbeat_file.exists():
                 try:
                     async with aiofiles.open(heartbeat_file, 'r') as f:
@@ -492,8 +492,8 @@ class AgentProcessManager:
     
     async def _setup_agent_logging(self, agent_process: AgentProcess):
         """Set up logging tasks for an Cyber process."""
-        # Create logs directory in cyber's personal folder
-        logs_dir = agent_process.sandbox.cyber_personal / "logs"
+        # Create logs directory in cyber's internal folder
+        logs_dir = agent_process.sandbox.cyber_personal / ".internal" / "logs"
         logs_dir.mkdir(exist_ok=True)
         
         # Use fixed log file name for current session

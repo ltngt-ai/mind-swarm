@@ -15,6 +15,8 @@ metadata:
   - messages
   - communication
   - protocol
+  - observation
+  - context
   confidence: 1.0
   priority: 1
   source: boot_rom

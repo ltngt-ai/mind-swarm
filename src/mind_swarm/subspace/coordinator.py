@@ -45,7 +45,7 @@ class MessageRouter:
             if not await aiofiles.os.path.isdir(cyber_dir):
                 continue
                 
-            outbox_dir = cyber_dir / "outbox"
+            outbox_dir = cyber_dir / "comms" / "outbox"
             if not await aiofiles.os.path.exists(outbox_dir):
                 logger.debug(f"No outbox directory for {cyber_name}")
                 continue
@@ -88,7 +88,7 @@ class MessageRouter:
                         )
                     
                     # Move to sent folder
-                    sent_dir = outbox_dir / "sent"
+                    sent_dir = cyber_dir / "comms" / "sent"
                     try:
                         await aiofiles.os.makedirs(sent_dir, exist_ok=True)
                     except OSError:
@@ -111,7 +111,7 @@ class MessageRouter:
     
     async def _deliver_message(self, to_agent: str, message: Dict[str, Any]):
         """Deliver a message to a specific Cyber's inbox."""
-        target_inbox = self.agents_dir / to_agent / "inbox"
+        target_inbox = self.agents_dir / to_agent / "comms" / "inbox"
         if not await aiofiles.os.path.exists(target_inbox):
             logger.warning(f"Cyber {to_agent} inbox not found")
             return
@@ -494,8 +494,8 @@ class SubspaceCoordinator:
             cyber_dir = self.subspace.agents_dir / name
             if await aiofiles.os.path.exists(cyber_dir):
                 # Count messages
-                inbox_dir = cyber_dir / "inbox"
-                outbox_dir = cyber_dir / "outbox"
+                inbox_dir = cyber_dir / "comms" / "inbox"
+                outbox_dir = cyber_dir / "comms" / "outbox"
                 
                 inbox_count = 0
                 if await aiofiles.os.path.exists(inbox_dir):
@@ -606,7 +606,7 @@ class SubspaceCoordinator:
                     body_manager = await self.body_system.create_agent_body(cyber_name, cyber_dir)
                     
                     # Ensure identity file exists (create if missing)
-                    identity_file = cyber_dir / "identity.json"
+                    identity_file = cyber_dir / ".internal" / "identity.json"
                     if not identity_file.exists():
                         await self._create_identity_file(cyber_name, cyber_dir, cyber_type)
                     
@@ -1015,8 +1015,10 @@ class SubspaceCoordinator:
             "capabilities": capabilities
         }
         
-        # Write identity file
-        identity_file = cyber_personal / "identity.json"
+        # Write identity file to .internal directory
+        internal_dir = cyber_personal / ".internal"
+        internal_dir.mkdir(exist_ok=True)
+        identity_file = internal_dir / "identity.json"
         identity_file.write_text(json.dumps(identity_data, indent=2))
         
         # Cache the model selection
@@ -1079,7 +1081,7 @@ class SubspaceCoordinator:
         """
         try:
             cyber_personal = self.subspace.agents_dir / cyber_name
-            identity_file = cyber_personal / "identity.json"
+            identity_file = cyber_personal / ".internal" / "identity.json"
             
             if identity_file.exists():
                 # Load existing identity
