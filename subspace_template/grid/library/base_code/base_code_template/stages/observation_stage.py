@@ -131,6 +131,9 @@ class ObservationStage:
         """
         logger.info("👁️ Observing what needs attention...")
         
+        # Update dynamic context with current time before LLM call
+        self.cognitive_loop._update_dynamic_context()
+        
         # Create tag filter for observation stage with our blacklist
         tag_filter = TagFilter(blacklist=self.KNOWLEDGE_BLACKLIST)
         
@@ -174,6 +177,9 @@ class ObservationStage:
             Orientation data including understanding and approach
         """
         logger.info("🧭 Orienting to understand situation...")
+        
+        # Update dynamic context with current time before LLM call
+        self.cognitive_loop._update_dynamic_context()
         
         # Create tag filter for observation stage with our blacklist
         tag_filter = TagFilter(blacklist=self.KNOWLEDGE_BLACKLIST)

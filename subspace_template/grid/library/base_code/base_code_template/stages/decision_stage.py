@@ -66,6 +66,9 @@ class DecisionStage:
             logger.warning("No orientation ID found in cycle state")
             return []
         
+        # Update dynamic context with current time before LLM call
+        self.cognitive_loop._update_dynamic_context()
+        
         # Create tag filter for decision stage with our blacklist
         tag_filter = TagFilter(blacklist=self.KNOWLEDGE_BLACKLIST)
         

@@ -205,6 +205,9 @@ class CognitiveLoop:
         with open(context_file, 'w') as f:
             json.dump(context_data, f, indent=2)
         
+        # Invalidate any cached version
+        self.memory_system.content_loader.invalidate_file(str(context_file))
+        
         # Add to memory as pinned so Cyber always sees current context
         context_memory = FileMemoryBlock(
             location=str(context_file),
@@ -247,6 +250,9 @@ class CognitiveLoop:
             # Write back
             with open(self.dynamic_context_file, 'w') as f:
                 json.dump(context_data, f, indent=2)
+            
+            # Invalidate cache so the new content is loaded
+            self.memory_system.content_loader.invalidate_file(str(self.dynamic_context_file))
                 
         except Exception as e:
             logger.error(f"Failed to update dynamic context: {e}")
@@ -286,6 +292,9 @@ class CognitiveLoop:
             
             # Increment cycle count
             self.cycle_count = self.state_manager.increment_cycle_count()
+            
+            # Update dynamic context at the start of each cycle
+            self._update_dynamic_context()
             
             # Stage 1: Observation - Gather and understand information
             orientation = await self.observation_stage.run()
