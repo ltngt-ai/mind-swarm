@@ -133,6 +133,9 @@ class CognitiveLoop:
         
         # Ensure processed_observations.json exists and is in memory
         self._init_processed_observations()
+        
+        # Initialize dynamic context file
+        self._init_dynamic_context()
     
     def _init_processed_observations(self):
         """Ensure processed_observations.json exists and is in memory."""
@@ -170,6 +173,72 @@ class CognitiveLoop:
             logger.info(f"Added identity.json to pinned memory")
         else:
             logger.warning(f"No identity.json file found at {identity_file}")
+    
+    def _init_dynamic_context(self):
+        """Initialize and maintain dynamic context file with runtime state."""
+        context_file = self.memory_dir / "dynamic_context.json"
+        
+        # Create or update the dynamic context
+        context_data = {
+            "current_time": datetime.now().isoformat(),
+            "current_location": "/personal",  # Default starting location
+            "cycle_count": self.cycle_count,
+            "cyber_id": self.cyber_id,
+            "cyber_type": self.cyber_type,
+            "last_activity": datetime.now().isoformat(),
+            "uptime_seconds": 0,
+            "working_memory_tokens": self.max_context_tokens
+        }
+        
+        # Write context file
+        with open(context_file, 'w') as f:
+            json.dump(context_data, f, indent=2)
+        
+        # Add to memory as pinned so Cyber always sees current context
+        context_memory = FileMemoryBlock(
+            location=str(context_file),
+            priority=Priority.LOW,
+            confidence=1.0,
+            pinned=True,  # Always in working memory
+            metadata={"file_type": "dynamic_context", "description": "Current runtime context"}
+        )
+        self.memory_system.add_memory(context_memory)
+        logger.info("Initialized dynamic_context.json")
+        
+        # Store reference for updates
+        self.dynamic_context_file = context_file
+        self.start_time = datetime.now()
+    
+    def _update_dynamic_context(self, **updates):
+        """Update the dynamic context file with new values."""
+        if not hasattr(self, 'dynamic_context_file'):
+            return
+            
+        try:
+            # Read current context
+            with open(self.dynamic_context_file, 'r') as f:
+                context_data = json.load(f)
+            
+            # Update time and uptime always
+            now = datetime.now()
+            context_data["current_time"] = now.isoformat()
+            if hasattr(self, 'start_time'):
+                uptime = (now - self.start_time).total_seconds()
+                context_data["uptime_seconds"] = int(uptime)
+            
+            # Update cycle count
+            context_data["cycle_count"] = self.cycle_count
+            
+            # Apply any specific updates
+            for key, value in updates.items():
+                context_data[key] = value
+            
+            # Write back
+            with open(self.dynamic_context_file, 'w') as f:
+                json.dump(context_data, f, indent=2)
+                
+        except Exception as e:
+            logger.error(f"Failed to update dynamic context: {e}")
     
     def _init_cycle_state(self):
         """Initialize a new cycle state."""
@@ -310,6 +379,9 @@ class CognitiveLoop:
         """PERCEIVE - Scan environment and update memory with observations."""
         logger.info("=== PERCEIVE PHASE ===")
         
+        # Update dynamic context at start of each perceive cycle
+        self._update_dynamic_context(last_activity=datetime.now().isoformat())
+        
         # Scan environment
         observations = self.environment_scanner.scan_environment(full_scan=False)
         
@@ -399,16 +471,29 @@ class CognitiveLoop:
         logger.info("🧠 Analyzing situation and understanding context...")
         orientation_response = await self.brain_interface.analyze_situation(observation, working_memory)
         
-        # Write the raw orientation response to a file
+        # Extract the useful content from the response
+        output_values = orientation_response.get("output_values", {})
+        
+        # Create a clean orientation record with only useful information
+        orientation_data = {
+            "timestamp": datetime.now().isoformat(),
+            "cycle_count": self.cycle_count,
+            "observation": observation,  # What we're orienting to
+            "understanding": output_values.get("understanding", ""),
+            "situation_type": output_values.get("situation_type", "unknown"),
+            "approach": output_values.get("approach", "")
+        }
+        
+        # Write the clean orientation to a file
         orientations_dir = self.memory_dir / "orientations"
         self.file_manager.ensure_directory(orientations_dir)
         
         timestamp = datetime.now()
         orientation_file = orientations_dir / f"orient_{timestamp.strftime('%Y%m%d_%H%M%S')}_{self.cycle_count}.json"
         
-        # Write orientation to file
+        # Write clean orientation to file
         with open(orientation_file, 'w') as f:
-            json.dump(orientation_response, f, indent=2)
+            json.dump(orientation_data, f, indent=2)
         
         # Create an ObservationMemoryBlock for the orientation
         # This allows the cyber to observe and reflect on its own analysis patterns

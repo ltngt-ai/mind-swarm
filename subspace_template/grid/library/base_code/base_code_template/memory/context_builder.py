@@ -90,17 +90,7 @@ class ContextBuilder:
                     "error": True
                 })
         
-        # Add system context at the beginning
-        from datetime import datetime
-        system_context = {
-            "id": "system:current_time",
-            "type": "system",
-            "content": f"Current time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-        }
-        
-        # Insert system context at the beginning
-        context_entries.insert(0, system_context)
-        
+        # No need for system time - it's in the dynamic_context.json file now
         return json.dumps(context_entries, indent=2)
     
     def _build_structured_context(self, memories: List[MemoryBlock]) -> str:

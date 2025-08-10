@@ -330,6 +330,117 @@ class ExecutePythonAction(Action):
             return f"<{type(value).__name__}>"
 
 
+class ChangeLocationAction(Action):
+    """Change the current working location in the filesystem."""
+    
+    def __init__(self):
+        super().__init__("change_location", "Change current working directory")
+    
+    async def execute(self, context: Dict[str, Any]) -> ActionResult:
+        """Change to a new location and update dynamic context."""
+        path = self.params.get("path", "")
+        
+        if not path:
+            return ActionResult(
+                self.name,
+                ActionStatus.FAILED,
+                error="No path specified"
+            )
+        
+        try:
+            # Get cognitive loop for dynamic context update
+            cognitive_loop = context.get("cognitive_loop")
+            if not cognitive_loop:
+                return ActionResult(
+                    self.name,
+                    ActionStatus.FAILED,
+                    error="No cognitive loop available"
+                )
+            
+            # Read current dynamic context
+            if hasattr(cognitive_loop, 'dynamic_context_file'):
+                with open(cognitive_loop.dynamic_context_file, 'r') as f:
+                    dynamic_context = json.load(f)
+                current_location = dynamic_context.get("current_location", "/personal")
+            else:
+                current_location = "/personal"
+            
+            # Resolve the new path
+            from pathlib import PurePosixPath
+            
+            if path.startswith('/'):
+                # Absolute path
+                new_location = PurePosixPath(path)
+            else:
+                # Relative path
+                current = PurePosixPath(current_location)
+                new_location = (current / path).resolve()
+            
+            # Convert to string and ensure it starts with /
+            new_location_str = str(new_location)
+            if not new_location_str.startswith('/'):
+                new_location_str = '/' + new_location_str
+            
+            # Validate the path is within allowed areas
+            allowed_roots = ['/personal', '/grid']
+            if not any(new_location_str.startswith(root) or new_location_str == root for root in allowed_roots):
+                return ActionResult(
+                    self.name,
+                    ActionStatus.FAILED,
+                    error=f"Cannot navigate to {new_location_str} - must be within /personal or /grid"
+                )
+            
+            # Check if the path exists (in the cyber's view)
+            if new_location_str.startswith('/personal'):
+                # Map to actual personal directory
+                rel_path = new_location_str[len('/personal'):]
+                if rel_path:
+                    actual_path = cognitive_loop.personal / rel_path.lstrip('/')
+                else:
+                    actual_path = cognitive_loop.personal
+            elif new_location_str.startswith('/grid'):
+                # Map to actual grid directory
+                rel_path = new_location_str[len('/grid'):]
+                grid_path = cognitive_loop.personal.parent.parent / "grid"
+                if rel_path:
+                    actual_path = grid_path / rel_path.lstrip('/')
+                else:
+                    actual_path = grid_path
+            else:
+                actual_path = None
+            
+            # Check if path exists
+            if actual_path and not actual_path.exists():
+                return ActionResult(
+                    self.name,
+                    ActionStatus.FAILED,
+                    error=f"Path does not exist: {new_location_str}"
+                )
+            
+            # Update dynamic context
+            cognitive_loop._update_dynamic_context(current_location=new_location_str)
+            
+            logger.info(f"Changed location from {current_location} to {new_location_str}")
+            
+            return ActionResult(
+                self.name,
+                ActionStatus.COMPLETED,
+                result={
+                    "previous_location": current_location,
+                    "current_location": new_location_str,
+                    "absolute_path": new_location_str
+                }
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to change location: {e}", exc_info=True)
+            return ActionResult(
+                self.name,
+                ActionStatus.FAILED,
+                error=f"Failed to change location: {str(e)}"
+            )
+
+
 class SimplifyExpressionAction(Action):
     """Simplify mathematical or logical expressions.
     
@@ -410,3 +521,4 @@ def register_compute_actions(registry):
     """Register all compute actions."""
     registry.register_action("base", "execute_python", ExecutePythonAction)
     registry.register_action("base", "simplify_expression", SimplifyExpressionAction)
+    registry.register_action("base", "change_location", ChangeLocationAction)
