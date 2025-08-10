@@ -2,6 +2,10 @@
 
 This module provides whitelist/blacklist filtering based on metadata tags,
 allowing different cognitive stages to see only relevant knowledge.
+
+Note: Tag filtering is independent of memory pinning. Pinning ensures memories
+stay in working memory (retention), while tag filtering controls what's visible
+in each cognitive stage (relevance). These are separate concerns.
 """
 
 import logging
@@ -84,9 +88,8 @@ class TagFilter:
         Returns:
             True if memory should be included, False otherwise
         """
-        # Always include pinned memories
-        if getattr(memory, 'pinned', False):
-            return True
+        # Note: We don't check pinned status here - that's a memory management concern
+        # Tag filtering is about relevance/visibility, not memory retention
         
         # Get tags from metadata
         metadata = getattr(memory, 'metadata', {}) or {}
