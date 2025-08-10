@@ -63,6 +63,10 @@ class ObservationStage:
         """
         logger.info("=== OBSERVATION STAGE ===")
         
+        # Initialize pending observations tracking
+        self._pending_observation_id = None
+        self._pending_obsolete_observations = []
+        
         # Phase 1: Perceive - Scan environment
         observations = await self.perceive()
         
@@ -71,10 +75,15 @@ class ObservationStage:
         
         if not selected_observation:
             logger.info("👁️ No immediate focus needed")
+            # Still handle any pending obsolete observations
+            self._complete_observation_processing(None, None)
             return None
             
         # Phase 3: Orient - Understand situation
         orientation = await self.orient(selected_observation)
+        
+        # After orient completes, record what was processed
+        self._complete_observation_processing(selected_observation, orientation)
         
         return orientation
     
@@ -249,18 +258,9 @@ class ObservationStage:
         reasoning = selection_result["reasoning"]
         obsolete_observations = selection_result.get("obsolete_observations", [])
         
-        # Remove obsolete observations from memory
-        if obsolete_observations:
-            logger.info(f"Removing {len(obsolete_observations)} obsolete observations:")
-            for obs_id in obsolete_observations:
-                try:
-                    self.memory_system.remove_memory(obs_id)
-                    logger.info(f"  - Removed: {obs_id}")
-                except Exception as e:
-                    logger.warning(f"  - Failed to remove {obs_id}: {e}")
-            
-            # Also remove from processed_observations.json
-            self.cognitive_loop._remove_obsolete_from_processed(obsolete_observations)
+        # Store for post-orient processing
+        self._pending_obsolete_observations = obsolete_observations
+        self._pending_observation_id = memory_id  # Store the ID for later
         
         # Check if there's actually a memory to retrieve
         if not memory_id:
@@ -277,11 +277,43 @@ class ObservationStage:
             logger.warning(f"Failed to retrieve memory {memory_id}")
             return None
         
-        # Only record if this is actually an observation (not a file or other memory type)
-        if memory_id.startswith("observation:"):
-            logger.info(f"Recording processed observation: {memory_id}")
-            self.cognitive_loop._record_processed_observation(memory_id, observation)
-        else:
-            logger.debug(f"Not recording {memory_id} as it's not an observation")
-            
+        # Don't record as processed yet - wait until after orient phase
+        # This prevents confusion during orient when the cyber sees conflicting info
+        
         return observation
+    
+    def _complete_observation_processing(self, observation: Optional[Dict[str, Any]], 
+                                        orientation: Optional[Dict[str, Any]]):
+        """Complete observation processing after orient phase.
+        
+        This is called after orient completes to record processed observations
+        and remove obsolete ones. This prevents confusion during the orient phase.
+        
+        Args:
+            observation: The observation that was processed (if any)
+            orientation: The orientation result (if any)
+        """
+        # Record the processed observation if we had one
+        if observation and hasattr(self, '_pending_observation_id'):
+            memory_id = self._pending_observation_id
+            if memory_id and memory_id.startswith("observation:"):
+                logger.info(f"Recording processed observation (post-orient): {memory_id}")
+                self.cognitive_loop._record_processed_observation(memory_id, observation)
+        
+        # Remove obsolete observations
+        if hasattr(self, '_pending_obsolete_observations') and self._pending_obsolete_observations:
+            obsolete_observations = self._pending_obsolete_observations
+            logger.info(f"Removing {len(obsolete_observations)} obsolete observations (post-orient):")
+            for obs_id in obsolete_observations:
+                try:
+                    self.memory_system.remove_memory(obs_id)
+                    logger.info(f"  - Removed: {obs_id}")
+                except Exception as e:
+                    logger.warning(f"  - Failed to remove {obs_id}: {e}")
+            
+            # Also remove from processed_observations.json
+            self.cognitive_loop._remove_obsolete_from_processed(obsolete_observations)
+        
+        # Clear pending state
+        self._pending_observation_id = None
+        self._pending_obsolete_observations = []
