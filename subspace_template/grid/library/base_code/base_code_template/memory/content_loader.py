@@ -43,6 +43,20 @@ class ContentCache:
         """Store content in cache."""
         self.cache[key] = (content, datetime.now())
     
+    def invalidate(self, key: str) -> bool:
+        """Invalidate a specific cache entry.
+        
+        Args:
+            key: The cache key to invalidate
+            
+        Returns:
+            True if the entry was found and removed, False otherwise
+        """
+        if key in self.cache:
+            del self.cache[key]
+            return True
+        return False
+    
     def clear(self) -> None:
         """Clear all cached content."""
         self.cache.clear()
@@ -227,3 +241,28 @@ class ContentLoader:
             logger.error(f"Error computing digest for {file_path}: {e}")
         
         return None
+    
+    def invalidate_file(self, file_path: str) -> bool:
+        """Invalidate cache for a specific file.
+        
+        Args:
+            file_path: Path to the file to invalidate
+            
+        Returns:
+            True if cache was invalidated, False otherwise
+        """
+        # Try to match any cache key that contains this file path
+        # Cache keys are like "file:/path/to/file:digest"
+        invalidated = False
+        keys_to_remove = []
+        
+        for key in self.cache.cache.keys():
+            if key.startswith(f"file:{file_path}:"):
+                keys_to_remove.append(key)
+        
+        for key in keys_to_remove:
+            if self.cache.invalidate(key):
+                invalidated = True
+                logger.debug(f"Invalidated cache for: {key}")
+        
+        return invalidated

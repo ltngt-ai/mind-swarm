@@ -38,7 +38,8 @@ class ObservationStage:
         "action_implementation", 
         "execution", 
         "procedures", 
-        "tools"
+        "tools",
+        "background"
     }
     
     def __init__(self, cognitive_loop):

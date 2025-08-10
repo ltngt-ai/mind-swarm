@@ -155,6 +155,9 @@ class CognitiveLoop:
                 json.dump([], f, indent=2)
             logger.info("Created empty processed_observations.json")
         
+        # Invalidate any cached version to ensure fresh content
+        self.memory_system.content_loader.invalidate_file(str(processed_file))
+        
         # Add to memory as pinned so Cyber always sees it
         processed_memory = FileMemoryBlock(
             location=str(processed_file),
@@ -400,7 +403,11 @@ class CognitiveLoop:
             
             logger.info(f"Wrote {len(processed)} records to processed_observations.json")
             
-            # Add a PINNED FileMemoryBlock for this file so the Cyber always sees it
+            # Invalidate the cache for this file so the new content is loaded
+            self.memory_system.content_loader.invalidate_file(str(processed_file))
+            
+            # Update the FileMemoryBlock for this file so the Cyber always sees it
+            # The memory manager will replace the existing one with the same ID
             processed_memory = FileMemoryBlock(
                 location=str(processed_file),
                 priority=Priority.LOW,
@@ -447,6 +454,9 @@ class CognitiveLoop:
                 # Write back the filtered list
                 with open(processed_file, 'w') as f:
                     json.dump(processed, f, indent=2)
+                
+                # Invalidate the cache for this file so the new content is loaded
+                self.memory_system.content_loader.invalidate_file(str(processed_file))
                 
                 # Update the FileMemoryBlock for this file
                 processed_memory = FileMemoryBlock(

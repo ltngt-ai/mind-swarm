@@ -32,7 +32,8 @@ class ExecutionStage:
     # Knowledge tags to exclude during execution stage
     # We don't need observation/perception details when executing
     KNOWLEDGE_BLACKLIST = {
-        "observation_details",
+        "observation",
+        "background",
         "raw_perception",
         "perception"
     }
