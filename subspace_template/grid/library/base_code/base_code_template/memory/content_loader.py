@@ -127,6 +127,29 @@ class ContentLoader:
             if not file_path.exists():
                 return f"[File not found: {memory.location}]"
             
+            # Handle directories
+            if file_path.is_dir():
+                # Create a directory listing
+                try:
+                    items = []
+                    for item in sorted(file_path.iterdir()):
+                        if item.is_dir():
+                            items.append(f"📁 {item.name}/")
+                        else:
+                            size = item.stat().st_size
+                            items.append(f"📄 {item.name} ({size} bytes)")
+                    
+                    content = f"Directory: {file_path}\n"
+                    content += f"Contains {len(items)} items:\n\n"
+                    content += "\n".join(items)
+                    
+                    # Cache the directory listing
+                    self.cache.put(cache_key, content)
+                    return content
+                    
+                except Exception as e:
+                    return f"[Error listing directory: {memory.location} - {str(e)}]"
+            
             if file_path.stat().st_size > 1_000_000:  # 1MB limit
                 return f"[File too large: {memory.location} - {file_path.stat().st_size} bytes]"
             

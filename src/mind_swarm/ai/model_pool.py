@@ -211,42 +211,70 @@ class ModelPool:
             yaml_free = set(self.models.keys())
             yaml_paid = set(self.paid_models.keys())
             
-            # Merge free models - only add if not from YAML
+            # Track runtime-added models (models that aren't in any YAML)
+            runtime_free = {}
+            runtime_paid = {}
+            
+            # Process free models from saved state
             for model_id, model_data in data.get('models', {}).items():
-                if model_id not in yaml_free:
-                    # This is a runtime-added model, keep it
-                    self.models[model_id] = ModelConfig.from_dict(model_data)
-                else:
-                    # Model exists in YAML, check for promotions
-                    saved_model = ModelConfig.from_dict(model_data)
+                saved_model = ModelConfig.from_dict(model_data)
+                
+                # Check if this model is from OpenRouter config
+                is_openrouter = saved_model.provider == "openrouter"
+                
+                if model_id in yaml_free:
+                    # Model exists in YAML, only preserve promotions
                     if saved_model.promoted_until or saved_model.original_priority:
-                        # Preserve promotion status
                         self.models[model_id].promoted_until = saved_model.promoted_until
                         self.models[model_id].original_priority = saved_model.original_priority
                         if saved_model.promoted_until:
                             self.models[model_id].priority = saved_model.priority
+                elif not is_openrouter:
+                    # This is a runtime-added model (not from OpenRouter), keep it
+                    runtime_free[model_id] = saved_model
+                # If it's an OpenRouter model not in YAML, skip it (it was removed)
                 
-            # Merge paid models - only add if not from YAML
+            # Process paid models from saved state
             for model_id, model_data in data.get('paid_models', {}).items():
-                if model_id not in yaml_paid:
-                    # This is a runtime-added model, keep it
-                    self.paid_models[model_id] = ModelConfig.from_dict(model_data)
-                else:
-                    # Model exists in YAML, check for promotions
-                    saved_model = ModelConfig.from_dict(model_data)
+                saved_model = ModelConfig.from_dict(model_data)
+                
+                # Check if this model is from OpenRouter config
+                is_openrouter = saved_model.provider == "openrouter"
+                
+                if model_id in yaml_paid:
+                    # Model exists in YAML, only preserve promotions
                     if saved_model.promoted_until or saved_model.original_priority:
-                        # Preserve promotion status
                         self.paid_models[model_id].promoted_until = saved_model.promoted_until
                         self.paid_models[model_id].original_priority = saved_model.original_priority
                         if saved_model.promoted_until:
                             self.paid_models[model_id].priority = saved_model.priority
-                
-            # Count what was actually added from state
-            added_free = len(self.models) - len(yaml_free)
-            added_paid = len(self.paid_models) - len(yaml_paid)
+                elif not is_openrouter:
+                    # This is a runtime-added model (not from OpenRouter), keep it
+                    runtime_paid[model_id] = saved_model
+                # If it's an OpenRouter model not in YAML, skip it (it was removed)
             
-            if added_free > 0 or added_paid > 0:
-                logger.info(f"Merged state: added {added_free} free and {added_paid} paid runtime models")
+            # Add runtime-added models back
+            self.models.update(runtime_free)
+            self.paid_models.update(runtime_paid)
+            
+            # Log what happened
+            if runtime_free or runtime_paid:
+                logger.info(f"Preserved {len(runtime_free)} free and {len(runtime_paid)} paid runtime-added models")
+            
+            # Check for removed models
+            removed_count = 0
+            for model_id in data.get('models', {}).keys():
+                if model_id not in self.models:
+                    logger.debug(f"Removed model {model_id} (no longer in config)")
+                    removed_count += 1
+            for model_id in data.get('paid_models', {}).keys():
+                if model_id not in self.paid_models:
+                    logger.debug(f"Removed model {model_id} (no longer in config)")
+                    removed_count += 1
+            
+            if removed_count > 0:
+                logger.info(f"Removed {removed_count} models that are no longer in config files")
+                
         except Exception as e:
             logger.error(f"Failed to load model pool state: {e}")
     

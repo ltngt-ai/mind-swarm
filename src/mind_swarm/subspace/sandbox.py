@@ -383,13 +383,10 @@ class SubspaceManager:
             # Memory areas
             memory_dir = sandbox.cyber_personal / "memory"
             memory_dir.mkdir(exist_ok=True)
-            for subdir in ["observations", "orientations", "knowledge", "workspace"]:
+            # Only create directories that are actually used by the cyber code
+            for subdir in ["orientations",  # Used by observation_stage for orientations
+                         "action_results"]:  # Used by all actions for their results
                 (memory_dir / subdir).mkdir(exist_ok=True)
-            
-            # Observation subdirectories
-            obs_dir = memory_dir / "observations"
-            for subdir in ["actions", "computations", "searches", "management"]:
-                (obs_dir / subdir).mkdir(exist_ok=True)
             
             # Internal logs
             (internal_dir / "logs").mkdir(exist_ok=True)
@@ -417,13 +414,10 @@ class SubspaceManager:
         # Memory directory with subdirectories
         memory_dir = sandbox.cyber_personal / "memory"
         memory_dir.mkdir(exist_ok=True)
-        for subdir in ["observations", "orientations", "knowledge", "workspace"]:
+        # Only create directories that are actually used by the cyber code
+        for subdir in ["orientations",  # Used by observation_stage for orientations
+                     "action_results"]:  # Used by all actions for their results
             (memory_dir / subdir).mkdir(exist_ok=True)
-        
-        # Observation subdirectories
-        obs_dir = memory_dir / "observations"
-        for subdir in ["actions", "computations", "searches", "management"]:
-            (obs_dir / subdir).mkdir(exist_ok=True)
         
         # Copy Cyber code to base_code directory
         self._copy_agent_base_code(base_code, cyber_type)

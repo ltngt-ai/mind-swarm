@@ -234,32 +234,35 @@ class ContextMemoryBlock(MemoryBlock):
 
 @dataclass
 class ObservationMemoryBlock(MemoryBlock):
-    """Filesystem observations - new files, changes, etc."""
-    observation_type: str
-    path: str
+    """Simple observation - something that happened."""
+    observation_type: str  # Type of observation (action_result, file_change, new_message, etc.)
+    path: str  # Path to the file containing details
+    message: str  # What happened (e.g., "Result of action 'respond': Message sent successfully")
+    cycle_count: int  # Which cycle this happened in
+    content: Optional[str] = None  # Optional - small content included directly (< 1KB)
     confidence: float = 1.0
     priority: Priority = Priority.HIGH
-    timestamp: Optional[datetime] = None
     expiry: Optional[datetime] = None
     pinned: bool = False
-    metadata: Optional[Dict[str, Any]] = None
     
     def __post_init__(self):
         """Initialize base class and set type."""
+        # Don't pass timestamp to parent - we don't use it
         super().__init__(
             confidence=self.confidence,
             priority=self.priority,
-            timestamp=self.timestamp,
+            timestamp=None,  # No timestamp needed
             expiry=self.expiry,
-            metadata=self.metadata,
+            metadata=None,  # No metadata
             pinned=self.pinned
         )
         self.type = MemoryType.OBSERVATION
         
         # Use unified ID that prevents duplication
+        # Include cycle count in ID to make observations unique per cycle
         self.id = UnifiedMemoryID.create_observation_id(
             self.observation_type,
-            self.path
+            f"{self.path}:cycle_{self.cycle_count}"
         )
 
 

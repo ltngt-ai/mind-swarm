@@ -1,9 +1,8 @@
-"""Observation Stage - Gathering and understanding information.
+"""Observation Stage - Understanding and managing observations.
 
 This stage encompasses:
-1. Perceive - Scan the environment for changes
-2. Observe - Select what deserves attention  
-3. Orient - Understand the situation
+1. Observe - Understand the situation from observations
+2. Cleanup - Clean up obsolete observations
 
 The output of this stage is an understanding of what's happening.
 """
@@ -26,9 +25,8 @@ class ObservationStage:
     """Handles the observation phase of cognition.
     
     This stage is responsible for:
-    - Scanning the environment for changes (Perceive)
-    - Selecting what needs attention (Observe)
-    - Understanding the situation (Orient)
+    - Understanding the situation from observations (Observe)
+    - Cleaning up obsolete observations (Cleanup)
     """
     
     # Knowledge tags to exclude during observation stage
@@ -63,138 +61,101 @@ class ObservationStage:
         """
         logger.info("=== OBSERVATION STAGE ===")
         
-        # Initialize pending observations tracking
-        self._pending_observation_id = None
-        self._pending_obsolete_observations = []
+        # Phase 1: Observe - Understand the situation from observations
+        orientation = await self.observe()
         
-        # Phase 1: Perceive - Scan environment
-        observations = await self.perceive()
-        
-        # Phase 2: Observe - Select focus
-        selected_observation = await self.observe()
-        
-        if not selected_observation:
-            logger.info("👁️ No immediate focus needed")
-            # Still handle any pending obsolete observations
-            self._complete_observation_processing(None, None)
-            return None
-            
-        # Phase 3: Orient - Understand situation
-        orientation = await self.orient(selected_observation)
-        
-        # After orient completes, record what was processed
-        self._complete_observation_processing(selected_observation, orientation)
+        # Phase 2: Cleanup - Clean up obsolete/processed observations
+        await self.cleanup()
         
         return orientation
     
-    async def perceive(self) -> list:
-        """PERCEIVE - Scan environment and update memory with observations.
-        
-        Returns:
-            List of observations found
-        """
-        logger.info("📡 Perceiving environment...")
-        
-        # Update dynamic context
-        self.cognitive_loop._update_dynamic_context(last_activity=datetime.now().isoformat())
-        
-        # Scan environment
-        observations = self.environment_scanner.scan_environment(full_scan=False)
-        
-        # Add observations to memory
-        significant_count = 0
-        
-        for obs in observations:
-            self.memory_system.add_memory(obs)
-            if obs.priority != Priority.LOW:
-                significant_count += 1
-
-        if significant_count > 0:
-            logger.info(f"📡 Perceived {significant_count} significant changes ({len(observations)} total)")
-        else:
-            logger.info("📡 Environment scan - no significant changes detected")
-            
-        return observations
-    
     async def observe(self) -> Optional[Dict[str, Any]]:
-        """OBSERVE - Intelligently select the most important observation.
+        """OBSERVE - Understand the situation from observations.
+        
+        This phase first scans for new observations, then analyzes all observations 
+        and produces an orientation/understanding.
         
         Returns:
-            Selected observation or None if nothing needs attention
+            Orientation data including understanding and approach, or None
         """
-        logger.info("👁️ Observing what needs attention...")
+        logger.info("👁️ Observing and understanding the situation...")
         
-        # Update dynamic context with current time before LLM call
-        self.cognitive_loop._update_dynamic_context()
+        # First, scan environment for new observations
+        logger.info("📡 Scanning for new observations...")
+        self.cognitive_loop._update_dynamic_context(stage="OBSERVATION", phase="SCAN")
+        observations = self.environment_scanner.scan_environment(
+            full_scan=False, 
+            cycle_count=self.cognitive_loop.cycle_count
+        )
+        
+        # Add all observations and memories from environment scanner
+        # Observations point to the actual files that changed, not to saved observations
+        significant_count = 0
+        for memory in observations:
+            # Add all memories to the memory system
+            self.memory_system.add_memory(memory)
+            
+            # Count significant observations
+            if isinstance(memory, ObservationMemoryBlock):
+                if memory.priority != Priority.LOW:
+                    significant_count += 1
+                logger.debug(f"Observation: {memory.observation_type} for {memory.path}")
+        
+        if significant_count > 0:
+            logger.info(f"📡 Found {significant_count} significant changes ({len(observations)} total)")
+        else:
+            logger.debug("📡 No significant changes detected")
+        
+        # Update dynamic context before LLM call - OBSERVE phase
+        self.cognitive_loop._update_dynamic_context(stage="OBSERVATION", phase="OBSERVE")
         
         # Create tag filter for observation stage with our blacklist
         tag_filter = TagFilter(blacklist=self.KNOWLEDGE_BLACKLIST)
         
-        # Build full working memory context with filtering
+        # Build working memory context for understanding the situation
         memory_context = self.memory_system.build_context(
             max_tokens=self.cognitive_loop.max_context_tokens // 2,
-            current_task="Deciding what to focus on",
+            current_task="Understanding the current situation from observations",
             selection_strategy="balanced",
             tag_filter=tag_filter,
-            exclude_types=[MemoryType.CYCLE_STATE]  # Don't need internal cycle state for selecting observations
+            exclude_types=[MemoryType.CYCLE_STATE]  # Don't need internal cycle state
         )
         
-        # Log what's in the context
-        if "processed_observations.json" in memory_context:
-            logger.debug("✓ processed_observations.json is in working memory")
-        else:
-            logger.warning("✗ processed_observations.json NOT in working memory")
+        # Use brain to analyze the situation from all observations
+        logger.info("🧠 Analyzing situation from observations...")
         
-        # Let the AI brain see everything and decide what to focus on
-        observation = await self._select_focus_from_memory(memory_context)
+        # The brain will look at all observations and understand the situation
+        orientation_response = await self.brain_interface.analyze_situation_from_observations(memory_context)
         
-        # Update cycle state with selected observation
-        self.cognitive_loop._update_cycle_state(current_observation=observation)
-           
-        return observation
-    
-    async def orient(self, observation: Dict[str, Any]) -> Dict[str, Any]:
-        """ORIENT - Understand the situation and build context.
-        
-        Args:
-            observation: The selected observation to orient to
-            
-        Returns:
-            Orientation data including understanding and approach
-        """
-        logger.info("🧭 Orienting to understand situation...")
-        
-        # Update dynamic context with current time before LLM call
-        self.cognitive_loop._update_dynamic_context()
-        
-        # Create tag filter for observation stage with our blacklist
-        tag_filter = TagFilter(blacklist=self.KNOWLEDGE_BLACKLIST)
-        
-        # Build working memory context for orientation with filtering
-        # We already have the selected observation, don't need all observations
-        working_memory = self.memory_system.build_context(
-            max_tokens=self.cognitive_loop.max_context_tokens // 2,
-            current_task="Understanding the current situation",
-            selection_strategy="balanced",
-            tag_filter=tag_filter,
-            exclude_types=[MemoryType.OBSERVATION, MemoryType.CYCLE_STATE]  # Focus on context, not raw observations
-        )
-        
-        # Use brain to understand the situation
-        logger.info("🧠 Analyzing situation and understanding context...")
-        orientation_response = await self.brain_interface.analyze_situation(observation, working_memory)
+        if not orientation_response:
+            logger.info("👁️ No significant situation to address")
+            return None
         
         # Extract the useful content from the response
         output_values = orientation_response.get("output_values", {})
         
-        # Create a clean orientation record with only useful information
+        # Debug log to see what we got
+        logger.debug(f"Brain response output_values: {output_values}")
+        
+        # Create orientation data - handle template placeholders
+        understanding = output_values.get("understanding", "")
+        situation_type = output_values.get("situation_type", "unknown")
+        approach = output_values.get("approach", "")
+        
+        # Check for template placeholders and replace with meaningful defaults
+        if understanding == "{understanding}" or not understanding:
+            understanding = "Analyzing current observations"
+        if situation_type == "{situation_type}" or not situation_type:
+            situation_type = "observation_review"
+        if approach == "{approach}" or not approach:
+            approach = "Continue monitoring and processing observations"
+        
         orientation_data = {
             "timestamp": datetime.now().isoformat(),
             "cycle_count": self.cognitive_loop.cycle_count,
-            "observation": observation,  # What we're orienting to
-            "understanding": output_values.get("understanding", ""),
-            "situation_type": output_values.get("situation_type", "unknown"),
-            "approach": output_values.get("approach", "")
+            "understanding": understanding,
+            "situation_type": situation_type,
+            "approach": approach
         }
         
         # Save orientation to file
@@ -211,13 +172,10 @@ class ObservationStage:
         orientation_observation = ObservationMemoryBlock(
             observation_type="self_orientation",
             path=str(orientation_file),
+            message="Created orientation for current situation",
+            cycle_count=self.cognitive_loop.cycle_count,
             priority=Priority.MEDIUM,
-            confidence=1.0,
-            metadata={
-                "file_type": "orientation",
-                "cycle_count": self.cognitive_loop.cycle_count,
-                "timestamp": timestamp.isoformat()
-            }
+            confidence=1.0
         )
         
         # Add observation to memory system
@@ -228,8 +186,7 @@ class ObservationStage:
         orientation_memory = FileMemoryBlock(
             location=str(orientation_file),
             priority=Priority.HIGH,
-            confidence=1.0,
-            metadata={"file_type": "orientation"}
+            confidence=1.0
         )
         
         # Add to working memory
@@ -237,83 +194,39 @@ class ObservationStage:
         
         # Store just the file reference in cycle state
         self.cognitive_loop._update_cycle_state(current_orientation_id=orientation_memory.id)
-        
+                
         return orientation_data
     
-    async def _select_focus_from_memory(self, memory_context: str) -> Optional[Dict[str, Any]]:
-        """Use brain to select what to focus on from full memory context.
+    async def cleanup(self) -> None:
+        """CLEANUP - Clean up obsolete observations that are no longer relevant.
         
-        Args:
-            memory_context: The full working memory context
-            
-        Returns:
-            Selected observation or None
+        The cyber determines what's obsolete based on cycle counts and context.
         """
-        selection_result = await self.brain_interface.select_focus_from_memory(memory_context)
+        logger.info("🧹 Cleaning up observations...")
         
-        if not selection_result:
-            return None
-            
-        memory_id = selection_result["memory_id"]
-        reasoning = selection_result["reasoning"]
-        obsolete_observations = selection_result.get("obsolete_observations", [])
+        # Update phase to CLEANUP
+        self.cognitive_loop._update_dynamic_context(stage="OBSERVATION", phase="CLEANUP")
         
-        # Store for post-orient processing
-        self._pending_obsolete_observations = obsolete_observations
-        self._pending_observation_id = memory_id  # Store the ID for later
-        
-        # Check if there's actually a memory to retrieve
-        if not memory_id:
-            # Brain decided no focus needed (just cleanup)
-            logger.debug(f"Brain decided no focus needed: {reasoning}")
-            return None
-        
-        # Retrieve the selected memory
-        observation = self.brain_interface.retrieve_memory_by_id(
-            memory_id, self.memory_system, reasoning
+        # Get the brain's assessment of what to clean up
+        memory_context = self.memory_system.build_context(
+            max_tokens=self.cognitive_loop.max_context_tokens // 4,  # Smaller context for cleanup
+            current_task="Identifying obsolete observations to clean up based on cycle counts",
+            selection_strategy="recent",
+            tag_filter=TagFilter(blacklist=self.KNOWLEDGE_BLACKLIST),
+            exclude_types=[MemoryType.CYCLE_STATE]  # Exclude internal state only, keep knowledge
         )
         
-        if not observation:
-            logger.warning(f"Failed to retrieve memory {memory_id}")
-            return None
+        cleanup_result = await self.brain_interface.identify_obsolete_observations(memory_context)
         
-        # Don't record as processed yet - wait until after orient phase
-        # This prevents confusion during orient when the cyber sees conflicting info
-        
-        return observation
-    
-    def _complete_observation_processing(self, observation: Optional[Dict[str, Any]], 
-                                        orientation: Optional[Dict[str, Any]]):
-        """Complete observation processing after orient phase.
-        
-        This is called after orient completes to record processed observations
-        and remove obsolete ones. This prevents confusion during the orient phase.
-        
-        Args:
-            observation: The observation that was processed (if any)
-            orientation: The orientation result (if any)
-        """
-        # Record the processed observation if we had one
-        if observation and hasattr(self, '_pending_observation_id'):
-            memory_id = self._pending_observation_id
-            if memory_id and memory_id.startswith("observation:"):
-                logger.info(f"Recording processed observation (post-orient): {memory_id}")
-                self.cognitive_loop._record_processed_observation(memory_id, observation)
-        
-        # Remove obsolete observations
-        if hasattr(self, '_pending_obsolete_observations') and self._pending_obsolete_observations:
-            obsolete_observations = self._pending_obsolete_observations
-            logger.info(f"Removing {len(obsolete_observations)} obsolete observations (post-orient):")
-            for obs_id in obsolete_observations:
-                try:
-                    self.memory_system.remove_memory(obs_id)
-                    logger.info(f"  - Removed: {obs_id}")
-                except Exception as e:
-                    logger.warning(f"  - Failed to remove {obs_id}: {e}")
+        if cleanup_result:
+            obsolete_observations = cleanup_result.get("obsolete_observations", [])
             
-            # Also remove from processed_observations.json
-            self.cognitive_loop._remove_obsolete_from_processed(obsolete_observations)
-        
-        # Clear pending state
-        self._pending_observation_id = None
-        self._pending_obsolete_observations = []
+            # Remove obsolete observations
+            if obsolete_observations:
+                logger.info(f"Removing {len(obsolete_observations)} obsolete observations:")
+                for obs_id in obsolete_observations:
+                    try:
+                        self.memory_system.remove_memory(obs_id)
+                        logger.info(f"  - Removed: {obs_id}")
+                    except Exception as e:
+                        logger.warning(f"  - Failed to remove {obs_id}: {e}")

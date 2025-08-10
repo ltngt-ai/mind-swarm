@@ -94,6 +94,9 @@ class ExecutionStage:
         """
         logger.info(f"📋 Validating and preparing {len(action_data)} actions...")
         
+        # Update phase to INSTRUCT
+        self.cognitive_loop._update_dynamic_context(stage="EXECUTION", phase="INSTRUCT")
+        
         corrected_actions = []
         validation_errors = 0
         
@@ -142,6 +145,9 @@ class ExecutionStage:
             List of action results
         """
         logger.info(f"⚡ Executing {len(action_data)} actions...")
+        
+        # Update phase to ACT
+        self.cognitive_loop._update_dynamic_context(stage="EXECUTION", phase="ACT")
         
         # Create tag filter for execution stage with our blacklist
         tag_filter = TagFilter(blacklist=self.KNOWLEDGE_BLACKLIST)
@@ -214,8 +220,12 @@ class ExecutionStage:
                     logger.warning("Critical action failed, stopping sequence")
                     break
                 
-        # Process results into observations
-        self.action_coordinator.process_action_results(results, self.memory_system)
+        # Process results into observations with cycle count
+        self.action_coordinator.process_action_results(
+            results, 
+            self.memory_system, 
+            self.cognitive_loop.cycle_count
+        )
         
         logger.info(f"⚡ Action phase complete: {successful_actions}/{len(results)} successful")
         

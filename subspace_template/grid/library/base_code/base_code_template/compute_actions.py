@@ -187,23 +187,23 @@ class ExecutePythonAction(Action):
                 "code_lines": len(code.strip().split('\n'))
             }
             
-            # Store in memory if requested
+            # Store result as memory (file) and create observation pointing to it
             if context.get("memory_manager") and (output_lines or result_vars):
-                # Write computation result to file
+                # Write computation result to file (this IS the memory)
                 from pathlib import Path
                 from datetime import datetime
                 import json
                 
-                obs_dir = Path("/personal/memory/observations/computations")
-                obs_dir.mkdir(parents=True, exist_ok=True)
+                results_dir = Path("/personal/memory/action_results")
+                results_dir.mkdir(parents=True, exist_ok=True)
                 
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:20]
                 filename = f"compute_{timestamp}.json"
-                filepath = obs_dir / filename
+                filepath = results_dir / filename
                 
                 # Write complete computation result to file
                 compute_data = {
-                    "observation_type": "computation_result",
+                    "type": "computation_result",
                     "timestamp": datetime.now().isoformat(),
                     "description": description,
                     "code": code,
@@ -222,18 +222,20 @@ class ExecutePythonAction(Action):
                 with open(filepath, 'w') as f:
                     json.dump(compute_data, f, indent=2, default=str)
                 
-                # Create observation pointing to the file
-                memory_block = ObservationMemoryBlock(
+                # Get cycle count from context
+                cognitive_loop = context.get("cognitive_loop")
+                cycle_count = cognitive_loop.cycle_count if cognitive_loop else 0
+                
+                # Create observation pointing to the memory file
+                result_summary = output_lines[0] if output_lines else 'Computed variables'
+                observation = ObservationMemoryBlock(
                     observation_type="computation_result",
-                    path=str(filepath),  # Path to the actual file
-                    priority=Priority.MEDIUM,
-                    metadata={
-                        "description": description,
-                        "result_summary": output_lines[0] if output_lines else 'Computed variables',
-                        "has_variables": bool(result_vars)
-                    }
+                    path=str(filepath),  # Points to the actual memory file
+                    message=f"Computation result: {result_summary}",
+                    cycle_count=cycle_count,
+                    priority=Priority.MEDIUM
                 )
-                context["memory_manager"].add_memory(memory_block)
+                context["memory_manager"].add_memory(observation)
             
             return ActionResult(
                 self.name,

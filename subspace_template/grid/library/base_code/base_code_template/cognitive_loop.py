@@ -139,35 +139,8 @@ class CognitiveLoop:
         # Add identity to memory (pinned so always visible)
         self._init_identity_memory()
         
-        # Ensure processed_observations.json exists and is in memory
-        self._init_processed_observations()
-        
         # Initialize dynamic context file
         self._init_dynamic_context()
-    
-    def _init_processed_observations(self):
-        """Ensure processed_observations.json exists and is in memory."""
-        processed_file = self.memory_dir / "processed_observations.json"
-        
-        # Create file if it doesn't exist
-        if not processed_file.exists():
-            with open(processed_file, 'w') as f:
-                json.dump([], f, indent=2)
-            logger.info("Created empty processed_observations.json")
-        
-        # Invalidate any cached version to ensure fresh content
-        self.memory_system.content_loader.invalidate_file(str(processed_file))
-        
-        # Add to memory as pinned so Cyber always sees it
-        processed_memory = FileMemoryBlock(
-            location=str(processed_file),
-            priority=Priority.LOW,
-            confidence=1.0,
-            pinned=True,  # Always in working memory
-            metadata={"file_type": "processed_observations_log"}
-        )
-        self.memory_system.add_memory(processed_memory)
-        logger.info("Added processed_observations.json to pinned memory")
     
     def _init_identity_memory(self):
         """Add Cyber identity file to working memory as pinned."""
@@ -223,8 +196,14 @@ class CognitiveLoop:
         self.dynamic_context_file = context_file
         self.start_time = datetime.now()
     
-    def _update_dynamic_context(self, **updates):
-        """Update the dynamic context file with new values."""
+    def _update_dynamic_context(self, stage=None, phase=None, **updates):
+        """Update the dynamic context file with new values.
+        
+        Args:
+            stage: Current stage (OBSERVATION, DECISION, EXECUTION, MAINTENANCE)
+            phase: Current phase within the stage (e.g., OBSERVE, CLEANUP, DECIDE, etc.)
+            **updates: Additional key-value pairs to update
+        """
         if not hasattr(self, 'dynamic_context_file'):
             return
             
@@ -242,6 +221,12 @@ class CognitiveLoop:
             
             # Update cycle count
             context_data["cycle_count"] = self.cycle_count
+            
+            # Update stage and phase if provided
+            if stage:
+                context_data["current_stage"] = stage
+            if phase:
+                context_data["current_phase"] = phase
             
             # Apply any specific updates
             for key, value in updates.items():
@@ -294,20 +279,23 @@ class CognitiveLoop:
             self.cycle_count = self.state_manager.increment_cycle_count()
             
             # Update dynamic context at the start of each cycle
-            self._update_dynamic_context()
+            self._update_dynamic_context(stage="STARTING", phase="INIT")
             
             # Stage 1: Observation - Gather and understand information
+            self._update_dynamic_context(stage="OBSERVATION", phase="STARTING")
             orientation = await self.observation_stage.run()
             
             if not orientation:
                 # No observation needed attention, do maintenance
                 logger.debug("😴 No work found, performing maintenance")
+                self._update_dynamic_context(stage="MAINTENANCE", phase="IDLE")
                 await self.maintain()
                 await self._save_checkpoint()
                 self.execution_tracker.end_execution("idle", {"reason": "no_observations"})
                 return False
             
             # Stage 2: Decision - Choose what to do
+            self._update_dynamic_context(stage="DECISION", phase="STARTING")
             actions = await self.decision_stage.run(orientation)
             
             if not actions:
@@ -318,6 +306,7 @@ class CognitiveLoop:
                 return True
             
             # Stage 3: Execution - Take action
+            self._update_dynamic_context(stage="EXECUTION", phase="STARTING")
             results = await self.execution_stage.run(actions)
             
             # Save checkpoint after completing all stages
@@ -369,116 +358,7 @@ class CognitiveLoop:
         # Add/update in memory
         self.memory_system.add_memory(cycle_state)
     
-    def _record_processed_observation(self, memory_id: str, observation: Dict[str, Any]):
-        """Record that an observation has been processed."""
-        try:
-            # Create a processed observations file in memory
-            processed_file = self.memory_dir / "processed_observations.json"
-            
-            # Load existing records
-            if processed_file.exists():
-                try:
-                    with open(processed_file, 'r') as f:
-                        content = f.read().strip()
-                        if content:
-                            processed = json.loads(content)
-                        else:
-                            # File exists but is empty
-                            processed = []
-                except (json.JSONDecodeError, ValueError) as e:
-                    logger.warning(f"Invalid JSON in processed_observations.json, starting fresh: {e}")
-                    processed = []
-            else:
-                processed = []
-            
-            # Add new record - simplified without redundant information
-            record = {
-                "memory_id": memory_id,
-                "processed_at": datetime.now().isoformat()
-            }
-            processed.append(record)
-            
-            # Extract type from observation for logging only
-            obs_type = observation.get("observation_type", observation.get("type", "unknown"))
-            logger.info(f"Recorded processed observation: {memory_id} ({obs_type})")
-            
-            # Keep only last 100 records to avoid unbounded growth
-            if len(processed) > 100:
-                processed = processed[-100:]
-            
-            # Write back
-            with open(processed_file, 'w') as f:
-                json.dump(processed, f, indent=2)
-            
-            logger.info(f"Wrote {len(processed)} records to processed_observations.json")
-            
-            # Invalidate the cache for this file so the new content is loaded
-            self.memory_system.content_loader.invalidate_file(str(processed_file))
-            
-            # Update the FileMemoryBlock for this file so the Cyber always sees it
-            # The memory manager will replace the existing one with the same ID
-            processed_memory = FileMemoryBlock(
-                location=str(processed_file),
-                priority=Priority.LOW,
-                confidence=1.0,
-                pinned=True,  # Always in working memory
-                metadata={"file_type": "processed_observations_log"}
-            )
-            self.memory_system.add_memory(processed_memory)
-            
-        except Exception as e:
-            logger.error(f"Failed to record processed observation: {e}")
     
-    def _remove_obsolete_from_processed(self, obsolete_ids: List[str]):
-        """Remove obsolete observations from the processed_observations.json file."""
-        try:
-            processed_file = self.memory_dir / "processed_observations.json"
-            
-            if not processed_file.exists():
-                return
-            
-            # Load existing records
-            try:
-                with open(processed_file, 'r') as f:
-                    content = f.read().strip()
-                    if content:
-                        processed = json.loads(content)
-                    else:
-                        processed = []
-            except (json.JSONDecodeError, ValueError) as e:
-                logger.warning(f"Invalid JSON in processed_observations.json: {e}")
-                return
-            
-            # Filter out obsolete observations
-            original_count = len(processed)
-            processed = [
-                record for record in processed 
-                if record.get("memory_id") not in obsolete_ids
-            ]
-            
-            removed_count = original_count - len(processed)
-            if removed_count > 0:
-                logger.info(f"Removed {removed_count} obsolete observations from processed_observations.json")
-                
-                # Write back the filtered list
-                with open(processed_file, 'w') as f:
-                    json.dump(processed, f, indent=2)
-                
-                # Invalidate the cache for this file so the new content is loaded
-                self.memory_system.content_loader.invalidate_file(str(processed_file))
-                
-                # Update the FileMemoryBlock for this file
-                processed_memory = FileMemoryBlock(
-                    location=str(processed_file),
-                    priority=Priority.LOW,
-                    confidence=1.0,
-                    pinned=True,  # Always in working memory
-                    metadata={"file_type": "processed_observations_log"}
-                )
-                self.memory_system.add_memory(processed_memory)
-            
-        except Exception as e:
-            logger.error(f"Failed to remove obsolete observations from processed file: {e}")
     
     # === SUPPORTING METHODS ===
     

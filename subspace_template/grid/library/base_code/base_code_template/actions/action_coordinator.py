@@ -336,7 +336,8 @@ class ActionCoordinator:
             self.action_history = self.action_history[-self.max_history:]
             
     def process_action_results(self, results: List[Dict[str, Any]], 
-                             memory_manager: Any) -> List[ObservationMemoryBlock]:
+                             memory_manager: Any,
+                             cycle_count: int) -> List[ObservationMemoryBlock]:
         """Process action results and create memory observations.
         
         All observations are backed by actual files in the filesystem.
@@ -344,15 +345,18 @@ class ActionCoordinator:
         Args:
             results: List of action results
             memory_manager: Memory manager for storing observations
+            cycle_count: Current cycle count from cognitive loop
             
         Returns:
             List of created observation memories
         """
         observations = []
         
-        # Ensure action_results directory exists (similar to orientations)
+        # Save action results to disk (these ARE the memory files)
         results_dir = Path("/personal/memory/action_results")
         results_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Use the passed cycle_count directly
         
         for i, result in enumerate(results):
             # Create unique filename for this action result
@@ -361,10 +365,30 @@ class ActionCoordinator:
             filename = f"action_{timestamp}_{i}_{action_name}.json"
             filepath = results_dir / filename
             
+            # Create descriptive message
+            if result["success"]:
+                message = f"Result of action '{result['action_name']}': Success"
+                if result.get("result"):
+                    result_str = str(result["result"])
+                    if len(result_str) <= 100:
+                        message += f" - {result_str}"
+            else:
+                message = f"Result of action '{result['action_name']}': Failed"
+                if result.get("error"):
+                    error_str = str(result["error"])
+                    if len(error_str) <= 100:
+                        message += f" - {error_str}"
+            
+            # Determine if we should include content directly (< 1KB)
+            inline_content = None
+            if result.get("result"):
+                result_str = str(result["result"])
+                if len(result_str) < 1024:  # Less than 1KB
+                    inline_content = result_str
+            
             # Write the complete result to file
             result_data = {
                 "observation_type": "action_result",
-                "timestamp": datetime.now().isoformat(),
                 "action_name": result["action_name"],
                 "action_index": i,
                 "status": result["status"],
@@ -372,7 +396,8 @@ class ActionCoordinator:
                 "duration": result["duration"],
                 "result": result.get("result"),
                 "error": result.get("error"),
-                "parameters": result.get("parameters", {})
+                "parameters": result.get("parameters", {}),
+                "cycle_count": cycle_count
             }
             
             # Write to file
@@ -382,13 +407,11 @@ class ActionCoordinator:
             # Create observation pointing to the file
             obs = ObservationMemoryBlock(
                 observation_type="action_result",
-                path=str(filepath),  # Path to the actual file
-                priority=Priority.HIGH if result["success"] else Priority.MEDIUM,
-                metadata={
-                    "action_name": result["action_name"],
-                    "success": result["success"],
-                    "result_summary": self._format_result_summary(result)
-                }
+                path=str(filepath),
+                message=message,
+                cycle_count=cycle_count,
+                content=inline_content,  # Include small results directly
+                priority=Priority.HIGH if result["success"] else Priority.MEDIUM
             )
             
             observations.append(obs)

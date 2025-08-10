@@ -132,12 +132,13 @@ class EnvironmentScanner:
         
         logger.debug(f"Initialized baseline with {baseline_count} files")
     
-    def scan_environment(self, full_scan: bool = False) -> List[MemoryBlock]:
+    def scan_environment(self, full_scan: bool = False, cycle_count: int = 0) -> List[MemoryBlock]:
         """Scan environment and return new observations as memory blocks.
         
         Args:
             full_scan: If True, ignore baseline and scan everything as new.
                       If False, only report actual changes since baseline.
+            cycle_count: Current cycle count for observations
             
         Returns:
             List of memory blocks for observations
@@ -148,24 +149,28 @@ class EnvironmentScanner:
             self.file_states.clear()
             self.seen_observation_ids.clear()
             
-            memories = self._do_scan()
+            memories = self._do_scan(cycle_count)
             
             # Restore baseline for future scans
             self.file_states = old_baseline
             return memories
         else:
-            return self._do_scan()
+            return self._do_scan(cycle_count)
     
-    def _do_scan(self) -> List[MemoryBlock]:
-        """Perform the actual environment scan."""
+    def _do_scan(self, cycle_count: int = 0) -> List[MemoryBlock]:
+        """Perform the actual environment scan.
+        
+        Args:
+            cycle_count: Current cycle count for observations
+        """
         memories = []
         scan_start = datetime.now()
         
         # Scan different areas
-        memories.extend(self._scan_inbox())
-        memories.extend(self._scan_grid_areas())
-        memories.extend(self._scan_memory_dir())
-        memories.extend(self._scan_workshop())
+        memories.extend(self._scan_inbox(cycle_count))
+        memories.extend(self._scan_grid_areas(cycle_count))
+        memories.extend(self._scan_memory_dir(cycle_count))
+        memories.extend(self._scan_workshop(cycle_count))
         
         # Add status memories
         memories.extend(self._create_status_memories())
@@ -184,8 +189,12 @@ class EnvironmentScanner:
         
         return memories
     
-    def _scan_inbox(self) -> List[MemoryBlock]:
-        """Scan inbox for new messages."""
+    def _scan_inbox(self, cycle_count: int = 0) -> List[MemoryBlock]:
+        """Scan inbox for new messages.
+        
+        Args:
+            cycle_count: Current cycle count for observations
+        """
         memories = []
         
         if not self.inbox_path.exists():
@@ -219,12 +228,9 @@ class EnvironmentScanner:
                     obs_memory = ObservationMemoryBlock(
                         observation_type="new_message",
                         path=str(msg_file),  # Direct path to the file
-                        priority=Priority.HIGH,
-                        metadata={
-                            "from_agent": msg_data.get("from", "unknown"),
-                            "subject": msg_data.get("subject", "No subject"),
-                            "preview": msg_data.get("content", "")[:100] + "..."
-                        }
+                        message=f"New message from {msg_data.get('from', 'unknown')}: {msg_data.get('subject', 'No subject')}",
+                        cycle_count=cycle_count,
+                        priority=Priority.HIGH
                     )
                     memories.append(obs_memory)
                     
@@ -238,8 +244,12 @@ class EnvironmentScanner:
         
         return memories
     
-    def _scan_grid_areas(self) -> List[MemoryBlock]:
-        """Scan grid areas for updates."""
+    def _scan_grid_areas(self, cycle_count: int = 0) -> List[MemoryBlock]:
+        """Scan grid areas for updates.
+        
+        Args:
+            cycle_count: Current cycle count for observations
+        """
         memories = []
         
         # Scan community (discussions)
@@ -247,7 +257,8 @@ class EnvironmentScanner:
             memories.extend(self._scan_directory(
                 self.community_path,
                 "community_discussion",
-                "Community discussion"
+                "Community discussion",
+                cycle_count
             ))
         
         # Scan library (shared knowledge) - only YAML files
@@ -273,7 +284,8 @@ class EnvironmentScanner:
                         obs_memory = self._create_observation(
                             "library_updated",
                             str(knowledge_file),
-                            Priority.MEDIUM
+                            Priority.MEDIUM,
+                            cycle_count
                         )
                         if obs_memory:
                             memories.append(obs_memory)
@@ -283,13 +295,21 @@ class EnvironmentScanner:
             memories.extend(self._scan_directory(
                 self.bulletin_path,
                 "announcement",
-                "Bulletin announcement"
+                "Bulletin announcement",
+                cycle_count
             ))
         
         return memories
     
-    def _scan_directory(self, directory: Path, obs_type: str, description: str) -> List[MemoryBlock]:
-        """Scan a directory for new or changed files."""
+    def _scan_directory(self, directory: Path, obs_type: str, description: str, cycle_count: int = 0) -> List[MemoryBlock]:
+        """Scan a directory for new or changed files.
+        
+        Args:
+            directory: Directory to scan
+            obs_type: Type of observation
+            description: Description of the observation
+            cycle_count: Current cycle count for observations
+        """
         memories = []
         
         try:
@@ -300,7 +320,8 @@ class EnvironmentScanner:
                         obs_memory = self._create_observation(
                             obs_type,
                             str(file_path),
-                            Priority.HIGH if obs_type == "plaza_bulletin" else Priority.MEDIUM
+                            Priority.HIGH if obs_type == "plaza_bulletin" else Priority.MEDIUM,
+                            cycle_count
                         )
                         if obs_memory:
                             memories.append(obs_memory)
@@ -319,8 +340,12 @@ class EnvironmentScanner:
         
         return memories
     
-    def _scan_memory_dir(self) -> List[MemoryBlock]:
-        """Scan Cyber's memory directory for important files only."""
+    def _scan_memory_dir(self, cycle_count: int = 0) -> List[MemoryBlock]:
+        """Scan Cyber's memory directory for important files only.
+        
+        Args:
+            cycle_count: Current cycle count for observations
+        """
         memories = []
         
         if not self.memory_path.exists():
@@ -338,6 +363,16 @@ class EnvironmentScanner:
                         confidence=1.0,
                         metadata={"type": "journal"}
                     ))
+                    
+                    # Also create an observation for the journal update
+                    obs_memory = self._create_observation(
+                        "journal_updated",
+                        str(journal_file),
+                        Priority.MEDIUM,
+                        cycle_count
+                    )
+                    if obs_memory:
+                        memories.append(obs_memory)
             
             # Skip all JSON memory files (memory_snapshot.json, etc)
             # These are internal state and observing them creates noise
@@ -347,8 +382,12 @@ class EnvironmentScanner:
         
         return memories
     
-    def _scan_workshop(self) -> List[MemoryBlock]:
-        """Scan workshop for available tools."""
+    def _scan_workshop(self, cycle_count: int = 0) -> List[MemoryBlock]:
+        """Scan workshop for available tools.
+        
+        Args:
+            cycle_count: Current cycle count for observations
+        """
         memories = []
         
         if not self.workshop_path or not self.workshop_path.exists():
@@ -363,7 +402,8 @@ class EnvironmentScanner:
                         obs_memory = self._create_observation(
                             "tool_available",
                             str(tool_file),
-                            Priority.LOW
+                            Priority.LOW,
+                            cycle_count
                         )
                         if obs_memory:
                             memories.append(obs_memory)
@@ -422,15 +462,28 @@ class EnvironmentScanner:
         """Mark a message as processed."""
         self.processed_messages.add(message_path)
     
-    def _create_observation(self, obs_type: str, path: str, priority: Priority) -> Optional[ObservationMemoryBlock]:
+    def _create_observation(self, obs_type: str, path: str, priority: Priority, cycle_count: int = 0) -> Optional[ObservationMemoryBlock]:
         """Create an observation with deduplication.
         
         Returns None if this exact observation has been seen before.
         """
+        # Create descriptive message based on observation type
+        file_name = Path(path).name
+        if obs_type == "file_change":
+            message = f"File changed: {file_name}"
+        elif obs_type == "new_file":
+            message = f"New file created: {file_name}"
+        elif obs_type == "file_deleted":
+            message = f"File deleted: {file_name}"
+        else:
+            message = f"{obs_type}: {file_name}"
+        
         # Create the observation memory block
         obs_memory = ObservationMemoryBlock(
             observation_type=obs_type,
             path=path,
+            message=message,
+            cycle_count=cycle_count,
             priority=priority
         )
         

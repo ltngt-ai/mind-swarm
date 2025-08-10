@@ -142,6 +142,12 @@ class MemorySystem:
         # Get memories to consider
         memories_to_select = self._memory_manager.symbolic_memory
         
+        # Debug: Log memory types in symbolic memory
+        memory_type_counts = {}
+        for m in memories_to_select:
+            memory_type_counts[m.type.name] = memory_type_counts.get(m.type.name, 0) + 1
+        logger.debug(f"Memory types available: {memory_type_counts}")
+        
         # Filter by memory type if specified
         if include_types:
             memories_to_select = [m for m in memories_to_select if m.type in include_types]

@@ -174,6 +174,9 @@ class MemoryPersistence:
                     memory = ObservationMemoryBlock(
                         observation_type=mem_data['observation_type'],
                         path=mem_data.get('path', ''),
+                        message=mem_data.get('message', mem_data.get('description', 'Restored observation')),
+                        cycle_count=mem_data.get('cycle_count', 0),
+                        content=mem_data.get('content'),
                         confidence=mem_data.get('confidence', 1.0),
                         priority=Priority[mem_data.get('priority', 'MEDIUM')],
                         pinned=mem_data.get('pinned', False)

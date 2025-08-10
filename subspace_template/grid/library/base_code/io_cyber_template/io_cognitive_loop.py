@@ -138,7 +138,8 @@ class IOCognitiveLoop(CognitiveLoop):
                 ObservationMemoryBlock(
                     observation_type="network_response",
                     path="/personal/network",
-                    description=f"Network response: {network_response.get('status', 'unknown')}",
+                    message=f"Network response: {network_response.get('status', 'unknown')}",
+                    cycle_count=self.cycle_count,
                     priority=Priority.HIGH
                 )
             )
@@ -157,7 +158,8 @@ class IOCognitiveLoop(CognitiveLoop):
                 ObservationMemoryBlock(
                     observation_type="user_message",
                     path="/personal/user_io",
-                    description=f"User message: {user_message.get('type', 'unknown')}",
+                    message=f"User message: {user_message.get('type', 'unknown')}",
+                    cycle_count=self.cycle_count,
                     priority=Priority.HIGH
                 )
             )

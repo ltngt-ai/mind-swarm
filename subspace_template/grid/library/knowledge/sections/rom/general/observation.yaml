@@ -1,0 +1,36 @@
+knowledge_version: '1.0'
+title: Observations
+content: |
+  Observations are the references to memories throughout the entire shared memory of Mind-Swarm.
+  They are created when your internal systems detect changes in the environment or in your own state.
+
+  Observations are autonomous functions of your system, including updating what have been processed.
+  Observations have a memory id prefix of `orientation:` other prefixes are NOT classed as observations.
+
+  ## 1. OBSERVE
+  - Observations could be from changes in memories throughout the Mind-Swarm or a previous actions you have performed
+  - Understand the situation from the observations
+  - Analyze what type of situation this is
+  - Determine your approach to handling it
+
+  ## 2. CLEANUP
+  - Clean up obsolete observations, that are no longer relevant or have been processed
+
+  ## Example
+  memory id of `observation:personal/comms/inbox/msg_abc.msg` → Observation about /personal/comms/inbox/msg_abc.msg
+
+metadata:
+  category: observations
+  tags:
+  - observation
+  - thinking
+  - pattern
+  - perception
+  - environment
+  - self_awareness
+  - memory_management
+  confidence: 1.0
+  priority: 1
+  source: boot_rom
+  created: '2024-01-01T00:00:00Z'
+  version: 1

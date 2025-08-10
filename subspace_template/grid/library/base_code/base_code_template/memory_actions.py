@@ -119,7 +119,80 @@ class FocusMemoryAction(Action):
                         result={"searched_paths": [str(p) for p in possible_paths]}
                     )
             
-            # Create FileMemoryBlock for the file
+            # Check if it's a directory
+            if file_path.is_dir():
+                # Handle directory by listing contents
+                logger.info(f"Focusing on directory: {file_path}")
+                
+                # Get cycle count from context
+                cognitive_loop = context.get("cognitive_loop")
+                cycle_count = cognitive_loop.cycle_count if cognitive_loop else 0
+                
+                # List directory contents
+                dir_contents = []
+                try:
+                    for item in sorted(file_path.iterdir()):
+                        item_type = "directory" if item.is_dir() else "file"
+                        # Get file size if it's a file
+                        size = item.stat().st_size if item.is_file() else None
+                        dir_contents.append({
+                            "name": item.name,
+                            "type": item_type,
+                            "path": str(item),
+                            "size": size
+                        })
+                except Exception as e:
+                    logger.warning(f"Error listing directory contents: {e}")
+                
+                # Create a directory listing as content
+                content = f"Directory: {file_path}\n"
+                content += f"Contains {len(dir_contents)} items:\n\n"
+                
+                for item in dir_contents:
+                    if item["type"] == "directory":
+                        content += f"📁 {item['name']}/\n"
+                    else:
+                        size_str = f" ({item['size']} bytes)" if item['size'] is not None else ""
+                        content += f"📄 {item['name']}{size_str}\n"
+                
+                # Create observation for directory focus
+                obs = ObservationMemoryBlock(
+                    observation_type="directory_focused",
+                    path=str(file_path),
+                    message=f"Focused on directory: {file_path.name} ({len(dir_contents)} items)",
+                    cycle_count=cycle_count,
+                    content=content if len(content) < 1024 else None,  # Include listing if small
+                    priority=Priority.MEDIUM
+                )
+                memory_system.add_memory(obs)
+                
+                # Also add FileMemoryBlocks for each file in the directory
+                for item in dir_contents:
+                    if item["type"] == "file":
+                        item_path = Path(item["path"])
+                        # Create FileMemoryBlock for each file
+                        file_mem = FileMemoryBlock(
+                            location=str(item_path),
+                            priority=Priority.LOW,  # Low priority since just listing
+                            confidence=0.8
+                        )
+                        memory_system.add_memory(file_mem)
+                        logger.debug(f"Added file to memory: {item_path.name}")
+                
+                return ActionResult(
+                    self.name,
+                    ActionStatus.COMPLETED,
+                    result={
+                        "memory_id": f"directory:{file_path}",
+                        "directory_path": str(file_path),
+                        "item_count": len(dir_contents),
+                        "contents": dir_contents,
+                        "listing": content,
+                        "focus_type": "directory"
+                    }
+                )
+            
+            # Regular file handling
             file_memory = FileMemoryBlock(
                 location=str(file_path),
                 start_line=line_range[0] if line_range else None,
@@ -141,15 +214,16 @@ class FocusMemoryAction(Action):
             # Determine file type and create appropriate observation
             file_type = self._determine_file_type(file_path)
             
+            # Get cycle count from context
+            cognitive_loop = context.get("cognitive_loop")
+            cycle_count = cognitive_loop.cycle_count if cognitive_loop else 0
+            
             obs = ObservationMemoryBlock(
                 observation_type="file_focused",
                 path=str(file_path),
-                priority=Priority.MEDIUM,
-                metadata={
-                    "focus_type": focus_type,
-                    "file_type": file_type,
-                    "file_size": file_path.stat().st_size
-                }
+                message=f"Focused on {file_type} file: {file_path.name}",
+                cycle_count=cycle_count,
+                priority=Priority.MEDIUM
             )
             memory_system.add_memory(obs)
             
@@ -473,13 +547,13 @@ class SearchMemoryAction(Action):
                 from datetime import datetime
                 import json
                 
-                # Write search results to file
-                obs_dir = Path("/personal/memory/observations/searches")
-                obs_dir.mkdir(parents=True, exist_ok=True)
+                # Write search results to file (this IS memory)
+                results_dir = Path("/personal/memory/action_results")
+                results_dir.mkdir(parents=True, exist_ok=True)
                 
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:20]
                 filename = f"search_{timestamp}.json"
-                filepath = obs_dir / filename
+                filepath = results_dir / filename
                 
                 search_data = {
                     "observation_type": "memory_search",
@@ -493,14 +567,16 @@ class SearchMemoryAction(Action):
                 with open(filepath, 'w') as f:
                     json.dump(search_data, f, indent=2, default=str)
                 
+                # Get cycle count
+                cognitive_loop = context.get("cognitive_loop") if context else None
+                cycle_count = cognitive_loop.cycle_count if cognitive_loop else 0
+                
                 obs = ObservationMemoryBlock(
                     observation_type="memory_search",
-                    path=str(filepath),  # Path to actual file
-                    priority=Priority.LOW,
-                    metadata={
-                        "query": query,
-                        "result_count": len(results)
-                    }
+                    path=str(filepath),  # Path to actual memory file
+                    message=f"Search for '{query}' found {len(results)} results",
+                    cycle_count=cycle_count,
+                    priority=Priority.LOW
                 )
                 memory_system.add_memory(obs)
             
@@ -653,12 +729,12 @@ class ManageMemoryAction(Action):
             from datetime import datetime
             import json
             
-            obs_dir = Path("/personal/memory/observations/management")
-            obs_dir.mkdir(parents=True, exist_ok=True)
+            results_dir = Path("/personal/memory/action_results")
+            results_dir.mkdir(parents=True, exist_ok=True)
             
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:20]
             filename = f"manage_{timestamp}_{operation}.json"
-            filepath = obs_dir / filename
+            filepath = results_dir / filename
             
             manage_data = {
                 "observation_type": "memory_managed",
@@ -671,14 +747,16 @@ class ManageMemoryAction(Action):
             with open(filepath, 'w') as f:
                 json.dump(manage_data, f, indent=2, default=str)
             
+            # Get cycle count
+            cognitive_loop = context.get("cognitive_loop") if context else None
+            cycle_count = cognitive_loop.cycle_count if cognitive_loop else 0
+            
             obs = ObservationMemoryBlock(
                 observation_type="memory_managed",
-                path=str(filepath),  # Path to actual file
-                priority=MemoryPriority.LOW,
-                metadata={
-                    "operation": operation,
-                    "memory_id": memory_id
-                }
+                path=str(filepath),  # Path to actual memory file
+                message=f"Memory management: {operation} on {memory_id}",
+                cycle_count=cycle_count,
+                priority=MemoryPriority.LOW
             )
             memory_system.add_memory(obs)
             

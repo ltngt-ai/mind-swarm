@@ -29,11 +29,9 @@ class DecisionStage:
     """
     
     # Knowledge tags to exclude during decision stage
-    # We don't need low-level implementation details when deciding
     KNOWLEDGE_BLACKLIST = {
-        "action_implementation",
-        "procedures", 
-        "low_level_details"
+        "low_level_details",
+        "observation"
     }
     
     def __init__(self, cognitive_loop):
@@ -67,8 +65,8 @@ class DecisionStage:
             logger.warning("No orientation ID found in cycle state")
             return []
         
-        # Update dynamic context with current time before LLM call
-        self.cognitive_loop._update_dynamic_context()
+        # Update dynamic context - DECIDE phase (brain LLM call)
+        self.cognitive_loop._update_dynamic_context(stage="DECISION", phase="DECIDE")
         
         # Create tag filter for decision stage with our blacklist
         tag_filter = TagFilter(blacklist=self.KNOWLEDGE_BLACKLIST)
@@ -91,14 +89,22 @@ class DecisionStage:
         output_values = decision_response.get("output_values", {})
         actions_json = output_values.get("actions", "[]")
         
+        # Debug log to see what we actually got
+        logger.debug(f"Raw actions_json from brain: {repr(actions_json)}")
+        
         # Parse the actions JSON string
         try:
             if isinstance(actions_json, str):
                 action_specs = json.loads(actions_json)
             else:
                 action_specs = actions_json
-        except:
-            logger.error("Failed to parse actions from decision")
+        except Exception as e:
+            logger.error(f"Failed to parse actions from decision: {e}")
+            logger.error(f"Actions JSON was: {repr(actions_json)}")
+            action_specs = []
+        
+        # Ensure action_specs is iterable (not None)
+        if action_specs is None:
             action_specs = []
         
         # Convert action specs to Action objects

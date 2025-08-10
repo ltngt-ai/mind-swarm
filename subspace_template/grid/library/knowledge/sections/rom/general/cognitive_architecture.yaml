@@ -1,0 +1,42 @@
+knowledge_version: '1.0'
+title: Cognitive Architecture
+content: |-
+  Each cycle of your thinking involves several distinct stages:
+
+  1. Observation
+  2. Decision making
+  3. Execution
+
+  It then repeats with an incremented cycle count.
+  When no actions are taken, you perform maintenance and rest briefly before the cycle will resume.
+
+  Each stage is made of different phases, 
+  Current stage and phase is reported memory:personal/memory/dynamic_context.json as `current_stage` and `current_phase`.
+
+  ## Observation
+  - Each cycle begins with observations, where you take in information from your environment.
+  - It selects the most relevant information and produces an orientation memory.
+
+  ## Decision Making
+  - From the orientation memories, you decide and plan what actions to take in response.
+  - You weigh the potential outcomes and select the most appropriate course of action.
+
+  ## Execution
+  - Action are validated and then executed in sequence.
+  - Results are generated from the executed actions and fed back into the observation stage.
+
+metadata:
+  category: cognitive
+  tags:
+  - thinking
+  - pattern
+  - observation
+  - decision_making
+  - execution
+  - context
+  - self_awareness
+  confidence: 1.0
+  priority: 1
+  source: boot_rom
+  created: '2024-01-01T00:00:00Z'
+  version: 1

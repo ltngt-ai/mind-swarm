@@ -20,22 +20,22 @@ content: |
   A memory in working memory has an additional prefix indicating their type:
   - memory: general contents
   - knowledge: content is knowledge useful for decision-making
-  - observation: observations you have made, these usually refer to memory
-  They also sometimes have postfix, such as a content hash or range for views into large shared memory.
+  There are additional prefixes and postfixes that can be used to further specify the memory.
+  If the memory has a postfix, it will be things such as a content hash or range for views into large shared memory.
 
   ### Working Memory Examples
   - memory:grid/community/discussion → /grid/community/discussion
   - knowledge:grid/library/knowledge/sections/rom/general/observeration.yaml → /grid/library/knowledge/sections/rom/general/observeration.yaml
-  - observation:personal/comms/inbox/msg_abc.msg → Observation about /personal/comms/inbox/msg_abc.msg
-
+  
   ## Memory Management
-  Working memories contents ARE same as the non-working memory version, consider the like a cache (they are always up to date and are not separate things)
+  Working memories contents ARE same as the hive-mind shared version, consider them like a cache (they are always up to date and are not separate things)
   If you want to bring a memory into your working memory use the `focus_memory` action.
 
   ## Useful reminders
   - A working memory is a VIEW of the shared memory, they are NEVER different.
-  - `focus_memory` is only need to open a view into a shared memory.
+  - If you have a memory id in working memory, `focus_memory` isn't needed to access it.
   - Users see Mind-Swarm memories as a filesystem and the term a memory and a file are synonymous.
+
 metadata:
   category: memory
   tags:

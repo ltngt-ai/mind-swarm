@@ -132,6 +132,123 @@ Always start your output with [[ ## understanding ## ]]
         # Just return the raw response - no parsing needed
         return json.loads(response)
     
+    async def analyze_situation_from_observations(self, memory_context: str) -> Optional[Dict[str, Any]]:
+        """Use brain to analyze the situation from all observations.
+        
+        This is the new OBSERVE phase where the brain understands the situation
+        from all available observations in memory.
+        
+        Args:
+            memory_context: Working memory context with all observations
+            
+        Returns:
+            Orientation data including understanding and approach, or None
+        """
+        thinking_request = {
+            "signature": {
+                "instruction": """
+Review all observations in your working memory to understand the current situation.
+Look at all observations, messages, file changes, and other information to build a complete picture.
+Determine what type of situation this is and how you should approach it.
+Always start your output with [[ ## understanding ## ]]
+""",
+                "inputs": {
+                    "working_memory": "Your current working memory with all observations and context"
+                },
+                "outputs": {
+                    "understanding": "Your comprehensive understanding of the current situation based on all observations",
+                    "situation_type": "The type of situation (e.g., 'new_message', 'task_request', 'file_update', 'maintenance', 'no_action_needed')",
+                    "approach": "Your planned approach to handle this situation",
+                },
+                "display_field": "understanding"
+            },
+            "input_values": {
+                "working_memory": memory_context
+            },
+            "request_id": f"observe_{int(time.time()*1000)}",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        response = await self._use_brain(json.dumps(thinking_request))
+        result = json.loads(response)
+        
+        # Check if there's actually something to address
+        output_values = result.get("output_values", {})
+        situation_type = output_values.get("situation_type", "").lower()
+        
+        # If there's nothing to do, return None
+        if situation_type in ["no_action_needed", "none", "nothing", ""]:
+            return None
+            
+        return result
+    
+    async def identify_obsolete_observations(self, memory_context: str) -> Optional[Dict[str, Any]]:
+        """Use brain to identify obsolete observations for cleanup.
+        
+        This is the CLEANUP phase where the brain identifies which observations
+        are no longer relevant or have been processed.
+        
+        Args:
+            memory_context: Working memory context for identifying obsolete items
+            
+        Returns:
+            Dict with lists of obsolete and processed observation IDs, or None
+        """
+        thinking_request = {
+            "signature": {
+                "instruction": """
+Review your working memory to identify observations that can be cleaned up.
+Each observation has a cycle_count showing when it was created.
+Look for:
+1. Old observations from many cycles ago that are no longer relevant
+2. Duplicate observations about the same thing
+3. Action results that have been superseded by newer results
+4. Observations about things that have already been handled
+
+Be conservative - only mark observations as obsolete if you're certain they're no longer needed.
+Current cycle count is in your working memory.
+Always start your output with [[ ## reasoning ## ]]
+""",
+                "inputs": {
+                    "working_memory": "Your working memory with observations including their cycle counts"
+                },
+                "outputs": {
+                    "reasoning": "Why these observations can be cleaned up",
+                    "obsolete_observations": "JSON array of observation IDs that are obsolete and can be removed, e.g. [\"observation:personal/action_result/old:cycle_5\"]"
+                },
+                "display_field": "reasoning"
+            },
+            "input_values": {
+                "working_memory": memory_context
+            },
+            "request_id": f"cleanup_{int(time.time()*1000)}",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        response = await self._use_brain(json.dumps(thinking_request))
+        result = json.loads(response)
+        
+        output_values = result.get("output_values", {})
+        
+        # Parse the JSON array from string if needed
+        obsolete_json = output_values.get("obsolete_observations", "[]")
+        
+        try:
+            if isinstance(obsolete_json, str):
+                obsolete_observations = json.loads(obsolete_json)
+            else:
+                obsolete_observations = obsolete_json
+        except:
+            obsolete_observations = []
+        
+        # Return None if nothing to clean up
+        if not obsolete_observations:
+            return None
+            
+        return {
+            "obsolete_observations": obsolete_observations
+        }
+    
     async def make_decision(
         self, 
         working_memory: str
