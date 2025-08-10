@@ -386,11 +386,14 @@ class CreateMemoryAction(Action):
                 memory_system.add_memory(file_memory)
                 
                 # Create observation about creation
+                cognitive_loop = context.get("cognitive_loop")
+                cycle_count = cognitive_loop.cycle_count if cognitive_loop else 0
                 obs = ObservationMemoryBlock(
                     observation_type="memory_created",
                     path=str(file_path),
-                    priority=Priority.MEDIUM,
-                    metadata={"memory_type": memory_type}
+                    message=f"Created {memory_type} memory at {file_path}",
+                    cycle_count=cycle_count,
+                    priority=Priority.MEDIUM
                 )
                 memory_system.add_memory(obs)
             
