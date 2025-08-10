@@ -13,7 +13,7 @@ from typing import Dict, Any, List
 from datetime import datetime
 
 from ..actions import ActionCoordinator
-from ..memory import Priority
+from ..memory import Priority, MemoryType
 from ..memory.tag_filter import TagFilter
 from ..utils import ReferenceResolver
 

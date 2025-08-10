@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 import json
 
-from ..memory import Priority, ObservationMemoryBlock, FileMemoryBlock
+from ..memory import Priority, ObservationMemoryBlock, FileMemoryBlock, MemoryType
 from ..memory.tag_filter import TagFilter
 from ..perception import EnvironmentScanner
 from ..brain import BrainInterface
@@ -94,30 +94,14 @@ class ObservationStage:
         
         # Add observations to memory
         significant_count = 0
-        high_priority_items = []
         
         for obs in observations:
             self.memory_system.add_memory(obs)
             if obs.priority != Priority.LOW:
                 significant_count += 1
-                if obs.priority == Priority.HIGH:
-                    # Handle different memory block types
-                    if hasattr(obs, 'observation_type'):
-                        # ObservationMemoryBlock
-                        high_priority_items.append(f"{obs.observation_type}: {obs.path[:100]}")
-                    elif isinstance(obs, FileMemoryBlock) and obs.metadata.get('file_type') == 'message':
-                        # FileMemoryBlock representing a message
-                        from_agent = obs.metadata.get('from_agent', 'unknown')
-                        subject = obs.metadata.get('subject', 'No subject')
-                        high_priority_items.append(f"message from {from_agent}: {subject[:100]}")
-                    else:
-                        # Other memory block types
-                        high_priority_items.append(f"{obs.type.name if hasattr(obs, 'type') else 'unknown'}: {str(obs)[:100]}")
-        
+
         if significant_count > 0:
             logger.info(f"📡 Perceived {significant_count} significant changes ({len(observations)} total)")
-            for item in high_priority_items[:3]:  # Show top 3 high priority items
-                logger.info(f"  • {item}")
         else:
             logger.info("📡 Environment scan - no significant changes detected")
             
@@ -142,7 +126,8 @@ class ObservationStage:
             max_tokens=self.cognitive_loop.max_context_tokens // 2,
             current_task="Deciding what to focus on",
             selection_strategy="balanced",
-            tag_filter=tag_filter
+            tag_filter=tag_filter,
+            exclude_types=[MemoryType.CYCLE_STATE]  # Don't need internal cycle state for selecting observations
         )
         
         # Log what's in the context
@@ -156,15 +141,7 @@ class ObservationStage:
         
         # Update cycle state with selected observation
         self.cognitive_loop._update_cycle_state(current_observation=observation)
-        
-        if observation:
-            if observation.get("type") == "COMMAND":
-                logger.info(f"👁️ Selected MESSAGE from {observation.get('from', 'unknown')}: {observation.get('command', 'no command')}")
-            elif observation.get("type") == "QUERY":
-                logger.info(f"👁️ Selected QUERY from {observation.get('from', 'unknown')}: {observation.get('query', 'no query')[:100]}")
-            else:
-                logger.info(f"👁️ Selected {observation.get('observation_type', 'observation')}: {str(observation.get('content', observation))[:100]}")
-        
+           
         return observation
     
     async def orient(self, observation: Dict[str, Any]) -> Dict[str, Any]:
@@ -185,11 +162,13 @@ class ObservationStage:
         tag_filter = TagFilter(blacklist=self.KNOWLEDGE_BLACKLIST)
         
         # Build working memory context for orientation with filtering
+        # We already have the selected observation, don't need all observations
         working_memory = self.memory_system.build_context(
             max_tokens=self.cognitive_loop.max_context_tokens // 2,
             current_task="Understanding the current situation",
             selection_strategy="balanced",
-            tag_filter=tag_filter
+            tag_filter=tag_filter,
+            exclude_types=[MemoryType.OBSERVATION, MemoryType.CYCLE_STATE]  # Focus on context, not raw observations
         )
         
         # Use brain to understand the situation

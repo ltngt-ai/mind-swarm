@@ -14,6 +14,7 @@ import json
 from ..brain import BrainInterface
 from ..actions import ActionCoordinator
 from ..memory.tag_filter import TagFilter
+from ..memory import MemoryType
 
 logger = logging.getLogger("Cyber.stages.decision")
 
@@ -72,12 +73,13 @@ class DecisionStage:
         # Create tag filter for decision stage with our blacklist
         tag_filter = TagFilter(blacklist=self.KNOWLEDGE_BLACKLIST)
         
-        # Build decision context - this will include the orientation file reference
+        # Build decision context - exclude raw observations since we have orientation
         decision_context = self.memory_system.build_context(
             max_tokens=self.cognitive_loop.max_context_tokens // 2,
             current_task="Deciding on actions",
             selection_strategy="balanced",
-            tag_filter=tag_filter
+            tag_filter=tag_filter,
+            exclude_types=[MemoryType.OBSERVATION, MemoryType.CYCLE_STATE]  # Don't need raw observations or internal state
         )
         
         # Use brain to decide on actions

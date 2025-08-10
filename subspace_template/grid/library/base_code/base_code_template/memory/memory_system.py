@@ -120,7 +120,9 @@ class MemorySystem:
                      current_task: Optional[str] = None,
                      selection_strategy: str = "balanced",
                      format_type: str = "json",
-                     tag_filter: Optional['TagFilter'] = None) -> str:
+                     tag_filter: Optional['TagFilter'] = None,
+                     exclude_types: Optional[List[MemoryType]] = None,
+                     include_types: Optional[List[MemoryType]] = None) -> str:
         """Build LLM context from current memories.
         
         Args:
@@ -129,6 +131,8 @@ class MemorySystem:
             selection_strategy: Selection strategy ("balanced", "recent", "relevant")
             format_type: Output format ("json", "structured", "narrative")
             tag_filter: Optional TagFilter to apply stage-specific filtering
+            exclude_types: List of memory types to exclude (e.g., [MemoryType.OBSERVATION])
+            include_types: List of memory types to include (if set, only these types are included)
             
         Returns:
             Formatted context string ready for LLM
@@ -138,7 +142,15 @@ class MemorySystem:
         # Get memories to consider
         memories_to_select = self._memory_manager.symbolic_memory
         
-        # Apply tag filter if provided
+        # Filter by memory type if specified
+        if include_types:
+            memories_to_select = [m for m in memories_to_select if m.type in include_types]
+            logger.debug(f"Include filter: {len(memories_to_select)} memories of types {include_types}")
+        elif exclude_types:
+            memories_to_select = [m for m in memories_to_select if m.type not in exclude_types]
+            logger.debug(f"Exclude filter: kept {len(memories_to_select)} memories, excluded types {exclude_types}")
+        
+        # Apply tag filter if provided (only filters knowledge)
         if tag_filter:
             memories_to_select = tag_filter.filter_memories(memories_to_select)
             logger.debug(f"Tag filter reduced memories from {len(self._memory_manager.symbolic_memory)} to {len(memories_to_select)}")
