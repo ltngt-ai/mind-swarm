@@ -335,6 +335,42 @@ class CreateMemoryAction(Action):
                     }
                 )
             
+            # Check if memory already exists
+            if file_path.exists():
+                return ActionResult(
+                    self.name,
+                    ActionStatus.FAILED,
+                    error=f"Memory already exists at {file_path}. Use 'update_memory' action to modify existing memories.",
+                    result={
+                        "existing_path": str(file_path),
+                        "suggestion": "Use update_memory action instead"
+                    }
+                )
+            
+            # Check if any parent in the path exists as a memory (not a directory)
+            # This catches cases like trying to create /personal/memory/observations/cycle_16.json
+            # when /personal/memory/observations already exists as a memory
+            for parent in file_path.parents:
+                if parent == Path("/"):
+                    break
+                if parent.exists() and parent.is_file():
+                    # Calculate the attempted subdirectory path for clearer error
+                    relative_path = file_path.relative_to(parent.parent)
+                    return ActionResult(
+                        self.name,
+                        ActionStatus.FAILED,
+                        error=f"Cannot create memory at '{location}' because '{parent.name}' already exists as a memory, not a directory. You tried to treat it as a directory.",
+                        result={
+                            "conflict_memory": str(parent),
+                            "attempted_path": str(file_path),
+                            "issue": f"'{parent.name}' is a memory, not a directory",
+                            "suggestions": [
+                                f"If you want to update the existing memory, use: update_memory with location='{parent.relative_to('/personal')}'",
+                                f"If you want a new memory alongside it, use a different name like: '{parent.parent.relative_to('/personal')}/{parent.stem}_entries/{file_path.name}'"
+                            ]
+                        }
+                    )
+            
             # Ensure directory exists
             file_path.parent.mkdir(parents=True, exist_ok=True)
             
@@ -601,6 +637,134 @@ class SearchMemoryAction(Action):
             )
 
 
+class UpdateMemoryAction(Action):
+    """Update an existing memory file with new content.
+    
+    This allows modifying existing files without recreating them.
+    """
+    
+    def __init__(self):
+        super().__init__(
+            "update_memory",
+            "Update existing memory file",
+            priority=ActionPriority.MEDIUM
+        )
+    
+    async def execute(self, params: Dict[str, Any], context: Dict[str, Any]) -> ActionResult:
+        """Update an existing memory file.
+        
+        Args:
+            params:
+                location: Path to existing file (relative to /personal/)
+                content: New content for the file
+                append: If true, append to file instead of replacing (optional, default false)
+                backup: If true, create backup before updating (optional, default false)
+            context: Execution context
+            
+        Returns:
+            ActionResult with update details
+        """
+        try:
+            location = params.get("location", "").strip()
+            content = params.get("content", "")
+            append = params.get("append", False)
+            backup = params.get("backup", False)
+            
+            if not location:
+                return ActionResult(
+                    self.name,
+                    ActionStatus.FAILED,
+                    error="Location is required"
+                )
+            
+            # Resolve file path
+            if location.startswith("/"):
+                file_path = Path(location)
+            else:
+                file_path = Path("/personal") / location
+            
+            # Check if file exists
+            if not file_path.exists():
+                return ActionResult(
+                    self.name,
+                    ActionStatus.FAILED,
+                    error=f"File does not exist: {file_path}"
+                )
+            
+            if not file_path.is_file():
+                return ActionResult(
+                    self.name,
+                    ActionStatus.FAILED,
+                    error=f"Path is not a file: {file_path}"
+                )
+            
+            # Create backup if requested
+            if backup:
+                backup_path = file_path.with_suffix(f"{file_path.suffix}.backup")
+                backup_path.write_text(file_path.read_text(encoding='utf-8'), encoding='utf-8')
+            
+            # Update the file
+            if append:
+                current_content = file_path.read_text(encoding='utf-8')
+                new_content = current_content + content
+            else:
+                new_content = content
+            
+            file_path.write_text(new_content, encoding='utf-8')
+            
+            # Update memory system if available
+            memory_system = context.get("memory_system")
+            if memory_system:
+                # Create/update FileMemoryBlock
+                file_memory = FileMemoryBlock(
+                    location=str(file_path),
+                    priority=Priority.MEDIUM,
+                    confidence=1.0,
+                    metadata={
+                        "updated": True,
+                        "append": append,
+                        "backup": backup
+                    }
+                )
+                memory_system.add_memory(file_memory)
+                
+                # Create observation
+                cognitive_loop = context.get("cognitive_loop")
+                cycle_count = cognitive_loop.cycle_count if cognitive_loop else 0
+                obs = ObservationMemoryBlock(
+                    observation_type="memory_updated",
+                    path=str(file_path),
+                    message=f"Updated memory at {file_path}" + (" (appended)" if append else " (replaced)"),
+                    cycle_count=cycle_count,
+                    priority=Priority.MEDIUM
+                )
+                memory_system.add_memory(obs)
+            
+            return ActionResult(
+                self.name,
+                ActionStatus.COMPLETED,
+                result={
+                    "file_path": str(file_path),
+                    "size": len(new_content),
+                    "append": append,
+                    "backup": backup_path if backup else None,
+                    "memory_id": file_memory.id if memory_system else None
+                }
+            )
+            
+        except Exception as e:
+            logger.error(f"Error updating memory at {location}: {e}", exc_info=True)
+            return ActionResult(
+                self.name,
+                ActionStatus.FAILED,
+                error=f"Failed to update memory: {str(e)}",
+                details={
+                    "attempted_path": location,
+                    "original_error": str(e)
+                }
+            )
+
+
 class ManageMemoryAction(Action):
     """Manage memory block properties including priority, pinning, and removal.
     
@@ -781,5 +945,6 @@ def register_memory_actions(registry):
     """Register all memory-focused actions."""
     registry.register_action("base", "focus_memory", FocusMemoryAction)
     registry.register_action("base", "create_memory", CreateMemoryAction)
+    registry.register_action("base", "update_memory", UpdateMemoryAction)
     registry.register_action("base", "search_memory", SearchMemoryAction)
     registry.register_action("base", "manage_memory", ManageMemoryAction)
