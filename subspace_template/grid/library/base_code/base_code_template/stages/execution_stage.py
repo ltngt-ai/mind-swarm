@@ -16,6 +16,7 @@ from ..actions import ActionCoordinator
 from ..memory import Priority, MemoryType
 from ..memory.tag_filter import TagFilter
 from ..utils import ReferenceResolver
+from ..state.stage_pipeline import ExecutionOutput
 
 logger = logging.getLogger("Cyber.stages.execution")
 
@@ -228,6 +229,55 @@ class ExecutionStage:
         )
         
         logger.info(f"⚡ Action phase complete: {successful_actions}/{len(results)} successful")
+        
+        # Categorize actions into completed and failed
+        completed_actions = []
+        failed_actions = []
+        side_effects = []
+        
+        for result in results:
+            action_summary = {
+                "name": result.get("action"),
+                "params": result.get("params", {}),
+                "status": result.get("status")
+            }
+            
+            if result.get("status") == "completed":
+                completed_actions.append(action_summary)
+                # Track side effects (e.g., files created, messages sent)
+                if "memory" in result.get("action", "").lower():
+                    side_effects.append(f"Modified memory: {result.get('result', {}).get('file_path', 'unknown')}")
+                elif "message" in result.get("action", "").lower():
+                    side_effects.append(f"Sent message to {result.get('params', {}).get('to', 'unknown')}")
+            else:
+                failed_actions.append(action_summary)
+        
+        # Track goal progress
+        goal_manager = self.cognitive_loop.goal_manager
+        decision_output = self.cognitive_loop.stage_pipeline.get_decision()
+        goal_progress = {}
+        
+        if decision_output:
+            addresses_goals = decision_output.get("addresses_goals", [])
+            for goal_id in addresses_goals:
+                # Simple progress tracking - can be enhanced
+                goal_progress[goal_id] = {
+                    "actions_completed": len(completed_actions),
+                    "actions_failed": len(failed_actions)
+                }
+        
+        # Write to pipeline
+        pipeline_output = ExecutionOutput(
+            stage="execution",
+            cycle_count=self.cognitive_loop.cycle_count,
+            completed_actions=completed_actions,
+            failed_actions=failed_actions,
+            results=results,
+            side_effects=side_effects,
+            goal_progress=goal_progress
+        )
+        self.cognitive_loop.stage_pipeline.write_execution(pipeline_output)
+        logger.info(f"📝 Wrote execution output to pipeline: {len(completed_actions)} completed, {len(failed_actions)} failed")
         
         # Clear tracked actions after execution
         self.cognitive_loop.action_tracker.clear_actions()

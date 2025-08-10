@@ -17,6 +17,8 @@ from ..memory import Priority, ObservationMemoryBlock, FileMemoryBlock, MemoryTy
 from ..memory.tag_filter import TagFilter
 from ..perception import EnvironmentScanner
 from ..brain import BrainInterface
+from ..state.stage_pipeline import ObservationOutput
+from ..state.goal_manager import GoalStatus
 
 logger = logging.getLogger("Cyber.stages.observation")
 
@@ -61,6 +63,9 @@ class ObservationStage:
         """
         logger.info("=== OBSERVATION STAGE ===")
         
+        # Phase 0: Reflect - Review previous execution results and update goals
+        await self.reflect()
+        
         # Phase 1: Observe - Understand the situation from observations
         orientation = await self.observe()
         
@@ -68,6 +73,48 @@ class ObservationStage:
         await self.cleanup()
         
         return orientation
+    
+    async def reflect(self):
+        """REFLECT - Review previous execution results and update goals.
+        
+        This phase looks at what happened in the last execution and updates
+        goals and tasks accordingly.
+        """
+        logger.info("🔍 Reflecting on previous execution results...")
+        self.cognitive_loop._update_dynamic_context(stage="OBSERVATION", phase="REFLECT")
+        
+        # Get last execution results from pipeline
+        last_execution = self.cognitive_loop.stage_pipeline.get_last_execution()
+        if not last_execution:
+            logger.debug("No previous execution to reflect on")
+            return
+        
+        # Review completed actions and update tasks
+        goal_manager = self.cognitive_loop.goal_manager
+        completed_actions = last_execution.get('completed_actions', [])
+        failed_actions = last_execution.get('failed_actions', [])
+        
+        # Update task progress based on action results
+        active_tasks = goal_manager.get_active_tasks()
+        for task in active_tasks:
+            # Check if any completed actions relate to this task
+            for action in completed_actions:
+                if task.description.lower() in str(action).lower():
+                    goal_manager.add_task_action(task.id, {
+                        'action': action,
+                        'status': 'completed',
+                        'cycle': self.cognitive_loop.cycle_count - 1
+                    })
+            
+            for action in failed_actions:
+                if task.description.lower() in str(action).lower():
+                    goal_manager.add_task_action(task.id, {
+                        'action': action,
+                        'status': 'failed',
+                        'cycle': self.cognitive_loop.cycle_count - 1
+                    })
+        
+        logger.info(f"Reflected on {len(completed_actions)} completed and {len(failed_actions)} failed actions")
     
     async def observe(self) -> Optional[Dict[str, Any]]:
         """OBSERVE - Understand the situation from observations.
@@ -194,6 +241,33 @@ class ObservationStage:
         
         # Store just the file reference in cycle state
         # Orientation is now tracked through memory system, not cycle state
+        
+        # Get relevant goals for this orientation
+        goal_manager = self.cognitive_loop.goal_manager
+        active_goals = goal_manager.get_active_goals()
+        relevant_goal_ids = []
+        for goal in active_goals:
+            # Simple relevance check - can be made more sophisticated
+            if (situation_type in ["task_received", "work_needed"] or 
+                goal.priority == "high"):
+                relevant_goal_ids.append(goal.id)
+        
+        # Write to pipeline
+        pipeline_output = ObservationOutput(
+            stage="observation",
+            cycle_count=self.cognitive_loop.cycle_count,
+            understanding=understanding,
+            situation_type=situation_type,
+            new_observations=[{"type": obs.observation_type, "path": obs.path} 
+                            for obs in self.memory_system.get_memories_by_type(MemoryType.OBSERVATION)
+                            if isinstance(obs, ObservationMemoryBlock) and 
+                            obs.cycle_count == self.cognitive_loop.cycle_count],
+            relevant_goals=relevant_goal_ids,
+            previous_results_reviewed=self.cognitive_loop.stage_pipeline.get_last_execution() is not None,
+            approach=approach
+        )
+        self.cognitive_loop.stage_pipeline.write_observation(pipeline_output)
+        logger.info(f"📝 Wrote observation output to pipeline with {len(relevant_goal_ids)} relevant goals")
                 
         return orientation_data
     

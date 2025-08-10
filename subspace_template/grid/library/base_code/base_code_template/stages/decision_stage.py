@@ -15,6 +15,8 @@ from ..brain import BrainInterface
 from ..actions import ActionCoordinator
 from ..memory.tag_filter import TagFilter
 from ..memory import MemoryType
+from ..state.stage_pipeline import DecisionOutput
+from ..state.goal_manager import GoalStatus
 
 logger = logging.getLogger("Cyber.stages.decision")
 
@@ -57,8 +59,16 @@ class DecisionStage:
         """
         logger.info("=== DECISION STAGE ===")
         
-        # Orientation is now handled through observation stage output
-        # No need to track orientation ID separately
+        # Get observation from pipeline for additional context
+        observation_output = self.cognitive_loop.stage_pipeline.get_observation()
+        uses_pipeline = observation_output is not None
+        
+        # Get active goals and tasks to consider
+        goal_manager = self.cognitive_loop.goal_manager
+        active_goals = goal_manager.get_active_goals()
+        active_tasks = goal_manager.get_active_tasks()
+        
+        logger.info(f"Considering {len(active_goals)} active goals and {len(active_tasks)} active tasks")
         
         # Update dynamic context - DECIDE phase (brain LLM call)
         self.cognitive_loop._update_dynamic_context(stage="DECISION", phase="DECIDE")
@@ -66,14 +76,37 @@ class DecisionStage:
         # Create tag filter for decision stage with our blacklist
         tag_filter = TagFilter(blacklist=self.KNOWLEDGE_BLACKLIST)
         
-        # Build decision context - exclude raw observations since we have orientation
+        # Build decision context - include goals and tasks
+        current_task = "Deciding on actions"
+        if active_goals:
+            current_task += f" to progress goals: {', '.join([g.description[:50] for g in active_goals[:3]])}"
+        
         decision_context = self.memory_system.build_context(
             max_tokens=self.cognitive_loop.max_context_tokens // 2,
-            current_task="Deciding on actions",
+            current_task=current_task,
             selection_strategy="balanced",
             tag_filter=tag_filter,
             exclude_types=[MemoryType.OBSERVATION]  # Don't need raw observations
         )
+        
+        # Add goals and tasks to context if not already in memory
+        if active_goals or active_tasks:
+            goals_context = {
+                "active_goals": [{
+                    "id": g.id,
+                    "description": g.description,
+                    "priority": g.priority,
+                    "status": g.status.value
+                } for g in active_goals],
+                "active_tasks": [{
+                    "id": t.id,
+                    "goal_id": t.goal_id,
+                    "description": t.description,
+                    "status": t.status.value,
+                    "next_steps": t.next_steps
+                } for t in active_tasks]
+            }
+            decision_context['goals_and_tasks'] = json.dumps(goals_context, indent=2)
         
         # Use brain to decide on actions
         logger.info("🤔 Making decision based on situation...")
@@ -135,5 +168,27 @@ class DecisionStage:
         # Save actions as serializable data and update cycle state
         action_data = [{"name": a.name, "params": a.params} for a in actions]
         # Actions are now tracked via ActionTracker in execution_stage
+        
+        # Track which goals actions might address
+        addresses_goals = []
+        for action in actions:
+            for goal in active_goals:
+                if goal.description.lower() in str(action.params).lower():
+                    addresses_goals.append(goal.id)
+        
+        # Extract reasoning from decision response
+        reasoning = output_values.get("reasoning", "No explicit reasoning provided")
+        
+        # Write to pipeline
+        pipeline_output = DecisionOutput(
+            stage="decision",
+            cycle_count=self.cognitive_loop.cycle_count,
+            selected_actions=action_data,
+            reasoning=reasoning,
+            addresses_goals=list(set(addresses_goals)),  # Unique goal IDs
+            uses_orientation=uses_pipeline
+        )
+        self.cognitive_loop.stage_pipeline.write_decision(pipeline_output)
+        logger.info(f"📝 Wrote decision output to pipeline addressing {len(addresses_goals)} goals")
         
         return action_data

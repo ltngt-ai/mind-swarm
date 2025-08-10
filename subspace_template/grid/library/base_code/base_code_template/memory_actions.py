@@ -650,25 +650,26 @@ class UpdateMemoryAction(Action):
             priority=ActionPriority.MEDIUM
         )
     
-    async def execute(self, params: Dict[str, Any], context: Dict[str, Any]) -> ActionResult:
+    async def execute(self, context: Dict[str, Any]) -> ActionResult:
         """Update an existing memory file.
         
+        Params (from self.params):
+            location: Path to existing file (relative to /personal/)
+            content: New content for the file
+            append: If true, append to file instead of replacing (optional, default false)
+            backup: If true, create backup before updating (optional, default false)
+        
         Args:
-            params:
-                location: Path to existing file (relative to /personal/)
-                content: New content for the file
-                append: If true, append to file instead of replacing (optional, default false)
-                backup: If true, create backup before updating (optional, default false)
             context: Execution context
             
         Returns:
             ActionResult with update details
         """
         try:
-            location = params.get("location", "").strip()
-            content = params.get("content", "")
-            append = params.get("append", False)
-            backup = params.get("backup", False)
+            location = self.params.get("location", "").strip()
+            content = self.params.get("content", "")
+            append = self.params.get("append", False)
+            backup = self.params.get("backup", False)
             
             if not location:
                 return ActionResult(

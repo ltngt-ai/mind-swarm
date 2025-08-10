@@ -23,6 +23,8 @@ from .memory import (
 from .perception import EnvironmentScanner
 from .knowledge import KnowledgeManager
 from .state import CyberStateManager, ExecutionStateTracker
+from .state.stage_pipeline import StagePipeline
+from .state.goal_manager import GoalManager
 from .actions import ActionCoordinator
 from .actions.action_tracker import ActionTracker
 from .utils import CognitiveUtils, FileManager
@@ -94,6 +96,12 @@ class CognitiveLoop:
         
         # Knowledge system
         self.knowledge_manager = KnowledgeManager(cyber_type=self.cyber_type)
+        
+        # Stage pipeline for information flow
+        self.stage_pipeline = StagePipeline(self.memory_dir)
+        
+        # Goal manager for persistent objectives
+        self.goal_manager = GoalManager(self.memory_dir)
         
         # State management
         self.state_manager = CyberStateManager(self.cyber_id, self.memory_dir)
@@ -266,6 +274,9 @@ class CognitiveLoop:
             
             # Increment cycle count
             self.cycle_count = self.state_manager.increment_cycle_count()
+            
+            # Start new pipeline cycle
+            self.stage_pipeline.start_new_cycle(self.cycle_count)
             
             # Update dynamic context at the start of each cycle
             self._update_dynamic_context(stage="STARTING", phase="INIT")

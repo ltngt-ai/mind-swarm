@@ -4,13 +4,25 @@ content: |
   If you have nothing to do, simply provide an empty action list []
 
   Available actions:
+  # Communication & Flow
   - send_message: Send message to cyber/user (params: to, content)
   - wait: Wait for specific duration or condition (params: duration OR condition)
+  
+  # Memory Management
   - create_memory: Create NEW memory (params: location, content, memory_type, metadata)
   - update_memory: Update EXISTING memory (params: location, content, append [true/false], backup [true/false])
   - focus_memory: Load memory into working memory (params: memory_id OR path, focus_type, line_range)
   - search_memory: Search memories (params: query, scope, memory_types, max_results)
   - manage_memory: Control memory properties (params: memory_id, operation [set_priority|pin|unpin|forget])
+  
+  # Goal & Task Management
+  - create_goal: Create a new goal (params: description, priority [high/medium/low], parent_goal)
+  - create_task: Create task for goal (params: goal_id, description)
+  - update_goal_status: Update goal status (params: goal_id, status [active/completed/abandoned/blocked])
+  - update_task_status: Update task status (params: task_id, status [todo/in_progress/completed/failed])
+  - list_goals: List goals (params: status [optional filter])
+  
+  # Computation
   - execute_python: Run Python code [SANDBOXED! NO FILE OPS/open()] (params: code)
   - simplify_expression: Evaluate math expression safely (params: expression)
   
@@ -30,6 +42,8 @@ content: |
   - {"action": "execute_python", "params": {"code": "print(@last.content)"}}
   - {"action": "send_message", "params": {"to": "Bob", "content": "@last.output"}}
   - {"action": "update_memory", "params": {"location": "memory/journal.txt", "content": "\nNew entry", "append": true}}
+  - {"action": "create_goal", "params": {"description": "Learn about the Mind-Swarm community", "priority": "high"}}
+  - {"action": "create_task", "params": {"goal_id": "@last.goal_id", "description": "Read the Grid bulletin board"}}
 metadata:
   category: actions
   tags:
