@@ -9,7 +9,6 @@ from .memory_blocks import (
     KnowledgeMemoryBlock,
     ContextMemoryBlock,
     ObservationMemoryBlock,
-    CycleStateMemoryBlock,
 )
 from .memory_manager import WorkingMemoryManager
 from .content_loader import ContentLoader
@@ -29,7 +28,6 @@ __all__ = [
     "KnowledgeMemoryBlock",
     "ContextMemoryBlock",
     "ObservationMemoryBlock",
-    "CycleStateMemoryBlock",
     # Core components (individual - for backward compatibility)
     "WorkingMemoryManager",
     "ContentLoader",

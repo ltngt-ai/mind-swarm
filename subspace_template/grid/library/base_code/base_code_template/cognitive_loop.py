@@ -16,7 +16,7 @@ from datetime import datetime
 # Import supporting modules
 from .memory import (
     MemorySystem,
-    ObservationMemoryBlock, CycleStateMemoryBlock,
+    ObservationMemoryBlock,
     FileMemoryBlock,
     Priority, MemoryType
 )
@@ -24,6 +24,7 @@ from .perception import EnvironmentScanner
 from .knowledge import KnowledgeManager
 from .state import CyberStateManager, ExecutionStateTracker
 from .actions import ActionCoordinator
+from .actions.action_tracker import ActionTracker
 from .utils import CognitiveUtils, FileManager
 from .brain import BrainInterface
 from .stages import ObservationStage, DecisionStage, ExecutionStage
@@ -99,6 +100,7 @@ class CognitiveLoop:
         self.execution_tracker = ExecutionStateTracker(self.cyber_id, self.memory_dir)
         
         # Action coordination
+        self.action_tracker = ActionTracker()
         self.action_coordinator = ActionCoordinator(cyber_type=self.cyber_type)
         
         # Perception system
@@ -125,7 +127,6 @@ class CognitiveLoop:
         if not self.memory_system.load_from_snapshot_file(self.memory_dir, self.knowledge_manager):
             # No snapshot - load ROM and init fresh
             self.knowledge_manager.load_rom_into_memory(self.memory_system)
-            self._init_cycle_state()
         
         # Load state
         existing_state = self.state_manager.load_state()
@@ -242,18 +243,6 @@ class CognitiveLoop:
         except Exception as e:
             logger.error(f"Failed to update dynamic context: {e}")
     
-    def _init_cycle_state(self):
-        """Initialize a new cycle state."""
-        cycle_state = CycleStateMemoryBlock(
-            cycle_state="perceive",
-            cycle_count=0
-        )
-        self.memory_system.add_memory(cycle_state)
-        self.state_manager.update_state({
-            "cycle_state": "perceive",
-            "cycle_count": 0
-        })
-        logger.info("Initialized new cycle state")
     
     async def run_cycle(self) -> bool:
         """Run one complete cognitive cycle using three-stage architecture.
@@ -324,39 +313,12 @@ class CognitiveLoop:
             logger.error(f"Error in cognitive cycle: {e}", exc_info=True)
             self.execution_tracker.end_execution("failed", {"error": str(e)})
             
-            # Reset state on error
-            self.state_manager.set_cycle_state("perceive")
+            # Reset context on error
+            self._update_dynamic_context(stage="ERROR_RECOVERY", phase="RESET")
             return False
     
     # === HELPER METHODS USED BY STAGES ===
     
-    def _get_cycle_state(self) -> Optional[CycleStateMemoryBlock]:
-        """Get the current cycle state from memory."""
-        cycle_states = self.memory_system.get_memories_by_type(MemoryType.CYCLE_STATE)
-        if cycle_states and isinstance(cycle_states[0], CycleStateMemoryBlock):
-            return cycle_states[0]
-        return None
-    
-    def _update_cycle_state(self, **kwargs):
-        """Update the cycle state in memory."""
-        cycle_state = self._get_cycle_state()
-        if not cycle_state:
-            # Create new cycle state if missing
-            cycle_state = CycleStateMemoryBlock(
-                cycle_state=kwargs.get('cycle_state', 'perceive'),
-                cycle_count=kwargs.get('cycle_count', 0)
-            )
-        
-        # Update fields
-        for key, value in kwargs.items():
-            if hasattr(cycle_state, key):
-                setattr(cycle_state, key, value)
-        
-        # Update timestamp
-        cycle_state.timestamp = datetime.now()
-        
-        # Add/update in memory
-        self.memory_system.add_memory(cycle_state)
     
     
     

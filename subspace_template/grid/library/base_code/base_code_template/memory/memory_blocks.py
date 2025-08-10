@@ -267,37 +267,5 @@ class ObservationMemoryBlock(MemoryBlock):
 
 
 
-@dataclass
-class CycleStateMemoryBlock(MemoryBlock):
-    """Stores the current state of the cognitive cycle for resumable execution."""
-    cycle_state: str  # Current state: perceive, observe, orient, decide, act
-    cycle_count: int
-    current_observation: Optional[Dict[str, Any]] = None
-    current_orientation: Optional[Dict[str, Any]] = None  # Deprecated - use current_orientation_id
-    current_orientation_id: Optional[str] = None  # Memory ID of orientation file
-    current_actions: Optional[List[Dict[str, Any]]] = None
-    last_observe_time: Optional[datetime] = None  # Track when observe last ran
-    confidence: float = 1.0
-    priority: Priority = Priority.LOW  # Internal bookkeeping, not actionable for Cyber
-    timestamp: Optional[datetime] = None
-    expiry: Optional[datetime] = None
-    pinned: bool = False
-    metadata: Optional[Dict[str, Any]] = None
-    
-    def __post_init__(self):
-        """Initialize base class and set type."""
-        super().__init__(
-            confidence=self.confidence,
-            priority=self.priority,
-            timestamp=self.timestamp,
-            expiry=self.expiry,
-            metadata=self.metadata,
-            pinned=self.pinned
-        )
-        self.type = MemoryType.CYCLE_STATE
-        
-        # Cycle state is a singleton in system namespace
-        self.id = UnifiedMemoryID.create(MemoryType.CYCLE_STATE, "personal/system/cycle_state")
-
 
 # IdentityMemoryBlock removed - use pinned FileMemoryBlock for identity.json instead

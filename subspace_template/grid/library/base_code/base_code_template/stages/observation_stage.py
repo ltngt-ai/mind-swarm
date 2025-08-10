@@ -118,7 +118,7 @@ class ObservationStage:
             current_task="Understanding the current situation from observations",
             selection_strategy="balanced",
             tag_filter=tag_filter,
-            exclude_types=[MemoryType.CYCLE_STATE]  # Don't need internal cycle state
+            exclude_types=[]  # Include all relevant memory types
         )
         
         # Use brain to analyze the situation from all observations
@@ -193,7 +193,7 @@ class ObservationStage:
         self.memory_system.add_memory(orientation_memory)
         
         # Store just the file reference in cycle state
-        self.cognitive_loop._update_cycle_state(current_orientation_id=orientation_memory.id)
+        # Orientation is now tracked through memory system, not cycle state
                 
         return orientation_data
     
@@ -213,7 +213,7 @@ class ObservationStage:
             current_task="Identifying obsolete observations to clean up based on cycle counts",
             selection_strategy="recent",
             tag_filter=TagFilter(blacklist=self.KNOWLEDGE_BLACKLIST),
-            exclude_types=[MemoryType.CYCLE_STATE]  # Exclude internal state only, keep knowledge
+            exclude_types=[]  # Include all relevant memory types
         )
         
         cleanup_result = await self.brain_interface.identify_obsolete_observations(memory_context)

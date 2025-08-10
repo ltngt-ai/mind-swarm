@@ -23,5 +23,4 @@ class MemoryType(Enum):
     KNOWLEDGE = "knowledge"
     CONTEXT = "context"
     OBSERVATION = "observation"
-    CYCLE_STATE = "cycle_state"
     IDENTITY = "identity"

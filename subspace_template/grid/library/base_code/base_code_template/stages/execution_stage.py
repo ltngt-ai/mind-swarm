@@ -130,8 +130,8 @@ class ExecutionStage:
         else:
             logger.info(f"📋 All {len(corrected_actions)} actions validated successfully")
         
-        # Update cycle state with corrected actions
-        self.cognitive_loop._update_cycle_state(current_actions=corrected_actions)
+        # Track corrected actions
+        self.cognitive_loop.action_tracker.set_actions(corrected_actions)
         
         return corrected_actions
     
@@ -228,5 +228,8 @@ class ExecutionStage:
         )
         
         logger.info(f"⚡ Action phase complete: {successful_actions}/{len(results)} successful")
+        
+        # Clear tracked actions after execution
+        self.cognitive_loop.action_tracker.clear_actions()
         
         return results

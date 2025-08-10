@@ -11,7 +11,7 @@ from pathlib import Path
 import logging
 
 from .memory_types import Priority, MemoryType
-from .memory_blocks import MemoryBlock, CycleStateMemoryBlock
+from .memory_blocks import MemoryBlock
 from .memory_manager import WorkingMemoryManager
 from .memory_selector import MemorySelector, RelevanceScorer
 from .context_builder import ContextBuilder

@@ -57,13 +57,8 @@ class DecisionStage:
         """
         logger.info("=== DECISION STAGE ===")
         
-        # Get orientation ID from cycle state
-        cycle_state = self.cognitive_loop._get_cycle_state()
-        orientation_id = getattr(cycle_state, 'current_orientation_id', None)
-        
-        if not orientation_id:
-            logger.warning("No orientation ID found in cycle state")
-            return []
+        # Orientation is now handled through observation stage output
+        # No need to track orientation ID separately
         
         # Update dynamic context - DECIDE phase (brain LLM call)
         self.cognitive_loop._update_dynamic_context(stage="DECISION", phase="DECIDE")
@@ -77,7 +72,7 @@ class DecisionStage:
             current_task="Deciding on actions",
             selection_strategy="balanced",
             tag_filter=tag_filter,
-            exclude_types=[MemoryType.OBSERVATION, MemoryType.CYCLE_STATE]  # Don't need raw observations or internal state
+            exclude_types=[MemoryType.OBSERVATION]  # Don't need raw observations
         )
         
         # Use brain to decide on actions
@@ -139,6 +134,6 @@ class DecisionStage:
         
         # Save actions as serializable data and update cycle state
         action_data = [{"name": a.name, "params": a.params} for a in actions]
-        self.cognitive_loop._update_cycle_state(current_actions=action_data)
+        # Actions are now tracked via ActionTracker in execution_stage
         
         return action_data

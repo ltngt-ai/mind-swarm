@@ -13,7 +13,7 @@ from datetime import datetime
 from .memory import (
     WorkingMemoryManager, Priority, MemoryType,
     FileMemoryBlock, ObservationMemoryBlock,
-    CycleStateMemoryBlock, KnowledgeMemoryBlock
+    KnowledgeMemoryBlock
 )
 
 logger = logging.getLogger("Cyber.memory_persistence")
@@ -139,22 +139,7 @@ class MemoryPersistence:
                 memory_type = MemoryType(mem_data['type'])
                 
                 # Reconstruct based on type
-                if memory_type == MemoryType.CYCLE_STATE:
-                    # Special handling for cycle state
-                    memory = CycleStateMemoryBlock(
-                        cycle_state=mem_data['cycle_state'],
-                        cycle_count=mem_data['cycle_count'],
-                        current_observation=mem_data.get('current_observation'),
-                        current_orientation=mem_data.get('current_orientation'),
-                        current_actions=mem_data.get('current_actions'),
-                        confidence=mem_data.get('confidence', 1.0),
-                        priority=Priority[mem_data.get('priority', 'CRITICAL')],
-                        pinned=mem_data.get('pinned', False)
-                    )
-                    # Update cycle count from saved state
-                    cycle_count = memory.cycle_count
-                    
-                elif memory_type == MemoryType.FILE:
+                if memory_type == MemoryType.FILE:
                     memory = FileMemoryBlock(
                         location=mem_data['location'],
                         start_line=mem_data.get('start_line'),

@@ -36,7 +36,6 @@ class CyberStateManager:
         self.current_state = {
             "cyber_id": cyber_id,
             "cycle_count": 0,
-            "cycle_state": "perceive",
             "last_activity": datetime.now(),
             "status": "active",
             "metadata": {}
@@ -203,23 +202,6 @@ class CyberStateManager:
         """
         return self.current_state.get(key, default)
         
-    def set_cycle_state(self, new_state: str, **kwargs) -> bool:
-        """Set the cognitive cycle state.
-        
-        Args:
-            new_state: New cycle state (perceive, observe, etc.)
-            **kwargs: Additional state updates
-            
-        Returns:
-            True if updated successfully
-        """
-        updates = {
-            "cycle_state": new_state,
-            "cycle_state_changed": datetime.now()
-        }
-        updates.update(kwargs)
-        
-        return self.update_state(updates)
         
     def increment_cycle_count(self) -> int:
         """Increment and return the cycle count.
@@ -240,13 +222,12 @@ class CyberStateManager:
         change_record = {
             "timestamp": datetime.now(),
             "changes": changes,
-            "cycle_count": self.current_state.get("cycle_count", 0),
-            "cycle_state": self.current_state.get("cycle_state", "unknown")
+            "cycle_count": self.current_state.get("cycle_count", 0)
         }
         
         # Log significant changes
         for key, change in changes.items():
-            if key in ["cycle_state", "status"]:
+            if key == "status":
                 logger.info(f"State change: {key} {change['old']} -> {change['new']}")
                 
     def _add_to_history(self, state_snapshot: Dict[str, Any]):
@@ -313,7 +294,7 @@ class CyberStateManager:
         state_to_validate = state_data or self.current_state
         
         # Required fields
-        required_fields = ["cyber_id", "cycle_count", "cycle_state", "status"]
+        required_fields = ["cyber_id", "cycle_count", "status"]
         
         is_valid, error = self.cognitive_utils.validate_cognitive_structure(
             state_to_validate, 

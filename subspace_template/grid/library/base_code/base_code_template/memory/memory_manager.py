@@ -12,7 +12,7 @@ import logging
 from .memory_blocks import (
     MemoryBlock, Priority, MemoryType,
     FileMemoryBlock, ObservationMemoryBlock,
-    CycleStateMemoryBlock, KnowledgeMemoryBlock
+    KnowledgeMemoryBlock
 )
 
 logger = logging.getLogger("Cyber.memory")
@@ -203,14 +203,6 @@ class WorkingMemoryManager:
                 "observation_type": memory.observation_type,
                 "path": memory.path
             })
-        elif hasattr(memory, 'cycle_state'):  # CycleStateMemoryBlock
-            fields.update({
-                "cycle_state": memory.cycle_state,
-                "cycle_count": memory.cycle_count,
-                "current_observation": memory.current_observation,
-                "current_orientation": memory.current_orientation,
-                "current_actions": memory.current_actions
-            })
         # Add other types as needed
         
         return fields
@@ -241,26 +233,12 @@ class WorkingMemoryManager:
             memories = snapshot.get('memories', [])
             logger.info(f"Restoring {len(memories)} memories from snapshot")
             
-            cycle_state_found = False
             
             for mem_data in memories:
                 try:
                     memory_type = MemoryType(mem_data.get('type', 'UNKNOWN'))
                     
-                    if memory_type == MemoryType.CYCLE_STATE:
-                        # Restore cycle state
-                        memory = CycleStateMemoryBlock(
-                            cycle_state=mem_data.get('cycle_state', 'perceive'),
-                            cycle_count=mem_data.get('cycle_count', 0),
-                            current_observation=mem_data.get('current_observation'),
-                            current_orientation=mem_data.get('current_orientation'),
-                            current_actions=mem_data.get('current_actions'),
-                            confidence=mem_data.get('confidence', 1.0),
-                            priority=Priority[mem_data.get('priority', 'CRITICAL')]
-                        )
-                        cycle_state_found = True
-                        
-                    elif memory_type == MemoryType.FILE:
+                    if memory_type == MemoryType.FILE:
                         memory = FileMemoryBlock(
                             location=mem_data['location'],
                             start_line=mem_data.get('start_line'),
@@ -315,9 +293,6 @@ class WorkingMemoryManager:
                     logger.warning(f"Failed to restore memory: {e}")
                     continue
             
-            # If no cycle state found, this will be handled by the cognitive loop
-            if not cycle_state_found:
-                logger.info("No cycle state found in snapshot")
             
             # Always reload ROM to ensure it's present
             if knowledge_manager:
