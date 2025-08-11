@@ -262,11 +262,8 @@ class ExecutionStage:
             else:
                 failed_actions.append(action_summary)
         
-        # Track goal progress from current pipeline
-        goal_manager = self.cognitive_loop.goal_manager
-        
+        # Track goal progress from decision buffer if available
         goal_progress = {}
-        # Get decision data from decision buffer
         decision_buffer = self.cognitive_loop.get_current_pipeline("decision")
         decision_file = self.cognitive_loop.personal.parent / decision_buffer.location
         try:

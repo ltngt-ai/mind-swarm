@@ -270,6 +270,9 @@ class CognitiveLoop:
         
         # Initialize dynamic context file
         self._init_dynamic_context()
+        
+        # Add goals and tasks files to memory if they exist
+        self._add_goals_and_tasks_files()
     
     def _init_identity_memory(self):
         """Add Cyber identity file to working memory as pinned."""
@@ -416,6 +419,71 @@ class CognitiveLoop:
         except Exception as e:
             logger.error(f"Failed to update dynamic context: {e}")
     
+    def _ensure_goals_and_tasks_in_memory(self):
+        """Ensure goals and tasks files are in memory if they exist and have content.
+        
+        This is called each cycle to handle files created after initialization.
+        """
+        # Check goals.json
+        goals_file = self.memory_dir / "goals.json"
+        goals_memory_id = f"memory:{goals_file.relative_to(self.personal.parent)}"
+        
+        # Check if it exists, has content, and isn't already in memory
+        if goals_file.exists() and goals_file.stat().st_size > 50:  # More than just empty JSON
+            # Check if already in memory
+            already_in_memory = any(
+                m.id == goals_memory_id 
+                for m in self.memory_system.symbolic_memory
+            )
+            if not already_in_memory:
+                goals_memory = FileMemoryBlock(
+                    location=str(goals_file.relative_to(self.personal.parent)),
+                    priority=Priority.HIGH,
+                    confidence=1.0,
+                    pinned=True,
+                    metadata={
+                        "file_type": "goals",
+                        "description": "My goals and objectives. Goals are high-level, long-term objectives that define WHY I do things."
+                    },
+                    cycle_count=self.cycle_count
+                )
+                self.memory_system.add_memory(goals_memory)
+                logger.info(f"Added goals.json to pinned memory at cycle {self.cycle_count}")
+        
+        # Check active_tasks.json
+        tasks_file = self.memory_dir / "active_tasks.json"
+        tasks_memory_id = f"memory:{tasks_file.relative_to(self.personal.parent)}"
+        
+        # Check if it exists, has content, and isn't already in memory
+        if tasks_file.exists() and tasks_file.stat().st_size > 50:  # More than just empty JSON
+            # Check if already in memory
+            already_in_memory = any(
+                m.id == tasks_memory_id 
+                for m in self.memory_system.symbolic_memory
+            )
+            if not already_in_memory:
+                tasks_memory = FileMemoryBlock(
+                    location=str(tasks_file.relative_to(self.personal.parent)),
+                    priority=Priority.HIGH,
+                    confidence=1.0,
+                    pinned=True,
+                    metadata={
+                        "file_type": "tasks",
+                        "description": "My active tasks. Tasks are specific, actionable items that define WHAT to do and can be completed in a few cycles."
+                    },
+                    cycle_count=self.cycle_count
+                )
+                self.memory_system.add_memory(tasks_memory)
+                logger.info(f"Added active_tasks.json to pinned memory at cycle {self.cycle_count}")
+    
+    def _add_goals_and_tasks_files(self):
+        """Add goals and tasks JSON files to memory as pinned FileMemoryBlocks.
+        
+        This makes the goal and task data visible to the Cyber without complexity.
+        Just calls the ensure method for initial setup.
+        """
+        self._ensure_goals_and_tasks_in_memory()
+    
     
     async def run_cycle(self) -> bool:
         """Run one complete cognitive cycle using four-stage architecture.
@@ -447,6 +515,10 @@ class CognitiveLoop:
             
             # Update dynamic context at the start of each cycle
             self._update_dynamic_context(stage="STARTING", phase="INIT")
+            
+            # Check if goals/tasks files need to be added to memory
+            # (they might have been created after initialization)
+            self._ensure_goals_and_tasks_in_memory()
             
             # Stage 1: Observation - Gather and understand information
             self._update_dynamic_context(stage="OBSERVATION", phase="STARTING")

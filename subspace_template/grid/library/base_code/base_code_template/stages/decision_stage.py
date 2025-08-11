@@ -74,23 +74,14 @@ class DecisionStage:
             logger.debug("No observation data in current pipeline")
             return []
         
-        # Get active goals and tasks to consider
-        goal_manager = self.cognitive_loop.goal_manager
-        active_goals = goal_manager.get_active_goals()
-        active_tasks = goal_manager.get_active_tasks()
-        
-        logger.info(f"Considering {len(active_goals)} active goals and {len(active_tasks)} active tasks")
-        
         # Update dynamic context - DECIDE phase (brain LLM call)
         self.cognitive_loop._update_dynamic_context(stage="DECISION", phase="DECIDE")
         
         # Create tag filter for decision stage with our blacklist
         tag_filter = TagFilter(blacklist=self.KNOWLEDGE_BLACKLIST)
         
-        # Build decision context - include goals and tasks
-        current_task = "Deciding on actions"
-        if active_goals:
-            current_task += f" to progress goals: {', '.join([g.description[:50] for g in active_goals[:3]])}"
+        # Build decision context - goals and tasks come from working memory
+        current_task = "Deciding on actions based on current situation, goals and tasks"
         
         decision_context = self.memory_system.build_context(
             max_tokens=self.cognitive_loop.max_context_tokens // 2,
@@ -99,44 +90,6 @@ class DecisionStage:
             tag_filter=tag_filter,
             exclude_types=[MemoryType.OBSERVATION]  # Don't need raw observations
         )
-        
-        # Add goals and tasks to context if not already in memory
-        if active_goals or active_tasks:
-            # Parse the JSON context to add goals and tasks
-            try:
-                context_data = json.loads(decision_context)
-            except json.JSONDecodeError:
-                context_data = []
-            
-            # Add goals and tasks as a special entry
-            goals_context = {
-                "id": "current_goals_and_tasks",
-                "type": "goals",
-                "content": {
-                    "active_goals": [{
-                        "id": g.id,
-                        "description": g.description,
-                        "priority": g.priority,
-                        "status": g.status.value
-                    } for g in active_goals],
-                    "active_tasks": [{
-                        "id": t.id,
-                        "goal_id": t.goal_id,
-                        "description": t.description,
-                        "status": t.status.value,
-                        "next_steps": t.next_steps
-                    } for t in active_tasks]
-                }
-            }
-            
-            # Add to context data
-            if isinstance(context_data, list):
-                context_data.append(goals_context)
-            else:
-                context_data = [context_data, goals_context]
-            
-            # Re-serialize
-            decision_context = json.dumps(context_data, indent=2)
         
         # Use brain to decide on actions
         logger.info("🤔 Making decision based on situation...")
@@ -199,11 +152,8 @@ class DecisionStage:
         action_data = [{"name": a.name, "params": a.params} for a in actions]
         
         # Track which goals actions might address
+        # Goals are now tracked through working memory, not directly
         addresses_goals = []
-        for action in actions:
-            for goal in active_goals:
-                if goal.description.lower() in str(action.params).lower():
-                    addresses_goals.append(goal.id)
         
         # Extract reasoning from decision response
         reasoning = output_values.get("reasoning", "No explicit reasoning provided")

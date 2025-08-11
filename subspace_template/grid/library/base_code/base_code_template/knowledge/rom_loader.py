@@ -92,7 +92,7 @@ class ROMLoader:
         Returns:
             Dictionary of general ROM data
         """
-        general_rom_dir = self.library_path / "rom" / "general"
+        general_rom_dir = self.library_path / "knowledge" / "sections" / "rom" / "general"
         return self.load_rom_directory(general_rom_dir)
         
     def get_agent_rom(self, cyber_type: str) -> Dict[str, Any]:
@@ -104,7 +104,7 @@ class ROMLoader:
         Returns:
             Dictionary of Cyber-specific ROM data
         """
-        agent_rom_dir = self.library_path / "rom" / cyber_type
+        agent_rom_dir = self.library_path / "knowledge" / "sections" / "rom" / cyber_type
         if agent_rom_dir.exists():
             return self.load_rom_directory(agent_rom_dir, cyber_type)
         return {}

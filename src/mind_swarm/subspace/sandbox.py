@@ -277,19 +277,18 @@ class SubspaceManager:
         # Copy grid structure if needed
         grid_template = template_dir / "grid"
         if grid_template.exists():
-            # Always sync ROM from template (for development)
-            rom_dir = self.library_dir / "rom"
-            # ROM is now in knowledge/sections/rom in the template
-            src_rom = grid_template / "library" / "knowledge" / "sections" / "rom"
-            if src_rom.exists():
-                if rom_dir.exists():
-                    logger.info("Updating ROM knowledge from template")
-                    shutil.rmtree(rom_dir)
+            # Copy the entire knowledge directory structure from template
+            knowledge_dir = self.library_dir / "knowledge"
+            src_knowledge = grid_template / "library" / "knowledge"
+            if src_knowledge.exists():
+                if knowledge_dir.exists():
+                    logger.info("Updating knowledge directory from template")
+                    shutil.rmtree(knowledge_dir)
                 else:
-                    logger.info("Copying ROM knowledge from template")
-                shutil.copytree(src_rom, rom_dir)
+                    logger.info("Copying knowledge directory from template")
+                shutil.copytree(src_knowledge, knowledge_dir)
             else:
-                logger.warning(f"ROM source not found at {src_rom}")
+                logger.warning(f"Knowledge source not found at {src_knowledge}")
             
             # Always sync base_code from template (for development)
             base_code_dir = self.library_dir / "base_code"
@@ -308,20 +307,6 @@ class SubspaceManager:
                 src_schema = grid_template / "library" / "KNOWLEDGE_SCHEMA.md"
                 if src_schema.exists():
                     shutil.copy2(src_schema, schema_file)
-            
-            # Copy actions directory if missing or update it
-            actions_dir = self.library_dir / "actions"
-            # Actions are now in knowledge/sections/actions in the template
-            src_actions = grid_template / "library" / "knowledge" / "sections" / "actions"
-            if src_actions.exists():
-                if actions_dir.exists():
-                    logger.info("Updating actions knowledge from template")
-                    shutil.rmtree(actions_dir)
-                else:
-                    logger.info("Copying actions knowledge to library")
-                shutil.copytree(src_actions, actions_dir)
-            else:
-                logger.warning(f"Actions source not found at {src_actions}")
             
             # Copy README files
             for subdir in ["community", "workshop", "library"]:

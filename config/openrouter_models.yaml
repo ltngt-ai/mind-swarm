@@ -1,4 +1,15 @@
 models:
+- id: z-ai/glm-4.5-air
+  name: GLM 4.5 Air
+  provider: openrouter
+  priority: primary
+  cost_type: paid
+  context_length: 131072
+  max_tokens: 4096
+  temperature: 0.7
+  _pricing:
+    prompt: '0.0000002'
+    completion: '0.0000011'
 - id: z-ai/glm-4.5-air:free
   name: GLM 4.5 Air (Free)
   provider: openrouter
@@ -7,14 +18,6 @@ models:
   context_length: 131072
   max_tokens: 4096
   temperature: 0.7
-# - id: moonshotai/kimi-dev-72b:free
-#   name: Kimi-Dev-72B (Free)
-#   provider: openrouter
-#   priority: primary
-#   cost_type: free
-#   context_length: 131072
-#   max_tokens: 4096
-#   temperature: 0.7
 - id: qwen/qwen3-235b-a22b:free
   name: Qwen3-235B-A22B (Free)
   provider: openrouter
@@ -34,29 +37,28 @@ models:
   _pricing:
     prompt: '0.00000005'
     completion: '0.0000004'
-- id: google/gemini-2.5-flash-lite
-  name: Gemini 2.5 Flash Lite
-  provider: openrouter
-  priority: normal
-  cost_type: paid
-  context_length: 400000
-  max_tokens: 4096
-  temperature: 0.7
-  _pricing:
-    prompt: '0.00000005'
-    completion: '0.0000004'
 - id: google/gemini-2.5-flash
   name: Gemini 2.5 Flash
   provider: openrouter
   priority: normal
   cost_type: paid
-  context_length: 400000
+  context_length: 1048576
   max_tokens: 4096
   temperature: 0.7
   _pricing:
-    prompt: '0.00000005'
+    prompt: '0.0000003'
+    completion: '0.0000025'
+- id: google/gemini-2.5-flash-lite
+  name: Gemini 2.5 Flash Lite
+  provider: openrouter
+  priority: normal
+  cost_type: paid
+  context_length: 1048576
+  max_tokens: 4096
+  temperature: 0.7
+  _pricing:
+    prompt: '0.0000001'
     completion: '0.0000004'
-
 provider_settings:
   openrouter:
     site_url: http://mind-swarm:8000
