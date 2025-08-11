@@ -9,7 +9,7 @@ import random
 import time
 import yaml
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Literal
+from typing import Dict, List, Optional, Any, Literal, Tuple
 from datetime import datetime, timedelta
 from dataclasses import dataclass, asdict, field
 from enum import Enum
@@ -43,25 +43,11 @@ class ModelConfig:
     temperature: float = 0.7
     api_settings: Dict[str, Any] = field(default_factory=dict)
     
-    # Temporary promotion tracking
-    promoted_until: Optional[datetime] = None
-    original_priority: Optional[Priority] = None
-    
-    def is_promoted(self) -> bool:
-        """Check if model is currently promoted."""
-        if not self.promoted_until:
-            return False
-        return datetime.now() < self.promoted_until
-    
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
         data = asdict(self)
         data['priority'] = self.priority.value
         data['cost_type'] = self.cost_type.value
-        if self.promoted_until:
-            data['promoted_until'] = self.promoted_until.isoformat()
-        if self.original_priority:
-            data['original_priority'] = self.original_priority.value
         return data
     
     @classmethod
@@ -70,14 +56,39 @@ class ModelConfig:
         # Convert string enums back
         data['priority'] = Priority(data['priority'])
         data['cost_type'] = CostType(data['cost_type'])
-        
-        # Handle datetime conversion
-        if data.get('promoted_until'):
-            data['promoted_until'] = datetime.fromisoformat(data['promoted_until'])
-        if data.get('original_priority'):
-            data['original_priority'] = Priority(data['original_priority'])
-            
         return cls(**data)
+
+
+@dataclass
+class Promotion:
+    """Represents a temporary promotion of a model."""
+    model_id: str
+    new_priority: Priority
+    expires_at: datetime
+    original_priority: Priority
+    
+    def is_active(self) -> bool:
+        """Check if promotion is still active."""
+        return datetime.now() < self.expires_at
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            'model_id': self.model_id,
+            'new_priority': self.new_priority.value,
+            'expires_at': self.expires_at.isoformat(),
+            'original_priority': self.original_priority.value
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'Promotion':
+        """Create from dictionary."""
+        return cls(
+            model_id=data['model_id'],
+            new_priority=Priority(data['new_priority']),
+            expires_at=datetime.fromisoformat(data['expires_at']),
+            original_priority=Priority(data['original_priority'])
+        )
 
 
 class ModelPool:
@@ -91,28 +102,30 @@ class ModelPool:
         """
         self.storage_path = storage_path or Path.home() / ".mind-swarm" / "model_pool.json"
         self.models: Dict[str, ModelConfig] = {}
-        self.paid_models: Dict[str, ModelConfig] = {}  # Separate paid model tracking
+        self.promotions: Dict[str, Promotion] = {}  # Active promotions
+        self.runtime_models: Dict[str, ModelConfig] = {}  # Models added at runtime
         
-        # Initialize with default models
-        self._initialize_defaults()
+        # Initialize with default models from YAML
+        self._load_yaml_models()
         
-        # Load saved state if exists
+        # Load saved state (promotions and runtime models)
         self._load_state()
         
         # Clean up expired promotions
         self._cleanup_promotions()
     
-    def _initialize_defaults(self):
-        """Initialize with default model configurations from YAML."""
-        # Load OpenAI models from config
+    def _load_yaml_models(self):
+        """Load models from YAML configuration files."""
+        # Load OpenAI models
         self._load_openai_models()
         
-        # Load OpenRouter models from config
+        # Load OpenRouter models
         self._load_openrouter_models()
+        
+        logger.info(f"Loaded {len(self.models)} models from YAML configs")
     
     def _load_openai_models(self):
         """Load OpenAI and OpenAI-compatible models from YAML configuration."""
-        # Try multiple locations for the config file
         config_paths = [
             Path("config/openai_models.yaml"),
             Path(__file__).parent.parent.parent.parent / "config" / "openai_models.yaml",
@@ -128,7 +141,7 @@ class ModelPool:
                         model = ModelConfig(
                             id=model_data['id'],
                             name=model_data['name'],
-                            provider="openai",  # All use OpenAI provider
+                            provider="openai",
                             priority=Priority(model_data['priority']),
                             cost_type=CostType(model_data['cost_type']),
                             context_length=model_data.get('context_length', 8192),
@@ -136,12 +149,7 @@ class ModelPool:
                             temperature=model_data.get('temperature', 0.7),
                             api_settings=model_data.get('api_settings', {})
                         )
-                        
-                        # Add to appropriate pool
-                        if model.cost_type == CostType.PAID:
-                            self.paid_models[model.id] = model
-                        else:
-                            self.models[model.id] = model
+                        self.models[model.id] = model
                     
                     logger.info(f"Loaded {len(data.get('models', []))} OpenAI models from {config_path}")
                     return
@@ -153,13 +161,11 @@ class ModelPool:
     
     def _load_openrouter_models(self):
         """Load OpenRouter models from YAML configuration."""
-        # Only load if API key is available
         import os
         if not os.getenv("OPENROUTER_API_KEY"):
             logger.debug("No OPENROUTER_API_KEY found, skipping OpenRouter models")
             return
             
-        # Try multiple locations for the config file
         config_paths = [
             Path("config/openrouter_models.yaml"),
             Path(__file__).parent.parent.parent.parent / "config" / "openrouter_models.yaml",
@@ -183,12 +189,7 @@ class ModelPool:
                             temperature=model_data.get('temperature', 0.7),
                             api_settings=model_data.get('api_settings', {})
                         )
-                        
-                        # Add to appropriate pool
-                        if model.cost_type == CostType.PAID:
-                            self.paid_models[model.id] = model
-                        else:
-                            self.models[model.id] = model
+                        self.models[model.id] = model
                     
                     logger.info(f"Loaded {len(data.get('models', []))} OpenRouter models from {config_path}")
                     return
@@ -199,7 +200,7 @@ class ModelPool:
         logger.debug("No OpenRouter models configuration file found")
     
     def _load_state(self):
-        """Load saved model pool state from disk and merge with YAML configs."""
+        """Load saved state (promotions and runtime models) from disk."""
         if not self.storage_path.exists():
             return
             
@@ -207,90 +208,46 @@ class ModelPool:
             with open(self.storage_path, 'r') as f:
                 data = json.load(f)
             
-            # Track models before merging
-            yaml_free = set(self.models.keys())
-            yaml_paid = set(self.paid_models.keys())
+            # Load active promotions
+            for promo_data in data.get('promotions', []):
+                try:
+                    promotion = Promotion.from_dict(promo_data)
+                    if promotion.is_active():
+                        self.promotions[promotion.model_id] = promotion
+                        logger.debug(f"Restored promotion for {promotion.model_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to restore promotion: {e}")
             
-            # Track runtime-added models (models that aren't in any YAML)
-            runtime_free = {}
-            runtime_paid = {}
+            # Load runtime-added models
+            for model_id, model_data in data.get('runtime_models', {}).items():
+                try:
+                    model = ModelConfig.from_dict(model_data)
+                    self.runtime_models[model_id] = model
+                    self.models[model_id] = model
+                    logger.debug(f"Restored runtime model {model_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to restore runtime model {model_id}: {e}")
             
-            # Process free models from saved state
-            for model_id, model_data in data.get('models', {}).items():
-                saved_model = ModelConfig.from_dict(model_data)
-                
-                # Check if this model is from OpenRouter config
-                is_openrouter = saved_model.provider == "openrouter"
-                
-                if model_id in yaml_free:
-                    # Model exists in YAML, only preserve promotions
-                    if saved_model.promoted_until or saved_model.original_priority:
-                        self.models[model_id].promoted_until = saved_model.promoted_until
-                        self.models[model_id].original_priority = saved_model.original_priority
-                        if saved_model.promoted_until:
-                            self.models[model_id].priority = saved_model.priority
-                elif not is_openrouter:
-                    # This is a runtime-added model (not from OpenRouter), keep it
-                    runtime_free[model_id] = saved_model
-                # If it's an OpenRouter model not in YAML, skip it (it was removed)
-                
-            # Process paid models from saved state
-            for model_id, model_data in data.get('paid_models', {}).items():
-                saved_model = ModelConfig.from_dict(model_data)
-                
-                # Check if this model is from OpenRouter config
-                is_openrouter = saved_model.provider == "openrouter"
-                
-                if model_id in yaml_paid:
-                    # Model exists in YAML, only preserve promotions
-                    if saved_model.promoted_until or saved_model.original_priority:
-                        self.paid_models[model_id].promoted_until = saved_model.promoted_until
-                        self.paid_models[model_id].original_priority = saved_model.original_priority
-                        if saved_model.promoted_until:
-                            self.paid_models[model_id].priority = saved_model.priority
-                elif not is_openrouter:
-                    # This is a runtime-added model (not from OpenRouter), keep it
-                    runtime_paid[model_id] = saved_model
-                # If it's an OpenRouter model not in YAML, skip it (it was removed)
-            
-            # Add runtime-added models back
-            self.models.update(runtime_free)
-            self.paid_models.update(runtime_paid)
-            
-            # Log what happened
-            if runtime_free or runtime_paid:
-                logger.info(f"Preserved {len(runtime_free)} free and {len(runtime_paid)} paid runtime-added models")
-            
-            # Check for removed models
-            removed_count = 0
-            for model_id in data.get('models', {}).keys():
-                if model_id not in self.models:
-                    logger.debug(f"Removed model {model_id} (no longer in config)")
-                    removed_count += 1
-            for model_id in data.get('paid_models', {}).keys():
-                if model_id not in self.paid_models:
-                    logger.debug(f"Removed model {model_id} (no longer in config)")
-                    removed_count += 1
-            
-            if removed_count > 0:
-                logger.info(f"Removed {removed_count} models that are no longer in config files")
+            logger.info(f"Restored {len(self.promotions)} promotions and {len(self.runtime_models)} runtime models")
                 
         except Exception as e:
             logger.error(f"Failed to load model pool state: {e}")
     
     def _save_state(self):
-        """Save current model pool state to disk."""
+        """Save current state (promotions and runtime models) to disk."""
         try:
             self.storage_path.parent.mkdir(parents=True, exist_ok=True)
             
+            # Only save promotions and runtime models
             data = {
-                'models': {
+                'promotions': [
+                    promo.to_dict() 
+                    for promo in self.promotions.values() 
+                    if promo.is_active()
+                ],
+                'runtime_models': {
                     model_id: model.to_dict()
-                    for model_id, model in self.models.items()
-                },
-                'paid_models': {
-                    model_id: model.to_dict()
-                    for model_id, model in self.paid_models.items()
+                    for model_id, model in self.runtime_models.items()
                 },
                 'last_updated': datetime.now().isoformat()
             }
@@ -304,35 +261,41 @@ class ModelPool:
     
     def _cleanup_promotions(self):
         """Remove expired promotions."""
-        now = datetime.now()
-        cleaned = 0
+        expired = []
+        for model_id, promotion in list(self.promotions.items()):
+            if not promotion.is_active():
+                expired.append(model_id)
+                del self.promotions[model_id]
         
-        for model in list(self.models.values()) + list(self.paid_models.values()):
-            if model.promoted_until and model.promoted_until < now:
-                # Restore original priority
-                if model.original_priority:
-                    model.priority = model.original_priority
-                model.promoted_until = None
-                model.original_priority = None
-                cleaned += 1
-        
-        if cleaned > 0:
-            logger.info(f"Cleaned up {cleaned} expired model promotions")
+        if expired:
+            logger.info(f"Cleaned up {len(expired)} expired promotions")
             self._save_state()
     
-    def add_model(self, model: ModelConfig, is_paid: bool = False):
-        """Add a model to the pool.
+    def _get_effective_priority(self, model: ModelConfig) -> Priority:
+        """Get the effective priority of a model, considering promotions.
         
         Args:
             model: Model configuration
-            is_paid: Whether this is a paid model
+            
+        Returns:
+            Effective priority (promoted or original)
         """
-        if is_paid:
-            self.paid_models[model.id] = model
-        else:
-            self.models[model.id] = model
+        if model.id in self.promotions:
+            promotion = self.promotions[model.id]
+            if promotion.is_active():
+                return promotion.new_priority
+        return model.priority
+    
+    def add_model(self, model: ModelConfig):
+        """Add a runtime model to the pool.
+        
+        Args:
+            model: Model configuration
+        """
+        self.models[model.id] = model
+        self.runtime_models[model.id] = model
         self._save_state()
-        logger.info(f"Added {'paid' if is_paid else 'free'} model {model.id} with priority {model.priority.value}")
+        logger.info(f"Added runtime model {model.id} ({model.cost_type.value}) with priority {model.priority.value}")
     
     def remove_model(self, model_id: str):
         """Remove a model from the pool.
@@ -340,17 +303,19 @@ class ModelPool:
         Args:
             model_id: Model ID to remove
         """
-        removed = False
-        if model_id in self.models:
+        if model_id in self.runtime_models:
+            # Can only remove runtime models, not YAML-defined ones
             del self.models[model_id]
-            removed = True
-        if model_id in self.paid_models:
-            del self.paid_models[model_id]
-            removed = True
+            del self.runtime_models[model_id]
             
-        if removed:
+            # Also remove any promotions
+            if model_id in self.promotions:
+                del self.promotions[model_id]
+            
             self._save_state()
-            logger.info(f"Removed model {model_id}")
+            logger.info(f"Removed runtime model {model_id}")
+        elif model_id in self.models:
+            logger.warning(f"Cannot remove YAML-defined model {model_id}. Remove from config file instead.")
         else:
             logger.warning(f"Model {model_id} not found")
     
@@ -360,38 +325,45 @@ class ModelPool:
         new_priority: Priority,
         duration_hours: Optional[float] = None
     ):
-        """Promote a model to a higher priority tier.
+        """Promote a model to a different priority tier.
         
         Args:
             model_id: Model ID to promote
             new_priority: New priority level
-            duration_hours: How long the promotion lasts (None = forever)
+            duration_hours: How long the promotion lasts (None = permanent)
         """
-        # Check both free and paid pools
-        model = self.models.get(model_id) or self.paid_models.get(model_id)
+        model = self.models.get(model_id)
         
         if not model:
             raise ValueError(f"Model {model_id} not found")
         
-        # If it's a paid model, move it to free pool temporarily
-        if model_id in self.paid_models:
-            model = self.paid_models.pop(model_id)
-            self.models[model_id] = model
-            logger.info(f"Moving paid model {model_id} to free pool")
-        
-        # Store original priority if not already promoted
-        if not model.original_priority:
-            model.original_priority = model.priority
-        
-        model.priority = new_priority
-        
         if duration_hours:
-            model.promoted_until = datetime.now() + timedelta(hours=duration_hours)
+            # Temporary promotion
+            promotion = Promotion(
+                model_id=model_id,
+                new_priority=new_priority,
+                expires_at=datetime.now() + timedelta(hours=duration_hours),
+                original_priority=model.priority
+            )
+            self.promotions[model_id] = promotion
             logger.info(f"Promoted {model_id} to {new_priority.value} for {duration_hours} hours")
         else:
-            model.promoted_until = None
-            model.original_priority = None
-            logger.info(f"Permanently promoted {model_id} to {new_priority.value}")
+            # Permanent promotion - update the model itself
+            if model_id in self.runtime_models:
+                # Runtime model - can change permanently
+                model.priority = new_priority
+                self.runtime_models[model_id].priority = new_priority
+                logger.info(f"Permanently promoted runtime model {model_id} to {new_priority.value}")
+            else:
+                # YAML model - use indefinite promotion
+                promotion = Promotion(
+                    model_id=model_id,
+                    new_priority=new_priority,
+                    expires_at=datetime.max,  # Far future
+                    original_priority=model.priority
+                )
+                self.promotions[model_id] = promotion
+                logger.info(f"Promoted YAML model {model_id} to {new_priority.value} (indefinite)")
         
         self._save_state()
     
@@ -401,24 +373,27 @@ class ModelPool:
         Args:
             model_id: Model ID to demote
         """
-        model = self.models.get(model_id)
+        removed = False
         
-        if not model:
-            raise ValueError(f"Model {model_id} not found in free pool")
+        # Remove promotion if exists
+        if model_id in self.promotions:
+            original_priority = self.promotions[model_id].original_priority
+            del self.promotions[model_id]
+            removed = True
+            logger.info(f"Removed promotion from {model_id}, restored to {original_priority.value}")
         
-        if model.original_priority:
-            model.priority = model.original_priority
-            model.original_priority = None
+        # For runtime models, check if priority was permanently changed
+        if model_id in self.runtime_models:
+            # Reset to NORMAL as default for runtime models
+            self.models[model_id].priority = Priority.NORMAL
+            self.runtime_models[model_id].priority = Priority.NORMAL
+            removed = True
+            logger.info(f"Reset runtime model {model_id} to NORMAL priority")
         
-        model.promoted_until = None
-        
-        # If it's a paid model, move it back
-        if model.cost_type == CostType.PAID:
-            self.paid_models[model_id] = self.models.pop(model_id)
-            logger.info(f"Moving {model_id} back to paid pool")
-        
-        logger.info(f"Demoted {model_id} to {model.priority.value}")
-        self._save_state()
+        if removed:
+            self._save_state()
+        else:
+            logger.warning(f"Model {model_id} has no active promotion")
     
     def select_model(self, paid_allowed: bool = False) -> Optional[ModelConfig]:
         """Select a model using random selection within priority tiers.
@@ -432,50 +407,82 @@ class ModelPool:
         # Clean up expired promotions first
         self._cleanup_promotions()
         
-        # Build candidate pools by priority
-        candidates = self.models.values()
+        # Filter candidates
+        candidates = []
+        for model in self.models.values():
+            # Skip paid models if not allowed, UNLESS they are promoted
+            if model.cost_type == CostType.PAID and not paid_allowed:
+                # Check if this model is promoted - promoted paid models should be usable
+                if model.id not in self.promotions or not self.promotions[model.id].is_active():
+                    continue
+            candidates.append(model)
         
-        if paid_allowed:
-            candidates = list(candidates) + list(self.paid_models.values())
+        if not candidates:
+            logger.warning("No models available in pool")
+            return None
         
-        # Group by priority
-        primary = [m for m in candidates if m.priority == Priority.PRIMARY]
-        normal = [m for m in candidates if m.priority == Priority.NORMAL]
-        fallback = [m for m in candidates if m.priority == Priority.FALLBACK]
+        # Group by effective priority
+        primary = []
+        normal = []
+        fallback = []
+        
+        for model in candidates:
+            effective_priority = self._get_effective_priority(model)
+            if effective_priority == Priority.PRIMARY:
+                primary.append(model)
+            elif effective_priority == Priority.NORMAL:
+                normal.append(model)
+            else:
+                fallback.append(model)
         
         # Select from highest available priority
         if primary:
             selected = random.choice(primary)
+            tier = "primary"
         elif normal:
             selected = random.choice(normal)
+            tier = "normal"
         elif fallback:
             selected = random.choice(fallback)
+            tier = "fallback"
         else:
-            logger.warning("No models available in pool")
+            logger.warning("No models available after filtering")
             return None
         
-        logger.debug(f"Selected model {selected.id} from {selected.priority.value} tier")
+        logger.debug(f"Selected model {selected.id} from {tier} tier")
         return selected
     
-    def list_models(self, include_paid: bool = True) -> List[ModelConfig]:
-        """List all models in the pool.
+    def list_models(self, include_paid: bool = True) -> List[Tuple[ModelConfig, Optional[Promotion]]]:
+        """List all models in the pool with their promotion status.
         
         Args:
             include_paid: Whether to include paid models
             
         Returns:
-            List of models sorted by priority
+            List of (model, promotion) tuples sorted by effective priority
         """
-        models = list(self.models.values())
+        results = []
         
-        if include_paid:
-            models.extend(self.paid_models.values())
+        for model in self.models.values():
+            # Skip paid models if requested
+            if model.cost_type == CostType.PAID and not include_paid:
+                continue
+            
+            # Get promotion if exists
+            promotion = self.promotions.get(model.id) if model.id in self.promotions else None
+            if promotion and not promotion.is_active():
+                promotion = None
+            
+            results.append((model, promotion))
         
-        # Sort by priority (PRIMARY < NORMAL < FALLBACK)
+        # Sort by effective priority
         priority_order = {Priority.PRIMARY: 0, Priority.NORMAL: 1, Priority.FALLBACK: 2}
-        models.sort(key=lambda m: (priority_order[m.priority], m.id))
+        results.sort(key=lambda x: (
+            priority_order[x[1].new_priority if x[1] else x[0].priority],
+            x[0].id
+        ))
         
-        return models
+        return results
     
     def get_model(self, model_id: str) -> Optional[ModelConfig]:
         """Get a specific model by ID.
@@ -486,54 +493,23 @@ class ModelPool:
         Returns:
             Model configuration or None
         """
-        return self.models.get(model_id) or self.paid_models.get(model_id)
+        return self.models.get(model_id)
     
-    def load_from_registry(self, models: List[Dict[str, Any]], curated_ids: List[str]):
-        """Load models from the existing registry format.
+    def get_promotion(self, model_id: str) -> Optional[Promotion]:
+        """Get active promotion for a model.
         
         Args:
-            models: List of model data from registry
-            curated_ids: List of curated model IDs
+            model_id: Model ID
+            
+        Returns:
+            Active promotion or None
         """
-        for model_data in models:
-            model_id = model_data.get('id', '')
-            if not model_id:
-                continue
-            
-            # Determine priority based on curated status
-            if model_id in curated_ids:
-                priority = Priority.PRIMARY
-            else:
-                priority = Priority.NORMAL
-            
-            # Determine cost type
-            is_free = (model_data.get('input_cost', 0) == 0 and 
-                      model_data.get('output_cost', 0) == 0)
-            cost_type = CostType.FREE if is_free else CostType.PAID
-            
-            # Determine provider
-            if '/' in model_id:
-                provider = model_id.split('/')[0]
-            else:
-                provider = 'unknown'
-            
-            model = ModelConfig(
-                id=model_id,
-                name=model_data.get('name', model_id),
-                provider=provider,
-                priority=priority,
-                cost_type=cost_type,
-                context_length=model_data.get('context_length', 8192),
-                max_tokens=model_data.get('max_output_tokens', 4096)
-            )
-            
-            if cost_type == CostType.PAID:
-                self.paid_models[model_id] = model
-            else:
-                self.models[model_id] = model
-        
-        self._save_state()
-        logger.info(f"Loaded {len(self.models)} free and {len(self.paid_models)} paid models from registry")
+        if model_id in self.promotions:
+            promotion = self.promotions[model_id]
+            if promotion.is_active():
+                return promotion
+        return None
+    
 
 
 # Global model pool instance

@@ -2,7 +2,7 @@ models:
 - id: z-ai/glm-4.5-air
   name: GLM 4.5 Air
   provider: openrouter
-  priority: primary
+  priority: normal
   cost_type: paid
   context_length: 131072
   max_tokens: 4096
@@ -13,7 +13,7 @@ models:
 - id: z-ai/glm-4.5-air:free
   name: GLM 4.5 Air (Free)
   provider: openrouter
-  priority: primary
+  priority: normal
   cost_type: free
   context_length: 131072
   max_tokens: 4096
@@ -21,7 +21,7 @@ models:
 - id: qwen/qwen3-235b-a22b:free
   name: Qwen3-235B-A22B (Free)
   provider: openrouter
-  priority: primary
+  priority: normal
   cost_type: free
   context_length: 131072
   max_tokens: 4096

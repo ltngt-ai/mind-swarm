@@ -27,9 +27,9 @@ def list_models(
     include_paid: bool = typer.Option(True, "--include-paid/--free-only", help="Include paid models in list")
 ):
     """List all available models with their priorities."""
-    models = model_pool.list_models(include_paid=include_paid)
+    model_list = model_pool.list_models(include_paid=include_paid)
     
-    if not models:
+    if not model_list:
         console.print("[yellow]No models available[/yellow]")
         return
     
@@ -41,22 +41,32 @@ def list_models(
     table.add_column("Context", style="dim")
     table.add_column("Status")
     
-    for model in models:
+    for model, promotion in model_list:
         # Determine status
         status = ""
-        if model.is_promoted():
-            remaining = model.promoted_until - datetime.now()
-            hours = remaining.total_seconds() / 3600
-            status = f"Promoted ({hours:.1f}h left)"
+        if promotion:
+            if promotion.expires_at == datetime.max:
+                status = "Promoted (indefinite)"
+            else:
+                remaining = promotion.expires_at - datetime.now()
+                hours = remaining.total_seconds() / 3600
+                status = f"Promoted ({hours:.1f}h left)"
+        
+        # Get effective priority
+        effective_priority = promotion.new_priority if promotion else model.priority
         
         # Format priority with color
-        priority = model.priority.value
-        if model.priority == Priority.PRIMARY:
+        priority = effective_priority.value
+        if effective_priority == Priority.PRIMARY:
             priority = f"[bold green]{priority}[/bold green]"
-        elif model.priority == Priority.NORMAL:
+        elif effective_priority == Priority.NORMAL:
             priority = f"[yellow]{priority}[/yellow]"
         else:
             priority = f"[dim]{priority}[/dim]"
+        
+        # Add indicator if promoted
+        if promotion:
+            priority = f"{priority} ⬆"
         
         # Format cost
         cost = "FREE" if model.cost_type == CostType.FREE else "PAID"
@@ -179,11 +189,13 @@ def model_info(
         console.print(f"[red]Model {model_id} not found[/red]")
         return
     
+    promotion = model_pool.get_promotion(model_id)
+    
     console.print(f"\n[bold]Model Information[/bold]")
     console.print(f"ID: [cyan]{model.id}[/cyan]")
     console.print(f"Name: {model.name}")
     console.print(f"Provider: {model.provider}")
-    console.print(f"Priority: [magenta]{model.priority.value}[/magenta]")
+    console.print(f"Base Priority: [magenta]{model.priority.value}[/magenta]")
     console.print(f"Cost Type: {'[green]FREE[/green]' if model.cost_type == CostType.FREE else '[red]PAID[/red]'}")
     console.print(f"Context Length: {model.context_length:,} tokens")
     console.print(f"Max Output: {model.max_tokens:,} tokens")
@@ -194,12 +206,16 @@ def model_info(
         for key, value in model.api_settings.items():
             console.print(f"  {key}: {value}")
     
-    if model.is_promoted():
-        remaining = model.promoted_until - datetime.now()
-        hours = remaining.total_seconds() / 3600
-        console.print(f"\n[yellow]Promoted until: {model.promoted_until.strftime('%Y-%m-%d %H:%M')} ({hours:.1f} hours remaining)[/yellow]")
-        if model.original_priority:
-            console.print(f"Original priority: {model.original_priority.value}")
+    if promotion:
+        console.print(f"\n[yellow][bold]Active Promotion:[/bold][/yellow]")
+        console.print(f"Promoted to: [green]{promotion.new_priority.value}[/green]")
+        if promotion.expires_at == datetime.max:
+            console.print(f"Duration: Indefinite")
+        else:
+            remaining = promotion.expires_at - datetime.now()
+            hours = remaining.total_seconds() / 3600
+            console.print(f"Expires: {promotion.expires_at.strftime('%Y-%m-%d %H:%M')} ({hours:.1f} hours remaining)")
+        console.print(f"Original priority: {promotion.original_priority.value}")
 
 
 if __name__ == "__main__":

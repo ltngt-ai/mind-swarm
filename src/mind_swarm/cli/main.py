@@ -236,9 +236,9 @@ class MindSwarmCLI:
         from mind_swarm.ai.model_pool import model_pool, Priority, CostType
         from datetime import datetime
         
-        models = model_pool.list_models(include_paid=True)
+        model_list = model_pool.list_models(include_paid=True)
         
-        if not models:
+        if not model_list:
             console.print("[yellow]No models available[/yellow]")
             return
         
@@ -250,22 +250,32 @@ class MindSwarmCLI:
         table.add_column("Context", style="dim")
         table.add_column("Status")
         
-        for model in models:
+        for model, promotion in model_list:
             # Determine status
             status = ""
-            if model.is_promoted():
-                remaining = model.promoted_until - datetime.now()
-                hours = remaining.total_seconds() / 3600
-                status = f"Promoted ({hours:.1f}h left)"
+            if promotion:
+                if promotion.expires_at == datetime.max:
+                    status = "Promoted (indefinite)"
+                else:
+                    remaining = promotion.expires_at - datetime.now()
+                    hours = remaining.total_seconds() / 3600
+                    status = f"Promoted ({hours:.1f}h left)"
+            
+            # Get effective priority
+            effective_priority = promotion.new_priority if promotion else model.priority
             
             # Format priority with color
-            priority = model.priority.value
-            if model.priority == Priority.PRIMARY:
+            priority = effective_priority.value
+            if effective_priority == Priority.PRIMARY:
                 priority = f"[bold green]{priority}[/bold green]"
-            elif model.priority == Priority.NORMAL:
+            elif effective_priority == Priority.NORMAL:
                 priority = f"[yellow]{priority}[/yellow]"
             else:
                 priority = f"[dim]{priority}[/dim]"
+            
+            # Add indicator if promoted
+            if promotion:
+                priority = f"{priority} ⬆"
             
             # Format cost
             cost = "FREE" if model.cost_type == CostType.FREE else "PAID"
@@ -287,12 +297,21 @@ class MindSwarmCLI:
         """Display model pool summary."""
         from mind_swarm.ai.model_pool import model_pool, Priority
         
-        models = model_pool.list_models(include_paid=True)
+        model_list = model_pool.list_models(include_paid=True)
         
-        # Count by priority
-        primary_count = sum(1 for m in models if m.priority == Priority.PRIMARY)
-        normal_count = sum(1 for m in models if m.priority == Priority.NORMAL) 
-        fallback_count = sum(1 for m in models if m.priority == Priority.FALLBACK)
+        # Count by effective priority (considering promotions)
+        primary_count = 0
+        normal_count = 0
+        fallback_count = 0
+        
+        for model, promotion in model_list:
+            effective_priority = promotion.new_priority if promotion else model.priority
+            if effective_priority == Priority.PRIMARY:
+                primary_count += 1
+            elif effective_priority == Priority.NORMAL:
+                normal_count += 1
+            else:
+                fallback_count += 1
         
         table = Table(title="Model Pool Summary")
         table.add_column("Priority", style="cyan")
