@@ -113,6 +113,27 @@ class MemorySystem:
             return True
         return False
     
+    def touch_memory(self, memory_id: str, cycle_count: int) -> bool:
+        """Update a memory's cycle_count to indicate it was modified.
+        
+        This is used when the underlying file is updated directly (e.g., via memory mapping)
+        and the memory system needs to know the file has changed.
+        
+        Args:
+            memory_id: ID of memory to touch
+            cycle_count: Current cycle count when the file was updated
+            
+        Returns:
+            True if memory was found and updated
+        """
+        if memory_id in self._memory_manager.memory_index:
+            memory = self._memory_manager.memory_index[memory_id]
+            if hasattr(memory, 'cycle_count'):
+                memory.cycle_count = cycle_count
+                logger.debug(f"Touched memory {memory_id} with cycle_count {cycle_count}")
+                return True
+        return False
+    
     # === CONTEXT BUILDING ===
     
     def build_context(self,

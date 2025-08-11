@@ -18,5 +18,6 @@ The cognitive loop is organized into three fundamental stages:
 from .observation_stage import ObservationStage
 from .decision_stage import DecisionStage
 from .execution_stage import ExecutionStage
+from .reflect_stage import ReflectStage
 
-__all__ = ['ObservationStage', 'DecisionStage', 'ExecutionStage']
+__all__ = ['ObservationStage', 'DecisionStage', 'ExecutionStage', 'ReflectStage']

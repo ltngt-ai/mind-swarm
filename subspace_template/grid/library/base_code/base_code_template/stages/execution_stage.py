@@ -16,7 +16,7 @@ from ..actions import ActionCoordinator
 from ..memory import Priority, MemoryType
 from ..memory.tag_filter import TagFilter
 from ..utils import ReferenceResolver
-from ..state.stage_pipeline import ExecutionOutput
+import json
 
 logger = logging.getLogger("Cyber.stages.execution")
 
@@ -57,16 +57,26 @@ class ExecutionStage:
         self.outbox_dir = cognitive_loop.outbox_dir
         self.memory_dir = cognitive_loop.memory_dir
         
-    async def run(self, action_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    async def run(self) -> List[Dict[str, Any]]:
         """Run the execution stage.
         
-        Args:
-            action_data: List of action specifications from decision stage
+        Reads the actions from the current pipeline and executes them.
             
         Returns:
             List of action results
         """
         logger.info("=== EXECUTION STAGE ===")
+        
+        # Read decision buffer to get decision data
+        decision_buffer = self.cognitive_loop.get_current_pipeline("decision")
+        decision_file = self.cognitive_loop.personal.parent / decision_buffer.location
+        
+        try:
+            with open(decision_file, 'r') as f:
+                decision_data = json.load(f)
+                action_data = decision_data.get("selected_actions", [])
+        except:
+            action_data = []
         
         if not action_data:
             logger.info("⚡ No actions to execute")
@@ -252,32 +262,47 @@ class ExecutionStage:
             else:
                 failed_actions.append(action_summary)
         
-        # Track goal progress
+        # Track goal progress from current pipeline
         goal_manager = self.cognitive_loop.goal_manager
-        decision_output = self.cognitive_loop.stage_pipeline.get_decision()
+        
         goal_progress = {}
+        # Get decision data from decision buffer
+        decision_buffer = self.cognitive_loop.get_current_pipeline("decision")
+        decision_file = self.cognitive_loop.personal.parent / decision_buffer.location
+        try:
+            with open(decision_file, 'r') as f:
+                decision_data = json.load(f)
+                addresses_goals = decision_data.get("addresses_goals", [])
+                for goal_id in addresses_goals:
+                    # Simple progress tracking - can be enhanced
+                    goal_progress[goal_id] = {
+                        "actions_completed": len(completed_actions),
+                        "actions_failed": len(failed_actions)
+                    }
+        except:
+            pass  # No decision data available
         
-        if decision_output:
-            addresses_goals = decision_output.get("addresses_goals", [])
-            for goal_id in addresses_goals:
-                # Simple progress tracking - can be enhanced
-                goal_progress[goal_id] = {
-                    "actions_completed": len(completed_actions),
-                    "actions_failed": len(failed_actions)
-                }
+        # Write to execution pipeline buffer
+        execution_content = {
+            "timestamp": datetime.now().isoformat(),
+            "cycle_count": self.cognitive_loop.cycle_count,
+            "completed_actions": completed_actions,
+            "failed_actions": failed_actions,
+            "results": results,
+            "side_effects": side_effects,
+            "goal_progress": goal_progress
+        }
         
-        # Write to pipeline
-        pipeline_output = ExecutionOutput(
-            stage="execution",
-            cycle_count=self.cognitive_loop.cycle_count,
-            completed_actions=completed_actions,
-            failed_actions=failed_actions,
-            results=results,
-            side_effects=side_effects,
-            goal_progress=goal_progress
-        )
-        self.cognitive_loop.stage_pipeline.write_execution(pipeline_output)
-        logger.info(f"📝 Wrote execution output to pipeline: {len(completed_actions)} completed, {len(failed_actions)} failed")
+        execution_buffer = self.cognitive_loop.get_current_pipeline("execution")
+        buffer_file = self.cognitive_loop.personal.parent / execution_buffer.location
+        
+        with open(buffer_file, 'w') as f:
+            json.dump(execution_content, f, indent=2)
+        
+        # Touch the memory block so it knows when the file was updated
+        self.cognitive_loop.memory_system.touch_memory(execution_buffer.id, self.cognitive_loop.cycle_count)
+        
+        logger.info(f"⚡ Execution written to pipeline buffer: {len(completed_actions)} completed, {len(failed_actions)} failed")
         
         # Clear tracked actions after execution
         self.cognitive_loop.action_tracker.clear_actions()

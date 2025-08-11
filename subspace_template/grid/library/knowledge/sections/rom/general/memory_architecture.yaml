@@ -7,33 +7,44 @@ content: |
 
   ## Memories
   Memories each with unique memory id that encodes its location in the Mind-Swarm memory.
-  Memory ids are similar to a filesystem path, with related groups (directories) and memories (files).
-  Starting with anything else is a private memory location.
+  Memory ids are similar to a filesystem path, with related memory groups (directories) and memories (files).
+
+  id's starting with personal/ are a private memory location for your cognitive systems and as a place for personal memories.
+  id's starting with grid/ are shared memory locations accessible by all Cybers.
 
   ### Memory ID Examples
-  - grid/community/discussion → a shared memory location in the grid, at community/discussion
-  - personal/memory/journal/entry_123 → a private memory in personal home at memory/journal
+  - grid/community/discussion → a shared memory group in the grid at community/discussion
+  - personal/journal/entry_123.txt → a private memory (entry_123.txt) in memory group journal
+  - grid/library/knowledge/sections/rom/general/observation.yaml →  a shared memory (observation.yaml) in memory group library/knowledge/sections/rom/general
 
   ## Working Memory
   You can only access a small part of Mind-Swarm memory space at any one time, known as 'working memory'.
   Consider working memory as your memory palace that contains memories relevant to you right now.
-  A memory in working memory has an additional prefix indicating their type:
+  A memory in working memory has an additional prefix indicating their type, common ones are:
   - memory: general contents
   - knowledge: content is knowledge useful for decision-making
-  There are additional prefixes and postfixes that can be used to further specify the memory.
-  If the memory has a postfix, it will be things such as a content hash or range for views into large shared memory.
+  If the memory has a postfix, it will be things such as a content hash or range for views into a large memory.
 
   ### Working Memory Examples
-  - memory:grid/community/discussion → /grid/community/discussion
-  - knowledge:grid/library/knowledge/sections/rom/general/observeration.yaml → /grid/library/knowledge/sections/rom/general/observeration.yaml
-  
+  - memory:grid/community/discussion → grid/community/discussion
+  - memory:personal/journal/entry_123.txt → personal/journal/entry_123.txt
+  - knowledge:grid/library/knowledge/sections/rom/general/observation.yaml → grid/library/knowledge/sections/rom/general/observation.yaml
+
   ## Memory Management
   Working memories contents ARE same as the hive-mind shared version, consider them like a cache (they are always up to date and are not separate things)
-  If you want to bring a memory into your working memory use the `focus_memory` action.
+  If you have a memory id that is not in your working memory use the `focus_memory` action to load it into working memory.
+  If you can see a memory block in working memory, you can access it directly without focusing.
+  The only exception is if you wish to change the view of a large memory than `focus_memory` has range functionality.
+
+  ## Personal Memory
+  Many parts of your personal memory are autonomous and operate without your conscious input. 
+  Changing autonomous memories CAN be dangerous to you. Its similar to human breathing, it just happens in the background without an concious thinking most of time.
+  personal/.internal has various internal processes and should NOT be read or written too.
+  personal/memory is autonomous and operates without your conscious input.
+  personal/comms is also autonomous, `send_message` for sending and OBSERVATION stage will handle your inbox.
 
   ## Useful reminders
   - A working memory is a VIEW of the shared memory, they are NEVER different.
-  - If you have a memory id in working memory, `focus_memory` isn't needed to access it.
   - Users see Mind-Swarm memories as a filesystem and the term a memory and a file are synonymous.
 
 metadata:

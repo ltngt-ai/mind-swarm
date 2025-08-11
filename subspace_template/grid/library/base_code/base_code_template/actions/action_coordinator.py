@@ -246,7 +246,7 @@ class ActionCoordinator:
                 "result": result.result,
                 "error": result.error,
                 "duration": duration,
-                "timestamp": start_time,
+                "timestamp": start_time.isoformat(),
                 "context_summary": self._summarize_context(context)
             }
             
@@ -277,7 +277,7 @@ class ActionCoordinator:
                 "result": None,
                 "error": str(e),
                 "duration": duration,
-                "timestamp": start_time,
+                "timestamp": start_time.isoformat(),
                 "context_summary": self._summarize_context(context)
             }
             

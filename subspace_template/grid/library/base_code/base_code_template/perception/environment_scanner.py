@@ -220,7 +220,8 @@ class EnvironmentScanner:
                             "from_agent": msg_data.get("from", "unknown"),
                             "to_agent": msg_data.get("to", "me"),
                             "subject": msg_data.get("subject", "No subject")
-                        }
+                        },
+                        cycle_count=cycle_count  # When this file was discovered
                     )
                     memories.append(file_memory)
                     
@@ -332,7 +333,8 @@ class EnvironmentScanner:
                             memories.append(FileMemoryBlock(
                                 location=str(file_path),
                                 priority=Priority.MEDIUM,
-                                confidence=0.8
+                                confidence=0.8,
+                                cycle_count=cycle_count  # When this file was discovered
                             ))
         
         except Exception as e:
@@ -361,7 +363,8 @@ class EnvironmentScanner:
                         location=str(journal_file),
                         priority=Priority.HIGH,
                         confidence=1.0,
-                        metadata={"type": "journal"}
+                        metadata={"type": "journal"},
+                        cycle_count=cycle_count  # When journal was updated
                     ))
                     
                     # Also create an observation for the journal update

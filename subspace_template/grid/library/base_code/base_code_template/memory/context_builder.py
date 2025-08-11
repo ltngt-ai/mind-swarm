@@ -74,6 +74,10 @@ class ContextBuilder:
                 if memory.priority != Priority.MEDIUM:
                     entry["priority"] = memory.priority.value
                 
+                # Add cycle_count if present (helps Cyber track what's current)
+                if hasattr(memory, 'cycle_count') and memory.cycle_count is not None:
+                    entry["cycle_count"] = memory.cycle_count
+                
                 # Metadata is for system use, not for Cyber's working memory
                 # The Cyber gets all needed info from the content and ID
                 # Exception: message sender is actually useful content, but include it in the content, not metadata

@@ -15,8 +15,8 @@ from ..brain import BrainInterface
 from ..actions import ActionCoordinator
 from ..memory.tag_filter import TagFilter
 from ..memory import MemoryType
-from ..state.stage_pipeline import DecisionOutput
 from ..state.goal_manager import GoalStatus
+from datetime import datetime
 
 logger = logging.getLogger("Cyber.stages.decision")
 
@@ -48,20 +48,31 @@ class DecisionStage:
         self.action_coordinator = cognitive_loop.action_coordinator
         self.knowledge_manager = cognitive_loop.knowledge_manager
         
-    async def run(self, orientation: Dict[str, Any]) -> List[Dict[str, Any]]:
+    async def run(self) -> List[Dict[str, Any]]:
         """Run the decision stage.
         
-        Args:
-            orientation: The orientation data from observation stage
+        Reads the observation from the current pipeline and decides on actions.
             
         Returns:
             List of action specifications to execute
         """
         logger.info("=== DECISION STAGE ===")
         
-        # Get observation from pipeline for additional context
-        observation_output = self.cognitive_loop.stage_pipeline.get_observation()
-        uses_pipeline = observation_output is not None
+        # Read observation buffer to get observation data
+        observation_buffer = self.cognitive_loop.get_current_pipeline("observation")
+        observation_file = self.cognitive_loop.personal.parent / observation_buffer.location
+        
+        try:
+            with open(observation_file, 'r') as f:
+                observation_data = json.load(f)
+                has_observation = bool(observation_data) and observation_data != {}
+        except:
+            observation_data = {}
+            has_observation = False
+        
+        if not has_observation:
+            logger.debug("No observation data in current pipeline")
+            return []
         
         # Get active goals and tasks to consider
         goal_manager = self.cognitive_loop.goal_manager
@@ -91,22 +102,41 @@ class DecisionStage:
         
         # Add goals and tasks to context if not already in memory
         if active_goals or active_tasks:
+            # Parse the JSON context to add goals and tasks
+            try:
+                context_data = json.loads(decision_context)
+            except json.JSONDecodeError:
+                context_data = []
+            
+            # Add goals and tasks as a special entry
             goals_context = {
-                "active_goals": [{
-                    "id": g.id,
-                    "description": g.description,
-                    "priority": g.priority,
-                    "status": g.status.value
-                } for g in active_goals],
-                "active_tasks": [{
-                    "id": t.id,
-                    "goal_id": t.goal_id,
-                    "description": t.description,
-                    "status": t.status.value,
-                    "next_steps": t.next_steps
-                } for t in active_tasks]
+                "id": "current_goals_and_tasks",
+                "type": "goals",
+                "content": {
+                    "active_goals": [{
+                        "id": g.id,
+                        "description": g.description,
+                        "priority": g.priority,
+                        "status": g.status.value
+                    } for g in active_goals],
+                    "active_tasks": [{
+                        "id": t.id,
+                        "goal_id": t.goal_id,
+                        "description": t.description,
+                        "status": t.status.value,
+                        "next_steps": t.next_steps
+                    } for t in active_tasks]
+                }
             }
-            decision_context['goals_and_tasks'] = json.dumps(goals_context, indent=2)
+            
+            # Add to context data
+            if isinstance(context_data, list):
+                context_data.append(goals_context)
+            else:
+                context_data = [context_data, goals_context]
+            
+            # Re-serialize
+            decision_context = json.dumps(context_data, indent=2)
         
         # Use brain to decide on actions
         logger.info("🤔 Making decision based on situation...")
@@ -165,9 +195,8 @@ class DecisionStage:
         else:
             logger.info("🤔 No actions decided")
         
-        # Save actions as serializable data and update cycle state
+        # Save actions as serializable data
         action_data = [{"name": a.name, "params": a.params} for a in actions]
-        # Actions are now tracked via ActionTracker in execution_stage
         
         # Track which goals actions might address
         addresses_goals = []
@@ -179,16 +208,25 @@ class DecisionStage:
         # Extract reasoning from decision response
         reasoning = output_values.get("reasoning", "No explicit reasoning provided")
         
-        # Write to pipeline
-        pipeline_output = DecisionOutput(
-            stage="decision",
-            cycle_count=self.cognitive_loop.cycle_count,
-            selected_actions=action_data,
-            reasoning=reasoning,
-            addresses_goals=list(set(addresses_goals)),  # Unique goal IDs
-            uses_orientation=uses_pipeline
-        )
-        self.cognitive_loop.stage_pipeline.write_decision(pipeline_output)
-        logger.info(f"📝 Wrote decision output to pipeline addressing {len(addresses_goals)} goals")
+        # Write to decision pipeline buffer
+        decision_content = {
+            "timestamp": datetime.now().isoformat(),
+            "cycle_count": self.cognitive_loop.cycle_count,
+            "selected_actions": action_data,
+            "reasoning": reasoning,
+            "addresses_goals": list(set(addresses_goals)),  # Unique goal IDs
+            "has_observation": has_observation
+        }
+        
+        decision_buffer = self.cognitive_loop.get_current_pipeline("decision")
+        buffer_file = self.cognitive_loop.personal.parent / decision_buffer.location
+        
+        with open(buffer_file, 'w') as f:
+            json.dump(decision_content, f, indent=2)
+        
+        # Touch the memory block so it knows when the file was updated
+        self.cognitive_loop.memory_system.touch_memory(decision_buffer.id, self.cognitive_loop.cycle_count)
+        
+        logger.info(f"💭 Decision written to pipeline buffer addressing {len(addresses_goals)} goals")
         
         return action_data

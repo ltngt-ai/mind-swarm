@@ -106,7 +106,8 @@ class KnowledgeManager:
                 confidence=1.0,
                 priority=Priority(metadata.get("priority", 1)),  # ROM is critical
                 metadata=metadata,
-                pinned=True  # ROM is always pinned so it's never removed
+                pinned=True,  # ROM is always pinned so it's never removed
+                cycle_count=0  # ROM loaded at initialization
             )
             
             # Add content to metadata for brain access

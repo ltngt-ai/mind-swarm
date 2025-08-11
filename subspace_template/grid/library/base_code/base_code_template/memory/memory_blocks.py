@@ -20,7 +20,8 @@ class MemoryBlock:
                  timestamp: Optional[datetime] = None,
                  expiry: Optional[datetime] = None,
                  metadata: Optional[Dict[str, Any]] = None,
-                 pinned: bool = False):
+                 pinned: bool = False,
+                 cycle_count: Optional[int] = None):
         """Initialize base memory block."""
         self.confidence = confidence
         self.priority = priority
@@ -28,6 +29,7 @@ class MemoryBlock:
         self.expiry = expiry
         self.metadata = metadata or {}
         self.pinned = pinned  # When True, memory is never removed by memory management
+        self.cycle_count = cycle_count  # Track which cycle this memory was created in
         
         # These must be set by subclasses
         self.type: MemoryType
@@ -47,6 +49,8 @@ class FileMemoryBlock(MemoryBlock):
     expiry: Optional[datetime] = None
     metadata: Optional[Dict[str, Any]] = None
     pinned: bool = False
+    cycle_count: Optional[int] = None
+    no_cache: bool = False  # If True, content should not be cached (e.g., memory-mapped files)
     
 
     def __post_init__(self):
@@ -57,7 +61,8 @@ class FileMemoryBlock(MemoryBlock):
             timestamp=self.timestamp,
             expiry=self.expiry,
             metadata=self.metadata,
-            pinned=self.pinned
+            pinned=self.pinned,
+            cycle_count=self.cycle_count
         )
         self.type = MemoryType.FILE
         
@@ -94,6 +99,7 @@ class StatusMemoryBlock(MemoryBlock):
     expiry: Optional[datetime] = None
     metadata: Optional[Dict[str, Any]] = None
     pinned: bool = False
+    cycle_count: Optional[int] = None
     
 
     def __post_init__(self):
@@ -104,7 +110,8 @@ class StatusMemoryBlock(MemoryBlock):
             timestamp=self.timestamp,
             expiry=self.expiry,
             metadata=self.metadata,
-            pinned=self.pinned
+            pinned=self.pinned,
+            cycle_count=self.cycle_count
         )
         self.type = MemoryType.STATUS
         
@@ -124,6 +131,7 @@ class TaskMemoryBlock(MemoryBlock):
     priority: Priority = Priority.HIGH
     timestamp: Optional[datetime] = None
     expiry: Optional[datetime] = None
+    cycle_count: Optional[int] = None
     pinned: bool = False
     metadata: Optional[Dict[str, Any]] = None
     
@@ -135,7 +143,8 @@ class TaskMemoryBlock(MemoryBlock):
             timestamp=self.timestamp,
             expiry=self.expiry,
             metadata=self.metadata,
-            pinned=self.pinned
+            pinned=self.pinned,
+            cycle_count=self.cycle_count
         )
         self.type = MemoryType.TASK
         
@@ -165,6 +174,7 @@ class KnowledgeMemoryBlock(MemoryBlock):
     timestamp: Optional[datetime] = None
     expiry: Optional[datetime] = None
     pinned: bool = False
+    cycle_count: Optional[int] = None
     metadata: Optional[Dict[str, Any]] = None
     
     def __post_init__(self):
@@ -175,7 +185,8 @@ class KnowledgeMemoryBlock(MemoryBlock):
             timestamp=self.timestamp,
             expiry=self.expiry,
             metadata=self.metadata,
-            pinned=self.pinned
+            pinned=self.pinned,
+            cycle_count=self.cycle_count
         )
         self.type = MemoryType.KNOWLEDGE
         
@@ -209,6 +220,7 @@ class ContextMemoryBlock(MemoryBlock):
     expiry: Optional[datetime] = None
     pinned: bool = False
     metadata: Optional[Dict[str, Any]] = None
+    cycle_count: Optional[int] = None
     
     def __post_init__(self):
         """Initialize base class and set type."""
@@ -218,7 +230,8 @@ class ContextMemoryBlock(MemoryBlock):
             timestamp=self.timestamp,
             expiry=self.expiry,
             metadata=self.metadata,
-            pinned=self.pinned
+            pinned=self.pinned,
+            cycle_count=self.cycle_count
         )
         self.type = MemoryType.CONTEXT
         
@@ -254,7 +267,8 @@ class ObservationMemoryBlock(MemoryBlock):
             timestamp=None,  # No timestamp needed
             expiry=self.expiry,
             metadata=None,  # No metadata
-            pinned=self.pinned
+            pinned=self.pinned,
+            cycle_count=self.cycle_count  # Pass cycle_count to parent
         )
         self.type = MemoryType.OBSERVATION
         

@@ -111,14 +111,16 @@ class ContentLoader:
         if memory.metadata.get("virtual", False):
             return memory.metadata.get("content", "[Virtual file - no content]")
         
-        # Build cache key
-        cache_key = f"file:{memory.location}:{memory.digest or 'no-digest'}"
-        
-        # Check cache first
-        cached = self.cache.get(cache_key)
-        if cached is not None:
-            logger.debug(f"Cache hit for {memory.location}")
-            return self._extract_lines(cached, memory.start_line, memory.end_line)
+        # Skip cache for no_cache files (e.g., memory-mapped files)
+        if not getattr(memory, 'no_cache', False):
+            # Build cache key
+            cache_key = f"file:{memory.location}:{memory.digest or 'no-digest'}"
+            
+            # Check cache first
+            cached = self.cache.get(cache_key)
+            if cached is not None:
+                logger.debug(f"Cache hit for {memory.location}")
+                return self._extract_lines(cached, memory.start_line, memory.end_line)
         
         # Load from filesystem
         try:
@@ -153,10 +155,23 @@ class ContentLoader:
             if file_path.stat().st_size > 1_000_000:  # 1MB limit
                 return f"[File too large: {memory.location} - {file_path.stat().st_size} bytes]"
             
-            content = file_path.read_text(encoding='utf-8', errors='replace')
+            # Read file content
+            if file_path.suffix == '.json' and 'dynamic_context' in file_path.name:
+                # For memory-mapped dynamic_context, read as binary and stop at null
+                with open(file_path, 'rb') as f:
+                    content_bytes = f.read(4096)  # Max size of memory-mapped file
+                    null_pos = content_bytes.find(b'\0')
+                    if null_pos != -1:
+                        content = content_bytes[:null_pos].decode('utf-8')
+                    else:
+                        content = content_bytes.decode('utf-8', errors='replace')
+            else:
+                content = file_path.read_text(encoding='utf-8', errors='replace')
             
-            # Cache the full content
-            self.cache.put(cache_key, content)
+            # Cache the full content (unless no_cache is set)
+            if not getattr(memory, 'no_cache', False):
+                cache_key = f"file:{memory.location}:{memory.digest or 'no-digest'}"
+                self.cache.put(cache_key, content)
             
             # Return requested lines
             return self._extract_lines(content, memory.start_line, memory.end_line)
