@@ -70,9 +70,8 @@ class ContextBuilder:
                 if memory.confidence < 1.0:
                     entry["confidence"] = round(memory.confidence, 2)
                 
-                # Only add priority if not MEDIUM
-                if memory.priority != Priority.MEDIUM:
-                    entry["priority"] = memory.priority.value
+                # Always add priority so Cybers understand the memory hierarchy
+                entry["priority"] = memory.priority.name  # Use name not value
                 
                 # Add cycle_count if present (helps Cyber track what's current)
                 if hasattr(memory, 'cycle_count') and memory.cycle_count is not None:

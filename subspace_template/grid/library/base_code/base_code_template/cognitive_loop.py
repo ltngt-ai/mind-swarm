@@ -117,7 +117,7 @@ class CognitiveLoop:
                 # Use path relative to filesystem_root (self.personal.parent)
                 buffer_memory = FileMemoryBlock(
                     location=str(buffer_file.relative_to(self.personal.parent)),
-                    priority=Priority.HIGH,
+                    priority=Priority.SYSTEM,  # System-controlled memory
                     pinned=True,  # Pipeline buffers should never be removed
                     metadata={
                         "stage": stage, 
@@ -126,7 +126,8 @@ class CognitiveLoop:
                         "description": f"{buffer_type.capitalize()} {stage} pipeline stage results"
                     },
                     cycle_count=self.cycle_count,  # When this memory was added
-                    no_cache=True  # Pipeline buffers change frequently, don't cache
+                    no_cache=True,  # Pipeline buffers change frequently, don't cache
+                    block_type=MemoryType.SYSTEM  # Mark as system memory
                 )
                 
                 # Add to memory system
@@ -162,7 +163,7 @@ class CognitiveLoop:
             self.memory_system.remove_memory(previous_buffer.id)
             updated_previous = FileMemoryBlock(
                 location=previous_buffer.location,
-                priority=Priority.HIGH,
+                priority=Priority.SYSTEM,  # System-controlled memory
                 pinned=True,
                 metadata={
                     "stage": stage,
@@ -171,7 +172,8 @@ class CognitiveLoop:
                     "description": f"Previous {stage} pipeline stage results"
                 },
                 cycle_count=max(0, self.cycle_count - 1),  # Previous cycle
-                no_cache=True  # Don't cache pipeline buffers
+                no_cache=True,  # Don't cache pipeline buffers
+                block_type=MemoryType.SYSTEM  # Mark as system memory
             )
             self.memory_system.add_memory(updated_previous)
             self.pipeline_buffers[stage]["previous"] = updated_previous
@@ -180,7 +182,7 @@ class CognitiveLoop:
             self.memory_system.remove_memory(current_buffer.id)
             updated_current = FileMemoryBlock(
                 location=current_buffer.location,
-                priority=Priority.HIGH,
+                priority=Priority.SYSTEM,  # System-controlled memory
                 pinned=True,
                 metadata={
                     "stage": stage,
@@ -189,7 +191,8 @@ class CognitiveLoop:
                     "description": f"Current {stage} pipeline stage results"
                 },
                 cycle_count=self.cycle_count,  # Current cycle
-                no_cache=True  # Don't cache pipeline buffers
+                no_cache=True,  # Don't cache pipeline buffers
+                block_type=MemoryType.SYSTEM  # Mark as system memory
             )
             self.memory_system.add_memory(updated_current)
             self.pipeline_buffers[stage]["current"] = updated_current
@@ -280,11 +283,12 @@ class CognitiveLoop:
         if identity_file.exists():
             identity_memory = FileMemoryBlock(
                 location=str(identity_file.relative_to(self.personal.parent)),
-                priority=Priority.LOW,  # Low priority since it's pinned
+                priority=Priority.SYSTEM,  # System-controlled identity
                 confidence=1.0,
                 pinned=True,  # Always in working memory
                 metadata={"file_type": "identity", "description": "My identity and configuration"},
-                cycle_count=self.cycle_count  # When this memory was added
+                cycle_count=self.cycle_count,  # When this memory was added
+                block_type=MemoryType.SYSTEM  # Mark as system memory
             )
             self.memory_system.add_memory(identity_memory)
             logger.info(f"Added identity.json to pinned memory")
@@ -337,12 +341,13 @@ class CognitiveLoop:
         self.dynamic_context_location = str(self.dynamic_context_file.relative_to(self.personal.parent))
         context_memory = FileMemoryBlock(
             location=self.dynamic_context_location,
-            priority=Priority.LOW,
+            priority=Priority.SYSTEM,  # System-controlled runtime context
             confidence=1.0,
             pinned=True,  # Always in working memory
             metadata={"file_type": "dynamic_context", "description": "Current runtime context"},
             cycle_count=self.cycle_count,  # Will always match file content now
-            no_cache=True  # Memory-mapped file, don't cache
+            no_cache=True,  # Memory-mapped file, don't cache
+            block_type=MemoryType.SYSTEM  # Mark as system memory
         )
         self.memory_system.add_memory(context_memory)
         self.dynamic_context_memory_id = context_memory.id

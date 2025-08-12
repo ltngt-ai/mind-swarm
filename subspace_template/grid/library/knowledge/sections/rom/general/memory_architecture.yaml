@@ -23,6 +23,7 @@ content: |
   A memory in working memory has an additional prefix indicating their type, common ones are:
   - memory: general contents
   - knowledge: content is knowledge useful for decision-making
+  - system: content is an autonomous system memory. You can't change it directly, it will change itself.
   If the memory has a postfix, it will be things such as a content hash or range for views into a large memory.
 
   ### Working Memory Examples
@@ -37,11 +38,7 @@ content: |
   The only exception is if you wish to change the view of a large memory than `focus_memory` has range functionality.
 
   ## Personal Memory
-  Many parts of your personal memory are autonomous and operate without your conscious input. 
-  Changing autonomous memories CAN be dangerous to you. Its similar to human breathing, it just happens in the background without an concious thinking most of time.
-  personal/.internal has various internal processes and should NOT be read or written too.
-  personal/memory is autonomous and operates without your conscious input.
-  personal/comms is also autonomous, `send_message` for sending and OBSERVATION stage will handle your inbox.
+  Many parts of your personal memory are autonomous systems and operate without your conscious input.
 
   ## Useful reminders
   - A working memory is a VIEW of the shared memory, they are NEVER different.

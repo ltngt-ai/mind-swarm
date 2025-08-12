@@ -7,11 +7,17 @@ from enum import Enum
 
 
 class Priority(Enum):
-    """Memory priority levels for selection algorithm."""
-    CRITICAL = 1  # Always included, never dropped
-    HIGH = 2      # Included unless space critical
-    MEDIUM = 3    # Included based on relevance
-    LOW = 4       # Background info, often dropped
+    """Memory priority levels for selection algorithm.
+    
+    Lower numeric values = higher priority.
+    FOUNDATIONAL and SYSTEM are special autonomous priorities.
+    """
+    FOUNDATIONAL = 0  # ROM knowledge, absolute foundation
+    SYSTEM = 1        # System-controlled memories (pipelines, dynamic context)
+    CRITICAL = 2      # User-critical, always included
+    HIGH = 3          # Important, included unless space critical  
+    MEDIUM = 4        # Normal priority, included based on relevance
+    LOW = 5           # Background info, often dropped
 
 
 class MemoryType(Enum):
@@ -23,3 +29,4 @@ class MemoryType(Enum):
     CONTEXT = "context"
     OBSERVATION = "observation"
     IDENTITY = "identity"
+    SYSTEM = "system"  # System-controlled memories (pipelines, dynamic context)

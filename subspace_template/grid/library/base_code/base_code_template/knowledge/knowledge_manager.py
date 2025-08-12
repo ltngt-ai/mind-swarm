@@ -101,7 +101,7 @@ class KnowledgeManager:
             knowledge_memory = FileMemoryBlock(
                 location=file_path,  # Use actual file path
                 confidence=1.0,  # ROM is always highly confident
-                priority=Priority(metadata.get("priority", 1)),  # ROM is critical
+                priority=Priority.FOUNDATIONAL,  # ROM is foundational knowledge
                 metadata=metadata,  # Keep original metadata for content
                 pinned=True,  # ROM is always pinned so it's never removed
                 cycle_count=0,  # ROM loaded at initialization
