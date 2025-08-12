@@ -14,8 +14,9 @@ import logging
 
 from .memory_blocks import (
     MemoryBlock, FileMemoryBlock,
-    KnowledgeMemoryBlock, ObservationMemoryBlock
+    ObservationMemoryBlock
 )
+from .memory_types import MemoryType
 
 logger = logging.getLogger("Cyber.memory.loader")
 
@@ -96,9 +97,11 @@ class ContentLoader:
             The loaded content as a string
         """
         if isinstance(memory, FileMemoryBlock):
-            return self.load_file_content(memory)
-        elif isinstance(memory, KnowledgeMemoryBlock):
-            return self.load_knowledge_content(memory)
+            # Check if it's a knowledge memory block
+            if hasattr(memory, 'type') and memory.type == MemoryType.KNOWLEDGE:
+                return self.load_knowledge_content(memory)
+            else:
+                return self.load_file_content(memory)
         elif isinstance(memory, ObservationMemoryBlock):
             return self.format_observation(memory)
         else:
@@ -182,10 +185,10 @@ class ContentLoader:
     
     # Removed load_message_content - messages are just FileMemoryBlock now
     
-    def load_knowledge_content(self, memory: KnowledgeMemoryBlock) -> str:
+    def load_knowledge_content(self, memory: FileMemoryBlock) -> str:
         """Load knowledge content from metadata or file."""
         # Check if content is in metadata (for ROM and in-memory knowledge)
-        if memory.metadata.get("content"):
+        if memory.metadata and memory.metadata.get("content"):
             return memory.metadata["content"]
         
         # Otherwise load from file

@@ -12,7 +12,7 @@ from datetime import datetime
 
 from .actions.base_actions import Action, ActionResult, ActionStatus, Priority as ActionPriority
 from .memory import (
-    FileMemoryBlock, ObservationMemoryBlock, KnowledgeMemoryBlock,
+    FileMemoryBlock, ObservationMemoryBlock,
     MemorySystem, ContentLoader, MemoryType, Priority
 )
 

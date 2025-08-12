@@ -15,7 +15,7 @@ import re
 from .memory_types import Priority, MemoryType
 from .memory_blocks import (
     MemoryBlock,
-    TaskMemoryBlock, KnowledgeMemoryBlock, FileMemoryBlock,
+    TaskMemoryBlock, FileMemoryBlock,
     ObservationMemoryBlock
 )
 from .context_builder import ContextBuilder
@@ -121,9 +121,9 @@ class RelevanceScorer:
                 return 0.9
             return 0.4
             
-        elif isinstance(memory, KnowledgeMemoryBlock):
-            # Use the built-in relevance score
-            return memory.relevance_score
+        elif isinstance(memory, FileMemoryBlock) and memory.type == MemoryType.KNOWLEDGE:
+            # Knowledge memories use confidence as relevance
+            return memory.confidence
             
         else:
             return 0.5
@@ -379,5 +379,3 @@ class MemorySelector:
         for memory in selected_memories:
             if isinstance(memory, FileMemoryBlock):
                 self.relevance_scorer.add_recent_file(memory.location)
-            elif isinstance(memory, KnowledgeMemoryBlock):
-                self.relevance_scorer.active_topics.add(memory.topic)

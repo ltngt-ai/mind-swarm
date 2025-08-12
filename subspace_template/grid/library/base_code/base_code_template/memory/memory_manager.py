@@ -11,8 +11,7 @@ import logging
 
 from .memory_blocks import (
     MemoryBlock, Priority, MemoryType,
-    FileMemoryBlock, ObservationMemoryBlock,
-    KnowledgeMemoryBlock
+    FileMemoryBlock, ObservationMemoryBlock
 )
 
 logger = logging.getLogger("Cyber.memory")
@@ -63,8 +62,15 @@ class WorkingMemoryManager:
         """Remove a memory block."""
         if memory_id in self.memory_index:
             block = self.memory_index[memory_id]
-            self.symbolic_memory.remove(block)
-            self.memories_by_type[block.type].remove(block)
+            
+            # Safely remove from symbolic_memory
+            if block in self.symbolic_memory:
+                self.symbolic_memory.remove(block)
+            
+            # Safely remove from memories_by_type
+            if block.type in self.memories_by_type and block in self.memories_by_type[block.type]:
+                self.memories_by_type[block.type].remove(block)
+            
             del self.memory_index[memory_id]
             
             # Clean up access history
@@ -265,14 +271,12 @@ class WorkingMemoryManager:
                         )
                         
                     elif memory_type == MemoryType.KNOWLEDGE:
-                        memory = KnowledgeMemoryBlock(
-                            topic=mem_data.get('topic', 'general'),
+                        memory = FileMemoryBlock(
                             location=mem_data.get('location', 'restored'),
-                            subtopic=mem_data.get('subtopic', ''),
-                            relevance_score=mem_data.get('relevance_score', 1.0),
-                            confidence=mem_data.get('confidence', 1.0),
+                            confidence=mem_data.get('confidence', mem_data.get('relevance_score', 1.0)),
                             priority=Priority[mem_data.get('priority', 'MEDIUM')],
-                            metadata=mem_data.get('metadata', {})
+                            metadata=mem_data.get('metadata', {}),
+                            block_type=MemoryType.KNOWLEDGE
                         )
                         
                     else:

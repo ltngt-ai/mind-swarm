@@ -87,7 +87,7 @@ class KnowledgeManager:
         rom_count = 0
         for rom_item in rom_items:
             # Import here to avoid circular imports
-            from ..memory import KnowledgeMemoryBlock
+            from ..memory import FileMemoryBlock, MemoryType
             
             metadata = rom_item.get("metadata", {})
             content = rom_item.get("content", "")
@@ -97,17 +97,15 @@ class KnowledgeManager:
             file_path = rom_item.get('file_path', f"knowledge/sections/rom/unknown/{rom_item.get('id', 'unknown')}")
             if not file_path.startswith('/'):
                 file_path = '/' + file_path
-                
-            knowledge_memory = KnowledgeMemoryBlock(
-                topic=metadata.get("category", "general"),
+            
+            knowledge_memory = FileMemoryBlock(
                 location=file_path,  # Use actual file path
-                subtopic=rom_item.get("id", ""),
-                relevance_score=1.0,  # ROM is always relevant
-                confidence=1.0,
+                confidence=1.0,  # ROM is always highly confident
                 priority=Priority(metadata.get("priority", 1)),  # ROM is critical
-                metadata=metadata,
+                metadata=metadata,  # Keep original metadata for content
                 pinned=True,  # ROM is always pinned so it's never removed
-                cycle_count=0  # ROM loaded at initialization
+                cycle_count=0,  # ROM loaded at initialization
+                block_type=MemoryType.KNOWLEDGE  # Mark as knowledge type
             )
             
             # Add content to metadata for brain access

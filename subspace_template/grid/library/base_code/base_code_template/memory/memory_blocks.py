@@ -51,6 +51,7 @@ class FileMemoryBlock(MemoryBlock):
     pinned: bool = False
     cycle_count: Optional[int] = None
     no_cache: bool = False  # If True, content should not be cached (e.g., memory-mapped files)
+    block_type: Optional[MemoryType] = None  # Override the default FILE type (e.g., KNOWLEDGE)
     
 
     def __post_init__(self):
@@ -64,17 +65,18 @@ class FileMemoryBlock(MemoryBlock):
             pinned=self.pinned,
             cycle_count=self.cycle_count
         )
-        self.type = MemoryType.FILE
+        # Use provided block_type or default to FILE
+        self.type = self.block_type if self.block_type else MemoryType.FILE
         
         # Generate unified ID
-        self.id = UnifiedMemoryID.create_from_path(self.location, MemoryType.FILE)
+        self.id = UnifiedMemoryID.create_from_path(self.location, self.type)
         
         # Add line range suffix if specified
         if self.start_line is not None and self.end_line is not None:
             parts = UnifiedMemoryID.parse(self.id)
             path_with_lines = f"{parts['path']}/lines-{self.start_line}-{self.end_line}"
             self.id = UnifiedMemoryID.create(
-                MemoryType.FILE,
+                self.type,
                 path_with_lines,
                 f"{self.location}:{self.start_line}-{self.end_line}"
             )
@@ -82,7 +84,7 @@ class FileMemoryBlock(MemoryBlock):
             # Add content hash if we have a digest
             parts = UnifiedMemoryID.parse(self.id)
             self.id = UnifiedMemoryID.create(
-                MemoryType.FILE,
+                self.type,
                 parts['path'],
                 self.digest
             )
@@ -161,51 +163,7 @@ class TaskMemoryBlock(MemoryBlock):
 
 
 # MessageMemoryBlock removed - messages are now FileMemoryBlock with metadata
-
-@dataclass
-class KnowledgeMemoryBlock(MemoryBlock):
-    """Reference to knowledge base entries."""
-    topic: str
-    location: str
-    subtopic: Optional[str] = None
-    relevance_score: float = 0.5
-    confidence: float = 1.0
-    priority: Priority = Priority.MEDIUM
-    timestamp: Optional[datetime] = None
-    expiry: Optional[datetime] = None
-    pinned: bool = False
-    cycle_count: Optional[int] = None
-    metadata: Optional[Dict[str, Any]] = None
-    
-    def __post_init__(self):
-        """Initialize base class and set type."""
-        super().__init__(
-            confidence=self.confidence,
-            priority=self.priority,
-            timestamp=self.timestamp,
-            expiry=self.expiry,
-            metadata=self.metadata,
-            pinned=self.pinned,
-            cycle_count=self.cycle_count
-        )
-        self.type = MemoryType.KNOWLEDGE
-        
-        # Create path from location and topic/subtopic
-        if '/library/' in self.location:
-            if self.subtopic:
-                path = f"grid/library/{self.topic}/{self.subtopic}"
-            else:
-                path = f"grid/library/{self.topic}"
-        else:
-            # ROM or other knowledge
-            if self.subtopic:
-                path = f"personal/knowledge/{self.topic}/{self.subtopic}"
-            else:
-                path = f"personal/knowledge/{self.topic}"
-        
-        self.id = UnifiedMemoryID.create(MemoryType.KNOWLEDGE, path)
-
-
+# KnowledgeMemoryBlock removed - knowledge is now FileMemoryBlock with block_type=KNOWLEDGE
 
 
 @dataclass
@@ -236,7 +194,8 @@ class ContextMemoryBlock(MemoryBlock):
         self.type = MemoryType.CONTEXT
         
         # Create path with context type and timestamp
-        path = f"personal/analysis/{self.context_type}/{self.timestamp.strftime('%Y%m%d-%H%M%S')}"
+        timestamp_str = self.timestamp.strftime('%Y%m%d-%H%M%S') if self.timestamp else "unknown"
+        path = f"personal/analysis/{self.context_type}/{timestamp_str}"
         
         # Include content hash based on summary
         self.id = UnifiedMemoryID.create(MemoryType.CONTEXT, path, self.summary)

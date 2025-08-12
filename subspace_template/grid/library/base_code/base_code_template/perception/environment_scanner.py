@@ -16,7 +16,7 @@ from ..memory.memory_types import Priority, MemoryType
 from ..memory.memory_blocks import (
     MemoryBlock,
     FileMemoryBlock, ObservationMemoryBlock,
-    KnowledgeMemoryBlock, StatusMemoryBlock
+    StatusMemoryBlock
 )
 from ..memory.unified_memory_id import UnifiedMemoryID
 
@@ -273,12 +273,11 @@ class EnvironmentScanner:
                         topic = rel_path.parts[0] if rel_path.parts else "general"
                         subtopic = rel_path.stem if len(rel_path.parts) > 1 else None
                         
-                        knowledge_memory = KnowledgeMemoryBlock(
-                            topic=topic,
-                            subtopic=subtopic,
+                        knowledge_memory = FileMemoryBlock(
                             location=str(knowledge_file),
-                            relevance_score=0.7,  # Default relevance
-                            priority=Priority.MEDIUM
+                            priority=Priority.MEDIUM,
+                            confidence=0.7,  # Default relevance
+                            block_type=MemoryType.KNOWLEDGE
                         )
                         memories.append(knowledge_memory)
                         

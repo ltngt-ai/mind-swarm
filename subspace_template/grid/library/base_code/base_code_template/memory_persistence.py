@@ -12,8 +12,7 @@ from datetime import datetime
 
 from .memory import (
     WorkingMemoryManager, Priority, MemoryType,
-    FileMemoryBlock, ObservationMemoryBlock,
-    KnowledgeMemoryBlock
+    FileMemoryBlock, ObservationMemoryBlock
 )
 
 logger = logging.getLogger("Cyber.memory_persistence")
@@ -168,15 +167,13 @@ class MemoryPersistence:
                     )
                     
                 elif memory_type == MemoryType.KNOWLEDGE:
-                    memory = KnowledgeMemoryBlock(
-                        topic=mem_data['topic'],
+                    memory = FileMemoryBlock(
                         location=mem_data['location'],
-                        subtopic=mem_data.get('subtopic', ''),
-                        relevance_score=mem_data.get('relevance_score', 0.8),
-                        confidence=mem_data.get('confidence', 1.0),
+                        confidence=mem_data.get('confidence', mem_data.get('relevance_score', 0.8)),
                         priority=Priority[mem_data.get('priority', 'MEDIUM')],
                         metadata=mem_data.get('metadata', {}),
-                        pinned=mem_data.get('pinned', False)
+                        pinned=mem_data.get('pinned', False),
+                        block_type=MemoryType.KNOWLEDGE
                     )
                     
                 else:

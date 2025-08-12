@@ -6,7 +6,6 @@ from .memory_blocks import (
     FileMemoryBlock,
     StatusMemoryBlock,
     TaskMemoryBlock,
-    KnowledgeMemoryBlock,
     ContextMemoryBlock,
     ObservationMemoryBlock,
 )
@@ -25,7 +24,6 @@ __all__ = [
     "FileMemoryBlock",
     "StatusMemoryBlock",
     "TaskMemoryBlock",
-    "KnowledgeMemoryBlock",
     "ContextMemoryBlock",
     "ObservationMemoryBlock",
     # Core components (individual - for backward compatibility)

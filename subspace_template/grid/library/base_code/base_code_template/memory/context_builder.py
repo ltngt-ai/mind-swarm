@@ -13,7 +13,7 @@ from .memory_types import MemoryType, Priority
 from .memory_blocks import (
     MemoryBlock,
     FileMemoryBlock, TaskMemoryBlock,
-    KnowledgeMemoryBlock, ObservationMemoryBlock
+    ObservationMemoryBlock
 )
 from .content_loader import ContentLoader
 
@@ -277,11 +277,9 @@ class ContextBuilder:
             metadata["to"] = memory.metadata.get('to_agent', 'me')
             metadata["read"] = memory.metadata.get('read', False)
             
-        elif isinstance(memory, KnowledgeMemoryBlock):
-            metadata["topic"] = memory.topic
-            if memory.subtopic:
-                metadata["subtopic"] = memory.subtopic
-            metadata["relevance"] = memory.relevance_score
+        elif isinstance(memory, FileMemoryBlock) and memory.type == MemoryType.KNOWLEDGE:
+            # Knowledge memories are just file blocks with knowledge type
+            metadata["relevance"] = memory.confidence
             
         elif isinstance(memory, ObservationMemoryBlock):
             metadata["observation_type"] = memory.observation_type
