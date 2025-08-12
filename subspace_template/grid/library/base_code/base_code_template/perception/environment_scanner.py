@@ -211,7 +211,7 @@ class EnvironmentScanner:
             # Get current location from dynamic context
             # Note: Scanner doesn't have access to cognitive_loop's memory map,
             # so we read the file directly, handling the null-padded format
-            current_location = "/personal"  # Default
+            current_location = None
             dynamic_context_file = self.personal_path / ".internal" / "memory" / "dynamic_context.json"
             
             if dynamic_context_file.exists():
@@ -225,9 +225,15 @@ class EnvironmentScanner:
                             content = content[:null_pos]
                         # Parse JSON
                         dynamic_context = json.loads(content.decode('utf-8'))
-                        current_location = dynamic_context.get("current_location", "/personal")
+                        current_location = dynamic_context.get("current_location")
                 except Exception as e:
-                    logger.debug(f"Error reading dynamic context: {e}, using default location")
+                    logger.debug(f"Error reading dynamic context: {e}")
+                    return memories  # Can't scan without location
+            
+            # If we still don't have a location, can't continue
+            if not current_location:
+                logger.debug("No current location available, skipping location scan")
+                return memories
             
             # Map virtual location to actual path
             if current_location.startswith('/personal'):

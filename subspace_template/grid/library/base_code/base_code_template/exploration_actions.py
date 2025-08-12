@@ -53,7 +53,13 @@ class FocusMemoryAction(Action):
             if not path.startswith('/'):
                 # Relative path - resolve from current location
                 dynamic_context = cognitive_loop.get_dynamic_context()
-                current_location = dynamic_context.get("current_location", "/personal")
+                current_location = dynamic_context.get("current_location")
+                if not current_location:
+                    return ActionResult(
+                        self.name,
+                        ActionStatus.FAILED,
+                        error="No current location available in context"
+                    )
                 
                 current = PurePosixPath(current_location)
                 focus_path = (current / path).resolve()
@@ -228,11 +234,23 @@ class ExploreTreeAction(Action):
             if path == ".":
                 # Current location
                 dynamic_context = cognitive_loop.get_dynamic_context()
-                explore_path_str = dynamic_context.get("current_location", "/personal")
+                explore_path_str = dynamic_context.get("current_location")
+                if not explore_path_str:
+                    return ActionResult(
+                        self.name,
+                        ActionStatus.FAILED,
+                        error="No current location available in context"
+                    )
             elif not path.startswith('/'):
                 # Relative path
                 dynamic_context = cognitive_loop.get_dynamic_context()
-                current_location = dynamic_context.get("current_location", "/personal")
+                current_location = dynamic_context.get("current_location")
+                if not current_location:
+                    return ActionResult(
+                        self.name,
+                        ActionStatus.FAILED,
+                        error="No current location available in context"
+                    )
                 
                 current = PurePosixPath(current_location)
                 explore_path = (current / path).resolve()

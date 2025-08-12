@@ -306,7 +306,7 @@ class CognitiveLoop:
                 "cycle_count": self.cycle_count,
                 "current_stage": "STARTING",
                 "current_phase": "INIT",
-                "current_location": "/personal"  # Default starting location
+                "current_location": "/grid/library/knowledge/sections/new_cyber_introduction"  # Starting location for new Cybers
             }
             json_str = json.dumps(context_data, indent=2)
             json_bytes = json_str.encode('utf-8') + b'\0'
@@ -361,7 +361,9 @@ class CognitiveLoop:
             Dictionary containing the current dynamic context
         """
         if not hasattr(self, 'dynamic_context_mmap'):
-            return {"current_location": "/personal"}
+            # This should never happen after init
+            logger.error("Dynamic context mmap not initialized!")
+            return {}
         
         try:
             # Read current data from memory-mapped file
@@ -382,7 +384,8 @@ class CognitiveLoop:
             
         except Exception as e:
             logger.error(f"Error reading dynamic context: {e}")
-            return {"current_location": "/personal"}
+            # Don't provide defaults - let the error propagate
+            return {}
     
     def _update_dynamic_context(self, stage=None, phase=None, **updates):
         """Update the dynamic context file with new values using memory mapping.

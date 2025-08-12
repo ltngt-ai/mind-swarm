@@ -361,7 +361,13 @@ class MoveToAction(Action):
             
             # Read current dynamic context using memory-mapped interface
             dynamic_context = cognitive_loop.get_dynamic_context()
-            current_location = dynamic_context.get("current_location", "/personal")
+            current_location = dynamic_context.get("current_location")
+            if not current_location:
+                return ActionResult(
+                    self.name,
+                    ActionStatus.FAILED,
+                    error="No current location available in context"
+                )
             
             # Resolve the new path
             from pathlib import PurePosixPath
