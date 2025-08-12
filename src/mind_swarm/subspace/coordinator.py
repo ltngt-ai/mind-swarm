@@ -1004,14 +1004,10 @@ class SubspaceCoordinator:
         if cyber_type == "io_gateway":
             capabilities = ["network", "user_io"]
         
-        # Create identity data
+        # Create identity data - only what the Cyber can actually use
         identity_data = {
             "name": cyber_name,
             "cyber_type": cyber_type,
-            "model": model_id,
-            "provider": provider,
-            "max_context_length": max_context_length,
-            "created_at": datetime.now().isoformat(),
             "capabilities": capabilities
         }
         
@@ -1087,21 +1083,8 @@ class SubspaceCoordinator:
                 # Load existing identity
                 identity_data = json.loads(identity_file.read_text())
                 
-                # Get model info from pool
-                model_info = self.model_selector.pool.get_model(model_id)
-                if model_info:
-                    # Update model information
-                    identity_data["model"] = model_id
-                    identity_data["provider"] = model_info.provider
-                    identity_data["max_context_length"] = model_info.context_length
-                    identity_data["last_updated"] = datetime.now().isoformat()
-                    
-                    # Write updated identity
-                    identity_file.write_text(json.dumps(identity_data, indent=2))
-                    
-                    logger.debug(f"Updated identity for {cyber_name}: model={model_id}, context={model_info.context_length}")
-                else:
-                    logger.warning(f"Model {model_id} not found in registry, identity not updated")
+                # Identity doesn't need updating - it's static
+                logger.debug(f"Identity for {cyber_name} remains unchanged")
             else:
                 logger.warning(f"Identity file not found for {cyber_name}")
                 

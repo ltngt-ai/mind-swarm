@@ -5,7 +5,6 @@ from .memory_blocks import (
     MemoryBlock,
     FileMemoryBlock,
     StatusMemoryBlock,
-    TaskMemoryBlock,
     ContextMemoryBlock,
     ObservationMemoryBlock,
 )
@@ -23,7 +22,6 @@ __all__ = [
     "MemoryType",
     "FileMemoryBlock",
     "StatusMemoryBlock",
-    "TaskMemoryBlock",
     "ContextMemoryBlock",
     "ObservationMemoryBlock",
     # Core components (individual - for backward compatibility)

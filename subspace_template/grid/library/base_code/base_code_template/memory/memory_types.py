@@ -18,7 +18,6 @@ class MemoryType(Enum):
     """Types of memory blocks."""
     FILE = "memory"
     STATUS = "status"
-    TASK = "task"
     MESSAGE = "message"
     KNOWLEDGE = "knowledge"
     CONTEXT = "context"

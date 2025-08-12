@@ -12,7 +12,7 @@ import logging
 from .memory_types import MemoryType, Priority
 from .memory_blocks import (
     MemoryBlock,
-    FileMemoryBlock, TaskMemoryBlock,
+    FileMemoryBlock,
     ObservationMemoryBlock
 )
 from .content_loader import ContentLoader
@@ -111,11 +111,9 @@ class ContextBuilder:
         # Build sections for each type
         type_order = [
             MemoryType.KNOWLEDGE,  # Knowledge (including pinned ROM)
-            MemoryType.TASK,       # Current task
             MemoryType.MESSAGE,    # Messages
             MemoryType.OBSERVATION,  # Recent observations
-            MemoryType.FILE,     # File content
-            MemoryType.KNOWLEDGE,  # Knowledge base
+            MemoryType.FILE,     # File content (includes goals.json and active_tasks.json)
             MemoryType.CONTEXT,  # Derived context
         ]
         
@@ -142,10 +140,8 @@ class ContextBuilder:
         # Section headers
         headers = {
             MemoryType.KNOWLEDGE: "=== KNOWLEDGE ===",
-            MemoryType.TASK: "=== CURRENT TASKS ===",
             MemoryType.MESSAGE: "=== MESSAGES ===",
             MemoryType.FILE: "=== FILE CONTENT ===",
-            MemoryType.KNOWLEDGE: "=== KNOWLEDGE BASE ===",
             MemoryType.OBSERVATION: "=== OBSERVATIONS ===",
             MemoryType.CONTEXT: "=== CONTEXT ===",
             MemoryType.STATUS: "=== STATUS ===",
@@ -168,8 +164,6 @@ class ContextBuilder:
                     from_agent = memory.metadata.get('from_agent', 'unknown')
                     subject = memory.metadata.get('subject', 'No subject')
                     lines.append(f"\n--- Message [{status}] from {from_agent}: {subject} ---")
-                elif isinstance(memory, TaskMemoryBlock):
-                    lines.append(f"\n--- Task: {memory.task_id} [{memory.status}] ---")
                 elif isinstance(memory, ObservationMemoryBlock):
                     lines.append(f"\n--- {memory.observation_type} ---")
                 else:
@@ -206,13 +200,12 @@ class ContextBuilder:
                 lines.append(f"- {content}")
             lines.append("")
         
-        # Current situation
-        task_memories = [m for m in memories if m.type == MemoryType.TASK]
-        if task_memories:
-            lines.append("I'm currently working on:")
-            for memory in task_memories:
-                if isinstance(memory, TaskMemoryBlock):
-                    lines.append(f"- {memory.description} (status: {memory.status})")
+        # Tasks are now tracked through active_tasks.json file
+        # Look for active_tasks.json in file memories
+        task_files = [m for m in memories if isinstance(m, FileMemoryBlock) 
+                      and 'active_tasks.json' in m.location]
+        if task_files:
+            lines.append("I'm currently working on tasks from active_tasks.json")
             lines.append("")
         
         # Recent observations
@@ -239,7 +232,7 @@ class ContextBuilder:
         
         # Other content
         other_memories = [m for m in memories if m.type not in 
-                         [MemoryType.KNOWLEDGE, MemoryType.TASK, MemoryType.OBSERVATION, MemoryType.MESSAGE]]
+                         [MemoryType.KNOWLEDGE, MemoryType.OBSERVATION, MemoryType.MESSAGE]]
         
         if other_memories:
             lines.append("Additional relevant information:")
@@ -264,18 +257,11 @@ class ContextBuilder:
             metadata["source"] = memory.location
             if memory.start_line is not None:
                 metadata["lines"] = f"{memory.start_line}-{memory.end_line or 'end'}"
-                
-        elif isinstance(memory, TaskMemoryBlock):
-            metadata["task_id"] = memory.task_id
-            metadata["status"] = memory.status
-            if memory.project:
-                metadata["project"] = memory.project
-                
-        # Check if FileMemoryBlock is a message
-        elif isinstance(memory, FileMemoryBlock) and memory.metadata.get('file_type') == 'message':
-            metadata["from"] = memory.metadata.get('from_agent', 'unknown')
-            metadata["to"] = memory.metadata.get('to_agent', 'me')
-            metadata["read"] = memory.metadata.get('read', False)
+            # Check if FileMemoryBlock is a message
+            if memory.metadata.get('file_type') == 'message':
+                metadata["from"] = memory.metadata.get('from_agent', 'unknown')
+                metadata["to"] = memory.metadata.get('to_agent', 'me')
+                metadata["read"] = memory.metadata.get('read', False)
             
         elif isinstance(memory, FileMemoryBlock) and memory.type == MemoryType.KNOWLEDGE:
             # Knowledge memories are just file blocks with knowledge type

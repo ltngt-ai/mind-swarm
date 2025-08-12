@@ -8,9 +8,11 @@ from datetime import datetime
 from typing import Dict, Any, Optional, List
 
 from .base_code_template.cognitive_loop import CognitiveLoop
-from .base_code_template.memory import ObservationMemoryBlock, TaskMemoryBlock, Priority
+from .base_code_template.memory import ObservationMemoryBlock, Priority
 from .base_code_template.actions import Action, ActionResult, ActionStatus, action_registry
 from .io_actions import register_io_actions
+from .base_code_template.memory_actions import register_memory_actions
+from .base_code_template.goal_actions import register_goal_actions
 
 logger = logging.getLogger("Cyber.io_cognitive")
 
@@ -91,7 +93,11 @@ class IOCognitiveLoop(CognitiveLoop):
         super().__init__(cyber_id, personal, cyber_type='io_cyber')
         self.io_handler = IOBodyFileHandler(personal)
         
-        # Register I/O actions
+        # Register base actions first (memory and goals)
+        register_memory_actions(action_registry)
+        register_goal_actions(action_registry)
+        
+        # Then register I/O specific actions
         register_io_actions(action_registry)
         
         # Load I/O-specific knowledge

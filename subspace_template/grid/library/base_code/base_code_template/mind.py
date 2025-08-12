@@ -31,8 +31,8 @@ class CyberMind:
         self.identity = self._load_identity()
         self.name = self.identity.get("name", os.environ.get("CYBER_NAME", "unknown"))
         self.cyber_type = self.identity.get("cyber_type", os.environ.get("CYBER_TYPE", "general"))
-        self.model = self.identity.get("model", "unknown")
-        self.max_context_length = self.identity.get("max_context_length", 4096)
+        # Context length is hardcoded - Cybers don't need to know about models
+        self.max_context_length = 65536  # Standard working memory size
         
         # Load configuration if it exists
         self.config = self._load_config()
@@ -41,7 +41,7 @@ class CyberMind:
         self.cognitive_loop = CognitiveLoop(
             self.name, 
             self.personal, 
-            max_context_tokens=self.max_context_length,
+            max_context_tokens=self.max_context_length,  # 65536 standard
             cyber_type=self.cyber_type
         )
         
@@ -52,8 +52,7 @@ class CyberMind:
         self.state = "INITIALIZING"
         
         # Log startup
-        logger.info(f"Cyber mind initializing: {self.name}")
-        logger.info(f"  Model: {self.model}, Context: {self.max_context_length}")
+        logger.info(f"Cyber mind initializing: {self.name} (type: {self.cyber_type})")
     
     def request_stop(self):
         """Request a graceful stop after the current cycle."""
@@ -69,14 +68,11 @@ class CyberMind:
             except Exception as e:
                 logger.error(f"Error loading identity: {e}")
         
-        # Default identity from environment
+        # Default identity from environment - only what Cyber can use
         return {
             "name": os.environ.get("CYBER_NAME", "unknown"),
             "cyber_type": os.environ.get("CYBER_TYPE", "general"),
-            "model": "unknown",
-            "max_context_length": 4096,
-            "provider": "unknown",
-            "created_at": datetime.now().isoformat()
+            "capabilities": []
         }
     
     def _load_config(self) -> dict:

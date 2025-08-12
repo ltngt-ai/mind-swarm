@@ -121,47 +121,7 @@ class StatusMemoryBlock(MemoryBlock):
         self.id = UnifiedMemoryID.create(MemoryType.STATUS, f"personal/system/{self.status_type}")
 
 
-@dataclass
-class TaskMemoryBlock(MemoryBlock):
-    """Current task representation."""
-    task_id: str
-    description: str
-    project: Optional[str] = None
-    dependencies: Optional[List[str]] = None
-    status: str = "pending"
-    confidence: float = 1.0
-    priority: Priority = Priority.HIGH
-    timestamp: Optional[datetime] = None
-    expiry: Optional[datetime] = None
-    cycle_count: Optional[int] = None
-    pinned: bool = False
-    metadata: Optional[Dict[str, Any]] = None
-    
-    def __post_init__(self):
-        """Initialize base class and set type."""
-        super().__init__(
-            confidence=self.confidence,
-            priority=self.priority,
-            timestamp=self.timestamp,
-            expiry=self.expiry,
-            metadata=self.metadata,
-            pinned=self.pinned,
-            cycle_count=self.cycle_count
-        )
-        self.type = MemoryType.TASK
-        
-        # Create path from project and task ID
-        if self.project:
-            path = f"personal/tasks/{self.project}/{self.task_id}"
-        else:
-            path = f"personal/tasks/general/{self.task_id}"
-        
-        self.id = UnifiedMemoryID.create(MemoryType.TASK, path)
-        
-        if self.dependencies is None:
-            self.dependencies = []
-
-
+# TaskMemoryBlock removed - tasks are now tracked through goals.json and active_tasks.json files
 # MessageMemoryBlock removed - messages are now FileMemoryBlock with metadata
 # KnowledgeMemoryBlock removed - knowledge is now FileMemoryBlock with block_type=KNOWLEDGE
 

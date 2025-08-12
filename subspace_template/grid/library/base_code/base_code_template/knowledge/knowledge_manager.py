@@ -135,7 +135,8 @@ class KnowledgeManager:
                 "content": content,
                 "metadata": metadata,
                 "source": "rom",
-                "loaded_at": datetime.now()
+                "loaded_at": datetime.now(),
+                "file_path": rom_content.get('file_path')  # Include the file path from ROM loader
             }
             
             self.loaded_knowledge[rom_id] = knowledge_item

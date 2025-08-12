@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .base_code_template.actions import Action, ActionResult, ActionStatus
-from .base_code_template.memory import TaskMemoryBlock, Priority
+from .base_code_template.memory import ObservationMemoryBlock, Priority
 
 
 class MakeNetworkRequestAction(Action):
@@ -58,25 +58,25 @@ class MakeNetworkRequestAction(Action):
             # Make the request
             request_id = await io_handler.make_network_request(network_request)
             
-            # Create task memory to track the request
+            # Create observation memory to track the request
             memory_manager = context.get("memory_manager")
             if memory_manager:
-                task_memory = TaskMemoryBlock(
-                    task_id=request_id,
-                    description=f"Fetching {url}",
-                    status="pending",
+                observation_memory = ObservationMemoryBlock(
+                    observation_type="network_request_sent",
+                    path="/personal/network",
+                    message=f"Sent {method} request to {url}",
+                    cycle_count=context.get("cycle_count", 0),
                     priority=Priority.HIGH,
-                    metadata={
+                    content=json.dumps({
                         "request_id": request_id,
                         "url": url,
-                        "method": method,
-                        "task_type": "network_request"
-                    }
+                        "method": method
+                    })
                 )
-                memory_manager.add_memory(task_memory)
+                memory_manager.add_memory(observation_memory)
                 
-                # Store task ID in context for tracking
-                context["network_task_id"] = task_memory.id
+                # Store request ID in context for tracking
+                context["network_request_id"] = request_id
             
             return ActionResult(
                 self.name,
@@ -122,17 +122,16 @@ class CheckNetworkResponseAction(Action):
             # For now, we'll rely on the observe phase to detect responses
             # This action confirms we're waiting for a response
             
-            task_id = context.get("network_task_id")
-            if task_id:
-                memory_manager = context.get("memory_manager")
-                if memory_manager:
-                    task_memory = memory_manager.access_memory(task_id)
-                    if task_memory and task_memory.status == "pending":
-                        return ActionResult(
-                            self.name,
-                            ActionStatus.COMPLETED,
-                            result={"status": "waiting_for_response"}
-                        )
+            request_id = context.get("network_request_id")
+            if request_id:
+                # Check if we're still waiting for this request
+                io_handler = context.get("io_handler")
+                if io_handler and request_id in io_handler.pending_network_requests:
+                    return ActionResult(
+                        self.name,
+                        ActionStatus.COMPLETED,
+                        result={"status": "waiting_for_response", "request_id": request_id}
+                    )
             
             return ActionResult(
                 self.name,

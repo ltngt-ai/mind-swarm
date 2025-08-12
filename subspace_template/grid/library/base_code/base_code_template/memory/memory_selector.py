@@ -15,7 +15,7 @@ import re
 from .memory_types import Priority, MemoryType
 from .memory_blocks import (
     MemoryBlock,
-    TaskMemoryBlock, FileMemoryBlock,
+    FileMemoryBlock,
     ObservationMemoryBlock
 )
 from .context_builder import ContextBuilder
@@ -85,7 +85,6 @@ class RelevanceScorer:
             MemoryType.MESSAGE: 1800,       # 30 minutes
             MemoryType.STATUS: 300,         # 5 minutes
             MemoryType.FILE: 3600,          # 1 hour
-            MemoryType.TASK: 7200,          # 2 hours
             MemoryType.KNOWLEDGE: 86400,    # 24 hours
         }
         
@@ -114,12 +113,6 @@ class RelevanceScorer:
         elif isinstance(memory, ObservationMemoryBlock):
             # Recent observations are important
             return 0.8
-            
-        elif isinstance(memory, TaskMemoryBlock):
-            # Active tasks are very relevant
-            if memory.status in ["in_progress", "pending"]:
-                return 0.9
-            return 0.4
             
         elif isinstance(memory, FileMemoryBlock) and memory.type == MemoryType.KNOWLEDGE:
             # Knowledge memories use confidence as relevance

@@ -276,7 +276,7 @@ class CognitiveLoop:
     
     def _init_identity_memory(self):
         """Add Cyber identity file to working memory as pinned."""
-        identity_file = self.personal / "identity.json"
+        identity_file = self.personal / ".internal" / "identity.json"
         if identity_file.exists():
             identity_memory = FileMemoryBlock(
                 location=str(identity_file.relative_to(self.personal.parent)),
@@ -300,9 +300,8 @@ class CognitiveLoop:
             # Only happens on very first run of a new Cyber
             context_data = {
                 "cycle_count": self.cycle_count,
-                "cyber_id": self.cyber_id,
-                "cyber_type": self.cyber_type,
-                "working_memory_tokens": self.max_context_tokens
+                "current_stage": "STARTING",
+                "current_phase": "INIT"
             }
             json_str = json.dumps(context_data, indent=2)
             json_bytes = json_str.encode('utf-8') + b'\0'
@@ -379,9 +378,9 @@ class CognitiveLoop:
             except json.JSONDecodeError:
                 # If corrupted, reset to defaults
                 context_data = {
-                    "cyber_id": self.cyber_id,
-                    "cyber_type": self.cyber_type,
-                    "working_memory_tokens": self.max_context_tokens
+                    "cycle_count": self.cycle_count,
+                    "current_stage": "ERROR_RECOVERY",
+                    "current_phase": "RESET"
                 }
             
             # Update cycle count - this is the key change
