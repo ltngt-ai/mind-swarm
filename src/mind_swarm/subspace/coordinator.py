@@ -641,7 +641,7 @@ class SubspaceCoordinator:
         logger.info("Creating shutdown files for all Cybers...")
         cyber_states = await self.spawner.get_cyber_states()
         for cyber_name in cyber_states:
-            shutdown_file = self.subspace.root_path / "cybers" / cyber_name / "shutdown"
+            shutdown_file = self.subspace.root_path / "cybers" / cyber_name / ".internal" / "shutdown"
             try:
                 shutdown_file.write_text("SHUTDOWN")
                 logger.debug(f"Created shutdown file for {cyber_name}")

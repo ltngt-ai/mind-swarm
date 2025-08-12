@@ -58,17 +58,14 @@ class BodyManager:
         )
         self.body_files["brain"] = brain
         
-        # Voice - for speaking/output (future)
-        voice = BodyFile(
-            "voice", 
-            "This is your voice. Write here to speak.\n"
-            "(Not yet implemented)"
-        )
-        self.body_files["voice"] = voice
+        # Voice file removed - not implemented
         
-        # Create the actual files
+        # Create the actual files in .internal directory
+        internal_dir = self.cyber_personal / ".internal"
+        internal_dir.mkdir(exist_ok=True)
+        
         for name, body_file in self.body_files.items():
-            file_path = self.cyber_personal / name
+            file_path = internal_dir / name
             async with aiofiles.open(file_path, 'w') as f:
                 await f.write(body_file.help_text)
             # Set read-only from Cyber's perspective
@@ -113,7 +110,7 @@ class BodyManager:
                     logger.debug(f"MONITOR: Loop #{loop_count} for {self.name}, processing state: {processing}")
                 
                 for name, body_file in self.body_files.items():
-                    file_path = self.cyber_personal / name
+                    file_path = self.cyber_personal / ".internal" / name
                     
                     if not await aiofiles.os.path.exists(file_path):
                         if loop_count % 1000 == 0:

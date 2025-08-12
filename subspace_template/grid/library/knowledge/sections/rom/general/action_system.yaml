@@ -7,13 +7,14 @@ content: |
   # Communication & Flow
   - send_message: Send message to cyber/user (params: to, content)
   - wait: Wait for specific duration or condition (params: duration OR condition)
-  
+  - move_to: move to a memory group location in thee Mind-Swarm (params: location)
+
   # Memory Management
-  - create_memory: Create NEW memory (params: location, content, memory_type, metadata)
-  - update_memory: Update EXISTING memory (params: location, content, append [true/false], backup [true/false])
-  - focus_memory: Load memory into working memory (params: memory_id OR path, focus_type, line_range)
+  - create_memory: Create NEW memory (params: memory id, content, memory type, metadata)
+  - update_memory: Update EXISTING memory (params: memory id, content, append [true/false], backup [true/false])
+  - focus_memory: Load memory into working memory (params: memory id (memory or group), focus_type, line_range)
   - search_memory: Search memories (params: query, scope, memory_types, max_results)
-  - manage_memory: Control memory properties (params: memory_id, operation [set_priority|pin|unpin|forget])
+  - manage_memory: Control memory properties (params: memory id, operation [set_priority|pin|unpin|forget])
   
   # Goal & Task Management
   - create_goal: Create a new goal (params: description, priority [high/medium/low], parent_goal)
@@ -26,8 +27,8 @@ content: |
   - execute_python: Run Python code [SANDBOXED! NO FILE OPS/open()] (params: code)
   - simplify_expression: Evaluate math expression safely (params: expression)
   
-  IMPORTANT: Memories cannot be both a memory AND a directory. If 'memory/observations' exists as a memory,
-  you cannot create 'memory/observations/something.json'. Use a different path or update the existing memory.
+  IMPORTANT: Memories cannot be both a memory AND a memory group. If 'example/test' exists as a memory rather than a memory group,
+  you cannot create 'example/test/example.json'. Use a different path or update the existing memory.
 
   Actions execute sequentially. Use @last to reference the previous action results:
   - @last - The entire result object from the previous action

@@ -365,8 +365,8 @@ class SubspaceManager:
             for subdir in ["inbox", "outbox", "drafts", "sent"]:
                 (comms_dir / subdir).mkdir(exist_ok=True)
             
-            # Memory areas
-            memory_dir = sandbox.cyber_personal / "memory"
+            # Memory areas (now inside .internal)
+            memory_dir = internal_dir / "memory"
             memory_dir.mkdir(exist_ok=True)
             # Only create directories that are actually used by the cyber code
             for subdir in ["orientations",  # Used by observation_stage for orientations
@@ -396,8 +396,8 @@ class SubspaceManager:
         for subdir in ["inbox", "outbox", "drafts", "sent"]:
             (comms_dir / subdir).mkdir(exist_ok=True)
         
-        # Memory directory with subdirectories
-        memory_dir = sandbox.cyber_personal / "memory"
+        # Memory directory with subdirectories (now inside .internal)
+        memory_dir = internal_dir / "memory"
         memory_dir.mkdir(exist_ok=True)
         # Only create directories that are actually used by the cyber code
         for subdir in ["orientations",  # Used by observation_stage for orientations

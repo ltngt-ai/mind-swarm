@@ -63,10 +63,10 @@ class CognitiveLoop:
         self.cyber_type = cyber_type
         
         # Core file interfaces - define these first
-        self.brain_file = self.personal / "brain"
+        self.brain_file = self.personal / ".internal" / "brain"
         self.inbox_dir = self.personal / "comms" / "inbox"
         self.outbox_dir = self.personal / "comms" / "outbox"
-        self.memory_dir = self.personal / "memory"
+        self.memory_dir = self.personal / ".internal" / "memory"
         
         # Initialize state early so it's available for managers
         self.cycle_count = 0
@@ -305,7 +305,8 @@ class CognitiveLoop:
             context_data = {
                 "cycle_count": self.cycle_count,
                 "current_stage": "STARTING",
-                "current_phase": "INIT"
+                "current_phase": "INIT",
+                "current_location": "/personal"  # Default starting location
             }
             json_str = json.dumps(context_data, indent=2)
             json_bytes = json_str.encode('utf-8') + b'\0'
@@ -352,6 +353,36 @@ class CognitiveLoop:
         self.memory_system.add_memory(context_memory)
         self.dynamic_context_memory_id = context_memory.id
         logger.info("Initialized dynamic_context.json with memory mapping")
+    
+    def get_dynamic_context(self) -> Dict[str, Any]:
+        """Get the current dynamic context from memory-mapped file.
+        
+        Returns:
+            Dictionary containing the current dynamic context
+        """
+        if not hasattr(self, 'dynamic_context_mmap'):
+            return {"current_location": "/personal"}
+        
+        try:
+            # Read current data from memory-mapped file
+            self.dynamic_context_mmap.seek(0)
+            content_bytes = self.dynamic_context_mmap.read(4096)
+            
+            # Find null terminator to get actual JSON content
+            null_pos = content_bytes.find(b'\0')
+            if null_pos != -1:
+                json_content = content_bytes[:null_pos].decode('utf-8')
+            else:
+                # No null terminator, try to parse what we have
+                json_content = content_bytes.decode('utf-8').rstrip()
+            
+            # Parse JSON
+            context_data = json.loads(json_content)
+            return context_data
+            
+        except Exception as e:
+            logger.error(f"Error reading dynamic context: {e}")
+            return {"current_location": "/personal"}
     
     def _update_dynamic_context(self, stage=None, phase=None, **updates):
         """Update the dynamic context file with new values using memory mapping.

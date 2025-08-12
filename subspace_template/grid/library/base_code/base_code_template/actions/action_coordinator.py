@@ -353,7 +353,7 @@ class ActionCoordinator:
         observations = []
         
         # Save action results to disk (these ARE the memory files)
-        results_dir = Path("/personal/memory/action_results")
+        results_dir = Path("/personal/.internal/memory/action_results")
         results_dir.mkdir(parents=True, exist_ok=True)
         
         # Use the passed cycle_count directly

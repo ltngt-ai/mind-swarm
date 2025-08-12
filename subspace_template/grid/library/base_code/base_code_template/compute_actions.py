@@ -194,7 +194,7 @@ class ExecutePythonAction(Action):
                 from datetime import datetime
                 import json
                 
-                results_dir = Path("/personal/memory/action_results")
+                results_dir = Path("/personal/.internal/memory/action_results")
                 results_dir.mkdir(parents=True, exist_ok=True)
                 
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:20]
@@ -332,11 +332,11 @@ class ExecutePythonAction(Action):
             return f"<{type(value).__name__}>"
 
 
-class ChangeLocationAction(Action):
-    """Change the current working location in the filesystem."""
+class MoveToAction(Action):
+    """Move to a new location in the Mind-Swarm filesystem."""
     
     def __init__(self):
-        super().__init__("change_location", "Change current working directory")
+        super().__init__("move_to", "Move to a new location in the Mind-Swarm")
     
     async def execute(self, context: Dict[str, Any]) -> ActionResult:
         """Change to a new location and update dynamic context."""
@@ -359,13 +359,9 @@ class ChangeLocationAction(Action):
                     error="No cognitive loop available"
                 )
             
-            # Read current dynamic context
-            if hasattr(cognitive_loop, 'dynamic_context_file'):
-                with open(cognitive_loop.dynamic_context_file, 'r') as f:
-                    dynamic_context = json.load(f)
-                current_location = dynamic_context.get("current_location", "/personal")
-            else:
-                current_location = "/personal"
+            # Read current dynamic context using memory-mapped interface
+            dynamic_context = cognitive_loop.get_dynamic_context()
+            current_location = dynamic_context.get("current_location", "/personal")
             
             # Resolve the new path
             from pathlib import PurePosixPath
@@ -390,6 +386,14 @@ class ChangeLocationAction(Action):
                     self.name,
                     ActionStatus.FAILED,
                     error=f"Cannot navigate to {new_location_str} - must be within /personal or /grid"
+                )
+            
+            # Check if trying to move into .internal
+            if '.internal' in new_location_str:
+                return ActionResult(
+                    self.name,
+                    ActionStatus.FAILED,
+                    error="Cannot move into .internal directories - these contain system files"
                 )
             
             # Check if the path exists (in the cyber's view)
@@ -523,4 +527,4 @@ def register_compute_actions(registry):
     """Register all compute actions."""
     registry.register_action("base", "execute_python", ExecutePythonAction)
     registry.register_action("base", "simplify_expression", SimplifyExpressionAction)
-    registry.register_action("base", "change_location", ChangeLocationAction)
+    registry.register_action("base", "move_to", MoveToAction)

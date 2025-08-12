@@ -22,11 +22,13 @@ from .actions import action_registry
 from .memory_actions import register_memory_actions
 from .compute_actions import register_compute_actions
 from .goal_actions import register_goal_actions
+from .exploration_actions import register_exploration_actions
 
 # Register all actions
 register_memory_actions(action_registry)
 register_compute_actions(action_registry)
 register_goal_actions(action_registry)
+register_exploration_actions(action_registry)
 logger.info(f"Registered actions: {action_registry._actions}")
 
 # Global variable for the mind instance

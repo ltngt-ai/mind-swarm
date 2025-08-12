@@ -279,6 +279,18 @@ class WorkingMemoryManager:
                             block_type=MemoryType.KNOWLEDGE
                         )
                         
+                    elif memory_type == MemoryType.SYSTEM:
+                        # System-controlled memories (dynamic context, pipeline buffers, etc.)
+                        memory = FileMemoryBlock(
+                            location=mem_data.get('location', 'restored'),
+                            confidence=mem_data.get('confidence', 1.0),
+                            priority=Priority[mem_data.get('priority', 'SYSTEM')],
+                            metadata=mem_data.get('metadata', {}),
+                            pinned=mem_data.get('pinned', True),
+                            no_cache=mem_data.get('no_cache', True),
+                            block_type=MemoryType.SYSTEM
+                        )
+                        
                     else:
                         # Skip unknown types
                         logger.warning(f"Unknown memory type: {memory_type}")

@@ -143,7 +143,7 @@ Goal and task management:
 
 ### Brain Communication (`brain/brain_interface.py`)
 Interface to AI thinking through body files:
-- Writes requests to `/personal/brain`
+- Writes requests to `/personal/.internal/brain`
 - Includes dynamic context (cycle, stage, phase)
 - Manages token budgets
 - Handles responses

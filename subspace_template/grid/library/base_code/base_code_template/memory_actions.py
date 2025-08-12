@@ -69,7 +69,7 @@ class FocusMemoryAction(Action):
                 cycle_count = cognitive_loop.cycle_count if cognitive_loop else 0
                 obs = ObservationMemoryBlock(
                     observation_type="memory_focused",
-                    path="personal/memory/focused",  # Simple path
+                    path="personal/.internal/memory/focused",  # Simple path
                     message=f"Focused on {existing_memory.type.value} memory: {memory_id}",
                     cycle_count=cycle_count,
                     priority=Priority.MEDIUM
@@ -100,7 +100,7 @@ class FocusMemoryAction(Action):
                 possible_paths = [
                     personal_dir / file_path,  # Personal memory
                     personal_dir.parent / "grid" / file_path,  # Shared memory
-                    personal_dir / "memory" / file_path,  # Memory directory
+                    personal_dir / ".internal" / "memory" / file_path,  # Memory directory
                     personal_dir.parent / file_path  # Relative to subspace
                 ]
                 
@@ -299,9 +299,11 @@ class CreateMemoryAction(Action):
         metadata = self.params.get("metadata", {})
         
         if not location:
-            # Auto-generate location based on type and timestamp
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            location = f"memory/{memory_type}_{timestamp}.txt"
+            return ActionResult(
+                self.name,
+                ActionStatus.FAILED,
+                error="Location is required. Please specify where to create the memory (e.g., 'notes/my_note.txt')"
+            )
         
         try:
             personal_dir = context.get("personal_dir", Path.home())
@@ -319,6 +321,14 @@ class CreateMemoryAction(Action):
             
             # Create full path
             file_path = base_path / location
+            
+            # Check if trying to create in .internal
+            if '.internal' in str(file_path) or str(file_path).startswith('/personal/.internal'):
+                return ActionResult(
+                    self.name,
+                    ActionStatus.FAILED,
+                    error="Cannot access /personal/.internal/* - these are private system memories"
+                )
             
             # Validate the path
             if file_path.is_dir():
@@ -545,6 +555,10 @@ class SearchMemoryAction(Action):
                     if len(results) >= max_results:
                         break
                     
+                    # Skip .internal directories and their contents
+                    if '.internal' in str(file_path):
+                        continue
+                    
                     if file_path.is_file() and file_path.stat().st_size < 1_000_000:  # Skip large files
                         try:
                             content = file_path.read_text(encoding='utf-8', errors='ignore')
@@ -585,7 +599,7 @@ class SearchMemoryAction(Action):
                 import json
                 
                 # Write search results to file (this IS memory)
-                results_dir = Path("/personal/memory/action_results")
+                results_dir = Path("/personal/.internal/memory/action_results")
                 results_dir.mkdir(parents=True, exist_ok=True)
                 
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:20]
@@ -683,6 +697,14 @@ class UpdateMemoryAction(Action):
                 file_path = Path(location)
             else:
                 file_path = Path("/personal") / location
+            
+            # Check if trying to access .internal
+            if '.internal' in str(file_path) or str(file_path).startswith('/personal/.internal'):
+                return ActionResult(
+                    self.name,
+                    ActionStatus.FAILED,
+                    error="Cannot access /personal/.internal/* - these are private system memories"
+                )
             
             # Check if file exists
             if not file_path.exists():
@@ -895,7 +917,7 @@ class ManageMemoryAction(Action):
             from datetime import datetime
             import json
             
-            results_dir = Path("/personal/memory/action_results")
+            results_dir = Path("/personal/.internal/memory/action_results")
             results_dir.mkdir(parents=True, exist_ok=True)
             
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:20]

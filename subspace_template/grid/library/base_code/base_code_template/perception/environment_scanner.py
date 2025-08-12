@@ -72,7 +72,7 @@ class EnvironmentScanner:
         
         # Directories to monitor
         self.inbox_path = self.personal_path / "comms" / "inbox"
-        self.memory_path = self.personal_path / "memory"
+        self.memory_path = self.personal_path / ".internal" / "memory"
         self.community_path = self.grid_path / "community"
         self.library_path = self.grid_path / "library"
         self.bulletin_path = self.grid_path / "bulletin"
@@ -86,6 +86,10 @@ class EnvironmentScanner:
         
         # Track observation IDs to prevent duplicates
         self.seen_observation_ids: Set[str] = set()
+        
+        # Track current location contents
+        self.current_location_contents: Optional[Dict[str, Any]] = None
+        self.last_location_scanned: Optional[str] = None
         
         # Last scan time
         self.last_scan = datetime.now()
@@ -166,6 +170,9 @@ class EnvironmentScanner:
         memories = []
         scan_start = datetime.now()
         
+        # Always scan current location first (like looking around the room)
+        memories.extend(self._scan_current_location(cycle_count))
+        
         # Scan different areas
         memories.extend(self._scan_inbox(cycle_count))
         memories.extend(self._scan_grid_areas(cycle_count))
@@ -186,6 +193,144 @@ class EnvironmentScanner:
             logger.debug(f"Scan details: {message_count} messages, {file_count} files, {obs_count} observations")
         
         logger.debug(f"Environment scan found {len(memories)} observations")
+        
+        return memories
+    
+    def _scan_current_location(self, cycle_count: int = 0) -> List[MemoryBlock]:
+        """Scan current location and create a system memory with its contents.
+        
+        This is like a Cyber looking around the room - automatically providing
+        awareness of what's in their current location.
+        
+        Args:
+            cycle_count: Current cycle count for observations
+        """
+        memories = []
+        
+        try:
+            # Get current location from dynamic context
+            # Note: Scanner doesn't have access to cognitive_loop's memory map,
+            # so we read the file directly, handling the null-padded format
+            current_location = "/personal"  # Default
+            dynamic_context_file = self.personal_path / ".internal" / "memory" / "dynamic_context.json"
+            
+            if dynamic_context_file.exists():
+                try:
+                    with open(dynamic_context_file, 'rb') as f:
+                        # Read memory-mapped file format (4KB with null padding)
+                        content = f.read(4096)
+                        # Find the null terminator
+                        null_pos = content.find(b'\0')
+                        if null_pos != -1:
+                            content = content[:null_pos]
+                        # Parse JSON
+                        dynamic_context = json.loads(content.decode('utf-8'))
+                        current_location = dynamic_context.get("current_location", "/personal")
+                except Exception as e:
+                    logger.debug(f"Error reading dynamic context: {e}, using default location")
+            
+            # Map virtual location to actual path
+            if current_location.startswith('/personal'):
+                rel_path = current_location[len('/personal'):]
+                actual_path = self.personal_path / rel_path.lstrip('/') if rel_path else self.personal_path
+            elif current_location.startswith('/grid'):
+                rel_path = current_location[len('/grid'):]
+                actual_path = self.grid_path / rel_path.lstrip('/') if rel_path else self.grid_path
+            else:
+                # Invalid location, skip
+                return memories
+            
+            # Only scan if location exists and is a directory
+            if not actual_path.exists() or not actual_path.is_dir():
+                return memories
+            
+            # Check if we need to rescan this location
+            if self.last_location_scanned == current_location:
+                # Location hasn't changed, check if contents changed
+                needs_rescan = False
+                for item in actual_path.iterdir():
+                    item_str = str(item)
+                    if item_str not in self.file_states:
+                        needs_rescan = True
+                        break
+                    current_state = FileState(item)
+                    if current_state.has_changed(self.file_states[item_str]):
+                        needs_rescan = True
+                        break
+                
+                if not needs_rescan:
+                    # No changes, return existing memory
+                    return memories
+            
+            # Collect directories and files for tree display
+            directories = []
+            files = []
+            
+            for item in sorted(actual_path.iterdir()):
+                # Skip ALL hidden files/dirs and certain system directories completely
+                if item.name.startswith('.') or item.name in ['__pycache__', '.git']:
+                    continue
+                
+                # Update file state tracking
+                item_str = str(item)
+                self.file_states[item_str] = FileState(item)
+                
+                if item.is_dir():
+                    directories.append((item.name, '📁'))
+                else:
+                    files.append((item.name, '📄'))
+            
+            # Build tree-style text representation
+            lines = []
+            lines.append(f"| {current_location} (📁=memory group, 📄=memory)")
+            
+            # Add directories first
+            for name, icon in directories:
+                lines.append(f"|---- {icon} {name}")
+            
+            # Then files
+            for name, icon in files:
+                lines.append(f"|---- {icon} {name}")
+            
+            # If empty, add a note
+            if not directories and not files:
+                lines.append("|---- (empty)")
+            
+            contents_text = "\n".join(lines)
+            total_items = len(directories) + len(files)
+            
+            # Create location contents file as plain text  
+            location_contents_file = self.personal_path / ".internal" / "memory" / "current_location.txt"
+            location_contents_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(location_contents_file, 'w') as f:
+                f.write(contents_text)
+            
+            # Create a SYSTEM priority memory for location contents
+            location_memory = FileMemoryBlock(
+                location=str(location_contents_file.relative_to(self.personal_path.parent)),
+                priority=Priority.SYSTEM,  # System-controlled, like looking around
+                confidence=1.0,
+                pinned=True,  # Always visible
+                metadata={
+                    "file_type": "current_location",
+                    "description": f"Looking around at: {current_location}",
+                    "location": current_location,
+                    "item_count": total_items
+                },
+                cycle_count=cycle_count,
+                no_cache=True,  # Always fresh
+                block_type=MemoryType.SYSTEM
+            )
+            memories.append(location_memory)
+            
+            # Update tracking
+            self.last_location_scanned = current_location
+            self.current_location_contents = contents_text
+            
+            logger.debug(f"Scanned location {current_location}: {total_items} items")
+            
+        except Exception as e:
+            logger.error(f"Error scanning current location: {e}")
         
         return memories
     

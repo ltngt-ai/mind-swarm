@@ -108,7 +108,7 @@ class ObservationStage:
             # Add a "no new observations" memory block so the Cyber knows scanning happened
             no_obs_memory = ObservationMemoryBlock(
                 observation_type="no_new_observations",
-                path="personal/memory/scan_status",
+                path="personal/.internal/memory/scan_status",
                 message="No new observations this cycle - environment unchanged",
                 cycle_count=self.cognitive_loop.cycle_count,
                 content="The environment scan completed but found no new changes, messages, or events requiring attention.",
