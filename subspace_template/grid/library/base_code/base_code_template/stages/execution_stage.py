@@ -773,7 +773,13 @@ Use the memory object for all operations.
         working_memories = self.memory_system.symbolic_memory
         for mem in working_memories[:15]:  # First 15 memories for context
             if hasattr(mem, 'id') and hasattr(mem, 'priority'):
-                working_memory_summary.append(f"- {mem.id.source}: {mem.id.path} (priority: {mem.priority})")
+                # mem.id is a string, not an object
+                # Extract type from the ID format (e.g., "memory:personal/..." -> "memory")
+                id_parts = str(mem.id).split(':', 1)
+                mem_type = id_parts[0] if len(id_parts) > 1 else "unknown"
+                mem_path = id_parts[1] if len(id_parts) > 1 else str(mem.id)
+                priority_name = mem.priority.name if hasattr(mem.priority, 'name') else str(mem.priority)
+                working_memory_summary.append(f"- {mem_type}: {mem_path} (priority: {priority_name})")
         
         memory_context = "\n".join(working_memory_summary) if working_memory_summary else "No working memory available"
         
