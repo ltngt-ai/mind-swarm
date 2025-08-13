@@ -143,6 +143,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 from datetime import datetime
 from contextlib import contextmanager
+from collections.abc import MutableMapping, MutableSequence
 
 
 class MemoryError(Exception):
@@ -176,6 +177,106 @@ class MemoryTypeError(MemoryError):
     pass
 
 
+class TrackedDict(dict):
+    """Dictionary that tracks modifications and notifies parent MemoryNode."""
+    
+    def __init__(self, data: dict, memory_node: 'MemoryNode'):
+        super().__init__(data)
+        self._memory_node = memory_node
+    
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        self._notify_change()
+    
+    def __delitem__(self, key):
+        super().__delitem__(key)
+        self._notify_change()
+    
+    def pop(self, *args, **kwargs):
+        result = super().pop(*args, **kwargs)
+        self._notify_change()
+        return result
+    
+    def popitem(self):
+        result = super().popitem()
+        self._notify_change()
+        return result
+    
+    def clear(self):
+        super().clear()
+        self._notify_change()
+    
+    def update(self, *args, **kwargs):
+        super().update(*args, **kwargs)
+        self._notify_change()
+    
+    def setdefault(self, key, default=None):
+        result = super().setdefault(key, default)
+        self._notify_change()
+        return result
+    
+    def _notify_change(self):
+        """Notify the parent MemoryNode that content has changed."""
+        self._memory_node._modified = True
+        if self._memory_node._memory._auto_save:
+            self._memory_node._save()
+
+
+class TrackedList(list):
+    """List that tracks modifications and notifies parent MemoryNode."""
+    
+    def __init__(self, data: list, memory_node: 'MemoryNode'):
+        super().__init__(data)
+        self._memory_node = memory_node
+    
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        self._notify_change()
+    
+    def __delitem__(self, key):
+        super().__delitem__(key)
+        self._notify_change()
+    
+    def append(self, value):
+        super().append(value)
+        self._notify_change()
+    
+    def extend(self, iterable):
+        super().extend(iterable)
+        self._notify_change()
+    
+    def insert(self, index, value):
+        super().insert(index, value)
+        self._notify_change()
+    
+    def remove(self, value):
+        super().remove(value)
+        self._notify_change()
+    
+    def pop(self, *args):
+        result = super().pop(*args)
+        self._notify_change()
+        return result
+    
+    def clear(self):
+        super().clear()
+        self._notify_change()
+    
+    def sort(self, *args, **kwargs):
+        super().sort(*args, **kwargs)
+        self._notify_change()
+    
+    def reverse(self):
+        super().reverse()
+        self._notify_change()
+    
+    def _notify_change(self):
+        """Notify the parent MemoryNode that content has changed."""
+        self._memory_node._modified = True
+        if self._memory_node._memory._auto_save:
+            self._memory_node._save()
+
+
 class MemoryNode:
     """Represents a single memory location that can be read or written."""
     
@@ -196,6 +297,12 @@ class MemoryNode:
         if self._content is None:
             self._load()
         
+        # Ensure content is wrapped for tracking
+        if isinstance(self._content, dict) and not isinstance(self._content, TrackedDict):
+            self._content = TrackedDict(self._content, self)
+        elif isinstance(self._content, list) and not isinstance(self._content, TrackedList):
+            self._content = TrackedList(self._content, self)
+        
         if isinstance(self._content, (dict, list)):
             return self._content[key]
         else:
@@ -209,9 +316,15 @@ class MemoryNode:
         if isinstance(self._content, dict):
             self._content[key] = value
             self._modified = True
+            # Auto-save if configured
+            if self._memory._auto_save:
+                self._save()
         elif isinstance(self._content, list):
             self._content[key] = value
             self._modified = True
+            # Auto-save if configured
+            if self._memory._auto_save:
+                self._save()
         else:
             raise TypeError(f"Memory at {self.path} does not support item assignment (type: {type(self._content).__name__})")
     
@@ -239,9 +352,18 @@ class MemoryNode:
                     with open(actual_path, 'r') as f:
                         self._content = yaml.safe_load(f)
                 else:
-                    self._type = "text/plain"
+                    # For files without extension, try to detect JSON content
                     with open(actual_path, 'r') as f:
-                        self._content = f.read()
+                        content_str = f.read()
+                    
+                    # Try to parse as JSON first
+                    try:
+                        self._content = json.loads(content_str)
+                        self._type = "application/json"
+                    except (json.JSONDecodeError, ValueError):
+                        # Not JSON, treat as plain text
+                        self._type = "text/plain"
+                        self._content = content_str
                 
                 # Track that this file was accessed for transaction commit
                 if not actual_path.is_dir():
@@ -263,16 +385,23 @@ class MemoryNode:
             # Create parent directories if needed
             actual_path.parent.mkdir(parents=True, exist_ok=True)
             
+            # Unwrap tracked objects back to plain dict/list for saving
+            content_to_save = self._content
+            if isinstance(self._content, TrackedDict):
+                content_to_save = dict(self._content)
+            elif isinstance(self._content, TrackedList):
+                content_to_save = list(self._content)
+            
             # Save based on type
             if self._type == "application/json":
                 with open(actual_path, 'w') as f:
-                    json.dump(self._content, f, indent=2)
+                    json.dump(content_to_save, f, indent=2)
             else:
                 with open(actual_path, 'w') as f:
-                    f.write(str(self._content))
+                    f.write(str(content_to_save))
             
             # Track change for potential rollback
-            self._memory._track_change(self.path, 'write', self._content)
+            self._memory._track_change(self.path, 'write', content_to_save)
             
             # Track that this file was written for transaction commit
             self._memory._track_write(self.path, self._type, self._new)
@@ -285,7 +414,13 @@ class MemoryNode:
     
     @property
     def content(self):
-        """Get the memory content."""
+        """Get the memory content, wrapped in tracking if mutable."""
+        if isinstance(self._content, dict) and not isinstance(self._content, TrackedDict):
+            # Wrap dict in TrackedDict for automatic change tracking
+            self._content = TrackedDict(self._content, self)
+        elif isinstance(self._content, list) and not isinstance(self._content, TrackedList):
+            # Wrap list in TrackedList for automatic change tracking
+            self._content = TrackedList(self._content, self)
         return self._content
     
     @content.setter
