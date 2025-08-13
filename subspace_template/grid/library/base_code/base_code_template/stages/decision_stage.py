@@ -3,7 +3,7 @@
 This stage encompasses:
 1. Decide - Generate natural language description of what to do
 
-The input is the orientation/understanding from the observation stage.
+The input is the orientation/reasoning from the observation stage.
 The output is a plain text intention describing what the cyber wants to accomplish.
 """
 
@@ -24,7 +24,7 @@ class DecisionStage:
     """Handles the decision phase of cognition using natural language intentions.
     
     This stage is responsible for:
-    - Taking the understanding from observation stage
+    - Taking the reasoning from observation stage
     - Deciding what to do in plain language
     - Returning a clear intention for the execution stage to implement
     """
@@ -120,7 +120,7 @@ class DecisionStage:
             "reasoning": reasoning,
             "priority": priority,
             "has_observation": has_observation,
-            "observation_context": observation_data.get("understanding", "")
+            "observation_context": observation_data.get("reasoning", "")
         }
         
         decision_buffer = self.cognitive_loop.get_current_pipeline("decision")

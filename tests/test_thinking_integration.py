@@ -43,7 +43,6 @@ def create_thinking_request(signature_type: str, inputs: dict) -> str:
                 "recent_history": "Recent actions and their outcomes"
             },
             "outputs": {
-                "situation_type": "What kind of situation this is",
                 "understanding": "What I understand about the situation",
                 "relevant_knowledge": "What knowledge or skills apply here"
             }
@@ -153,7 +152,6 @@ async def simulate_agent_thinking():
     if use_mock:
         orient_response = {
             "output_values": {
-                "situation_type": "arithmetic_problem",
                 "understanding": "User wants me to solve a simple addition problem",
                 "relevant_knowledge": "Basic arithmetic operations"
             },

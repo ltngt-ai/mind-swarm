@@ -4,7 +4,7 @@ This stage encompasses:
 1. Observe - Understand the situation from observations
 2. Cleanup - Clean up obsolete observations
 
-The output of this stage is an understanding of what's happening.
+The output of this stage is reasoning about what's happening and its relevance.
 """
 
 import logging
@@ -12,6 +12,7 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 from pathlib import Path
 import json
+import time
 
 from ..memory import Priority, ObservationMemoryBlock, MemoryType
 from ..memory.tag_filter import TagFilter
@@ -76,12 +77,12 @@ class ObservationStage:
         """OBSERVE - Understand the situation from observations.
         
         This phase first scans for new observations, then analyzes all observations 
-        and produces an orientation/understanding.
+        and produces orientation with reasoning and relevance.
         
         Returns:
-            Orientation data including understanding and approach, or None
+            Orientation data including reasoning and relevance, or None
         """
-        logger.info("👁️ Observing and understanding the situation...")
+        logger.info("👁️ Observing and reasoning about the situation...")
         
         # First, scan environment for new observations
         logger.info("📡 Scanning for new observations...")
@@ -126,7 +127,7 @@ class ObservationStage:
         # Create tag filter for observation stage with our blacklist
         tag_filter = TagFilter(blacklist=self.KNOWLEDGE_BLACKLIST)
         
-        # Build working memory context for understanding the situation
+        # Build working memory context for reasoning about the situation
         memory_context = self.memory_system.build_context(
             max_tokens=self.cognitive_loop.max_context_tokens // 2,
             current_task="Understanding the current situation from observations",
@@ -139,7 +140,7 @@ class ObservationStage:
         logger.info("🧠 Analyzing situation from observations...")
         
         # The brain will look at all observations and understand the situation
-        orientation_response = await self.brain_interface.analyze_situation_from_observations(memory_context)
+        orientation_response = await self._analyze_situation_from_observations(memory_context)
         
         if not orientation_response:
             logger.info("👁️ No significant situation to address")
@@ -152,24 +153,20 @@ class ObservationStage:
         logger.debug(f"Brain response output_values: {output_values}")
         
         # Create orientation data - handle template placeholders
-        understanding = output_values.get("understanding", "")
-        situation_type = output_values.get("situation_type", "unknown")
-        approach = output_values.get("approach", "")
+        reasoning = output_values.get("reasoning", "")
+        relevance = output_values.get("relevance", "")
         
         # Check for template placeholders and replace with meaningful defaults
-        if understanding == "{understanding}" or not understanding:
-            understanding = "Analyzing current observations"
-        if situation_type == "{situation_type}" or not situation_type:
-            situation_type = "observation_review"
-        if approach == "{approach}" or not approach:
-            approach = "Continue monitoring and processing observations"
+        if reasoning == "{reasoning}" or not reasoning:
+            reasoning = "Analyzing current observations"
+        if relevance == "{relevance}" or not relevance:
+            relevance = "Observations being processed for context"
         
         orientation_data = {
             "timestamp": datetime.now().isoformat(),
             "cycle_count": self.cognitive_loop.cycle_count,
-            "understanding": understanding,
-            "situation_type": situation_type,
-            "approach": approach
+            "reasoning": reasoning,
+            "relevance": relevance
         }
         
         # Write to observation pipeline buffer
@@ -210,7 +207,7 @@ class ObservationStage:
             exclude_types=[]  # Include all relevant memory types
         )
         
-        cleanup_result = await self.brain_interface.identify_obsolete_observations(memory_context)
+        cleanup_result = await self._identify_obsolete_observations(memory_context)
         
         if cleanup_result:
             obsolete_observations = cleanup_result.get("obsolete_observations", [])
@@ -224,3 +221,111 @@ class ObservationStage:
                         logger.info(f"  - Removed: {obs_id}")
                     except Exception as e:
                         logger.warning(f"  - Failed to remove {obs_id}: {e}")
+    
+    async def _analyze_situation_from_observations(self, memory_context: str) -> Optional[Dict[str, Any]]:
+        """Use brain to analyze the situation from all observations.
+        
+        This is the new OBSERVE phase where the brain understands the situation
+        from all available observations in memory.
+        
+        Args:
+            memory_context: Working memory context with all observations
+            
+        Returns:
+            Orientation data including reasoning and relevance, or None
+        """
+        thinking_request = {
+            "signature": {
+                "instruction": """
+Review all observations in your working memory to reason relevant changes.
+Look at recent observations and how they relate to the current situation, goals and tasks.
+Don't plan how to act on this information, just how it might be important.
+Always start your output with [[ ## reasoning ## ]]
+""",
+                "inputs": {
+                    "working_memory": "Your current working memory with all observations and context"
+                },
+                "outputs": {
+                    "reasoning": "Your comprehensive reasoning of the current situation based on all observations",
+                    "relevance": "How the observations relate to the current situation and goals",
+                },
+                "display_field": "reasoning"
+            },
+            "input_values": {
+                "working_memory": memory_context
+            },
+            "request_id": f"observe_{int(time.time()*1000)}",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        response = await self.brain_interface._use_brain(json.dumps(thinking_request))
+        result = json.loads(response)
+        
+        return result
+    
+    async def _identify_obsolete_observations(self, memory_context: str) -> Optional[Dict[str, Any]]:
+        """Use brain to identify obsolete observations for cleanup.
+        
+        This is the CLEANUP phase where the brain identifies which observations
+        are no longer relevant or have been processed.
+        
+        Args:
+            memory_context: Working memory context for identifying obsolete items
+            
+        Returns:
+            Dict with lists of obsolete and processed observation IDs, or None
+        """
+        thinking_request = {
+            "signature": {
+                "instruction": """
+Review your working memory to identify observations that can be cleaned up.
+Each observation has a cycle_count showing when it was created.
+Look for:
+1. Old observations from many cycles ago that are no longer relevant
+2. Duplicate observations about the same thing
+3. Action results that have been superseded by newer results
+4. Observations about things that have already been handled
+
+Be conservative - only mark observations as obsolete if you're certain they're no longer needed.
+Current cycle count is in your working memory.
+Always start your output with [[ ## reasoning ## ]]
+""",
+                "inputs": {
+                    "working_memory": "Your working memory with observations including their cycle counts"
+                },
+                "outputs": {
+                    "reasoning": "Why these observations can be cleaned up",
+                    "obsolete_observations": "JSON array of observation IDs that are obsolete and can be removed, e.g. [\"observation:personal/action_result/old:cycle_5\"]"
+                },
+                "display_field": "reasoning"
+            },
+            "input_values": {
+                "working_memory": memory_context
+            },
+            "request_id": f"cleanup_{int(time.time()*1000)}",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        response = await self.brain_interface._use_brain(json.dumps(thinking_request))
+        result = json.loads(response)
+        
+        output_values = result.get("output_values", {})
+        
+        # Parse the JSON array from string if needed
+        obsolete_json = output_values.get("obsolete_observations", "[]")
+        
+        try:
+            if isinstance(obsolete_json, str):
+                obsolete_observations = json.loads(obsolete_json)
+            else:
+                obsolete_observations = obsolete_json
+        except:
+            obsolete_observations = []
+        
+        # Return None if nothing to clean up
+        if not obsolete_observations:
+            return None
+            
+        return {
+            "obsolete_observations": obsolete_observations
+        }
