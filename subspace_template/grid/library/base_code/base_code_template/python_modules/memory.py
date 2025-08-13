@@ -488,6 +488,12 @@ class Memory:
     
     def _resolve_path(self, path: str) -> Path:
         """Resolve a memory path to actual filesystem path."""
+        # Strip off any prefix before ':' (common mistake when copying from working memory)
+        # e.g., 'system:personal/...' -> 'personal/...'
+        # e.g., 'file:/personal/...' -> '/personal/...'
+        if ':' in path and not path.startswith('/'):
+            path = path.split(':', 1)[1]  # Remove everything before and including first ':'
+        
         if path.startswith('/personal'):
             return self._personal_root / path[10:]  # Remove '/personal/'
         elif path.startswith('/grid'):

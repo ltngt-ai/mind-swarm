@@ -59,6 +59,7 @@ class ExecutionStage:
         
         # Generate API documentation as knowledge (once)
         self._ensure_api_docs_knowledge()
+        self._ensure_location_api_docs_knowledge()
     
     def _ensure_api_docs_knowledge(self):
         """Ensure API documentation is in working memory."""
@@ -246,6 +247,167 @@ class ExecutionStage:
         
         return "\n".join(docs)
     
+    def _ensure_location_api_docs_knowledge(self):
+        """Ensure Location API documentation is in working memory."""
+        api_docs_path = self.personal / ".internal" / "knowledge" / "location_api_docs.yaml"
+        
+        # First, create the file if it doesn't exist
+        if not api_docs_path.exists():
+            logger.info("Generating Location API documentation from Python module...")
+            try:
+                # Extract documentation from the actual location module
+                docs = self._extract_location_api_documentation()
+                
+                # Create clean YAML with pipe syntax for content
+                api_docs_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(api_docs_path, 'w') as f:
+                    # Write YAML manually for clean formatting
+                    f.write("knowledge_version: '1.0'\n")
+                    f.write("title: Location API - Python Module Documentation\n")
+                    f.write("content: |\n")
+                    # Indent content properly for YAML pipe syntax
+                    for line in docs.split('\n'):
+                        f.write(f"  {line}\n")
+                    f.write("metadata:\n")
+                    f.write("  category: execution\n")
+                    f.write("  tags:\n")
+                    f.write("    - execution\n")
+                    f.write("    - location\n")
+                    f.write("    - navigation\n")
+                    f.write("    - api\n")
+                    f.write("    - reference\n")
+                    f.write("    - execution_only\n")
+                    f.write("    - python\n")
+                    f.write("  confidence: 1.0\n")
+                    f.write("  priority: 1\n")
+                    f.write("  source: location.py\n")
+                    f.write(f"  created: '{datetime.now().isoformat()}'\n")
+                    f.write("  auto_generated: true\n")
+                logger.info(f"Created Location API documentation at {api_docs_path}")
+            except Exception as e:
+                logger.warning(f"Failed to generate Location API docs: {e}")
+                return
+        
+        # Now load it into working memory like ROM does
+        try:
+            # Load the YAML file
+            file_content = api_docs_path.read_text()
+            api_data = yaml.safe_load(file_content)
+            
+            # Create FileMemoryBlock exactly like ROM loader does
+            from ..memory import FileMemoryBlock, MemoryType
+            
+            metadata = api_data.get("metadata", {})
+            content = api_data.get("content", "")
+            
+            # Add content to metadata for brain access (like ROM does)
+            if not metadata:
+                metadata = {}
+            metadata["content"] = content
+            metadata["is_location_api_docs"] = True
+            
+            api_memory = FileMemoryBlock(
+                location=str(api_docs_path),  # Use the actual file path
+                confidence=1.0,
+                priority=Priority.FOUNDATIONAL,  # High priority so it's always included
+                metadata=metadata,
+                pinned=True,  # Pin it so it's never removed
+                cycle_count=0,
+                block_type=MemoryType.KNOWLEDGE
+            )
+            
+            # Add it to the memory system
+            self.memory_system.add_memory(api_memory)
+            logger.info("Loaded Location API documentation into working memory")
+            
+        except Exception as e:
+            logger.warning(f"Failed to load Location API docs into memory: {e}")
+    
+    def _extract_location_api_documentation(self) -> str:
+        """Extract documentation from the location module using AST."""
+        import ast
+        import inspect
+        from ..python_modules import location
+        
+        # Get the source file path
+        source_file = inspect.getsourcefile(location)
+        if not source_file:
+            return "Failed to locate location source file"
+        
+        # Read and parse the source
+        with open(source_file, 'r') as f:
+            source_code = f.read()
+        
+        tree = ast.parse(source_code)
+        
+        docs = []
+        docs.append("# Location API - Extracted from Python Module")
+        docs.append("")
+        
+        # Get module docstring
+        module_doc = ast.get_docstring(tree)
+        if module_doc:
+            docs.append("## Module Overview")
+            docs.append(module_doc)
+            docs.append("")
+        
+        # Process all classes and functions
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef):
+                # Get class docstring
+                class_doc = ast.get_docstring(node)
+                if class_doc:
+                    docs.append(f"## {node.name} Class")
+                    docs.append(class_doc)
+                    docs.append("")
+                    
+                    # Get methods
+                    docs.append(f"### {node.name} Methods\n")
+                    for item in node.body:
+                        if isinstance(item, ast.FunctionDef) and not item.name.startswith('_'):
+                            method_doc = ast.get_docstring(item)
+                            
+                            # Build signature
+                            args = []
+                            for arg in item.args.args:
+                                if arg.arg != 'self':
+                                    args.append(arg.arg)
+                            signature = f"({', '.join(args)})"
+                            
+                            docs.append(f"#### {item.name}{signature}")
+                            if method_doc:
+                                docs.append(method_doc)
+                            docs.append("")
+        
+        # Add practical usage examples
+        docs.append("## Common Usage Patterns\n")
+        docs.append("```python")
+        docs.append("# The location object is pre-initialized for you")
+        docs.append("")
+        docs.append("# GET CURRENT LOCATION")
+        docs.append("current = location.current")
+        docs.append("print(f'Currently at: {current}')")
+        docs.append("")
+        docs.append("# CHANGE LOCATION")
+        docs.append("location.current = '/grid/library/knowledge'")
+        docs.append("# Or use the change method")
+        docs.append("location.change('/personal/workspace')")
+        docs.append("")
+        docs.append("# CHECK IF LOCATION EXISTS")
+        docs.append("if location.exists('/grid/workshop'):")
+        docs.append("    location.current = '/grid/workshop'")
+        docs.append("else:")
+        docs.append("    print('Workshop does not exist')")
+        docs.append("")
+        docs.append("# ERROR HANDLING")
+        docs.append("try:")
+        docs.append("    location.current = '/invalid/path'")
+        docs.append("except LocationError as e:")
+        docs.append("    print(f'Invalid location: {e}')")
+        docs.append("```")
+        
+        return "\n".join(docs)
+    
     def _setup_execution_environment(self):
         """Set up the Python execution environment with new Memory API."""
         # Safe built-ins for script execution
@@ -268,7 +430,7 @@ class ExecutionStage:
             'str': str, 'repr': repr, 'format': format,
             
             # Type checking
-            'type': type, 'isinstance': isinstance,
+            'type': type, 'isinstance': isinstance, 'hasattr': hasattr,
             'bool': bool,
             
             # Constants
@@ -440,29 +602,14 @@ Use the memory object for all operations.
             
             # If we have more attempts left, try to fix the error
             if attempt < max_attempts:
-                if result["error_type"] == "SyntaxError":
-                    logger.info("📝 Attempting to fix syntax error...")
-                    fixed_script = await self._fix_script_error(current_script, result, "syntax")
-                    
-                    if fixed_script and fixed_script != current_script:
-                        current_script = fixed_script
-                        logger.info("📝 Generated fixed script, retrying...")
-                    else:
-                        logger.warning(f"❌ Could not fix syntax error, trying again...")
-                        
-                elif result["error_type"] in ["MemoryError", "MemoryNotFoundError", "AttributeError", "TypeError"]:
-                    logger.info("⚠️ Memory operation error, attempting fix...")
-                    fixed_script = await self._fix_script_error(current_script, result, "memory")
-                    
-                    if fixed_script and fixed_script != current_script:
-                        current_script = fixed_script
-                        logger.info("📝 Generated recovery script, retrying...")
-                    else:
-                        logger.warning(f"❌ Could not fix memory error, trying again...")
+                logger.info(f"⚠️ Script error: {result['error_type']}, attempting fix...")
+                fixed_script = await self._fix_script_error(current_script, result)
+                
+                if fixed_script and fixed_script != current_script:
+                    current_script = fixed_script
+                    logger.info("📝 Generated fixed script, retrying...")
                 else:
-                    # Unknown error type, save result and stop
-                    final_results = [result]
-                    break
+                    logger.warning(f"❌ Could not fix {result['error_type']} error, attempt {attempt}/{max_attempts}")
             else:
                 # No more attempts left
                 final_results = [result]
@@ -532,6 +679,14 @@ Use the memory object for all operations.
         namespace['MemoryError'] = MemoryError
         namespace['MemoryNotFoundError'] = MemoryNotFoundError
         namespace['MemoryPermissionError'] = MemoryPermissionError
+        
+        # Import and initialize the Location API
+        from ..python_modules.location import Location, LocationError
+        
+        # Create location instance
+        location_instance = Location(context)
+        namespace['location'] = location_instance
+        namespace['LocationError'] = LocationError
         
         # Capture output
         output_lines = []
@@ -610,47 +765,48 @@ Use the memory object for all operations.
                 "attempt": attempt
             }
     
-    async def _fix_script_error(self, script: str, error: Dict[str, Any], error_type: str) -> Optional[str]:
-        """Try to fix an error in the script."""
+    async def _fix_script_error(self, script: str, error: Dict[str, Any]) -> Optional[str]:
+        """Try to fix an error in the script by showing the full error context to the AI."""
         
-        if error_type == "syntax":
-            instruction = """
-The Python script has a syntax error. Fix it.
+        # Get working memory context for better error recovery
+        working_memory_summary = []
+        working_memories = self.memory_system.symbolic_memory
+        for mem in working_memories[:15]:  # First 15 memories for context
+            if hasattr(mem, 'id') and hasattr(mem, 'priority'):
+                working_memory_summary.append(f"- {mem.id.source}: {mem.id.path} (priority: {mem.priority})")
+        
+        memory_context = "\n".join(working_memory_summary) if working_memory_summary else "No working memory available"
+        
+        # Build full error context
+        error_context = {
+            "error_type": error.get("error_type", "Unknown"),
+            "error_message": error.get("error", ""),
+            "line_number": error.get("line"),
+            "partial_output": error.get("partial_output", [])
+        }
+        
+        # Include traceback if available (often has the real error details)
+        if "traceback" in error:
+            error_context["traceback"] = error["traceback"]
+        
+        instruction = """
+The Python script failed with an error. Analyze the error and fix the script.
+
+The memory object provides access to all files and data.
+The location object provides navigation capabilities.
 
 CRITICAL: Output ONLY the corrected Python code - no markdown, no explanations, just Python.
-Remember: NO async/await, memory operations are synchronous.
-"""
-        else:  # memory error
-            # Get working memory context for better error recovery
-            working_memory_summary = []
-            working_memories = self.memory_system.get_working_memory()
-            for mem in working_memories[:10]:  # First 10 memories for context
-                if hasattr(mem, 'id') and hasattr(mem, 'priority'):
-                    working_memory_summary.append(f"- {mem.id.source}: {mem.id.path} (priority: {mem.priority})")
-            
-            memory_context = "\n".join(working_memory_summary) if working_memory_summary else "No working memory available"
-            
-            instruction = f"""
-The Python script has a memory operation error. Fix it.
-
-Common issues:
-- Path doesn't exist - use memory.make_memory_group() first
-- Wrong attribute access - check what's available in working memory
-- Transaction failed - handle MemoryError exceptions
-
-Working memory contains:
-{memory_context}
-
-CRITICAL: Output ONLY the corrected Python code.
+Remember: NO async/await, all operations are synchronous.
 """
         
         fix_request = {
             "signature": {
                 "instruction": instruction,
                 "inputs": {
-                    "script": "The script with error",
-                    "error": "The error details",
-                    "working_memory": "Available memory context"
+                    "script": "The script that failed",
+                    "error_details": "Full error information including traceback",
+                    "working_memory": "Available memory context",
+                    "partial_output": "Any output before the error"
                 },
                 "outputs": {
                     "fixed_script": "The corrected Python script"
@@ -658,8 +814,9 @@ CRITICAL: Output ONLY the corrected Python code.
             },
             "input_values": {
                 "script": script,
-                "error": f"{error['error']} at line {error.get('line', '?')}",
-                "working_memory": memory_context
+                "error_details": json.dumps(error_context, indent=2),
+                "working_memory": memory_context,
+                "partial_output": "\n".join(error.get("partial_output", []))
             }
         }
         
@@ -671,7 +828,7 @@ CRITICAL: Output ONLY the corrected Python code.
             if fixed:
                 return self._clean_script(fixed)
         except Exception as e:
-            logger.error(f"Failed to fix {error_type} error: {e}")
+            logger.error(f"Failed to fix script error: {e}")
         
         return None
     

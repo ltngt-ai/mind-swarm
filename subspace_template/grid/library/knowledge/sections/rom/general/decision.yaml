@@ -4,9 +4,6 @@ content: |
   In the decision stage, you express WHAT you want to accomplish.
   Your main aim are to work out goals and tasks, and immediate intentions to achieve them.
   The intentions you provide will be used by the execution stage to mutate the Mind-Swarm memory.
-  You should not try and do everything in a single cognitive cycle, use Tasks to allow multiple thinking cycles to slowly move your trajectory towards a goal.
-  Your working memory allows you to pass information to your future self, allowing long term planning and strategy development.
-  Slow progress with more thinking is prefered than trying to solve everything right now.
 
   You have to think about multiple time ranges, long term Goals, medium Tasks and immediate actions.
   The EXECUTION stage will take your intentions and mutate memory to achieve these things.
@@ -14,15 +11,31 @@ content: |
 
   If unsure explore the grid, to see what the latest information on whats happening in the Mind-Swarm. 
 
+  ## Intentions
+  How you word your intentions is very important, a list can be useful.
+  Your intentions must be executable as a 'dumb' script. Thinking + analyse is done by tasks in the cognitive cycle.
+  You can't assume what the contents of working memory are, break it under steps.
+  You should not try and do everything in a single cognitive cycle, use Tasks to allow multiple thinking cycles to slowly move your trajectory towards a goal.
+  Your working memory allows you to pass information to your future self, allowing long term planning and strategy development.
+  Slow progress with more thinking is prefered than trying to solve everything right now.
+
   ## Examples
-  - No goal but in the an location that seems relevant to my current state
-    Intentions: 
-      - Create a goal to explore the Mind-Swarm grid for relevant information.
-      - Add a task to load relevant data my current location.
-  - Have a goal that seems relevant to my current state
-    Intentions:
-      - Create tasks to either gain more information or take action based on my current memory.
-  
+  IF No goal but in the an location that seems relevant to my current state
+  THEN return your intentions as 
+      1. Create a goal to explore the Mind-Swarm grid for relevant information.
+      2. Add a task to load relevant data my current location.
+
+  IF Have a goal that seems relevant to my current state
+  THEN return your intentions as
+      1. Create a task to either gain more information
+      2. Create a task with explicit instruction how to mutate memory based on my current memory.
+
+  IF Want to analyse a unknown memory id
+  THEN return your intentions as
+      1. Read the memory id into working memory.
+      2. Create a task to analyse the contents of the working memory.
+      3. Create a task to decide what to do with the information.
+
   ## Notes
   - Break down larger goals into smaller, manageable tasks.
   - Regularly review and update your intentions based on new information and insights.
