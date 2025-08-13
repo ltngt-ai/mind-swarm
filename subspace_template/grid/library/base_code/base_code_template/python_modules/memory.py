@@ -628,6 +628,20 @@ class Memory:
         self._accessed_files = []
         self._written_files = []
     
+    def _clean_path(self, path: str) -> str:
+        """Clean a path by removing any type prefix.
+        
+        Accepts both formats:
+        - "knowledge:personal/goals/..." -> "personal/goals/..."
+        - "personal/goals/..." -> "personal/goals/..." (unchanged)
+        
+        Note: We only run on Linux, so no need to handle Windows paths.
+        """
+        if ':' in path and not path.startswith('/'):
+            # Strip the prefix (everything before and including first ':')
+            return path.split(':', 1)[1]
+        return path
+    
     def _resolve_path(self, path: str) -> Path:
         """Resolve a memory path to actual filesystem path.
         
@@ -640,19 +654,8 @@ class Memory:
         """
         original_path = path
         
-        # Strip off any prefix before ':' (common mistake when copying from working memory)
-        # e.g., 'system:personal/...' -> 'personal/...'
-        # e.g., 'knowledge:personal/goals/...' -> 'personal/goals/...'
-        # e.g., 'file:/personal/...' -> '/personal/...'
-        if ':' in path and not path.startswith('/'):
-            # Check if colon is part of a Windows drive letter (e.g., C:/)
-            colon_index = path.index(':')
-            if colon_index == 1 and path[0].isalpha():
-                # This is a Windows path like C:/something
-                pass  # Don't strip
-            else:
-                # Strip the prefix
-                path = path.split(':', 1)[1]  # Remove everything before and including first ':'
+        # First clean the path to remove any type prefix
+        path = self._clean_path(path)
         
         if path.startswith('/personal'):
             return self._personal_root / path[10:]  # Remove '/personal/'
@@ -685,20 +688,28 @@ class Memory:
     def _track_access(self, path: str, file_type: str):
         """Track file access for adding to working memory on commit."""
         if self._transaction_depth > 0:
-            self._accessed_files.append({'path': path, 'type': file_type})
+            # Clean the path to remove any type prefix before tracking
+            clean_path = self._clean_path(path)
+            self._accessed_files.append({'path': clean_path, 'type': file_type})
     
     def _track_write(self, path: str, file_type: str, is_new: bool):
         """Track file write for adding to working memory on commit."""
         if self._transaction_depth > 0:
-            self._written_files.append({'path': path, 'type': file_type, 'new': is_new})
+            # Clean the path to remove any type prefix before tracking
+            clean_path = self._clean_path(path)
+            self._written_files.append({'path': clean_path, 'type': file_type, 'new': is_new})
     
     def __getitem__(self, path: str) -> MemoryNode:
         """Dictionary-style access to memory."""
-        return MemoryNode(path, self)
+        # Clean the path to allow both prefixed and non-prefixed formats
+        clean_path = self._clean_path(path)
+        return MemoryNode(clean_path, self)
     
     def __setitem__(self, path: str, value: Any):
         """Dictionary-style memory assignment."""
-        node = MemoryNode(path, self, new=True)
+        # Clean the path to allow both prefixed and non-prefixed formats
+        clean_path = self._clean_path(path)
+        node = MemoryNode(clean_path, self, new=True)
         node.content = value
         node._save()
     
@@ -722,7 +733,7 @@ class Memory:
         """Create a new memory at the specified path.
         
         Args:
-            path: Memory path like "/personal/notes.txt"
+            path: Memory path like "/personal/notes.txt" or "knowledge:personal/notes.txt"
             
         Returns:
             MemoryNode that can be modified and saved
@@ -734,7 +745,8 @@ class Memory:
             # Automatically saved
             ```
         """
-        return MemoryNode(path, self, new=True)
+        clean_path = self._clean_path(path)
+        return MemoryNode(clean_path, self, new=True)
     
     def make_memory_group(self, path: str):
         """Create a memory group (directory) at the specified path.
@@ -742,7 +754,7 @@ class Memory:
         Memory groups organize related memories together.
         
         Args:
-            path: Group path like "/personal/projects"
+            path: Group path like "/personal/projects" or "knowledge:personal/projects"
             
         Raises:
             NotAMemoryGroupError: If a memory already exists at this path
@@ -754,7 +766,8 @@ class Memory:
             memory.personal.experiments.test1 = "First experiment"
             ```
         """
-        actual_path = self._resolve_path(path)
+        clean_path = self._clean_path(path)
+        actual_path = self._resolve_path(clean_path)
         
         # Check if there's already a file (memory) at this path
         if actual_path.exists() and actual_path.is_file():
@@ -773,7 +786,7 @@ class Memory:
         """Check if a memory exists at the path.
         
         Args:
-            path: Memory path to check
+            path: Memory path to check (with or without prefix)
             
         Returns:
             True if memory exists, False otherwise
@@ -786,14 +799,15 @@ class Memory:
                 memory["/personal/config.json"] = "{}"
             ```
         """
-        actual_path = self._resolve_path(path)
+        clean_path = self._clean_path(path)
+        actual_path = self._resolve_path(clean_path)
         return actual_path.exists() and actual_path.is_file()
     
     def has_group(self, path: str) -> bool:
         """Check if a memory group exists at the path.
         
         Args:
-            path: Group path to check
+            path: Group path to check (with or without prefix)
             
         Returns:
             True if group exists, False otherwise
@@ -804,14 +818,15 @@ class Memory:
                 memory.make_memory_group("/personal/archive")
             ```
         """
-        actual_path = self._resolve_path(path)
+        clean_path = self._clean_path(path)
+        actual_path = self._resolve_path(clean_path)
         return actual_path.exists() and actual_path.is_dir()
     
     def exists(self, path: str) -> bool:
         """Check if anything (memory or group) exists at the path.
         
         Args:
-            path: Path to check
+            path: Path to check (with or without prefix)
             
         Returns:
             True if path exists, False otherwise
@@ -822,42 +837,48 @@ class Memory:
                 memory.make_memory_group("/personal/data")
             ```
         """
-        actual_path = self._resolve_path(path)
+        clean_path = self._clean_path(path)
+        actual_path = self._resolve_path(clean_path)
         return actual_path.exists()
     
     def list_memories(self, path: str) -> List[str]:
         """List all memories in a group."""
-        actual_path = self._resolve_path(path)
+        clean_path = self._clean_path(path)
+        actual_path = self._resolve_path(clean_path)
         if not actual_path.exists() or not actual_path.is_dir():
             return []
         return [item.name for item in actual_path.iterdir() if item.is_file()]
     
     def list_groups(self, path: str) -> List[str]:
         """List all sub-groups in a group."""
-        actual_path = self._resolve_path(path)
+        clean_path = self._clean_path(path)
+        actual_path = self._resolve_path(clean_path)
         if not actual_path.exists() or not actual_path.is_dir():
             return []
         return [item.name for item in actual_path.iterdir() if item.is_dir()]
     
     def remove_memory(self, path: str):
         """Delete a memory."""
-        actual_path = self._resolve_path(path)
+        clean_path = self._clean_path(path)
+        actual_path = self._resolve_path(clean_path)
         if actual_path.exists() and actual_path.is_file():
             actual_path.unlink()
-            self._track_change(path, 'delete')
+            self._track_change(clean_path, 'delete')
     
     def remove_group(self, path: str):
         """Delete a memory group and all its contents."""
-        actual_path = self._resolve_path(path)
+        clean_path = self._clean_path(path)
+        actual_path = self._resolve_path(clean_path)
         if actual_path.exists() and actual_path.is_dir():
             import shutil
             shutil.rmtree(actual_path)
-            self._track_change(path, 'rmdir')
+            self._track_change(clean_path, 'rmdir')
     
     def search(self, query: str, path: str = "/personal", limit: int = 10) -> List[MemoryNode]:
         """Search for memories containing the query string."""
         results = []
-        search_root = self._resolve_path(path)
+        clean_path = self._clean_path(path)
+        search_root = self._resolve_path(clean_path)
         
         if not search_root.exists():
             return results
