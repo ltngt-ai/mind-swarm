@@ -157,6 +157,13 @@ class MemoryNotFoundError(MemoryError):
         super().__init__(f"Memory not found: {path}")
 
 
+class NotAMemoryGroupError(MemoryError):
+    """Raised when trying to create a memory group where a memory already exists."""
+    def __init__(self, path: str):
+        self.path = path
+        super().__init__(f"Cannot create memory group at '{path}': a memory already exists there")
+
+
 class MemoryPermissionError(MemoryError):
     """Raised when lacking permission to access memory."""
     def __init__(self, path: str):
@@ -602,6 +609,10 @@ class Memory:
         Args:
             path: Group path like "/personal/projects"
             
+        Raises:
+            NotAMemoryGroupError: If a memory already exists at this path
+            MemoryError: If creation fails for other reasons
+            
         Example:
             ```python
             memory.make_memory_group("/personal/experiments")
@@ -609,8 +620,19 @@ class Memory:
             ```
         """
         actual_path = self._resolve_path(path)
-        actual_path.mkdir(parents=True, exist_ok=True)
-        self._track_change(path, 'mkdir')
+        
+        # Check if there's already a file (memory) at this path
+        if actual_path.exists() and actual_path.is_file():
+            raise NotAMemoryGroupError(path)
+        
+        try:
+            actual_path.mkdir(parents=True, exist_ok=True)
+            self._track_change(path, 'mkdir')
+        except NotADirectoryError:
+            # This happens when a parent in the path is a file, not a directory
+            raise NotAMemoryGroupError(path)
+        except Exception as e:
+            raise MemoryError(f"Failed to create memory group at '{path}': {e}")
     
     def has_memory(self, path: str) -> bool:
         """Check if a memory exists at the path.
