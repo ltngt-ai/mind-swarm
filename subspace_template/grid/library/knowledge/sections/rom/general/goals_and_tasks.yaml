@@ -61,8 +61,6 @@ metadata:
   tags:
   - goals
   - tasks
-  - reflection_only
-  - decision_only
   confidence: 1.0
   priority: 1
   source: boot_rom

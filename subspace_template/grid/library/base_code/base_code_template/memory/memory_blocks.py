@@ -98,15 +98,6 @@ class FileMemoryBlock(MemoryBlock):
                     import logging
                     logger = logging.getLogger("Cyber.memory")
                     logger.warning(f"FileMemoryBlock created with unnamespaced path: {self.location}")
-                    
-                    # Check if this looks like a malformed memory ID being used as a location
-                    if ':' in self.location and '/' in self.location.split(':', 1)[1]:
-                        # This looks like "type:path" format - someone is passing an ID as location
-                        raise ValueError(
-                            f"FileMemoryBlock location looks like a memory ID: {self.location}. "
-                            f"FileMemoryBlock requires an actual file path, not a memory ID. "
-                            f"All memory in Mind-Swarm is disk-based - there are no in-memory only items."
-                        )
             except Exception as e:
                 import logging
                 logger = logging.getLogger("Cyber.memory")

@@ -487,20 +487,48 @@ class Memory:
         self._written_files = []
     
     def _resolve_path(self, path: str) -> Path:
-        """Resolve a memory path to actual filesystem path."""
+        """Resolve a memory path to actual filesystem path.
+        
+        Valid path formats:
+        - '/personal/...' - Absolute personal path
+        - 'personal/...' - Relative personal path
+        - '/grid/...' - Absolute grid path
+        - 'grid/...' - Relative grid path
+        - 'type:path' - Memory ID format (prefix will be stripped)
+        """
+        original_path = path
+        
         # Strip off any prefix before ':' (common mistake when copying from working memory)
         # e.g., 'system:personal/...' -> 'personal/...'
+        # e.g., 'knowledge:personal/goals/...' -> 'personal/goals/...'
         # e.g., 'file:/personal/...' -> '/personal/...'
         if ':' in path and not path.startswith('/'):
-            path = path.split(':', 1)[1]  # Remove everything before and including first ':'
+            # Check if colon is part of a Windows drive letter (e.g., C:/)
+            colon_index = path.index(':')
+            if colon_index == 1 and path[0].isalpha():
+                # This is a Windows path like C:/something
+                pass  # Don't strip
+            else:
+                # Strip the prefix
+                path = path.split(':', 1)[1]  # Remove everything before and including first ':'
         
         if path.startswith('/personal'):
             return self._personal_root / path[10:]  # Remove '/personal/'
+        elif path.startswith('personal/'):
+            # Already relative to personal, just remove the 'personal/' prefix
+            return self._personal_root / path[9:]  # Remove 'personal/'
         elif path.startswith('/grid'):
             return Path(path)
+        elif path.startswith('grid/'):
+            # Relative grid path
+            return Path('/') / path
         else:
-            # Default to personal space
-            return self._personal_root / path
+            # No valid namespace found - this is an error
+            raise MemoryError(
+                f"Invalid memory path: '{original_path}'. "
+                f"Path must start with 'personal/', '/personal/', 'grid/', or '/grid/'. "
+                f"After stripping any type prefix, got: '{path}'"
+            )
     
     def _track_change(self, path: str, operation: str, data: Any = None):
         """Track a change for potential rollback."""

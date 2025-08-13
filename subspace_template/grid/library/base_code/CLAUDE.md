@@ -6,6 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is the runtime code for Mind-Swarm Cybers - autonomous AI entities that think and act within their sandboxed environment. Each Cyber runs this code as an independent process with its own cognitive loop, memory system, and action capabilities.
 
+Cyber's 'memory' is actually always disk based, the 'working memory' is just a symbolic view of the actual filesystem.
+Never create a FileMemoryBlock that isn't backed by a real file on the disk.
+
 ## Core Architecture
 
 ### The Cyber Mind (`mind.py`)
