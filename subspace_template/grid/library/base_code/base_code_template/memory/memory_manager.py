@@ -271,8 +271,19 @@ class WorkingMemoryManager:
                         )
                         
                     elif memory_type == MemoryType.KNOWLEDGE:
+                        location = mem_data.get('location', 'restored')
+                        
+                        # Skip malformed entries where an ID is used as location
+                        # This catches Alice's incorrect usage like "knowledge:personal/goals/..."
+                        if ':' in location and '/' in location.split(':', 1)[1]:
+                            logger.warning(
+                                f"Skipping malformed KNOWLEDGE memory with ID-like location: {location}. "
+                                f"FileMemoryBlock requires actual file paths, not memory IDs."
+                            )
+                            continue
+                            
                         memory = FileMemoryBlock(
-                            location=mem_data.get('location', 'restored'),
+                            location=location,
                             confidence=mem_data.get('confidence', mem_data.get('relevance_score', 1.0)),
                             priority=Priority[mem_data.get('priority', 'MEDIUM')],
                             metadata=mem_data.get('metadata', {}),

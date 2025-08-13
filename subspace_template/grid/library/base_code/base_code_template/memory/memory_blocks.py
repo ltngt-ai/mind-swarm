@@ -68,6 +68,50 @@ class FileMemoryBlock(MemoryBlock):
         # Use provided block_type or default to FILE
         self.type = self.block_type if self.block_type else MemoryType.FILE
         
+        # CRITICAL: FileMemoryBlock MUST reference an actual file on disk
+        # Working memory is a symbolic view of disk-based memory, NOT in-memory storage
+        from pathlib import Path
+        
+        # Special case for virtual files that don't need disk backing
+        virtual_prefixes = ['boot_rom/', 'virtual/', 'restored']
+        is_virtual = any(self.location.startswith(prefix) for prefix in virtual_prefixes)
+        
+        if not is_virtual:
+            # Try to resolve the path to check if file exists
+            try:
+                # Handle both absolute and relative paths
+                if self.location.startswith('/'):
+                    file_path = Path(self.location)
+                elif self.location.startswith('personal/'):
+                    # This is relative to the cyber's filesystem root
+                    # We can't check from here, but log for debugging
+                    import logging
+                    logger = logging.getLogger("Cyber.memory")
+                    logger.debug(f"FileMemoryBlock created for cyber-relative path: {self.location}")
+                elif self.location.startswith('grid/'):
+                    # Grid-relative path
+                    import logging
+                    logger = logging.getLogger("Cyber.memory")
+                    logger.debug(f"FileMemoryBlock created for grid-relative path: {self.location}")
+                else:
+                    # This shouldn't happen - all paths should be properly namespaced
+                    import logging
+                    logger = logging.getLogger("Cyber.memory")
+                    logger.warning(f"FileMemoryBlock created with unnamespaced path: {self.location}")
+                    
+                    # Check if this looks like a malformed memory ID being used as a location
+                    if ':' in self.location and '/' in self.location.split(':', 1)[1]:
+                        # This looks like "type:path" format - someone is passing an ID as location
+                        raise ValueError(
+                            f"FileMemoryBlock location looks like a memory ID: {self.location}. "
+                            f"FileMemoryBlock requires an actual file path, not a memory ID. "
+                            f"All memory in Mind-Swarm is disk-based - there are no in-memory only items."
+                        )
+            except Exception as e:
+                import logging
+                logger = logging.getLogger("Cyber.memory")
+                logger.debug(f"Path validation for FileMemoryBlock: {e}")
+        
         # Generate unified ID
         self.id = UnifiedMemoryID.create_from_path(self.location, self.type)
         
