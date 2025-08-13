@@ -216,15 +216,9 @@ class EnvironmentScanner:
             
             if dynamic_context_file.exists():
                 try:
-                    with open(dynamic_context_file, 'rb') as f:
-                        # Read memory-mapped file format (4KB with null padding)
-                        content = f.read(4096)
-                        # Find the null terminator
-                        null_pos = content.find(b'\0')
-                        if null_pos != -1:
-                            content = content[:null_pos]
-                        # Parse JSON
-                        dynamic_context = json.loads(content.decode('utf-8'))
+                    # Read as standard JSON file
+                    with open(dynamic_context_file, 'r') as f:
+                        dynamic_context = json.load(f)
                         current_location = dynamic_context.get("current_location")
                 except Exception as e:
                     logger.debug(f"Error reading dynamic context: {e}")

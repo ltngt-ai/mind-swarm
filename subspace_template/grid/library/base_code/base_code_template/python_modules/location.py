@@ -122,19 +122,9 @@ class Location:
             if not self._dynamic_context_file.exists():
                 raise LocationError("Dynamic context file not found")
             
-            # Read the memory-mapped file properly
-            with open(self._dynamic_context_file, 'rb') as f:
-                content = f.read(4096)  # Read up to 4KB
-            
-            # Find the null terminator
-            null_pos = content.find(b'\0')
-            if null_pos != -1:
-                json_bytes = content[:null_pos]
-            else:
-                json_bytes = content.rstrip(b'\0')
-            
-            # Parse JSON
-            return json.loads(json_bytes.decode('utf-8'))
+            # Read as standard JSON file
+            with open(self._dynamic_context_file, 'r') as f:
+                return json.load(f)
             
         except Exception as e:
             raise LocationError(f"Failed to read dynamic context: {e}")
@@ -149,13 +139,9 @@ class Location:
             LocationError: If unable to write context
         """
         try:
-            # Write back with proper padding
-            json_str = json.dumps(context, indent=2)
-            json_bytes = json_str.encode('utf-8') + b'\0'
-            padded_content = json_bytes.ljust(4096, b'\0')
-            
-            with open(self._dynamic_context_file, 'wb') as f:
-                f.write(padded_content)
+            # Write as standard JSON file
+            with open(self._dynamic_context_file, 'w') as f:
+                json.dump(context, f, indent=2)
                 
         except Exception as e:
             raise LocationError(f"Failed to write dynamic context: {e}")

@@ -9,7 +9,6 @@ This refactored version uses a three-stage cognitive architecture:
 import asyncio
 import json
 import logging
-import mmap
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from datetime import datetime
@@ -292,7 +291,7 @@ class CognitiveLoop:
             logger.warning(f"No identity.json file found at {identity_file}")
     
     def _init_dynamic_context(self):
-        """Initialize memory mapping for existing dynamic context file."""
+        """Initialize dynamic context file."""
         self.dynamic_context_file = self.memory_dir / "dynamic_context.json"
         
         # File should already exist - if not, create minimal one
@@ -304,35 +303,9 @@ class CognitiveLoop:
                 "current_phase": "INIT",
                 "current_location": "/grid/library/knowledge/sections/new_cyber_introduction"  # Starting location for new Cybers
             }
-            json_str = json.dumps(context_data, indent=2)
-            json_bytes = json_str.encode('utf-8') + b'\0'
-            padded_content = json_bytes.ljust(4096, b'\0')
-            with open(self.dynamic_context_file, 'wb') as f:
-                f.write(padded_content)
+            with open(self.dynamic_context_file, 'w') as f:
+                json.dump(context_data, f, indent=2)
             logger.info(f"Created initial dynamic_context.json for new Cyber")
-        else:
-            # File exists - just verify it's the right size for memory mapping
-            file_size = self.dynamic_context_file.stat().st_size
-            if file_size < 4096:
-                # Pad existing file to 4KB if needed
-                with open(self.dynamic_context_file, 'rb') as f:
-                    content = f.read()
-                # Find null terminator or end of JSON
-                null_pos = content.find(b'\0')
-                if null_pos == -1:
-                    # No null terminator, add one
-                    padded_content = content.rstrip() + b'\0'
-                    padded_content = padded_content.ljust(4096, b'\0')
-                else:
-                    # Already has null, just pad with more nulls
-                    padded_content = content.ljust(4096, b'\0')
-                with open(self.dynamic_context_file, 'wb') as f:
-                    f.write(padded_content)
-                logger.debug(f"Padded existing dynamic_context.json to 4KB")
-        
-        # Open existing file for memory mapping
-        self.dynamic_context_fd = open(self.dynamic_context_file, 'r+b')
-        self.dynamic_context_mmap = mmap.mmap(self.dynamic_context_fd.fileno(), 4096)
         
         # Add to memory as pinned so Cyber always sees current context
         self.dynamic_context_location = str(self.dynamic_context_file.relative_to(self.personal.parent))
@@ -343,82 +316,58 @@ class CognitiveLoop:
             pinned=True,  # Always in working memory
             metadata={"file_type": "dynamic_context", "description": "Current runtime context"},
             cycle_count=self.cycle_count,  # Will always match file content now
-            no_cache=True,  # Memory-mapped file, don't cache
+            no_cache=True,  # Don't cache, always read from disk
             block_type=MemoryType.SYSTEM  # Mark as system memory
         )
         self.memory_system.add_memory(context_memory)
         self.dynamic_context_memory_id = context_memory.id
-        logger.info("Initialized dynamic_context.json with memory mapping")
+        logger.info("Initialized dynamic_context.json")
     
     def get_dynamic_context(self) -> Dict[str, Any]:
-        """Get the current dynamic context from memory-mapped file.
+        """Get the current dynamic context from file.
         
         Returns:
             Dictionary containing the current dynamic context
         """
-        if not hasattr(self, 'dynamic_context_mmap'):
-            # This should never happen after init
-            logger.error("Dynamic context mmap not initialized!")
+        if not hasattr(self, 'dynamic_context_file'):
+            logger.error("Dynamic context file not initialized!")
             return {}
         
         try:
-            # Read current data from memory-mapped file
-            self.dynamic_context_mmap.seek(0)
-            content_bytes = self.dynamic_context_mmap.read(4096)
-            
-            # Find null terminator to get actual JSON content
-            null_pos = content_bytes.find(b'\0')
-            if null_pos != -1:
-                json_content = content_bytes[:null_pos].decode('utf-8')
-            else:
-                # No null terminator, try to parse what we have
-                json_content = content_bytes.decode('utf-8').rstrip()
-            
-            # Parse JSON
-            context_data = json.loads(json_content)
-            return context_data
+            # Read current data from file
+            with open(self.dynamic_context_file, 'r') as f:
+                return json.load(f)
             
         except Exception as e:
             logger.error(f"Error reading dynamic context: {e}")
-            # Don't provide defaults - let the error propagate
             return {}
     
     def _update_dynamic_context(self, stage=None, phase=None, **updates):
-        """Update the dynamic context file with new values using memory mapping.
+        """Update the dynamic context file with new values.
         
         Args:
             stage: Current stage (OBSERVATION, DECISION, EXECUTION, MAINTENANCE)
             phase: Current phase within the stage (e.g., OBSERVE, CLEANUP, DECIDE, etc.)
             **updates: Additional key-value pairs to update
         """
-        if not hasattr(self, 'dynamic_context_mmap'):
+        if not hasattr(self, 'dynamic_context_file'):
             return
             
         try:
-            # Read current data from memory-mapped file
-            self.dynamic_context_mmap.seek(0)
-            content_bytes = self.dynamic_context_mmap.read(4096)
-            
-            # Find null terminator to get actual JSON content
-            null_pos = content_bytes.find(b'\0')
-            if null_pos != -1:
-                json_content = content_bytes[:null_pos].decode('utf-8')
-            else:
-                # No null terminator, try to parse what we have
-                json_content = content_bytes.decode('utf-8').rstrip()
-            
-            # Parse JSON
+            # Read current data from file
             try:
-                context_data = json.loads(json_content)
-            except json.JSONDecodeError:
-                # If corrupted, reset to defaults
+                with open(self.dynamic_context_file, 'r') as f:
+                    context_data = json.load(f)
+            except (json.JSONDecodeError, FileNotFoundError):
+                # If corrupted or missing, reset to defaults
                 context_data = {
                     "cycle_count": self.cycle_count,
                     "current_stage": "ERROR_RECOVERY",
-                    "current_phase": "RESET"
+                    "current_phase": "RESET",
+                    "current_location": "/grid/library/knowledge/sections/new_cyber_introduction"
                 }
             
-            # Update cycle count - this is the key change
+            # Update cycle count
             context_data["cycle_count"] = self.cycle_count
             
             # Update stage and phase if provided
@@ -431,20 +380,9 @@ class CognitiveLoop:
             for key, value in updates.items():
                 context_data[key] = value
             
-            # Write back to memory-mapped file
-            json_str = json.dumps(context_data, indent=2)
-            if len(json_str) > 4095:  # Leave room for null terminator
-                logger.warning("Dynamic context exceeds 4KB, truncating")
-                json_str = json_str[:4095]
-            
-            # Add null terminator and pad the rest with nulls
-            json_bytes = json_str.encode('utf-8') + b'\0'
-            padded_content = json_bytes.ljust(4096, b'\0')
-            
-            # Write to memory map
-            self.dynamic_context_mmap.seek(0)
-            self.dynamic_context_mmap.write(padded_content)
-            self.dynamic_context_mmap.flush()  # Force write to disk
+            # Write back to file
+            with open(self.dynamic_context_file, 'w') as f:
+                json.dump(context_data, f, indent=2)
             
             # Touch the memory block so it knows the file was updated
             if hasattr(self, 'dynamic_context_memory_id'):
@@ -645,12 +583,9 @@ class CognitiveLoop:
             logger.error(f"Error saving memory: {e}")
     
     def cleanup(self):
-        """Clean up resources including memory-mapped files."""
+        """Clean up resources."""
         try:
-            if hasattr(self, 'dynamic_context_mmap'):
-                self.dynamic_context_mmap.close()
-            if hasattr(self, 'dynamic_context_fd'):
-                self.dynamic_context_fd.close()
-            logger.info("Cleaned up memory-mapped resources")
+            # No special cleanup needed for standard file I/O
+            logger.info("Cleanup completed")
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")
