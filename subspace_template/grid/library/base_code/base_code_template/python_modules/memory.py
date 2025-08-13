@@ -426,6 +426,13 @@ class MemoryNode:
     @content.setter
     def content(self, value):
         """Set the memory content."""
+        # Check if someone is trying to save a MemoryNode directly
+        if isinstance(value, MemoryNode):
+            raise MemoryTypeError(
+                f"Cannot save a MemoryNode object directly. "
+                f"Did you mean to use .content? "
+                f"Example: memory['{self.path}'] = other_memory.content"
+            )
         self._content = value
         self._modified = True
         # Auto-detect type if not set
@@ -508,6 +515,13 @@ class MemoryGroup:
             # Internal attributes
             super().__setattr__(name, value)
         else:
+            # Check if someone is trying to save a MemoryNode directly
+            if isinstance(value, MemoryNode):
+                raise MemoryTypeError(
+                    f"Cannot save a MemoryNode object directly to '{self._base_path}/{name}'. "
+                    f"Did you mean to use .content? "
+                    f"Example: memory.{self._base_path.lstrip('/')}.{name} = other_memory.content"
+                )
             # Memory assignment - ensure parent directory exists
             path = f"{self._base_path}/{name}"
             actual_path = self._memory._resolve_path(path)
@@ -541,6 +555,13 @@ class MemoryGroup:
     
     def __setitem__(self, key: str, value: Any):
         """Set memory via subscript."""
+        # Check if someone is trying to save a MemoryNode directly
+        if isinstance(value, MemoryNode):
+            raise MemoryTypeError(
+                f"Cannot save a MemoryNode object directly to '{self._base_path}/{key}'. "
+                f"Did you mean to use .content? "
+                f"Example: memory['{self._base_path}/{key}'] = other_memory.content"
+            )
         # Same logic as __setattr__ but for subscript notation
         path = f"{self._base_path}/{key}"
         actual_path = self._memory._resolve_path(path)
@@ -707,6 +728,13 @@ class Memory:
     
     def __setitem__(self, path: str, value: Any):
         """Dictionary-style memory assignment."""
+        # Check if someone is trying to save a MemoryNode directly
+        if isinstance(value, MemoryNode):
+            raise MemoryTypeError(
+                f"Cannot save a MemoryNode object directly to '{path}'. "
+                f"Did you mean to use .content? "
+                f"Example: memory['{path}'] = other_memory.content"
+            )
         # Clean the path to allow both prefixed and non-prefixed formats
         clean_path = self._clean_path(path)
         node = MemoryNode(clean_path, self, new=True)
