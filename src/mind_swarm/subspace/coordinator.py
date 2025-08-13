@@ -53,7 +53,8 @@ class MessageRouter:
             # Process each message in outbox
             try:
                 outbox_files = await aiofiles.os.listdir(outbox_dir)
-                msg_files = [f for f in outbox_files if f.endswith('.msg')]
+                # Support both .msg (old format) and .json (new memory API format)
+                msg_files = [f for f in outbox_files if f.endswith('.msg') or f.endswith('.json')]
                 if msg_files:
                     logger.info(f"Found {len(msg_files)} messages in {cyber_name}'s outbox")
             except OSError as e:
@@ -72,8 +73,11 @@ class MessageRouter:
                     if to_agent == "broadcast":
                         # Broadcast to all Cybers
                         await self._broadcast_message(message, exclude=[cyber_name])
-                    elif to_agent.startswith("Cyber-") or to_agent.endswith("_dev"):
-                        # Direct message to another Cyber or developer
+                    elif to_agent.endswith("_dev"):
+                        # Message to a developer - store in developer's mailbox
+                        await self._deliver_to_developer(to_agent, message)
+                    elif to_agent.startswith("Cyber-") or await self._agent_exists(to_agent):
+                        # Direct message to another Cyber
                         if not await self._agent_exists(to_agent):
                             # Send error back to sender
                             await self._send_delivery_error(cyber_name, message, f"Cyber {to_agent} not found")
@@ -146,6 +150,30 @@ class MessageRouter:
         """Check if an Cyber exists."""
         cyber_dir = self.agents_dir / cyber_name
         return await aiofiles.os.path.exists(cyber_dir)
+    
+    async def _deliver_to_developer(self, to_dev: str, message: Dict[str, Any]):
+        """Deliver a message to a developer's mailbox.
+        
+        Args:
+            to_dev: Developer cyber name (e.g., "deano_dev")
+            message: Message to deliver
+        """
+        # Create the developer's inbox directory if it doesn't exist
+        dev_inbox = self.agents_dir / to_dev / "inbox"
+        try:
+            await aiofiles.os.makedirs(dev_inbox, exist_ok=True)
+        except OSError:
+            pass  # Directory might already exist
+        
+        # Generate unique filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:20]
+        msg_id = message.get("id", f"msg_{timestamp}")
+        msg_file = dev_inbox / f"{msg_id}.msg"
+        
+        # Write message
+        async with aiofiles.open(msg_file, 'w') as f:
+            await f.write(json.dumps(message, indent=2))
+        logger.info(f"Delivered message to developer {to_dev}")
     
     async def _send_delivery_error(self, sender: str, original_message: Dict[str, Any], error_reason: str):
         """Send a delivery error message back to the sender."""
