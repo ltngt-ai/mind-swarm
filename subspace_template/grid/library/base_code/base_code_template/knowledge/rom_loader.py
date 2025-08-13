@@ -109,6 +109,20 @@ class ROMLoader:
             return self.load_rom_directory(agent_rom_dir, cyber_type)
         return {}
         
+    def get_execution_rom(self) -> Dict[str, Any]:
+        """Load execution-specific ROM files.
+        
+        Note: Execution API docs are now auto-generated from Python source,
+        so this directory is typically empty or minimal.
+        
+        Returns:
+            Dictionary of execution ROM data (if any)
+        """
+        execution_rom_dir = self.library_path / "knowledge" / "sections" / "rom" / "execution"
+        if execution_rom_dir.exists():
+            return self.load_rom_directory(execution_rom_dir)
+        return {}
+    
     def get_all_rom(self, cyber_type: Optional[str] = None) -> Dict[str, Any]:
         """Load all applicable ROM for an Cyber.
         
@@ -116,13 +130,17 @@ class ROMLoader:
             cyber_type: Optional Cyber type for specific ROM
             
         Returns:
-            Combined ROM data (general + Cyber-specific)
+            Combined ROM data (general + Cyber-specific + execution)
         """
         all_rom = {}
         
         # Load general ROM
         general_rom = self.get_general_rom()
         all_rom.update(general_rom)
+        
+        # Load execution ROM (Python API docs)
+        execution_rom = self.get_execution_rom()
+        all_rom.update(execution_rom)
         
         # Load Cyber-specific ROM if specified
         if cyber_type:

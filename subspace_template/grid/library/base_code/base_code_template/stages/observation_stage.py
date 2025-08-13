@@ -35,6 +35,9 @@ class ObservationStage:
         "action_guide", 
         "action_implementation", 
         "execution", 
+        "execution_only",  # Execution stage specific
+        "decision_only",  # Decision stage specific
+        "reflection_only",  # Reflection stage specific
         "procedures", 
         "tools",
         "background"

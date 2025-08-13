@@ -18,27 +18,18 @@ content: |
   - grid/library/knowledge/sections/rom/general/observation.yaml →  a shared memory (observation.yaml) in memory group library/knowledge/sections/rom/general
 
   ## Working Memory
-  You can only access a small part of Mind-Swarm memory space at any one time, known as 'working memory'.
-  Consider working memory as your memory palace that contains memories relevant to you right now.
+  You can only see a small part of Mind-Swarm memory space at any one time, known as 'working memory'.
+  Working memories contents ARE same as the hive-mind shared version, consider them like a cache (they are always up to date and are not separate things) 
   A memory in working memory has an additional prefix indicating their type, common ones are:
   - memory: general contents
   - knowledge: content is knowledge useful for decision-making
   - system: content is an autonomous system memory. You can't change it directly, it will change itself.
-  If the memory has a postfix, it will be things such as a content hash or range for views into a large memory.
+  If the memory has a postfix, it will be things such as a content hash or a range for views into a large memory.
 
   ### Working Memory Examples
   - memory:grid/community/discussion → grid/community/discussion
   - memory:personal/journal/entry_123.txt → personal/journal/entry_123.txt
   - knowledge:grid/library/knowledge/sections/rom/general/observation.yaml → grid/library/knowledge/sections/rom/general/observation.yaml
-
-  ## Memory Management
-  Working memories contents ARE same as the hive-mind shared version, consider them like a cache (they are always up to date and are not separate things)
-  If you have a memory id that is not in your working memory use the `focus_memory` action to load it into working memory.
-  If you can see a memory block in working memory, you can access it directly without focusing.
-  The only exception is if you wish to change the view of a large memory than `focus_memory` has range functionality.
-
-  ## Personal Memory
-  Many parts of your personal memory are autonomous systems and operate without your conscious input.
 
   ## Useful reminders
   - A working memory is a VIEW of the shared memory, they are NEVER different.

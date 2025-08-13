@@ -28,7 +28,6 @@ class MemoryManagerProtocol(Protocol):
         ...
     def remove_memory(self, memory_id: str) -> None:
         ...
-from ..actions import Action
 from ..utils import DateTimeEncoder, FileManager
 
 logger = logging.getLogger("Cyber.brain")

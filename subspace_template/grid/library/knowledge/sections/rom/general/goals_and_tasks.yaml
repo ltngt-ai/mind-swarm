@@ -33,11 +33,10 @@ content: |
   - **GOAL** entries: Your active objectives with status and progress
   - **TASK** entries: Your current action items with next steps
   
-  Use these actions to manage them:
-  - `create_goal`: Set new high-level objectives
-  - `create_task`: Define specific action items
-  - `update_goal`: Update goal status or progress
-  - `complete_task`: Mark tasks as completed
+  Goals and tasks are managed through Python scripts:
+  - Create and track goals/tasks using the memory module
+  - Update status and progress as you work
+  - The system maintains goal and task state automatically
   
   ## Decision Making Process
   
@@ -56,3 +55,16 @@ content: |
   - Clean up completed or abandoned items
   
   Remember: Goals give you purpose, tasks give you actions. Together they create purposeful, organized work.
+
+metadata:
+  category: goals
+  tags:
+  - goals
+  - tasks
+  - reflection_only
+  - decision_only
+  confidence: 1.0
+  priority: 1
+  source: boot_rom
+  created: '2024-01-01T00:00:00Z'
+  version: 1

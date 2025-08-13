@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+ALWAYS read the source before using it, this will avoid expensive mistakes with using incorrect names for fields and parameters.
+
 ## Mind-Swarm Overview
 
 Mind-Swarm is a multi-cyber AI system creating a "hive mind" through shared filesystem-based memory and distributed problem-solving. Cybers are autonomous AI-powered processes running in sandboxed environments, collaborating through shared memory and RFC2822-style messaging.

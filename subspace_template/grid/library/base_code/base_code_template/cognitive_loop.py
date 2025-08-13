@@ -24,13 +24,10 @@ from .memory import (
 from .perception import EnvironmentScanner
 from .knowledge import KnowledgeManager
 from .state import CyberStateManager, ExecutionStateTracker
-# Removed StagePipeline - using double-buffered FileMemoryBlocks instead
 from .state.goal_manager import GoalManager
-from .actions import ActionCoordinator
-from .actions.action_tracker import ActionTracker
 from .utils import CognitiveUtils, FileManager
 from .brain import BrainInterface
-from .stages import ObservationStage, DecisionStage, ExecutionStage, ReflectStage
+from .stages import ObservationStage, ReflectStage, DecisionStage, ExecutionStage
 
 logger = logging.getLogger("Cyber.cognitive")
 
@@ -85,8 +82,8 @@ class CognitiveLoop:
         
         # Initialize cognitive stages (4 stages now)
         self.observation_stage = ObservationStage(self)
-        self.decision_stage = DecisionStage(self)
-        self.execution_stage = ExecutionStage(self)
+        self.decision_stage = DecisionStage(self)  # This is now V2
+        self.execution_stage = ExecutionStage(self)  # This is now V2
         self.reflect_stage = ReflectStage(self)
     
     def _initialize_pipeline_buffers(self):
@@ -230,9 +227,8 @@ class CognitiveLoop:
         self.state_manager = CyberStateManager(self.cyber_id, self.memory_dir)
         self.execution_tracker = ExecutionStateTracker(self.cyber_id, self.memory_dir)
         
-        # Action coordination
-        self.action_tracker = ActionTracker()
-        self.action_coordinator = ActionCoordinator(cyber_type=self.cyber_type)
+        # V2 doesn't need action system - actions are Python functions in scripts
+        # self.action_tracker = ActionTracker()
         
         # Perception system
         grid_path = self.personal.parent.parent / "grid"

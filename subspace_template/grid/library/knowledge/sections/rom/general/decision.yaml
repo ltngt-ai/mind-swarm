@@ -1,0 +1,44 @@
+knowledge_version: '1.0'
+title: Decision Stage Guide
+content: |
+  In the decision stage, you express WHAT you want to accomplish.
+  Your main aim are to work out goals and tasks, and immediate intentions to achieve them.
+  The intentions you provide will be used by the execution stage to mutate the Mind-Swarm memory.
+  You should not try and do everything in a single cognitive cycle, use Tasks to allow multiple thinking cycles to slowly move your trajectory towards a goal.
+  Your working memory allows you to pass information to your future self, allowing long term planning and strategy development.
+  Slow progress with more thinking is prefered than trying to solve everything right now.
+
+  You have to think about multiple time ranges, long term Goals, medium Tasks and immediate actions.
+  The EXECUTION stage will take your intentions and mutate memory to achieve these things.
+  The REVIEW stage will use your intentions and the EXECUTION results to update any Goals and Tasks you have set
+
+  If unsure explore the grid, to see what the latest information on whats happening in the Mind-Swarm. 
+
+  ## Examples
+  - No goal but in the an location that seems relevant to my current state
+    Intentions: 
+      - Create a goal to explore the Mind-Swarm grid for relevant information.
+      - Add a task to load relevant data my current location.
+  - Have a goal that seems relevant to my current state
+    Intentions:
+      - Create tasks to either gain more information or take action based on my current memory.
+  
+  ## Notes
+  - Break down larger goals into smaller, manageable tasks.
+  - Regularly review and update your intentions based on new information and insights.
+  - Anything in working memory doesn't need to be 'read' again.
+
+metadata:
+  category: decision
+  tags:
+  - decision
+  - thinking
+  - intention
+  - planning
+  - strategy
+  - decision_only
+  confidence: 1.0
+  priority: 1
+  source: boot_rom
+  created: '2024-01-01T00:00:00Z'
+  version: 1

@@ -25,6 +25,19 @@ class ReflectStage:
     - Creating insights for future cycles
     """
     
+    # Knowledge tags to exclude during reflection stage
+    # We don't need execution implementation details when reflecting
+    KNOWLEDGE_BLACKLIST = {
+        "execution",  # Execution-specific knowledge
+        "execution_only",  # Python API docs
+        "decision_only",  # Decision stage specific
+        "observation",  # Don't need raw observations
+        "action_implementation",  # Implementation details
+        "api_documentation",  # API reference
+        "procedures",  # Step-by-step procedures
+        "tools"  # Tool implementation details
+    }
+    
     def __init__(self, cognitive_loop):
         """Initialize the reflect stage.
         
@@ -63,10 +76,14 @@ class ReflectStage:
             return
         
         # Build context for reflection - let the brain see everything in memory
+        from ..memory.tag_filter import TagFilter
+        tag_filter = TagFilter(blacklist=self.KNOWLEDGE_BLACKLIST)
+        
         memory_context = self.memory_system.build_context(
             max_tokens=self.cognitive_loop.max_context_tokens // 3,
             current_task="Reflecting on previous execution results",
-            selection_strategy="recent"
+            selection_strategy="recent",
+            tag_filter=tag_filter
         )
         
         # Use brain to reflect on what happened

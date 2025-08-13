@@ -1,0 +1,31 @@
+knowledge_version: '1.0'
+title: Execution Guide
+content: |
+  ## Write Python to implement the intention
+  Transform intentions into a Python script that work directly with memories.
+
+  Whilst this uses the medium of python, it ISN'T a normal script it mutages the Mind-Swarm memory directly.
+  You turn the intentions in the actionable items and then implement them in Python that change memory.
+  The result are passed to the next stage in the cognative architecture.
+  Think multi-cycle of the cognative loop, where each cycle builds upon the last.
+
+  ## Rules
+  1. This is how you (the Cyber) mutate memory, it allows you to change and adapt the information stored in Mind-Swarm memory.
+  2. A variable called `memory` is available, it represents the entire Mind-Swarm shared memory, not just working memory.
+  3. Accessing memory will return either the working_memory or bring the non-working memory into the working memory.
+  4. Use `with memory.transaction():` for operations that should succeed or fail together - automatic rollback on error.
+  5. Changes made outside transactions are applied immediately and permanently.
+
+metadata:
+  category: execution
+  tags:
+  - execution_only
+  - implementation
+  - python
+  - scripting
+  - coding
+  confidence: 1.0
+  priority: 1
+  source: boot_rom
+  created: '2024-01-01T00:00:00Z'
+  version: 1
