@@ -75,7 +75,7 @@ class EnvironmentScanner:
         self.memory_path = self.personal_path / ".internal" / "memory"
         self.community_path = self.grid_path / "community"
         self.library_path = self.grid_path / "library"
-        self.bulletin_path = self.grid_path / "bulletin"
+        self.announcements_path = self.grid_path / "community" / "announcements"
         self.workshop_path = self.grid_path / "workshop"
         
         # Track file states for change detection
@@ -112,8 +112,8 @@ class EnvironmentScanner:
             paths_to_baseline.append(self.library_path)
         if self.community_path and self.community_path.exists():
             paths_to_baseline.append(self.community_path)
-        if self.bulletin_path and self.bulletin_path.exists():
-            paths_to_baseline.append(self.bulletin_path)
+        if self.announcements_path and self.announcements_path.exists():
+            paths_to_baseline.append(self.announcements_path)
         if self.workshop_path and self.workshop_path.exists():
             paths_to_baseline.append(self.workshop_path)
         
@@ -178,6 +178,7 @@ class EnvironmentScanner:
         
         # Scan different areas
         memories.extend(self._scan_inbox(cycle_count))
+        memories.extend(self._scan_announcements(cycle_count))
         memories.extend(self._scan_grid_areas(cycle_count))
         memories.extend(self._scan_memory_dir(cycle_count))
         memories.extend(self._scan_workshop(cycle_count))
@@ -467,6 +468,63 @@ class EnvironmentScanner:
         
         return memories
     
+    def _scan_announcements(self, cycle_count: int = 0) -> List[MemoryBlock]:
+        """Scan community announcements for important updates.
+        
+        Args:
+            cycle_count: Current cycle count for observations
+        """
+        memories = []
+        
+        if not self.announcements_path or not self.announcements_path.exists():
+            return memories
+        
+        try:
+            # Look for announcement files
+            for ann_file in self.announcements_path.glob("*.json"):
+                state = self._check_file_state(ann_file)
+                if state:  # New or changed announcements
+                    try:
+                        # Read announcement file
+                        with open(ann_file, 'r') as f:
+                            ann_data = json.load(f)
+                        
+                        # Create HIGH priority file memory for announcements
+                        file_memory = FileMemoryBlock(
+                            location=str(ann_file),
+                            priority=Priority.HIGH,  # Announcements are important
+                            confidence=1.0,
+                            pinned=True,  # Keep in working memory
+                            metadata={
+                                "file_type": "announcement",
+                                "description": "System announcements - IMPORTANT updates for all Cybers",
+                                "last_updated": ann_data.get("metadata", {}).get("last_updated", "unknown")
+                            },
+                            cycle_count=cycle_count,
+                            block_type=MemoryType.SYSTEM
+                        )
+                        memories.append(file_memory)
+                        
+                        # Create observation for new/updated announcements
+                        obs_memory = ObservationMemoryBlock(
+                            observation_type="announcement_update",
+                            path=str(ann_file),
+                            message=f"IMPORTANT: System announcements have been updated. Check {ann_file.name} for critical information.",
+                            cycle_count=cycle_count,
+                            priority=Priority.HIGH
+                        )
+                        memories.append(obs_memory)
+                        
+                        logger.info(f"Found updated announcements in {ann_file.name}")
+                        
+                    except Exception as e:
+                        logger.error(f"Error reading announcement file {ann_file}: {e}")
+        
+        except Exception as e:
+            logger.error(f"Error scanning announcements: {e}")
+        
+        return memories
+    
     def _scan_inbox(self, cycle_count: int = 0) -> List[MemoryBlock]:
         """Scan inbox for new messages.
         
@@ -568,14 +626,7 @@ class EnvironmentScanner:
                         if obs_memory:
                             memories.append(obs_memory)
         
-        # Scan bulletin (announcements)
-        if self.bulletin_path and self.bulletin_path.exists():
-            memories.extend(self._scan_directory(
-                self.bulletin_path,
-                "announcement",
-                "Bulletin announcement",
-                cycle_count
-            ))
+        # Note: Announcements are now handled in _scan_announcements() for better visibility
         
         return memories
     

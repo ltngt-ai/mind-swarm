@@ -185,6 +185,40 @@ class MindSwarmClient:
             response.raise_for_status()
             return response.json()["question_id"]
     
+    async def update_announcements(
+        self, 
+        title: str, 
+        message: str, 
+        priority: str = "HIGH",
+        expires: Optional[str] = None
+    ) -> bool:
+        """Update system announcements for all Cybers.
+        
+        Args:
+            title: Announcement title
+            message: Announcement message
+            priority: Priority level (CRITICAL, HIGH, MEDIUM, LOW)
+            expires: Optional expiration date in ISO format
+            
+        Returns:
+            True if successful
+        """
+        payload = {
+            "title": title,
+            "message": message,
+            "priority": priority
+        }
+        if expires:
+            payload["expires"] = expires
+        
+        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
+            response = await client.post(
+                f"{self.base_url}/community/announcements",
+                json=payload
+            )
+            response.raise_for_status()
+            return response.json().get("success", False)
+    
     async def get_cyber_states(self) -> Dict[str, Dict[str, Any]]:
         """Get states of all Cybers.
         

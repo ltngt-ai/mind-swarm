@@ -349,6 +349,7 @@ class MindSwarmCLI:
         console.print("  [cyan]command <name> <command> [params][/cyan] - Send command to Cyber")
         console.print("  [cyan]message <name> <text>[/cyan] - Send message to Cyber")
         console.print("  [cyan]question <text>[/cyan] - Create a shared question")
+        console.print("  [cyan]announce <title> | <message>[/cyan] - Create system announcement")
         console.print("  [cyan]models[/cyan] - Show model pool summary")
         console.print("  [cyan]models list[/cyan] - Show all available models")
         console.print("  [cyan]models promote <id> <priority> [--duration <hours>][/cyan] - Promote model")
@@ -487,6 +488,51 @@ class MindSwarmCLI:
                     question_text = " ".join(parts[1:])
                     q_id = await self.client.create_community_question(question_text)
                     console.print(f"Posted to Community: {q_id}")
+                
+                elif cmd == "announce" and len(parts) > 1:
+                    # Create system announcement
+                    # Format: announce <title> | <message> [--priority HIGH] [--expires 2025-12-31]
+                    announce_text = " ".join(parts[1:])
+                    
+                    # Parse title and message separated by |
+                    if "|" in announce_text:
+                        title, rest = announce_text.split("|", 1)
+                        title = title.strip()
+                        
+                        # Parse message and optional flags
+                        message_parts = rest.strip().split("--")
+                        message = message_parts[0].strip()
+                        
+                        # Parse optional flags
+                        priority = "HIGH"
+                        expires = None
+                        
+                        for flag_part in message_parts[1:]:
+                            flag_part = flag_part.strip()
+                            if flag_part.startswith("priority "):
+                                priority = flag_part[9:].strip().upper()
+                            elif flag_part.startswith("expires "):
+                                expires = flag_part[8:].strip()
+                        
+                        try:
+                            success = await self.client.update_announcements(
+                                title=title,
+                                message=message,
+                                priority=priority,
+                                expires=expires
+                            )
+                            
+                            if success:
+                                console.print(f"[green]✓ Announcement created: {title}[/green]")
+                                console.print(f"  Priority: {priority}")
+                                if expires:
+                                    console.print(f"  Expires: {expires}")
+                            else:
+                                console.print("[red]Failed to create announcement[/red]")
+                        except Exception as e:
+                            console.print(f"[red]Error creating announcement: {e}[/red]")
+                    else:
+                        console.print("[yellow]Format: announce <title> | <message> [--priority HIGH] [--expires 2025-12-31][/yellow]")
                 
                 elif cmd == "models":
                     # Check for subcommand
@@ -818,6 +864,51 @@ def status():
             console.print("\n[red]✗ Bubblewrap error[/red]")
     except FileNotFoundError:
         console.print("\n[red]✗ Bubblewrap not found[/red]")
+
+
+@app.command()
+def announce(
+    title: str = typer.Argument(..., help="Announcement title"),
+    message: str = typer.Argument(..., help="Announcement message"),
+    priority: str = typer.Option("HIGH", "--priority", "-p", help="Priority: CRITICAL, HIGH, MEDIUM, LOW"),
+    expires: Optional[str] = typer.Option(None, "--expires", "-e", help="Expiration date (ISO format: 2025-12-31)"),
+):
+    """Create a system announcement for all Cybers."""
+    console.print(f"[bold]Creating System Announcement[/bold]")
+    
+    # Check if server is running
+    client = MindSwarmClient()
+    if not client.is_server_running():
+        console.print("[red]Server is not running![/red]")
+        console.print("Start with: [cyan]mind-swarm server start[/cyan]")
+        return
+    
+    async def send_announcement():
+        try:
+            if await client.check_server():
+                success = await client.update_announcements(
+                    title=title,
+                    message=message,
+                    priority=priority.upper(),
+                    expires=expires
+                )
+                
+                if success:
+                    console.print(f"[green]✓ Announcement created successfully![/green]")
+                    console.print(f"  Title: {title}")
+                    console.print(f"  Message: {message}")
+                    console.print(f"  Priority: {priority.upper()}")
+                    if expires:
+                        console.print(f"  Expires: {expires}")
+                else:
+                    console.print("[red]Failed to create announcement[/red]")
+            else:
+                console.print("[red]Server not responding[/red]")
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+            logger.error(f"Failed to create announcement: {e}", exc_info=True)
+    
+    asyncio.run(send_announcement())
 
 
 @app.command()

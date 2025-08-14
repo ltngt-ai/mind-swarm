@@ -42,6 +42,14 @@ class QuestionRequest(BaseModel):
     created_by: str = "user"
 
 
+class AnnouncementRequest(BaseModel):
+    """Request to create or update system announcements."""
+    title: str
+    message: str
+    priority: str = "HIGH"
+    expires: Optional[str] = None
+
+
 class RegisterDeveloperRequest(BaseModel):
     """Request model for registering a developer."""
     name: str
@@ -378,6 +386,40 @@ class MindSwarmServer:
             
             questions = await self.coordinator.get_community_questions()
             return {"questions": questions}
+        
+        @self.app.post("/community/announcements")
+        async def update_announcements(request: AnnouncementRequest):
+            """Update system announcements for all Cybers."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            if not getattr(self, '_coordinator_ready', False):
+                raise HTTPException(status_code=503, detail="Server still initializing, please wait")
+            
+            try:
+                success = await self.coordinator.update_announcements(
+                    title=request.title,
+                    message=request.message,
+                    priority=request.priority,
+                    expires=request.expires
+                )
+                
+                if success:
+                    # Notify websocket clients
+                    await self._broadcast_event({
+                        "type": "announcement_updated",
+                        "title": request.title,
+                        "message": request.message,
+                        "priority": request.priority,
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    
+                    return {"success": True, "message": "Announcement updated successfully"}
+                else:
+                    raise HTTPException(status_code=500, detail="Failed to update announcement")
+                    
+            except Exception as e:
+                logger.error(f"Failed to update announcement: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
         
         @self.app.get("/Cybers/all")
         async def list_all_agents():

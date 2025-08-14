@@ -1376,3 +1376,86 @@ class SubspaceCoordinator:
                 return self.developer_registry.mark_message_as_read(dev_name, message_path)
         
         return False
+    
+    async def update_announcements(self, title: str, message: str, priority: str = "HIGH", expires: Optional[str] = None) -> bool:
+        """Update system announcements that all Cybers will see.
+        
+        Args:
+            title: Title of the announcement
+            message: The announcement message
+            priority: Priority level (CRITICAL, HIGH, MEDIUM, LOW)
+            expires: Optional expiration date in ISO format
+            
+        Returns:
+            True if announcement was successfully updated
+        """
+        try:
+            # Path to announcements file
+            announcements_file = self.subspace.root_path / "grid" / "community" / "announcements" / "system_announcements.json"
+            
+            # Ensure directory exists
+            announcements_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Load existing announcements or create new structure
+            if announcements_file.exists():
+                with open(announcements_file, 'r') as f:
+                    data = json.load(f)
+            else:
+                data = {
+                    "announcements": [],
+                    "metadata": {
+                        "version": "1.0"
+                    }
+                }
+            
+            # Add new announcement
+            new_announcement = {
+                "id": f"ann-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
+                "date": datetime.now().strftime("%Y-%m-%d"),
+                "priority": priority,
+                "title": title,
+                "message": message,
+                "expires": expires
+            }
+            
+            # Add to beginning of list (most recent first)
+            data["announcements"].insert(0, new_announcement)
+            
+            # Keep only last 10 announcements and remove expired ones
+            current_date = datetime.now().date()
+            active_announcements = []
+            for ann in data["announcements"][:10]:  # Keep max 10
+                if ann.get("expires"):
+                    try:
+                        expire_date = datetime.fromisoformat(ann["expires"]).date()
+                        if expire_date < current_date:
+                            continue  # Skip expired
+                    except:
+                        pass  # Keep if can't parse expiry
+                active_announcements.append(ann)
+            
+            data["announcements"] = active_announcements
+            data["metadata"]["last_updated"] = datetime.now().isoformat()
+            
+            # Write back to file
+            with open(announcements_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            
+            logger.info(f"Updated system announcements: {title}")
+            
+            # Also broadcast a message to notify Cybers immediately
+            await self.broadcast_command(
+                "announcement",
+                {
+                    "title": title,
+                    "message": message,
+                    "priority": priority
+                },
+                from_developer="subspace"
+            )
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to update announcements: {e}")
+            return False
