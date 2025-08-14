@@ -596,9 +596,64 @@ class CognitiveLoop:
         if expired or old_observations:
             logger.info(f"🧹 Cleaned up {expired} expired, {old_observations} old memories")
         
+        # Clean up old script execution files
+        script_files_cleaned = await self._cleanup_old_script_executions()
+        if script_files_cleaned > 0:
+            logger.info(f"🧹 Cleaned up {script_files_cleaned} old script execution files")
+        
         # Log cleanup completion
-        if cleanup_decisions or expired or old_observations:
+        if cleanup_decisions or expired or old_observations or script_files_cleaned:
             logger.info(f"✨ Cleanup completed for cycle {self.cycle_count}")
+    
+    async def _cleanup_old_script_executions(self, max_age_minutes: int = 30, keep_recent: int = 10) -> int:
+        """Clean up old script execution files from action_results directory.
+        
+        Args:
+            max_age_minutes: Maximum age in minutes before files are eligible for cleanup
+            keep_recent: Always keep at least this many recent files
+            
+        Returns:
+            Number of files cleaned up
+        """
+        import time
+        from pathlib import Path
+        
+        action_results_dir = self.memory_dir / "action_results"
+        if not action_results_dir.exists():
+            return 0
+        
+        # Get all script execution files
+        script_files = list(action_results_dir.glob("script_execution_*.json"))
+        if len(script_files) <= keep_recent:
+            return 0  # Don't clean up if we have fewer than the minimum to keep
+        
+        # Sort by modification time (newest first)
+        script_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+        
+        # Always keep the most recent files
+        files_to_check = script_files[keep_recent:]
+        
+        current_time = time.time()
+        max_age_seconds = max_age_minutes * 60
+        cleaned_count = 0
+        
+        for file_path in files_to_check:
+            try:
+                file_age = current_time - file_path.stat().st_mtime
+                if file_age > max_age_seconds:
+                    # Remove associated memory if it exists
+                    memory_id = f"memory:{file_path.relative_to(self.personal.parent)}"
+                    if self.memory_system.remove_memory(memory_id):
+                        logger.debug(f"Removed memory for old script execution: {memory_id}")
+                    
+                    # Delete the file
+                    file_path.unlink()
+                    cleaned_count += 1
+                    logger.debug(f"Deleted old script execution file: {file_path.name}")
+            except Exception as e:
+                logger.error(f"Error cleaning up script file {file_path}: {e}")
+        
+        return cleaned_count
     
     async def _identify_cleanup_targets(self, memory_context: str) -> Optional[Dict[str, Any]]:
         """Use brain to identify what needs cleanup.
