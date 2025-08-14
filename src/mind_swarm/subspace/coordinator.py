@@ -1459,3 +1459,42 @@ class SubspaceCoordinator:
         except Exception as e:
             logger.error(f"Failed to update announcements: {e}")
             return False
+    
+    async def clear_announcements(self) -> bool:
+        """Clear all system announcements.
+        
+        Returns:
+            True if successfully cleared
+        """
+        try:
+            announcements_dir = self.subspace_root / "grid" / "community" / "announcements"
+            announcements_file = announcements_dir / "system_announcements.json"
+            
+            # Create empty announcements structure
+            empty_announcements = {
+                "announcements": [],
+                "last_updated": datetime.now().isoformat(),
+                "cleared_at": datetime.now().isoformat(),
+                "cleared_by": "system"
+            }
+            
+            # Write empty announcements
+            with open(announcements_file, 'w') as f:
+                json.dump(empty_announcements, f, indent=2)
+            
+            logger.info("📢 Cleared all system announcements")
+            
+            # Notify all Cybers that announcements were cleared
+            await self.body_manager.broadcast_notification(
+                {
+                    "event": "announcements_cleared",
+                    "timestamp": datetime.now().isoformat(),
+                    "message": "System announcements have been cleared"
+                }
+            )
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to clear announcements: {e}")
+            return False

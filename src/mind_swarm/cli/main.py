@@ -350,6 +350,7 @@ class MindSwarmCLI:
         console.print("  [cyan]message <name> <text>[/cyan] - Send message to Cyber")
         console.print("  [cyan]question <text>[/cyan] - Create a shared question")
         console.print("  [cyan]announce <title> | <message>[/cyan] - Create system announcement")
+        console.print("  [cyan]clear-announcements[/cyan] - Clear all system announcements")
         console.print("  [cyan]models[/cyan] - Show model pool summary")
         console.print("  [cyan]models list[/cyan] - Show all available models")
         console.print("  [cyan]models promote <id> <priority> [--duration <hours>][/cyan] - Promote model")
@@ -533,6 +534,17 @@ class MindSwarmCLI:
                             console.print(f"[red]Error creating announcement: {e}[/red]")
                     else:
                         console.print("[yellow]Format: announce <title> | <message> [--priority HIGH] [--expires 2025-12-31][/yellow]")
+                
+                elif cmd == "clear-announcements":
+                    # Clear all system announcements
+                    try:
+                        success = await self.client.clear_announcements()
+                        if success:
+                            console.print("[green]✓ All announcements cleared[/green]")
+                        else:
+                            console.print("[red]Failed to clear announcements[/red]")
+                    except Exception as e:
+                        console.print(f"[red]Error clearing announcements: {e}[/red]")
                 
                 elif cmd == "models":
                     # Check for subcommand

@@ -421,6 +421,32 @@ class MindSwarmServer:
                 logger.error(f"Failed to update announcement: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
+        @self.app.delete("/community/announcements")
+        async def clear_announcements():
+            """Clear all system announcements."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            if not getattr(self, '_coordinator_ready', False):
+                raise HTTPException(status_code=503, detail="Server still initializing, please wait")
+            
+            try:
+                success = await self.coordinator.clear_announcements()
+                
+                if success:
+                    # Notify websocket clients
+                    await self._broadcast_event({
+                        "type": "announcements_cleared",
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    
+                    return {"success": True, "message": "All announcements cleared"}
+                else:
+                    raise HTTPException(status_code=500, detail="Failed to clear announcements")
+                    
+            except Exception as e:
+                logger.error(f"Failed to clear announcements: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         @self.app.get("/Cybers/all")
         async def list_all_agents():
             """List all known Cybers including hibernating ones."""

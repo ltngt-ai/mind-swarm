@@ -219,6 +219,19 @@ class MindSwarmClient:
             response.raise_for_status()
             return response.json().get("success", False)
     
+    async def clear_announcements(self) -> bool:
+        """Clear all system announcements.
+        
+        Returns:
+            True if successful
+        """
+        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
+            response = await client.delete(
+                f"{self.base_url}/community/announcements"
+            )
+            response.raise_for_status()
+            return response.json().get("success", False)
+    
     async def get_cyber_states(self) -> Dict[str, Dict[str, Any]]:
         """Get states of all Cybers.
         
