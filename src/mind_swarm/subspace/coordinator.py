@@ -1467,7 +1467,7 @@ class SubspaceCoordinator:
             True if successfully cleared
         """
         try:
-            announcements_dir = self.subspace_root / "grid" / "community" / "announcements"
+            announcements_dir = self.subspace.root_path / "grid" / "community" / "announcements"
             announcements_file = announcements_dir / "system_announcements.json"
             
             # Create empty announcements structure
@@ -1485,13 +1485,9 @@ class SubspaceCoordinator:
             logger.info("📢 Cleared all system announcements")
             
             # Notify all Cybers that announcements were cleared
-            await self.body_manager.broadcast_notification(
-                {
-                    "event": "announcements_cleared",
-                    "timestamp": datetime.now().isoformat(),
-                    "message": "System announcements have been cleared"
-                }
-            )
+            # Note: broadcast_notification doesn't exist, but Cybers will notice
+            # the change when they scan the announcements file
+            logger.info("Announcements cleared - Cybers will detect the change on next scan")
             
             return True
             
