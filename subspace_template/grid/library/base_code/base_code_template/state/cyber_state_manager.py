@@ -92,8 +92,7 @@ class CyberStateManager:
             success = self.file_manager.save_file(self.state_file, state_json, atomic=True)
             
             if success:
-                # Add to history
-                self._add_to_history(state_to_save)
+                # History tracking was removed - no longer needed
                 logger.debug(f"Saved state for Cyber {self.cyber_id}")
                 
             return success
