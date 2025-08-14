@@ -1,8 +1,7 @@
-"""Observation Stage - Understanding and managing observations.
+"""Observation Stage - Understanding the situation through environmental scanning.
 
-This stage encompasses:
-1. Observe - Understand the situation from observations
-2. Cleanup - Clean up obsolete observations
+This stage scans the environment for changes and creates understanding
+from observations about the current situation.
 
 The output of this stage is reasoning about what's happening and its relevance.
 """
@@ -26,8 +25,9 @@ class ObservationStage:
     """Handles the observation phase of cognition.
     
     This stage is responsible for:
-    - Understanding the situation from observations (Observe)
-    - Cleaning up obsolete observations (Cleanup)
+    - Scanning the environment for changes
+    - Processing incoming messages  
+    - Creating contextual understanding from observations
     """
     
     # Knowledge tags to exclude during observation stage
@@ -65,11 +65,8 @@ class ObservationStage:
         """
         logger.info("=== OBSERVATION STAGE ===")
         
-        # Phase 1: Observe - Understand the situation from observations
+        # Observe - Understand the situation from observations
         orientation = await self.observe()
-        
-        # Phase 2: Cleanup - Clean up obsolete/processed observations
-        await self.cleanup()
         
         return orientation
     
@@ -188,40 +185,6 @@ class ObservationStage:
                 
         return orientation_data
     
-    async def cleanup(self) -> None:
-        """CLEANUP - Clean up obsolete observations that are no longer relevant.
-        
-        The cyber determines what's obsolete based on cycle counts and context.
-        """
-        logger.info("🧹 Cleaning up observations...")
-        
-        # Update phase to CLEANUP
-        self.cognitive_loop._update_dynamic_context(stage="OBSERVATION", phase="CLEANUP")
-        
-        # Get the brain's assessment of what to clean up
-        memory_context = self.memory_system.build_context(
-            max_tokens=self.cognitive_loop.max_context_tokens // 4,  # Smaller context for cleanup
-            current_task="Identifying obsolete observations to clean up based on cycle counts",
-            selection_strategy="recent",
-            tag_filter=TagFilter(blacklist=self.KNOWLEDGE_BLACKLIST),
-            exclude_types=[]  # Include all relevant memory types
-        )
-        
-        cleanup_result = await self._identify_obsolete_observations(memory_context)
-        
-        if cleanup_result:
-            obsolete_observations = cleanup_result.get("obsolete_observations", [])
-            
-            # Remove obsolete observations
-            if obsolete_observations:
-                logger.info(f"Removing {len(obsolete_observations)} obsolete observations:")
-                for obs_id in obsolete_observations:
-                    try:
-                        self.memory_system.remove_memory(obs_id)
-                        logger.info(f"  - Removed: {obs_id}")
-                    except Exception as e:
-                        logger.warning(f"  - Failed to remove {obs_id}: {e}")
-    
     async def _analyze_situation_from_observations(self, memory_context: str) -> Optional[Dict[str, Any]]:
         """Use brain to analyze the situation from all observations.
         
@@ -262,70 +225,3 @@ Always start your output with [[ ## reasoning ## ]]
         result = json.loads(response)
         
         return result
-    
-    async def _identify_obsolete_observations(self, memory_context: str) -> Optional[Dict[str, Any]]:
-        """Use brain to identify obsolete observations for cleanup.
-        
-        This is the CLEANUP phase where the brain identifies which observations
-        are no longer relevant or have been processed.
-        
-        Args:
-            memory_context: Working memory context for identifying obsolete items
-            
-        Returns:
-            Dict with lists of obsolete and processed observation IDs, or None
-        """
-        thinking_request = {
-            "signature": {
-                "instruction": """
-Review your working memory to identify observations that can be cleaned up.
-Each observation has a cycle_count showing when it was created.
-Look for:
-1. Old observations from many cycles ago that are no longer relevant
-2. Duplicate observations about the same thing
-3. Action results that have been superseded by newer results
-4. Observations about things that have already been handled
-
-Be conservative - only mark observations as obsolete if you're certain they're no longer needed.
-Current cycle count is in your working memory.
-Always start your output with [[ ## reasoning ## ]]
-""",
-                "inputs": {
-                    "working_memory": "Your working memory with observations including their cycle counts"
-                },
-                "outputs": {
-                    "reasoning": "Why these observations can be cleaned up",
-                    "obsolete_observations": "JSON array of observation IDs that are obsolete and can be removed, e.g. [\"observation:personal/action_result/old:cycle_5\"]"
-                },
-                "display_field": "reasoning"
-            },
-            "input_values": {
-                "working_memory": memory_context
-            },
-            "request_id": f"cleanup_{int(time.time()*1000)}",
-            "timestamp": datetime.now().isoformat()
-        }
-        
-        response = await self.brain_interface._use_brain(json.dumps(thinking_request))
-        result = json.loads(response)
-        
-        output_values = result.get("output_values", {})
-        
-        # Parse the JSON array from string if needed
-        obsolete_json = output_values.get("obsolete_observations", "[]")
-        
-        try:
-            if isinstance(obsolete_json, str):
-                obsolete_observations = json.loads(obsolete_json)
-            else:
-                obsolete_observations = obsolete_json
-        except:
-            obsolete_observations = []
-        
-        # Return None if nothing to clean up
-        if not obsolete_observations:
-            return None
-            
-        return {
-            "obsolete_observations": obsolete_observations
-        }

@@ -524,6 +524,10 @@ class CognitiveLoop:
             self._update_dynamic_context(stage="REFLECT", phase="STARTING")
             await self.reflect_stage.run()
             
+            # Stage 5: Cleanup - Clean up obsolete memories and maintain system
+            self._update_dynamic_context(stage="CLEANUP", phase="STARTING")
+            await self.cleanup()
+            
             # Save checkpoint after completing all stages
             await self._save_checkpoint()
             
@@ -550,15 +554,121 @@ class CognitiveLoop:
     
     # === SUPPORTING METHODS ===
     
-    async def maintain(self):
-        """Perform maintenance tasks when idle."""
-        # Cleanup old memories
+    async def cleanup(self):
+        """Perform memory cleanup and system maintenance.
+        
+        This is called at the end of every cognitive cycle to:
+        1. Clean up obsolete observations
+        2. Remove expired memories
+        3. Manage memory budget
+        4. Perform other maintenance tasks
+        """
+        # Get context for intelligent cleanup decisions
+        from .memory.tag_filter import TagFilter
+        memory_context = self.memory_system.build_context(
+            max_tokens=self.max_context_tokens // 4,  # Smaller context for cleanup
+            current_task="Identifying obsolete memories and observations for cleanup",
+            selection_strategy="recent",
+            tag_filter=TagFilter(blacklist={"action_guide", "action_implementation", "execution", "procedures", "tools"}),
+            exclude_types=[]
+        )
+        
+        # Use brain to identify what to clean up
+        cleanup_decisions = await self._identify_cleanup_targets(memory_context)
+        
+        if cleanup_decisions:
+            # Clean up identified obsolete observations
+            obsolete_observations = cleanup_decisions.get("obsolete_observations", [])
+            for obs_id in obsolete_observations:
+                if self.memory_system.remove_memory(obs_id):
+                    logger.debug(f"🧹 Removed obsolete observation: {obs_id}")
+            
+            # Future: Add more cleanup types here (old files, completed tasks, etc.)
+        
+        # Also do automatic cleanup of expired memories
         expired = self.memory_system.cleanup_expired()
         old_observations = self.memory_system.cleanup_old_observations(max_age_seconds=1800)
         
         if expired or old_observations:
             logger.info(f"🧹 Cleaned up {expired} expired, {old_observations} old memories")
+        
+        # Log cleanup completion
+        if cleanup_decisions or expired or old_observations:
+            logger.info(f"✨ Cleanup completed for cycle {self.cycle_count}")
+    
+    async def _identify_cleanup_targets(self, memory_context: str) -> Optional[Dict[str, Any]]:
+        """Use brain to identify what needs cleanup.
+        
+        Args:
+            memory_context: Working memory context for cleanup decisions
             
+        Returns:
+            Dict with cleanup targets or None
+        """
+        import time
+        
+        thinking_request = {
+            "signature": {
+                "instruction": """
+Review your working memory to identify items that can be cleaned up.
+Each memory has a cycle_count showing when it was created.
+Look for:
+1. Old observations from many cycles ago that are no longer relevant
+2. Duplicate observations about the same thing
+3. Action results that have been superseded by newer results
+4. Observations about things that have already been handled
+5. Completed tasks that don't need to be tracked anymore
+
+Be conservative - only mark items as obsolete if you're certain they're no longer needed.
+Current cycle count is in your working memory.
+Always start your output with [[ ## reasoning ## ]]
+""",
+                "inputs": {
+                    "working_memory": "Your working memory with all items including their cycle counts"
+                },
+                "outputs": {
+                    "reasoning": "Why these items can be cleaned up",
+                    "obsolete_observations": "JSON array of observation IDs that are obsolete and can be removed, e.g. [\"observation:personal/action_result/old:cycle_5\"]"
+                },
+                "display_field": "reasoning"
+            },
+            "input_values": {
+                "working_memory": memory_context
+            },
+            "request_id": f"cleanup_{int(time.time()*1000)}",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        response = await self.brain_interface._use_brain(json.dumps(thinking_request))
+        result = json.loads(response)
+        
+        output_values = result.get("output_values", {})
+        
+        # Parse the JSON array from string if needed
+        obsolete_json = output_values.get("obsolete_observations", "[]")
+        
+        try:
+            if isinstance(obsolete_json, str):
+                obsolete_observations = json.loads(obsolete_json)
+            else:
+                obsolete_observations = obsolete_json
+        except:
+            obsolete_observations = []
+        
+        # Return None if nothing to clean up
+        if not obsolete_observations:
+            return None
+            
+        return {
+            "obsolete_observations": obsolete_observations
+        }
+    
+    async def maintain(self):
+        """Perform maintenance tasks when idle.
+        
+        This is called when the cyber has no work to do.
+        Note: Regular cleanup is now done at the end of each cycle.
+        """
         # Save state periodically
         if self.cycle_count % 100 == 0:
             logger.info(f"💾 Saving checkpoint at cycle {self.cycle_count}")
@@ -581,11 +691,3 @@ class CognitiveLoop:
             self.memory_system.save_snapshot_to_file(self.memory_dir)
         except Exception as e:
             logger.error(f"Error saving memory: {e}")
-    
-    def cleanup(self):
-        """Clean up resources."""
-        try:
-            # No special cleanup needed for standard file I/O
-            logger.info("Cleanup completed")
-        except Exception as e:
-            logger.error(f"Error during cleanup: {e}")

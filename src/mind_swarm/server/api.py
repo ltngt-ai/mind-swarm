@@ -88,7 +88,7 @@ class MindSwarmServer:
         # Configure CORS
         self.app.add_middleware(
             CORSMiddleware,
-            allow_origins=["http://localhost:5173", "http://localhost:5174", "http://localhost:5175"],  # Vite dev servers
+            allow_origins=["http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "http://localhost:5176"],  # Vite dev servers
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
@@ -496,6 +496,78 @@ class MindSwarmServer:
                 return {"success": success}
             except Exception as e:
                 logger.error(f"Failed to mark message as read: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.get("/filesystem/structure")
+        async def get_filesystem_structure():
+            """Get the subspace filesystem structure."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            if not getattr(self, '_coordinator_ready', False):
+                raise HTTPException(status_code=503, detail="Server still initializing, please wait")
+            
+            try:
+                from pathlib import Path
+                import os
+                
+                # Get the actual subspace root
+                subspace_root = self.coordinator.subspace.root_path
+                
+                def build_directory_tree(path: Path, max_depth: int = 3, current_depth: int = 0):
+                    """Recursively build directory tree structure."""
+                    if current_depth >= max_depth:
+                        return None
+                        
+                    if not path.exists() or not path.is_dir():
+                        return None
+                    
+                    node = {
+                        "name": path.name,
+                        "path": str(path.relative_to(subspace_root.parent)) if subspace_root.parent in path.parents or path == subspace_root else path.name,
+                        "type": "directory",
+                        "children": []
+                    }
+                    
+                    try:
+                        # Get subdirectories only (not files)
+                        for item in sorted(path.iterdir()):
+                            if item.is_dir() and not item.name.startswith('.'):
+                                child = build_directory_tree(item, max_depth, current_depth + 1)
+                                if child:
+                                    node["children"].append(child)
+                    except PermissionError:
+                        pass
+                    
+                    return node
+                
+                # Build the grid structure
+                grid_path = subspace_root / "grid"
+                grid_structure = None
+                if grid_path.exists():
+                    grid_structure = build_directory_tree(grid_path, max_depth=3)
+                
+                # Get cyber home directories
+                cyber_homes = []
+                cybers_path = subspace_root / "cybers"
+                if cybers_path.exists():
+                    try:
+                        for cyber_home in sorted(cybers_path.iterdir()):
+                            if cyber_home.is_dir() and not cyber_home.name.startswith('.'):
+                                cyber_homes.append({
+                                    "name": cyber_home.name,
+                                    "path": str(cyber_home.relative_to(subspace_root.parent)),
+                                    "type": "directory"
+                                })
+                    except PermissionError:
+                        pass
+                
+                return {
+                    "grid": grid_structure,
+                    "cyber_homes": cyber_homes
+                }
+                
+            except Exception as e:
+                logger.error(f"Failed to get filesystem structure: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
         @self.app.websocket("/ws")
