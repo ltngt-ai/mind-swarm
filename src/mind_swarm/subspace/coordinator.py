@@ -1400,6 +1400,9 @@ class SubspaceCoordinator:
             if announcements_file.exists():
                 with open(announcements_file, 'r') as f:
                     data = json.load(f)
+                # Ensure metadata exists (for backward compatibility)
+                if "metadata" not in data:
+                    data["metadata"] = {"version": "1.0"}
             else:
                 data = {
                     "announcements": [],
@@ -1470,12 +1473,15 @@ class SubspaceCoordinator:
             announcements_dir = self.subspace.root_path / "grid" / "community" / "announcements"
             announcements_file = announcements_dir / "system_announcements.json"
             
-            # Create empty announcements structure
+            # Create empty announcements structure with metadata
             empty_announcements = {
                 "announcements": [],
-                "last_updated": datetime.now().isoformat(),
-                "cleared_at": datetime.now().isoformat(),
-                "cleared_by": "system"
+                "metadata": {
+                    "version": "1.0",
+                    "last_updated": datetime.now().isoformat(),
+                    "cleared_at": datetime.now().isoformat(),
+                    "cleared_by": "system"
+                }
             }
             
             # Write empty announcements
