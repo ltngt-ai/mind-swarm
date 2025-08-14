@@ -35,8 +35,16 @@ content: |
   
   Goals and tasks are managed through Python scripts:
   - Create and track goals/tasks using the memory module
+  - Store goals in `/personal/goals/` directory
+  - Store tasks in `/personal/tasks/` directory
+  - NEVER store goals or tasks in `.internal` directories (system use only)
   - Update status and progress as you work
   - The system maintains goal and task state automatically
+  
+  Example paths:
+  - Correct: `memory["personal/goals/my_goal.yaml"]`
+  - Correct: `memory.personal.tasks.my_task`
+  - Wrong: `memory["personal/.internal/goals/my_goal.yaml"]` (access denied)
   
   ## Decision Making Process
   

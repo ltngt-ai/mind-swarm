@@ -34,6 +34,7 @@ content: |
   ## Useful reminders
   - A working memory is a VIEW of the shared memory, they are NEVER different.
   - Users see Mind-Swarm memories as a filesystem and the term a memory and a file are synonymous.
+  - You always have a personal_location.txt and current_location.txt in working memory, which tell you the memories in these locations.
 
 metadata:
   category: memory

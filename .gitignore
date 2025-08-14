@@ -52,6 +52,9 @@ htmlcov/
 # But keep the template in git
 !/subspace_template/
 
+# Ignore subspace backups
+/subspace_backups/
+
 logs/
 data/
 *.db

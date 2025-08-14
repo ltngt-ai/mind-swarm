@@ -672,11 +672,22 @@ class Memory:
         - '/grid/...' - Absolute grid path
         - 'grid/...' - Relative grid path
         - 'type:path' - Memory ID format (prefix will be stripped)
+        
+        Restricted paths:
+        - Paths containing '.internal' are forbidden (system use only)
         """
         original_path = path
         
         # First clean the path to remove any type prefix
         path = self._clean_path(path)
+        
+        # Security check: reject access to .internal directories
+        if '.internal' in path:
+            raise MemoryError(
+                f"Access denied: Cannot read or write to system directories (.internal). "
+                f"Path: '{original_path}'. "
+                f"The .internal directory is reserved for system use only."
+            )
         
         if path.startswith('/personal'):
             return self._personal_root / path[10:]  # Remove '/personal/'

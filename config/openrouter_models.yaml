@@ -24,7 +24,7 @@ models:
   priority: normal
   cost_type: free
   context_length: 131072
-  max_tokens: 8192
+  max_tokens: 16384
   temperature: 0.7
 - id: openai/gpt-5-nano
   name: GPT-5 Nano

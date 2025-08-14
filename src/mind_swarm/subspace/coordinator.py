@@ -356,6 +356,9 @@ class SubspaceCoordinator:
         # Create identity file with initial model info
         await self._create_identity_file(state.name, cyber_personal, cyber_type)
         
+        # Create initial example goals and tasks for new cybers
+        await self._create_initial_goals_and_tasks(state.name, cyber_personal)
+        
         # Create additional body files for I/O Cybers
         if agent_type_enum == CyberType.IO_GATEWAY:
             await self._create_io_agent_body_files(state.name, cyber_personal)
@@ -1004,6 +1007,83 @@ class SubspaceCoordinator:
         else:
             self._agent_model_cache.clear()
             logger.info("Cleared all Cyber model caches")
+    
+    async def _create_initial_goals_and_tasks(self, cyber_name: str, cyber_personal: Path):
+        """Create example goals and tasks for new cybers to show proper structure.
+        
+        Args:
+            cyber_name: Name of the Cyber
+            cyber_personal: Cyber's home directory
+        """
+        import yaml
+        from datetime import datetime
+        
+        # Create goals directory
+        goals_dir = cyber_personal / "goals"
+        goals_dir.mkdir(exist_ok=True)
+        
+        # Create tasks directory
+        tasks_dir = cyber_personal / "tasks"
+        tasks_dir.mkdir(exist_ok=True)
+        
+        # Create an example goal
+        example_goal = {
+            "id": "learn_mindswarm",
+            "title": "Learn About Mind-Swarm",
+            "description": "Understand the Mind-Swarm system, my capabilities, and how to collaborate with other cybers",
+            "status": "ACTIVE",
+            "progress": 0,
+            "created_at": datetime.now().isoformat(),
+            "priority": "HIGH",
+            "sub_goals": [],
+            "notes": "This is an example goal. Create your own goals in /personal/goals/"
+        }
+        
+        goal_file = goals_dir / "learn_mindswarm.yaml"
+        with open(goal_file, 'w') as f:
+            yaml.dump(example_goal, f, default_flow_style=False, sort_keys=False)
+        
+        # Create example tasks
+        task1 = {
+            "id": "explore_personal",
+            "title": "Explore Personal Directory",
+            "description": "Understand the structure and purpose of my personal directory",
+            "status": "PENDING",
+            "goal_id": "learn_mindswarm",
+            "created_at": datetime.now().isoformat(),
+            "priority": "HIGH",
+            "next_steps": [
+                "Review personal_location.txt to see directory structure",
+                "Understand where to store goals and tasks",
+                "Learn what directories are available for use"
+            ],
+            "notes": "This is an example task. Create your own tasks in /personal/tasks/"
+        }
+        
+        task1_file = tasks_dir / "explore_personal.yaml"
+        with open(task1_file, 'w') as f:
+            yaml.dump(task1, f, default_flow_style=False, sort_keys=False)
+        
+        task2 = {
+            "id": "read_intro",
+            "title": "Read Introduction Materials",
+            "description": "Read the intro.yaml file in the new_cyber_introduction section",
+            "status": "PENDING",
+            "goal_id": "learn_mindswarm",
+            "created_at": datetime.now().isoformat(),
+            "priority": "MEDIUM",
+            "next_steps": [
+                "Read intro.yaml to understand Mind-Swarm basics",
+                "Explore further_info directory for additional information"
+            ],
+            "notes": "The new_cyber_introduction section contains important information for new cybers"
+        }
+        
+        task2_file = tasks_dir / "read_intro.yaml"
+        with open(task2_file, 'w') as f:
+            yaml.dump(task2, f, default_flow_style=False, sort_keys=False)
+        
+        logger.info(f"Created initial example goals and tasks for {cyber_name}")
     
     async def _create_identity_file(self, cyber_name: str, cyber_personal: Path, cyber_type: str):
         """Create identity file for the Cyber with vital statistics.

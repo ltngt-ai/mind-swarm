@@ -173,6 +173,9 @@ class EnvironmentScanner:
         # Always scan current location first (like looking around the room)
         memories.extend(self._scan_current_location(cycle_count))
         
+        # Also scan personal directory structure (like knowing your home)
+        memories.extend(self._scan_personal_location(cycle_count))
+        
         # Scan different areas
         memories.extend(self._scan_inbox(cycle_count))
         memories.extend(self._scan_grid_areas(cycle_count))
@@ -193,6 +196,106 @@ class EnvironmentScanner:
             logger.debug(f"Scan details: {message_count} messages, {file_count} files, {obs_count} observations")
         
         logger.debug(f"Environment scan found {len(memories)} observations")
+        
+        return memories
+    
+    def _scan_personal_location(self, cycle_count: int = 0) -> List[MemoryBlock]:
+        """Scan personal directory and create a system memory with its structure.
+        
+        This provides cybers with awareness of their personal space organization,
+        excluding .internal directories which are system-only.
+        
+        Args:
+            cycle_count: Current cycle count for observations
+        """
+        memories = []
+        
+        try:
+            # Create personal location file showing directory structure
+            personal_location_file = self.personal_path / ".internal" / "memory" / "personal_location.txt"
+            
+            # Collect directories and files for tree display, excluding .internal
+            lines = []
+            lines.append("| /personal (your home directory)")
+            
+            # Scan top-level personal directory
+            directories = []
+            files = []
+            
+            for item in sorted(self.personal_path.iterdir()):
+                # Skip ALL hidden files/dirs especially .internal
+                if item.name.startswith('.'):
+                    continue
+                
+                if item.is_dir():
+                    directories.append(item.name)
+                else:
+                    files.append(item.name)
+            
+            # Add directories first with their contents
+            for dir_name in directories:
+                lines.append(f"|---- 📁 {dir_name}/")
+                
+                # Show contents of important directories (goals, tasks)
+                if dir_name in ['goals', 'tasks']:
+                    dir_path = self.personal_path / dir_name
+                    if dir_path.exists():
+                        sub_items = []
+                        try:
+                            for sub_item in sorted(dir_path.iterdir()):
+                                if not sub_item.name.startswith('.'):
+                                    icon = '📁' if sub_item.is_dir() else '📄'
+                                    sub_items.append(f"|       {icon} {sub_item.name}")
+                        except:
+                            pass
+                        
+                        if sub_items:
+                            for sub_line in sub_items[:5]:  # Show first 5 items
+                                lines.append(sub_line)
+                            if len(sub_items) > 5:
+                                lines.append(f"|       ... and {len(sub_items) - 5} more")
+                        else:
+                            lines.append("|       (empty)")
+            
+            # Then files
+            for file_name in files:
+                lines.append(f"|---- 📄 {file_name}")
+            
+            # If nothing visible, add a note
+            if not directories and not files:
+                lines.append("|---- (no visible files or directories)")
+                lines.append("|")
+                lines.append("| Tip: Create /personal/goals/ and /personal/tasks/ directories")
+                lines.append("| to organize your goals and tasks!")
+            
+            contents_text = "\n".join(lines)
+            
+            # Save to file
+            personal_location_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(personal_location_file, 'w') as f:
+                f.write(contents_text)
+            
+            # Create a FOUNDATIONAL priority memory for personal structure
+            personal_memory = FileMemoryBlock(
+                location=str(personal_location_file.relative_to(self.personal_path.parent)),
+                priority=Priority.FOUNDATIONAL,  # Always visible, core knowledge
+                confidence=1.0,
+                pinned=True,  # Always in working memory
+                metadata={
+                    "file_type": "personal_structure",
+                    "description": "Your personal directory structure",
+                    "tip": "Store goals in /personal/goals/ and tasks in /personal/tasks/"
+                },
+                cycle_count=cycle_count,
+                no_cache=True,  # Always fresh
+                block_type=MemoryType.SYSTEM
+            )
+            memories.append(personal_memory)
+            
+            logger.debug(f"Created personal location memory with {len(directories)} dirs and {len(files)} files")
+            
+        except Exception as e:
+            logger.error(f"Error scanning personal location: {e}")
         
         return memories
     
