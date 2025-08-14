@@ -563,6 +563,8 @@ class CognitiveLoop:
         3. Manage memory budget
         4. Perform other maintenance tasks
         """
+        logger.debug(f"Starting cleanup for cycle {self.cycle_count}")
+        
         # Get context for intelligent cleanup decisions
         from .memory.tag_filter import TagFilter
         memory_context = self.memory_system.build_context(
@@ -573,8 +575,12 @@ class CognitiveLoop:
             exclude_types=[]
         )
         
+        logger.debug(f"Built cleanup context with {len(memory_context)} chars")
+        
         # Use brain to identify what to clean up
+        logger.debug("Calling _identify_cleanup_targets...")
         cleanup_decisions = await self._identify_cleanup_targets(memory_context)
+        logger.debug(f"Cleanup decisions: {cleanup_decisions}")
         
         if cleanup_decisions:
             # Clean up identified obsolete observations
@@ -666,6 +672,8 @@ class CognitiveLoop:
         """
         import time
         
+        logger.debug("_identify_cleanup_targets called")
+        
         thinking_request = {
             "signature": {
                 "instruction": """
@@ -701,7 +709,9 @@ Always start your output with [[ ## reasoning ## ]]
             "timestamp": datetime.now().isoformat()
         }
         
+        logger.debug(f"Sending cleanup brain request with ID: {thinking_request['request_id']}")
         response = await self.brain_interface._use_brain(json.dumps(thinking_request))
+        logger.debug(f"Got cleanup brain response: {response[:200] if response else 'None'}")
         result = json.loads(response)
         
         output_values = result.get("output_values", {})
