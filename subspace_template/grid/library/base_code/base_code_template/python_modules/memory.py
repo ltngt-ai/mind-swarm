@@ -139,6 +139,7 @@ except MemoryError as e:
 """
 
 import json
+import yaml
 from pathlib import Path
 from typing import Any, Dict, List
 from datetime import datetime
@@ -220,6 +221,32 @@ class TrackedDict(dict):
         self._memory_node._modified = True
         if self._memory_node._memory._auto_save:
             self._memory_node._save()
+    
+    def __reduce__(self):
+        """Make TrackedDict serialize as a regular dict.
+        
+        This ensures that when Cybers save data, they get plain dicts,
+        not TrackedDict objects with internal implementation details.
+        """
+        return (dict, (dict(self),))
+    
+    def __getstate__(self):
+        """Return state for pickling as a regular dict."""
+        return dict(self)
+    
+    def __setstate__(self, state):
+        """Restore from pickled state."""
+        self.clear()
+        self.update(state)
+    
+    @classmethod
+    def __get_validators__(cls):
+        """Pydantic validator to treat as regular dict."""
+        yield lambda v: dict(v) if isinstance(v, cls) else v
+    
+    def to_dict(self):
+        """Convert to a regular dictionary (for explicit conversion)."""
+        return dict(self)
 
 
 class TrackedList(list):
@@ -275,6 +302,32 @@ class TrackedList(list):
         self._memory_node._modified = True
         if self._memory_node._memory._auto_save:
             self._memory_node._save()
+    
+    def __reduce__(self):
+        """Make TrackedList serialize as a regular list.
+        
+        This ensures that when Cybers save data, they get plain lists,
+        not TrackedList objects with internal implementation details.
+        """
+        return (list, (list(self),))
+    
+    def __getstate__(self):
+        """Return state for pickling as a regular list."""
+        return list(self)
+    
+    def __setstate__(self, state):
+        """Restore from pickled state."""
+        self.clear()
+        self.extend(state)
+    
+    @classmethod
+    def __get_validators__(cls):
+        """Pydantic validator to treat as regular list."""
+        yield lambda v: list(v) if isinstance(v, cls) else v
+    
+    def to_list(self):
+        """Convert to a regular list (for explicit conversion)."""
+        return list(self)
 
 
 class MemoryNode:
@@ -1012,3 +1065,24 @@ class Memory:
             # This would restore previous file states
             print(f"Rolling back: {change['operation']} on {change['path']}")
     
+
+
+# Register YAML representers to make TrackedDict and TrackedList transparent
+# This ensures Cybers never see these internal implementation classes
+def _represent_tracked_dict(dumper, data):
+    """Represent TrackedDict as a regular dict in YAML."""
+    return dumper.represent_dict(dict(data))
+
+def _represent_tracked_list(dumper, data):
+    """Represent TrackedList as a regular list in YAML."""
+    return dumper.represent_list(list(data))
+
+# Register with both safe and regular dumpers
+yaml.add_representer(TrackedDict, _represent_tracked_dict)
+yaml.add_representer(TrackedList, _represent_tracked_list)
+try:
+    # Also register with SafeDumper if available
+    yaml.SafeDumper.add_representer(TrackedDict, _represent_tracked_dict)
+    yaml.SafeDumper.add_representer(TrackedList, _represent_tracked_list)
+except AttributeError:
+    pass  # SafeDumper might not be available in all versions
