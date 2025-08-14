@@ -583,7 +583,11 @@ class CognitiveLoop:
                 if self.memory_system.remove_memory(obs_id):
                     logger.debug(f"🧹 Removed obsolete observation: {obs_id}")
             
-            # Future: Add more cleanup types here (old files, completed tasks, etc.)
+            # Clean up identified obsolete memory blocks
+            obsolete_memories = cleanup_decisions.get("obsolete_memories", [])
+            for mem_id in obsolete_memories:
+                if self.memory_system.remove_memory(mem_id):
+                    logger.debug(f"🧹 Removed obsolete memory: {mem_id}")
         
         # Also do automatic cleanup of expired memories
         expired = self.memory_system.cleanup_expired()
@@ -617,7 +621,9 @@ Look for:
 2. Duplicate observations about the same thing
 3. Action results that have been superseded by newer results
 4. Observations about things that have already been handled
-5. Completed tasks that don't need to be tracked anymore
+5. Memory blocks for files that no longer exist (e.g., old outbox messages that were moved)
+6. Temporary memory blocks that are no longer needed
+7. Completed tasks that don't need to be tracked anymore
 
 Be conservative - only mark items as obsolete if you're certain they're no longer needed.
 Current cycle count is in your working memory.
@@ -628,7 +634,8 @@ Always start your output with [[ ## reasoning ## ]]
                 },
                 "outputs": {
                     "reasoning": "Why these items can be cleaned up",
-                    "obsolete_observations": "JSON array of observation IDs that are obsolete and can be removed, e.g. [\"observation:personal/action_result/old:cycle_5\"]"
+                    "obsolete_observations": "JSON array of observation IDs that are obsolete and can be removed, e.g. [\"observation:personal/action_result/old:cycle_5\"]",
+                    "obsolete_memories": "JSON array of memory IDs that are obsolete and can be removed, e.g. [\"memory:personal/outbox/msg_Alice_20250814_132424_7715.json\"]"
                 },
                 "display_field": "reasoning"
             },
@@ -644,23 +651,33 @@ Always start your output with [[ ## reasoning ## ]]
         
         output_values = result.get("output_values", {})
         
-        # Parse the JSON array from string if needed
-        obsolete_json = output_values.get("obsolete_observations", "[]")
+        # Parse the JSON arrays from strings if needed
+        obsolete_obs_json = output_values.get("obsolete_observations", "[]")
+        obsolete_mem_json = output_values.get("obsolete_memories", "[]")
         
         try:
-            if isinstance(obsolete_json, str):
-                obsolete_observations = json.loads(obsolete_json)
+            if isinstance(obsolete_obs_json, str):
+                obsolete_observations = json.loads(obsolete_obs_json)
             else:
-                obsolete_observations = obsolete_json
+                obsolete_observations = obsolete_obs_json
         except:
             obsolete_observations = []
         
+        try:
+            if isinstance(obsolete_mem_json, str):
+                obsolete_memories = json.loads(obsolete_mem_json)
+            else:
+                obsolete_memories = obsolete_mem_json
+        except:
+            obsolete_memories = []
+        
         # Return None if nothing to clean up
-        if not obsolete_observations:
+        if not obsolete_observations and not obsolete_memories:
             return None
             
         return {
-            "obsolete_observations": obsolete_observations
+            "obsolete_observations": obsolete_observations,
+            "obsolete_memories": obsolete_memories
         }
     
     async def maintain(self):
