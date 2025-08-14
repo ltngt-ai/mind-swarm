@@ -14,7 +14,7 @@ models:
     name: "Qwen 3 30B (Local)"
     priority: "fallback"
     cost_type: "free"
-    context_length: 8192
+    context_length: 65536
     max_tokens: 8192
     api_settings:
-      host: "http://192.168.1.147:1234"
+      host: "http://10.127.0.18:1234"

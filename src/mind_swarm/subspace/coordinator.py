@@ -544,9 +544,23 @@ class SubspaceCoordinator:
                     except OSError:
                         outbox_count = 0
                 
+                # Get current location from dynamic_context.json
+                current_location = None
+                dynamic_context_file = cyber_dir / ".internal" / "memory" / "dynamic_context.json"
+                if await aiofiles.os.path.exists(dynamic_context_file):
+                    try:
+                        async with aiofiles.open(dynamic_context_file, 'r') as f:
+                            content = await f.read()
+                            import json
+                            dynamic_context = json.loads(content)
+                            current_location = dynamic_context.get("current_location", "/personal")
+                    except (OSError, json.JSONDecodeError):
+                        current_location = "/personal"
+                
                 state.update({
                     "inbox_count": inbox_count,
                     "outbox_count": outbox_count,
+                    "current_location": current_location or "/personal",
                 })
             
             # Add persistent state info
@@ -823,21 +837,37 @@ class SubspaceCoordinator:
                     self._agent_model_cache[name] = selected_model_id
                     logger.info(f"Selected and cached model {selected_model_id} for Cyber {name}")
                 else:
-                    # Ultimate fallback to local model
-                    logger.warning("No suitable model found, using fallback")
+                    # Ultimate fallback - try to get from model pool
+                    logger.warning("No suitable model found, trying to get fallback from model pool")
                     from dataclasses import asdict
                     from mind_swarm.ai.config import AIExecutionConfig
                     
-                    config_obj = AIExecutionConfig(
-                        provider="openai",
-                        model_id="local/default",
-                        temperature=0.7,
-                        max_tokens=4096,
-                        api_key=os.getenv("OPENAI_API_KEY", ""),
-                        provider_settings={
-                            "host": "http://192.168.1.209:1234"
-                        }
-                    )
+                    # Try to select any available model
+                    fallback_model = self.model_selector.pool.select_model(paid_allowed=False)
+                    
+                    if fallback_model:
+                        # Use the selected fallback model
+                        config_obj = AIExecutionConfig(
+                            provider=fallback_model.provider,
+                            model_id=fallback_model.id,
+                            temperature=fallback_model.temperature,
+                            max_tokens=fallback_model.max_tokens,
+                            api_key=os.getenv("OPENAI_API_KEY", ""),
+                            provider_settings=fallback_model.api_settings
+                        )
+                        selected_model_id = fallback_model.id
+                    else:
+                        # Absolute last resort - no hardcoded IPs
+                        logger.error("No models available in model pool")
+                        config_obj = AIExecutionConfig(
+                            provider="openai",
+                            model_id="local/default",
+                            temperature=0.7,
+                            max_tokens=4096,
+                            api_key=os.getenv("OPENAI_API_KEY", ""),
+                            provider_settings={}  # Empty settings, no hardcoded IP
+                        )
+                        selected_model_id = "local/default"
                     
                     # Convert to dict format expected by DSPy
                     config_dict = asdict(config_obj)
@@ -849,7 +879,6 @@ class SubspaceCoordinator:
                         'api_key': config_dict.get('api_key'),
                         'provider_settings': config_dict.get('provider_settings'),
                     }
-                    selected_model_id = "local/default"
                     
                     # Cache the fallback
                     self._agent_model_cache[name] = selected_model_id
@@ -877,7 +906,8 @@ class SubspaceCoordinator:
                     self._brain_handlers[config_key] = DynamicBrainHandler(
                         None, 
                         model_config,
-                        model_switch_callback=self._on_model_switch
+                        model_switch_callback=self._on_model_switch,
+                        model_pool=self.model_selector.pool
                     )
                 
                 brain_handler = self._brain_handlers[config_key]

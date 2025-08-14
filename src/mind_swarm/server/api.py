@@ -513,30 +513,52 @@ class MindSwarmServer:
                 # Get the actual subspace root
                 subspace_root = self.coordinator.subspace.root_path
                 
-                def build_directory_tree(path: Path, max_depth: int = 3, current_depth: int = 0):
+                def build_directory_tree(path: Path, max_depth: int = 4, current_depth: int = 0, include_files: bool = True):
                     """Recursively build directory tree structure."""
                     if current_depth >= max_depth:
                         return None
                         
-                    if not path.exists() or not path.is_dir():
+                    if not path.exists():
                         return None
                     
-                    node = {
-                        "name": path.name,
-                        "path": str(path.relative_to(subspace_root.parent)) if subspace_root.parent in path.parents or path == subspace_root else path.name,
-                        "type": "directory",
-                        "children": []
-                    }
-                    
-                    try:
-                        # Get subdirectories only (not files)
-                        for item in sorted(path.iterdir()):
-                            if item.is_dir() and not item.name.startswith('.'):
-                                child = build_directory_tree(item, max_depth, current_depth + 1)
-                                if child:
-                                    node["children"].append(child)
-                    except PermissionError:
-                        pass
+                    # Build node based on type
+                    if path.is_dir():
+                        node = {
+                            "name": path.name,
+                            "path": str(path.relative_to(subspace_root.parent)) if subspace_root.parent in path.parents or path == subspace_root else path.name,
+                            "type": "directory",
+                            "children": []
+                        }
+                        
+                        try:
+                            # Get both subdirectories and files
+                            for item in sorted(path.iterdir()):
+                                if item.name.startswith('.'):
+                                    continue
+                                    
+                                if item.is_dir():
+                                    child = build_directory_tree(item, max_depth, current_depth + 1, include_files)
+                                    if child:
+                                        node["children"].append(child)
+                                elif include_files and item.is_file():
+                                    # Add files to the tree
+                                    file_node = {
+                                        "name": item.name,
+                                        "path": str(item.relative_to(subspace_root.parent)),
+                                        "type": "file",
+                                        "size": item.stat().st_size
+                                    }
+                                    node["children"].append(file_node)
+                        except PermissionError:
+                            pass
+                    else:
+                        # It's a file
+                        node = {
+                            "name": path.name,
+                            "path": str(path.relative_to(subspace_root.parent)),
+                            "type": "file",
+                            "size": path.stat().st_size
+                        }
                     
                     return node
                 
@@ -544,7 +566,7 @@ class MindSwarmServer:
                 grid_path = subspace_root / "grid"
                 grid_structure = None
                 if grid_path.exists():
-                    grid_structure = build_directory_tree(grid_path, max_depth=3)
+                    grid_structure = build_directory_tree(grid_path, max_depth=10)
                 
                 # Get cyber home directories
                 cyber_homes = []

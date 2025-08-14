@@ -186,7 +186,7 @@ class SignatureCache:
 class DynamicBrainHandler:
     """Dynamic brain handler for processing generic thinking requests with DSPy."""
     
-    def __init__(self, ai_service, lm_config: Dict[str, Any], cache_size: int = 100, cache_ttl: int = 3600, model_switch_callback=None):
+    def __init__(self, ai_service, lm_config: Dict[str, Any], cache_size: int = 100, cache_ttl: int = 3600, model_switch_callback=None, model_pool=None):
         """Initialize the handler.
         
         Args:
@@ -195,9 +195,11 @@ class DynamicBrainHandler:
             cache_size: Maximum number of signatures to cache
             cache_ttl: Cache time-to-live in seconds
             model_switch_callback: Optional callback when model switches (cyber_id, model_id, max_context_length)
+            model_pool: Model pool for fallback selection
         """
         self.ai_service = ai_service
         self.lm_config = lm_config
+        self.model_pool = model_pool
         self.factory = DSPySignatureFactory()
         self.cache = SignatureCache(cache_size, cache_ttl)
         self.logger = logger
@@ -431,20 +433,36 @@ class DynamicBrainHandler:
                 if self.model_switch_callback:
                     await self.model_switch_callback(cyber_id, new_model_info.id, new_model_info.context_length)
             else:
-                # No alternative model, fall back to local default
-                self.logger.warning(f"No alternative model for Cyber {cyber_id}, using fallback configuration")
+                # No alternative model, try to get a fallback from model pool
+                self.logger.warning(f"No alternative model for Cyber {cyber_id}, trying to get fallback from model pool")
                 
-                # Use a fallback configuration
-                config = {
-                    'provider': 'openai',
-                    'model': 'local/default',
-                    'temperature': 0.7,
-                    'max_tokens': 4096,
-                    'api_settings': {'host': 'http://192.168.1.209:1234'}
-                }
-                self.lm = configure_dspy_for_mind_swarm(config)
-                self.lm_config.update(config)
-                self.logger.info(f"Using fallback local model for Cyber {cyber_id}")
+                # Try to select any available model (including free models)
+                fallback_model = self.model_pool.select_model(paid_allowed=False)
+                if fallback_model:
+                    config = {
+                        'provider': fallback_model.provider,
+                        'model': fallback_model.id,
+                        'temperature': fallback_model.temperature,
+                        'max_tokens': fallback_model.max_tokens,
+                        'api_settings': fallback_model.api_settings
+                    }
+                    self.lm = configure_dspy_for_mind_swarm(config)
+                    self.lm_config.update(config)
+                    self.logger.info(f"Using fallback model {fallback_model.id} for Cyber {cyber_id}")
+                else:
+                    # Ultimate fallback if no models are configured at all
+                    self.logger.error(f"No models available in model pool for Cyber {cyber_id}")
+                    # Use minimal config with no hardcoded IPs
+                    config = {
+                        'provider': 'openai',
+                        'model': 'local/default',
+                        'temperature': 0.7,
+                        'max_tokens': 4096,
+                        'api_settings': {}  # Empty settings, will use defaults
+                    }
+                    self.lm = configure_dspy_for_mind_swarm(config)
+                    self.lm_config.update(config)
+                    self.logger.info(f"Using minimal fallback configuration for Cyber {cyber_id}")
                 
                 # Notify about model switch
                 if self.model_switch_callback:
