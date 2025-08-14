@@ -45,7 +45,7 @@ class MessageRouter:
             if not await aiofiles.os.path.isdir(cyber_dir):
                 continue
                 
-            outbox_dir = cyber_dir / "comms" / "outbox"
+            outbox_dir = cyber_dir / "outbox"
             if not await aiofiles.os.path.exists(outbox_dir):
                 logger.debug(f"No outbox directory for {cyber_name}")
                 continue
@@ -91,16 +91,16 @@ class MessageRouter:
                             f"Unknown recipient format: {to_agent}. Use 'Cyber-name' for Cybers or 'name_dev' for developers"
                         )
                     
-                    # Move to sent folder
-                    sent_dir = cyber_dir / "comms" / "sent"
+                    # Move to mail archive folder
+                    archive_dir = cyber_dir / "mail_archive"
                     try:
-                        await aiofiles.os.makedirs(sent_dir, exist_ok=True)
+                        await aiofiles.os.makedirs(archive_dir, exist_ok=True)
                     except OSError:
                         pass  # Directory might already exist
                     
-                    sent_file = sent_dir / msg_file.name
+                    archive_file = archive_dir / msg_file.name
                     try:
-                        await aiofiles.os.rename(msg_file, sent_file)
+                        await aiofiles.os.rename(msg_file, archive_file)
                     except OSError as e:
                         logger.error(f"Failed to move message file: {e}")
                     routed_count += 1
@@ -115,7 +115,7 @@ class MessageRouter:
     
     async def _deliver_message(self, to_agent: str, message: Dict[str, Any]):
         """Deliver a message to a specific Cyber's inbox."""
-        target_inbox = self.agents_dir / to_agent / "comms" / "inbox"
+        target_inbox = self.agents_dir / to_agent / "inbox"
         if not await aiofiles.os.path.exists(target_inbox):
             logger.warning(f"Cyber {to_agent} inbox not found")
             return
@@ -522,8 +522,8 @@ class SubspaceCoordinator:
             cyber_dir = self.subspace.agents_dir / name
             if await aiofiles.os.path.exists(cyber_dir):
                 # Count messages
-                inbox_dir = cyber_dir / "comms" / "inbox"
-                outbox_dir = cyber_dir / "comms" / "outbox"
+                inbox_dir = cyber_dir / "inbox"
+                outbox_dir = cyber_dir / "outbox"
                 
                 inbox_count = 0
                 if await aiofiles.os.path.exists(inbox_dir):
@@ -537,7 +537,7 @@ class SubspaceCoordinator:
                 if await aiofiles.os.path.exists(outbox_dir):
                     try:
                         files = await aiofiles.os.listdir(outbox_dir)
-                        outbox_count = len([f for f in files if f.endswith('.msg')])
+                        outbox_count = len([f for f in files if f.endswith('.msg') or f.endswith('.json')])
                     except OSError:
                         outbox_count = 0
                 

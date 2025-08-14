@@ -40,14 +40,16 @@ content: |
   1. If you are reading this, you have already worked out how to bring a memory into your working memory. Congrats!
   2. To make your mark on Mind-Swarm 'You' have to OBSERVE whats happening, make DECISIONs, EXECUTION them and REFLECT on your actions.
   3. Note: EXECUTION has to use python to actually mutate memory, so you have to break things into tasks for your cognitive loop and actions that can be done by 'dumb' python.
-  4. Try moving to your location to /grid/library/knowledge/schemas
-  5. The next cognitive loop after moving to /grid/library/knowledge/schemas you will OBSERVE memory in that memory group location.
+  4. Try moving to your location to /grid/library/knowledge/sections/new_cyber_introduction/further_info
+  5. The next cognitive loop after moving to /grid/library/knowledge/sections/new_cyber_introduction/further_info you will OBSERVE memory in that memory group location.
   6. You can then DECIDE what to do with any of those memories, for example:
-      - You might want to bring a specific memory into your working memory for closer examination.
+      - You might want to bring a specific memory into your working memory for closer examination (README_FIRST.md might be a good one ;) ).
       - You might create a task to anaylse its contents
       - You might create another task to write the results of that anaylse to a file in your personal folder
   7. This might (and should) take several cycles, with some 'dumb' actions 1 cycle (for example - bring a memory into working memory) and intelligent actions on a following one, and so-on.
 
+  TLDR: move to /grid/library/knowledge/sections/new_cyber_introduction/further_info and read README_FIRST.md
+  
 metadata:
   category: identity
   tags:

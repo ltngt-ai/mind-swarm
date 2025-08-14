@@ -1,6 +1,7 @@
 """Sandbox implementation using bubblewrap for Cyber isolation."""
 
 import asyncio
+import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
@@ -261,8 +262,9 @@ class SubspaceManager:
         logger.info(f"Initialized subspace at {self.root_path}")
     
     def _initialize_from_template(self):
-        """Initialize subspace directories from template if they don't exist."""
+        """Initialize subspace directories from template using intelligent sync."""
         import shutil
+        import subprocess
         
         # Find template directory
         # __file__ is src/mind_swarm/subspace/sandbox.py
@@ -272,56 +274,64 @@ class SubspaceManager:
             logger.warning(f"Template directory not found at {template_dir}")
             return
         
-        # Note: Removed redundant runtime directory copying - base_code is accessed directly from library
+        # Check if sync script exists
+        sync_script = Path(__file__).parent.parent.parent.parent / "scripts" / "sync_subspace.py"
+        config_file = Path(__file__).parent.parent.parent.parent / "config" / "subspace_sync.yaml"
         
-        # Copy grid structure if needed
+        if sync_script.exists() and config_file.exists():
+            # Use the new sync system
+            logger.info("Using intelligent sync system for template updates")
+            try:
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(sync_script),
+                        "--subspace", str(self.root_path),
+                        "--template", str(template_dir),
+                        "--config", str(config_file),
+                    ],
+                    capture_output=True,
+                    text=True
+                )
+                
+                if result.returncode == 0:
+                    logger.info("Template sync completed successfully")
+                else:
+                    logger.warning(f"Template sync failed: {result.stderr}")
+                    # Fall back to basic initialization for critical files
+                    self._fallback_initialization(template_dir)
+            except Exception as e:
+                logger.error(f"Error running sync script: {e}")
+                self._fallback_initialization(template_dir)
+        else:
+            # Fall back to old method if sync system not available
+            logger.info("Sync system not available, using basic initialization")
+            self._fallback_initialization(template_dir)
+    
+    def _fallback_initialization(self, template_dir: Path):
+        """Fallback initialization for when sync system is not available."""
+        import shutil
+        
+        # Only copy files that don't exist (non-destructive)
         grid_template = template_dir / "grid"
-        if grid_template.exists():
-            # Copy the entire knowledge directory structure from template
-            knowledge_dir = self.library_dir / "knowledge"
-            src_knowledge = grid_template / "library" / "knowledge"
-            if src_knowledge.exists():
-                if knowledge_dir.exists():
-                    logger.info("Updating knowledge directory from template")
-                    shutil.rmtree(knowledge_dir)
-                else:
-                    logger.info("Copying knowledge directory from template")
-                shutil.copytree(src_knowledge, knowledge_dir)
-            else:
-                logger.warning(f"Knowledge source not found at {src_knowledge}")
-            
-            # Always sync base_code from template (for development)
-            base_code_dir = self.library_dir / "base_code"
-            src_base_code = grid_template / "library" / "base_code"
-            if src_base_code.exists():
-                if base_code_dir.exists():
-                    logger.info("Updating base_code in library from template")
-                    shutil.rmtree(base_code_dir)
-                else:
-                    logger.info("Copying base_code to library")
-                shutil.copytree(src_base_code, base_code_dir)
-            
-            # Copy knowledge schema if missing
-            schema_file = self.library_dir / "KNOWLEDGE_SCHEMA.md"
-            if not schema_file.exists():
-                src_schema = grid_template / "library" / "KNOWLEDGE_SCHEMA.md"
-                if src_schema.exists():
-                    shutil.copy2(src_schema, schema_file)
-            
-            # Copy README files
-            for subdir in ["community", "workshop", "library"]:
-                readme = getattr(self, f"{subdir}_dir") / "README.md"
-                if not readme.exists():
-                    src_readme = grid_template / subdir / "README.md"
-                    if src_readme.exists():
-                        shutil.copy2(src_readme, readme)
+        if not grid_template.exists():
+            return
         
-        # Initialize Cyber directory in plaza
+        # Initialize basic structure if missing
+        for subdir in ["community", "workshop", "library", "bulletin"]:
+            target_dir = self.grid_dir / subdir
+            if not target_dir.exists():
+                src_dir = grid_template / subdir
+                if src_dir.exists():
+                    logger.info(f"Initializing {subdir} from template")
+                    shutil.copytree(src_dir, target_dir)
+        
+        # Copy critical files if missing
         agent_dir_file = self.community_dir / "cyber_directory.json"
         if not agent_dir_file.exists():
             src_agent_dir = grid_template / "community" / "cyber_directory.json"
             if src_agent_dir.exists():
-                logger.info("Copying initial cyber_directory.json to plaza")
+                logger.info("Copying initial cyber_directory.json")
                 shutil.copy2(src_agent_dir, agent_dir_file)
     
     def create_sandbox(self, name: str, cyber_type: str = "general") -> BubblewrapSandbox:
@@ -359,11 +369,9 @@ class SubspaceManager:
             self._copy_agent_base_code(base_code, cyber_type)
             
             # Create organized directory structure
-            # Communications
-            comms_dir = sandbox.cyber_personal / "comms"
-            comms_dir.mkdir(exist_ok=True)
-            for subdir in ["inbox", "outbox", "drafts", "sent"]:
-                (comms_dir / subdir).mkdir(exist_ok=True)
+            # Mail directories (directly under personal)
+            for subdir in ["inbox", "outbox", "mail_archive"]:
+                (sandbox.cyber_personal / subdir).mkdir(exist_ok=True)
             
             # Memory areas (now inside .internal)
             memory_dir = internal_dir / "memory"
@@ -390,11 +398,9 @@ class SubspaceManager:
         # Internal logs
         (internal_dir / "logs").mkdir(exist_ok=True)
         
-        # Communications directory
-        comms_dir = sandbox.cyber_personal / "comms"
-        comms_dir.mkdir(exist_ok=True)
-        for subdir in ["inbox", "outbox", "drafts", "sent"]:
-            (comms_dir / subdir).mkdir(exist_ok=True)
+        # Mail directories (directly under personal)
+        for subdir in ["inbox", "outbox", "mail_archive"]:
+            (sandbox.cyber_personal / subdir).mkdir(exist_ok=True)
         
         # Memory directory with subdirectories (now inside .internal)
         memory_dir = internal_dir / "memory"

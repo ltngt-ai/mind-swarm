@@ -71,7 +71,7 @@ class EnvironmentScanner:
         self.grid_path = Path(grid_path)
         
         # Directories to monitor
-        self.inbox_path = self.personal_path / "comms" / "inbox"
+        self.inbox_path = self.personal_path / "inbox"
         self.memory_path = self.personal_path / ".internal" / "memory"
         self.community_path = self.grid_path / "community"
         self.library_path = self.grid_path / "library"
@@ -238,16 +238,32 @@ class EnvironmentScanner:
                 actual_path = self.grid_path / rel_path.lstrip('/') if rel_path else self.grid_path
             else:
                 # Invalid location, skip
+                logger.warning(f"Invalid location format: {current_location}")
                 return memories
+            
+            logger.info(f"Scanning location: {current_location} -> actual_path: {actual_path}")
             
             # Only scan if location exists and is a directory
-            if not actual_path.exists() or not actual_path.is_dir():
+            if not actual_path.exists():
+                logger.warning(f"Location does not exist: {actual_path}")
+                return memories
+            if not actual_path.is_dir():
+                logger.warning(f"Location is not a directory: {actual_path}")
                 return memories
             
+            # Check if current_location.txt exists
+            location_contents_file = self.personal_path / ".internal" / "memory" / "current_location.txt"
+            
             # Check if we need to rescan this location
-            if self.last_location_scanned == current_location:
-                # Location hasn't changed, check if contents changed
-                needs_rescan = False
+            needs_rescan = False
+            if self.last_location_scanned != current_location:
+                # Location changed, definitely need to rescan
+                needs_rescan = True
+            elif not location_contents_file.exists():
+                # File doesn't exist, need to create it
+                needs_rescan = True
+            else:
+                # Location hasn't changed and file exists, check if contents changed
                 for item in actual_path.iterdir():
                     item_str = str(item)
                     if item_str not in self.file_states:
@@ -257,10 +273,24 @@ class EnvironmentScanner:
                     if current_state.has_changed(self.file_states[item_str]):
                         needs_rescan = True
                         break
-                
-                if not needs_rescan:
-                    # No changes, return existing memory
-                    return memories
+            
+            if not needs_rescan:
+                # No changes and file exists, return the existing location memory
+                location_memory = FileMemoryBlock(
+                    location=str(location_contents_file),
+                    confidence=1.0,
+                    priority=Priority.FOUNDATIONAL,
+                    pinned=True,  # Always visible
+                    metadata={
+                        "file_type": "current_location",
+                        "description": f"Looking around at: {current_location}",
+                        "location": current_location
+                    },
+                    cycle_count=cycle_count,
+                    block_type=MemoryType.SYSTEM
+                )
+                memories.append(location_memory)
+                return memories
             
             # Collect directories and files for tree display
             directories = []

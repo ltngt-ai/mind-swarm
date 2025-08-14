@@ -60,8 +60,8 @@ class CognitiveLoop:
         
         # Core file interfaces - define these first
         self.brain_file = self.personal / ".internal" / "brain"
-        self.inbox_dir = self.personal / "comms" / "inbox"
-        self.outbox_dir = self.personal / "comms" / "outbox"
+        self.inbox_dir = self.personal / "inbox"
+        self.outbox_dir = self.personal / "outbox"
         self.memory_dir = self.personal / ".internal" / "memory"
         
         # Initialize state early so it's available for managers

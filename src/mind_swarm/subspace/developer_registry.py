@@ -108,23 +108,15 @@ class DeveloperRegistry:
         cyber_dir.mkdir(parents=True, exist_ok=True)
         
         # Create organized directory structure matching new Cyber layout
-        # Communications directory
-        comms_dir = cyber_dir / "comms"
-        comms_dir.mkdir(exist_ok=True)
-        
-        # Create inbox and outbox under comms
-        inbox_dir = comms_dir / "inbox"
+        # Mail directories (directly under cyber directory)
+        inbox_dir = cyber_dir / "inbox"
         inbox_dir.mkdir(exist_ok=True)
         
-        outbox_dir = comms_dir / "outbox"
+        outbox_dir = cyber_dir / "outbox"
         outbox_dir.mkdir(exist_ok=True)
         
-        # Create drafts and sent directories
-        drafts_dir = comms_dir / "drafts"
-        drafts_dir.mkdir(exist_ok=True)
-        
-        sent_dir = comms_dir / "sent"
-        sent_dir.mkdir(exist_ok=True)
+        mail_archive_dir = cyber_dir / "mail_archive"
+        mail_archive_dir.mkdir(exist_ok=True)
         
         # Create memory directory (developers might have memory too)
         memory_dir = cyber_dir / "memory"

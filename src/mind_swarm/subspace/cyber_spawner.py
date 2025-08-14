@@ -33,7 +33,7 @@ class AgentProcess:
         msg_id = f"{message.get('from', 'subspace')}_{int(asyncio.get_event_loop().time() * 1000)}"
         message['id'] = msg_id
         
-        inbox_dir = self.sandbox.cyber_personal / "comms" / "inbox"
+        inbox_dir = self.sandbox.cyber_personal / "inbox"
         msg_file = inbox_dir / f"{msg_id}.msg"
         msg_file.write_text(json.dumps(message, indent=2))
         

@@ -1,0 +1,48 @@
+# Subspace Sync Configuration
+# This file controls how subspace_template changes are synced to the runtime subspace
+
+# Paths that are always overwritten from template (no merge)
+# These are system-critical files that Cybers shouldn't modify
+template_owned:
+  - grid/library/base_code/base_code_template
+  - grid/library/base_code/io_cyber_template
+  - grid/workshop  # System tools
+
+# Paths that are never overwritten (Cyber-owned content)
+# These areas belong to Cybers and their contributions
+cyber_owned:
+  - cybers/*  # All Cyber personal directories
+  - grid/community  # Shared discussions and questions
+  - grid/library/knowledge/sections/new_cyber_introduction  # Alice's contributions
+  - grid/bulletin  # Announcements from Cybers
+
+# Paths that require intelligent merging
+# Changes from both template and Cybers are preserved
+merge_required:
+  - grid/library/knowledge/schemas  # Schema updates need merging
+  - grid/library/knowledge/sections/rom  # ROM updates with Cyber insights
+  - grid/library/README.md  # Documentation updates
+
+# File patterns to ignore during sync
+ignore_patterns:
+  - "*.pyc"
+  - "__pycache__"
+  - ".git"
+  - "*.log"
+  - ".tmp_*"
+  - "*.lock"
+  - ".DS_Store"
+  - "brain"  # Body files that change constantly
+  - "network"  # IO body files
+  - "user_io"  # IO body files
+
+# Backup configuration
+backup:
+  enabled: true
+  max_backups: 10  # Keep last 10 backups
+  backup_dir: subspace_backups
+
+# Conflict resolution
+conflicts:
+  strategy: preserve_cyber  # Options: preserve_cyber, preserve_template, manual
+  conflict_suffix: .template_conflict

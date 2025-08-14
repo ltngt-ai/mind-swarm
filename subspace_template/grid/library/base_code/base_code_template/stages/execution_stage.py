@@ -528,13 +528,10 @@ class ExecutionStage:
             "signature": {
                 "instruction": """
 Generate Python code based on the current intentions to mutate the Mind-Swarm memory.
-
 system:personal/.internal/memory/pipeline/current_decision_pipe_stage.json has the current intention.
-
 If there's no clear intention, return an empty script.
 
-Output ONLY valid Python code - no markdown, no ``` markers.
-Use the memory object for all operations.
+The provided API docs describe the available operations and their usage.
 """,
                 "inputs": {
                     "working_memory": "Full working memory context including decision buffer with intention"
@@ -768,20 +765,21 @@ Use the memory object for all operations.
     async def _fix_script_error(self, script: str, error: Dict[str, Any]) -> Optional[str]:
         """Try to fix an error in the script by showing the full error context to the AI."""
         
-        # Get working memory context for better error recovery
-        working_memory_summary = []
-        working_memories = self.memory_system.symbolic_memory
-        for mem in working_memories[:15]:  # First 15 memories for context
-            if hasattr(mem, 'id') and hasattr(mem, 'priority'):
-                # mem.id is a string, not an object
-                # Extract type from the ID format (e.g., "memory:personal/..." -> "memory")
-                id_parts = str(mem.id).split(':', 1)
-                mem_type = id_parts[0] if len(id_parts) > 1 else "unknown"
-                mem_path = id_parts[1] if len(id_parts) > 1 else str(mem.id)
-                priority_name = mem.priority.name if hasattr(mem.priority, 'name') else str(mem.priority)
-                working_memory_summary.append(f"- {mem_type}: {mem_path} (priority: {priority_name})")
+        # Create tag filter - allow execution-related knowledge
+        tag_filter = TagFilter(blacklist=self.KNOWLEDGE_BLACKLIST)
         
-        memory_context = "\n".join(working_memory_summary) if working_memory_summary else "No working memory available"
+        # Get the SAME working memory view as the original script generation
+        # This ensures the recovery stage sees exactly what the initial stage saw
+        working_memory_context = self.memory_system.build_context(
+            max_tokens=self.cognitive_loop.max_context_tokens // 2,
+            current_task="Fix Python script error based on error details",
+            selection_strategy="balanced",
+            tag_filter=tag_filter,
+            exclude_types=[]
+        )
+        
+        # API documentation is already in working memory as pinned FileMemoryBlocks
+        # No need to extract it again - it will be included in working_memory_context
         
         # Build full error context
         error_context = {
@@ -798,8 +796,12 @@ Use the memory object for all operations.
         instruction = """
 The Python script failed with an error. Analyze the error and fix the script.
 
-The memory object provides access to all files and data.
-The location object provides navigation capabilities.
+You have access to the SAME memory and location objects as before:
+- memory: Provides filesystem access through attribute notation
+- location: Provides navigation capabilities
+
+The API documentation is in your working memory (look for Memory API and Location API docs).
+The error details show exactly what went wrong.
 
 CRITICAL: Output ONLY the corrected Python code - no markdown, no explanations, just Python.
 Remember: NO async/await, all operations are synchronous.
@@ -811,7 +813,7 @@ Remember: NO async/await, all operations are synchronous.
                 "inputs": {
                     "script": "The script that failed",
                     "error_details": "Full error information including traceback",
-                    "working_memory": "Available memory context",
+                    "working_memory": "Complete memory context including API documentation",
                     "partial_output": "Any output before the error"
                 },
                 "outputs": {
@@ -821,7 +823,7 @@ Remember: NO async/await, all operations are synchronous.
             "input_values": {
                 "script": script,
                 "error_details": json.dumps(error_context, indent=2),
-                "working_memory": memory_context,
+                "working_memory": working_memory_context,
                 "partial_output": "\n".join(error.get("partial_output", []))
             }
         }
