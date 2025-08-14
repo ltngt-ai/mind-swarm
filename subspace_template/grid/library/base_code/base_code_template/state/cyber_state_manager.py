@@ -41,13 +41,11 @@ class CyberStateManager:
             "metadata": {}
         }
         
-        # State history
-        self.state_history = []
-        self.max_history = 100
+        # Removed state_history - never used, just wastes disk space
         
         # File paths
         self.state_file = memory_dir / "cyber_state.json"
-        self.history_file = memory_dir / "state_history.json"
+        # Removed history_file - state history tracking was removed
         
     def initialize(self) -> bool:
         """Initialize state management system.
@@ -135,8 +133,7 @@ class CyberStateManager:
             self.current_state = state_data
             logger.info(f"Loaded state for Cyber {self.cyber_id}: cycle {state_data.get('cycle_count', 0)}")
             
-            # Load history if available
-            self._load_history()
+            # Removed history loading - state history tracking was removed
             
             return state_data
             
@@ -168,9 +165,7 @@ class CyberStateManager:
             self.current_state.update(updates)
             self.current_state["last_updated"] = datetime.now()
             
-            # Track state change if significant
-            if changes:
-                self._track_state_change(changes)
+            # Removed state history tracking - never used, just wastes disk space
                 
             # Save if requested
             if save:
@@ -213,74 +208,9 @@ class CyberStateManager:
         self.update_state({"cycle_count": new_count})
         return new_count
         
-    def _track_state_change(self, changes: Dict[str, Any]):
-        """Track state changes for history.
-        
-        Args:
-            changes: Dictionary of changes
-        """
-        change_record = {
-            "timestamp": datetime.now(),
-            "changes": changes,
-            "cycle_count": self.current_state.get("cycle_count", 0)
-        }
-        
-        # Log significant changes
-        for key, change in changes.items():
-            if key == "status":
-                logger.info(f"State change: {key} {change['old']} -> {change['new']}")
-                
-    def _add_to_history(self, state_snapshot: Dict[str, Any]):
-        """Add state snapshot to history.
-        
-        Args:
-            state_snapshot: State snapshot to add
-        """
-        # Create history entry
-        history_entry = {
-            "timestamp": datetime.now(),
-            "snapshot": state_snapshot.copy()
-        }
-        
-        # Add to history
-        self.state_history.append(history_entry)
-        
-        # Trim history if needed
-        if len(self.state_history) > self.max_history:
-            self.state_history = self.state_history[-self.max_history:]
+    # Removed all history tracking methods - state history was never used, just wasted disk space
             
-        # Save history periodically
-        if len(self.state_history) % 10 == 0:
-            self._save_history()
-            
-    def _save_history(self):
-        """Save state history to disk."""
-        try:
-            history_json = safe_json_encode(self.state_history, indent=2)
-            self.file_manager.save_file(self.history_file, history_json)
-        except Exception as e:
-            logger.error(f"Failed to save state history: {e}")
-            
-    def _load_history(self):
-        """Load state history from disk."""
-        try:
-            history_json = self.file_manager.load_file(self.history_file)
-            if history_json:
-                self.state_history = safe_json_decode(history_json) or []
-                logger.debug(f"Loaded {len(self.state_history)} history entries")
-        except Exception as e:
-            logger.error(f"Failed to load state history: {e}")
-            
-    def get_state_history(self, limit: int = 10) -> List[Dict[str, Any]]:
-        """Get recent state history.
-        
-        Args:
-            limit: Maximum entries to return
-            
-        Returns:
-            List of history entries
-        """
-        return self.state_history[-limit:] if self.state_history else []
+    # Removed get_state_history method - state history tracking was removed
         
     def validate_state(self, state_data: Optional[Dict[str, Any]] = None) -> bool:
         """Validate state data structure.

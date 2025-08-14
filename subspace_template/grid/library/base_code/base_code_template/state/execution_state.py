@@ -35,8 +35,7 @@ class ExecutionStateTracker:
         
         # Execution tracking
         self.current_execution = None
-        self.execution_history = []
-        self.max_history = 1000
+        # Removed execution_history - never used, just wastes disk space
         
         # Performance metrics
         self.metrics = {
@@ -141,8 +140,7 @@ class ExecutionStateTracker:
         # Update metrics
         self._update_metrics(self.current_execution)
         
-        # Add to history
-        self._add_to_history(self.current_execution)
+        # Removed history tracking - never used, just wastes disk space
         
         # Clear current execution
         execution_data = self.current_execution
@@ -206,32 +204,7 @@ class ExecutionStateTracker:
             self.metrics["by_state"][state_name]["count"] += 1
             self.metrics["by_state"][state_name]["total_duration"] += state_duration
             
-    def _add_to_history(self, execution: Dict[str, Any]):
-        """Add execution to history.
-        
-        Args:
-            execution: Execution data to add
-        """
-        # Create compact history entry
-        history_entry = {
-            "id": execution["id"],
-            "type": execution["type"],
-            "status": execution["status"],
-            "start_time": execution["start_time"],
-            "end_time": execution.get("end_time"),
-            "duration": execution.get("duration", 0.0),
-            "state_count": len(execution.get("states", []))
-        }
-        
-        self.execution_history.append(history_entry)
-        
-        # Trim history if needed
-        if len(self.execution_history) > self.max_history:
-            self.execution_history = self.execution_history[-self.max_history:]
-            
-        # Save periodically
-        if len(self.execution_history) % 10 == 0:
-            self.save_execution_state()
+    # Removed _add_to_history method - execution history tracking was removed
             
     def save_execution_state(self) -> bool:
         """Save execution state and metrics to disk.
@@ -240,10 +213,9 @@ class ExecutionStateTracker:
             True if saved successfully
         """
         try:
-            # Save current execution if any
+            # Save current execution only (removed history tracking)
             execution_data = {
                 "current_execution": self.current_execution,
-                "recent_history": self.execution_history[-100:],  # Last 100
                 "last_saved": datetime.now()
             }
             
@@ -273,7 +245,7 @@ class ExecutionStateTracker:
                 execution_data = safe_json_decode(execution_json)
                 if execution_data:
                     self.current_execution = execution_data.get("current_execution")
-                    self.execution_history = execution_data.get("recent_history", [])
+                    # Removed loading of execution_history
                     
             # Load metrics
             metrics_json = self.file_manager.load_file(self.metrics_file)
@@ -294,23 +266,7 @@ class ExecutionStateTracker:
             logger.error(f"Failed to load execution state: {e}")
             return False
             
-    def get_execution_history(self, limit: int = 10, 
-                            execution_type: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Get recent execution history.
-        
-        Args:
-            limit: Maximum entries to return
-            execution_type: Filter by execution type
-            
-        Returns:
-            List of execution entries
-        """
-        history = self.execution_history
-        
-        if execution_type:
-            history = [h for h in history if h.get("type") == execution_type]
-            
-        return history[-limit:] if history else []
+    # Removed get_execution_history method - execution history tracking was removed
         
     def get_performance_metrics(self) -> Dict[str, Any]:
         """Get performance metrics.
