@@ -491,16 +491,7 @@ class CognitiveLoop:
             
             # Stage 1: Observation - Gather and understand information
             self._update_dynamic_context(stage="OBSERVATION", phase="STARTING")
-            orientation = await self.observation_stage.run()
-            
-            if not orientation:
-                # No observation needed attention, do maintenance
-                logger.debug("😴 No work found, performing maintenance")
-                self._update_dynamic_context(stage="MAINTENANCE", phase="IDLE")
-                await self.maintain()
-                await self._save_checkpoint()
-                self.execution_tracker.end_execution("idle", {"reason": "no_observations"})
-                return False
+            await self.observation_stage.observe()
             
             # Stage 2: Decision - Choose what to do
             self._update_dynamic_context(stage="DECISION", phase="STARTING")
@@ -523,8 +514,8 @@ class CognitiveLoop:
             
             # Stage 5: Cleanup - Clean up obsolete memories and maintain system
             self._update_dynamic_context(stage="CLEANUP", phase="STARTING")
-            await self.cleanup()
-            
+            await self.cleanup_stage.run(self.cycle_count)
+                
             # Save checkpoint after completing all stages
             await self._save_checkpoint()
             
@@ -546,20 +537,7 @@ class CognitiveLoop:
     
     # === HELPER METHODS USED BY STAGES ===
     
-    
-    
-    
     # === SUPPORTING METHODS ===
-    
-    async def cleanup(self):
-        """Perform memory cleanup and system maintenance.
-        
-        This delegates to the CleanupStage to handle all cleanup operations.
-        """
-        await self.cleanup_stage.run(self.cycle_count)
-    
-    # Note: _cleanup_old_script_executions and _identify_cleanup_targets have been moved to CleanupStage
-    # These methods are now part of the CleanupStage class
     
     async def maintain(self):
         """Perform maintenance tasks when idle.

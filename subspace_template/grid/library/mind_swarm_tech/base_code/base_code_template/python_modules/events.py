@@ -1,10 +1,13 @@
-"""Events API for cybers to sleep efficiently and wake on events.
+"""
+# Events API for cybers to sleep efficiently and wake on events.
 
-This module provides the Events class for managing cyber idle states,
-allowing them to sleep for specified durations or until specific events
-occur (like new mail arriving).
+## Events
 
-Waiting multiple times in the same script is pointless, as you need to return to the cognitive loop to think between waiting.
+The Events class provides methods to sleep for specified durations
+or until specific events occur, allowing cybers to idle efficiently
+without consuming resources.
+Waiting multiple times in the same script is pointless, as you need
+to return to the cognitive loop to think between waiting.
 
 ## Usage Examples
 
@@ -13,9 +16,6 @@ Waiting multiple times in the same script is pointless, as you need to return to
 # Sleep for 30 seconds
 events.sleep(30)
 print("Woke up after 30 seconds")
-
-# Sleep for 5 minutes
-events.sleep(300)
 ```
 
 ### Wake on New Mail
@@ -28,18 +28,7 @@ else:
     print("No mail received within timeout")
 ```
 
-### Efficient Idle with Mail Check
-```python
-# Sleep for 30 seconds but wake early if mail arrives
-new_mail = events.wait_for_mail(30)
-if new_mail:
-    print(f"New mail arrived: {new_mail}")
-else:
-    print("Completed sleep duration without mail")
-```
-
 ## Important Notes
-
 1. **Sleep durations are in seconds**
 2. **Maximum sleep duration is 300 seconds (5 minutes) for safety**
 3. **Mail wake events check the inbox directory for new messages**
@@ -47,34 +36,10 @@ else:
 5. **Only wait ONCE per script** - Multiple waits are ineffective. Return to cognitive loop between waits.
 
 ## Why Only One Wait?
-
 Python scripts run within a single cognitive cycle. The cyber cannot think or process
 information until the script completes and returns to the cognitive loop. Multiple
 waits just delay without allowing thought.
 
-**WRONG - Multiple waits in one script:**
-```python
-# This doesn't work as expected!
-events.sleep(10)
-print("First wait done")  # Cyber hasn't thought about this yet
-events.sleep(10)  # WARNING will be printed!
-print("Second wait done")  # Still no thinking happened
-```
-
-**RIGHT - Let cognitive loop handle multiple waits:**
-```python
-# In one execution:
-new_mail = events.wait_for_mail(30)
-if new_mail:
-    memory.add("mail_received", True)
-# Script ends, cyber thinks, decides next action
-
-# In next execution (if cyber decides to wait again):
-if memory.get("mail_received"):
-    # Process the mail...
-else:
-    # Wait again or do something else
-```
 """
 
 import time
@@ -88,26 +53,11 @@ class EventsError(Exception):
 
 
 class Events:
-    """Main events interface for efficient cyber idling.
-    
-    The Events class provides methods to sleep for specified durations
-    or until specific events occur, allowing cybers to idle efficiently
-    without consuming resources.
-    
-    Examples:
-        ```python
-        # The events object is pre-initialized for you
-        
-        # Sleep for 30 seconds
-        events.sleep(30)
-        
-        # Wait for new mail
-        new_mail = events.wait_for_mail(timeout=60)
-        
-        # Sleep or wake on mail
-        reason = events.sleep_or_mail(30)
-        ```
     """
+Main events interface for efficient cyber waiting.
+
+
+"""
     
     def __init__(self, context: Dict[str, Any]):
         """Initialize the events system.

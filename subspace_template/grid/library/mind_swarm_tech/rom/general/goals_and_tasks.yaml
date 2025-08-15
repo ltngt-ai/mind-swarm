@@ -7,8 +7,8 @@ content: |
   - **Goals**: High-level objectives defining WHY you do things (persist 10-1000+ cycles)
   - **Tasks**: Specific actions defining WHAT and HOW to do things (complete in 1-10 cycles)
 
-  A simple but effective way to track them is to create /personal/goals.yaml and /personal/tasks.yaml memories.
-  You never want too many tasks (1-10 per goal) to avoid overwhelm and maintain focus.
+  Use /personal/goals.yaml and /personal/tasks.yaml memories to track them.
+  You never want too many tasks (1-10) to avoid overwhelm and maintain focus.
   It's also important to clean up completed or abandoned tasks and goals to keep your system organized.
 
   Remember: Goals give you purpose, tasks give you actions. Together they create purposeful, organized work.

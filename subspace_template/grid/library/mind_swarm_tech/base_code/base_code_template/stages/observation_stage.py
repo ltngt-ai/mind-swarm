@@ -56,21 +56,8 @@ class ObservationStage:
         self.brain_interface = cognitive_loop.brain_interface
         self.memory_dir = cognitive_loop.memory_dir
         self.file_manager = cognitive_loop.file_manager
-        
-    async def run(self) -> Optional[Dict[str, Any]]:
-        """Run the complete observation stage.
-        
-        Returns:
-            Orientation data if something needs attention, None otherwise
-        """
-        logger.info("=== OBSERVATION STAGE ===")
-        
-        # Observe - Understand the situation from observations
-        orientation = await self.observe()
-        
-        return orientation
     
-    async def observe(self) -> Optional[Dict[str, Any]]:
+    async def observe(self):
         """OBSERVE - Understand the situation from observations.
         
         This phase first scans for new observations, then analyzes all observations 
@@ -79,6 +66,7 @@ class ObservationStage:
         Returns:
             Orientation data including reasoning and relevance, or None
         """
+        logger.info("=== OBSERVATION STAGE ===")
         logger.info("👁️ Observing and reasoning about the situation...")
         
         # First, scan environment for new observations
@@ -88,35 +76,6 @@ class ObservationStage:
             full_scan=False, 
             cycle_count=self.cognitive_loop.cycle_count
         )
-        
-        # Add all observations and memories from environment scanner
-        # Observations point to the actual files that changed, not to saved observations
-        significant_count = 0
-        for memory in observations:
-            # Add all memories to the memory system
-            self.memory_system.add_memory(memory)
-            
-            # Count significant observations
-            if isinstance(memory, ObservationMemoryBlock):
-                if memory.priority != Priority.LOW:
-                    significant_count += 1
-                logger.debug(f"Observation: {memory.observation_type} for {memory.path}")
-        
-        if significant_count > 0:
-            logger.info(f"📡 Found {significant_count} significant changes ({len(observations)} total)")
-        else:
-            logger.debug("📡 No significant changes detected")
-            # Add a "no new observations" memory block so the Cyber knows scanning happened
-            no_obs_memory = ObservationMemoryBlock(
-                observation_type="no_new_observations",
-                path="personal/.internal/memory/scan_status",
-                message="No new observations this cycle - environment unchanged",
-                cycle_count=self.cognitive_loop.cycle_count,
-                content="The environment scan completed but found no new changes, messages, or events requiring attention.",
-                priority=Priority.LOW
-            )
-            self.memory_system.add_memory(no_obs_memory)
-            logger.debug("Added 'no new observations' status to memory")
         
         # Update dynamic context before LLM call - OBSERVE phase
         self.cognitive_loop._update_dynamic_context(stage="OBSERVATION", phase="OBSERVE")
@@ -178,12 +137,6 @@ class ObservationStage:
         self.cognitive_loop.memory_system.touch_memory(observation_buffer.id, self.cognitive_loop.cycle_count)
         
         logger.info(f"💭 Observation written to pipeline buffer")
-        
-        # Store just the file reference in cycle state
-        # Orientation is now tracked through memory system, not cycle state
-        
-                
-        return orientation_data
     
     async def _analyze_situation_from_observations(self, memory_context: str) -> Optional[Dict[str, Any]]:
         """Use brain to analyze the situation from all observations.

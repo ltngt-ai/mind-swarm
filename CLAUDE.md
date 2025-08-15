@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-ALWAYS read the source before using it, this will avoid expensive mistakes with using incorrect names for fields and parameters.
+**ALWAYS read the source code before using it, this will avoid expensive mistakes with using incorrect names for fields and parameters.**
 
 ## Mind-Swarm Overview
 
