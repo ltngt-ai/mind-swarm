@@ -919,10 +919,11 @@ class SubspaceCoordinator:
             
             # Update model metrics
             if selected_model_id:
-                # Estimate tokens (rough approximation)
-                estimated_tokens = len(prompt.split()) + len(response.split())
-                # Metrics tracking can be added to model pool later if needed
-                logger.debug(f"Model {selected_model_id} succeeded in {elapsed_ms:.0f}ms with ~{estimated_tokens} tokens")
+                # Estimate tokens (rough approximation: ~3 tokens per word for technical content)
+                estimated_words = len(prompt.split()) + len(response.split())
+                estimated_tokens = estimated_words * 3  # More accurate for technical/code content
+                # Note: This is just an estimate. Actual usage is tracked in token_tracker
+                logger.debug(f"Model {selected_model_id} succeeded in {elapsed_ms:.0f}ms with ~{estimated_words} words (~{estimated_tokens} tokens est.)")
                 
                 # Update Cyber's identity file with current model info
                 await self._update_agent_model_info(name, selected_model_id)

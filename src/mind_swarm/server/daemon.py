@@ -11,6 +11,27 @@ import os
 from pathlib import Path
 import argparse
 
+# Load environment variables from .env file if it exists BEFORE any imports
+try:
+    from dotenv import load_dotenv
+    load_dotenv(override=True)  # Override to ensure we get the latest values
+except ImportError:
+    # dotenv not installed, try manual loading
+    env_file = Path.cwd() / ".env"
+    if env_file.exists():
+        with open(env_file) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    # Remove quotes if present
+                    value = value.strip()
+                    if value.startswith('"') and value.endswith('"'):
+                        value = value[1:-1]
+                    elif value.startswith("'") and value.endswith("'"):
+                        value = value[1:-1]
+                    os.environ[key.strip()] = value
+
 from mind_swarm.server.api import MindSwarmServer
 from mind_swarm.utils.logging import setup_logging, logger
 from mind_swarm.core.config import settings
@@ -167,6 +188,13 @@ def main():
     
     logger.info(f"Starting Mind-Swarm server daemon on {args.host}:{args.port}")
     logger.info(f"Logging to: {args.log_file}")
+    
+    # Log API key status
+    if os.getenv("CEREBRAS_API_KEY"):
+        key_preview = os.getenv("CEREBRAS_API_KEY")[:10] + "..."
+        logger.info(f"CEREBRAS_API_KEY loaded: {key_preview}")
+    else:
+        logger.warning("CEREBRAS_API_KEY not found in environment - Cerebras models won't work")
     
     # Run the daemon
     daemon = ServerDaemon(args.host, args.port)

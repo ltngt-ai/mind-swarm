@@ -68,6 +68,8 @@ class ModelSelector:
                     api_key = os.getenv("OPENAI_API_KEY")
                 elif model.provider == "anthropic":
                     api_key = os.getenv("ANTHROPIC_API_KEY")
+                elif model.provider == "cerebras":
+                    api_key = os.getenv("CEREBRAS_API_KEY")
         
         return AIExecutionConfig(
             model_id=model.id,

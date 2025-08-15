@@ -112,6 +112,12 @@ class MindSwarmDSPyLM(dspy.LM):
                 self.api_base = self.config.get("base_url") or "https://api.openai.com/v1"
                 logger.info(f"Using standard OpenAI API: {self.api_base}")
         
+        elif self.provider == "cerebras":
+            # Cerebras uses a fixed endpoint
+            self.api_base = "https://api.cerebras.ai/v1"
+            self.api_key = self.config.get("api_key") or os.getenv("CEREBRAS_API_KEY")
+            logger.info(f"Cerebras setup - api_key from config: {'yes' if self.config.get('api_key') else 'no'}, from env: {'yes' if os.getenv('CEREBRAS_API_KEY') else 'no'}")
+            
         elif self.provider == "anthropic":
             self.api_key = self.config.get("api_key") or os.getenv("ANTHROPIC_API_KEY")
         
@@ -267,6 +273,56 @@ class MindSwarmDSPyLM(dspy.LM):
             llm_logger.info(f"{'='*80}\n")
         
         try:
+            # Check rate limits before making the call
+            from mind_swarm.ai.token_tracker import token_tracker
+            
+            # Try to get cyber_id from kwargs first, then from instance attribute
+            cyber_id = kwargs.get("cyber_id", getattr(self, "current_cyber_id", "unknown"))
+            
+            # Estimate tokens (rough estimate based on message length)
+            estimated_tokens = sum(len(msg.get("content", "")) // 4 for msg in messages) + 500
+            
+            allowed, reason = token_tracker.check_rate_limit(
+                cyber_id=cyber_id,
+                provider=self.provider,
+                estimated_tokens=estimated_tokens
+            )
+            
+            if not allowed:
+                logger.info(f"Rate limit for {cyber_id}: {reason}")
+                # Parse wait time from the reason message if available
+                import asyncio
+                import re
+                
+                wait_match = re.search(r'Wait ~(\d+)s', reason)
+                if wait_match:
+                    wait_time = int(wait_match.group(1))
+                    # Add a small buffer
+                    wait_time = min(wait_time + 2, 60)  # Cap at 60 seconds
+                else:
+                    wait_time = 30  # Default wait
+                
+                logger.info(f"Waiting {wait_time}s for token refill...")
+                await asyncio.sleep(wait_time)
+                
+                # Check again after waiting
+                allowed, reason = token_tracker.check_rate_limit(
+                    cyber_id=cyber_id,
+                    provider=self.provider,
+                    estimated_tokens=estimated_tokens
+                )
+                
+                if not allowed:
+                    # Still not enough tokens, wait again
+                    logger.warning(f"Still waiting for tokens: {reason}")
+                    await asyncio.sleep(30)
+                    # Try one more time
+                    allowed, reason = token_tracker.check_rate_limit(
+                        cyber_id=cyber_id,
+                        provider=self.provider,
+                        estimated_tokens=estimated_tokens
+                    )
+            
             # Use our AI service to generate response
             result = await ai_service.chat_completion(messages)
             response_text = result["message"]["content"]
@@ -293,11 +349,31 @@ class MindSwarmDSPyLM(dspy.LM):
                 
                 llm_logger.info(f"{'='*80}\n")
             
+            # Track token usage if available
+            usage = result.get("usage", {})
+            if usage:
+                from mind_swarm.ai.token_tracker import token_tracker
+                
+                # Try to get cyber_id from kwargs first, then from instance attribute
+                cyber_id = kwargs.get("cyber_id", getattr(self, "current_cyber_id", "unknown"))
+                
+                input_tokens = usage.get("prompt_tokens", 0) or usage.get("input_tokens", 0)
+                output_tokens = usage.get("completion_tokens", 0) or usage.get("output_tokens", 0)
+                
+                if input_tokens or output_tokens:
+                    token_tracker.track_usage(
+                        cyber_id=cyber_id,
+                        provider=self.provider,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens
+                    )
+                    logger.debug(f"Tracked token usage for {cyber_id}: {input_tokens} in, {output_tokens} out")
+            
             # Track in history
             self.history.append({
                 "messages": messages,
                 "response": response_text,
-                "usage": result.get("usage", {})
+                "usage": usage
             })
             
             # Return in DSPy expected format
@@ -316,7 +392,7 @@ class MindSwarmDSPyLM(dspy.LM):
         prompt = kwargs.pop("prompt", None)
         messages = kwargs.pop("messages", None)
         
-        logger.debug(f"DSPy aforward called with kwargs: {list(kwargs.keys())}")
+        logger.debug(f"DSPy aforward called with kwargs: {kwargs}")
         
         # Call acall with extracted values
         completions = await self.acall(prompt=prompt, messages=messages, **kwargs)

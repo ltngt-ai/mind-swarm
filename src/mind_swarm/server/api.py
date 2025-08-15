@@ -74,6 +74,7 @@ class StatusResponse(BaseModel):
     server_uptime: float
     server_start_time: str
     local_llm_status: Optional[Dict[str, Any]] = None
+    token_usage: Optional[Dict[str, Any]] = None
 
 
 class MindSwarmServer:
@@ -248,12 +249,21 @@ class MindSwarmServer:
                 except Exception as e:
                     logger.warning(f"STATUS: Local LLM check failed with exception: {e}")
             
+            # Get token usage stats
+            token_usage = None
+            try:
+                from mind_swarm.ai.token_tracker import token_tracker
+                token_usage = token_tracker.get_usage_stats()
+            except Exception as e:
+                logger.debug(f"Could not get token usage: {e}")
+            
             response = StatusResponse(
                 Cybers=cyber_states,
                 community_questions=len(questions),
                 server_uptime=uptime,
                 server_start_time=self.start_time.isoformat(),
-                local_llm_status=local_llm_status
+                local_llm_status=local_llm_status,
+                token_usage=token_usage
             )
             logger.info(f"STATUS: /status endpoint completed in {time.time() - endpoint_start:.2f}s total")
             return response

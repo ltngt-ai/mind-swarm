@@ -122,6 +122,9 @@ class ModelPool:
         # Load OpenRouter models
         self._load_openrouter_models()
         
+        # Load Cerebras models
+        self._load_cerebras_models()
+        
         logger.info(f"Loaded {len(self.models)} models from YAML configs")
     
     def _load_openai_models(self):
@@ -198,6 +201,46 @@ class ModelPool:
                     logger.error(f"Failed to load OpenRouter models from {config_path}: {e}")
         
         logger.debug("No OpenRouter models configuration file found")
+    
+    def _load_cerebras_models(self):
+        """Load Cerebras models from YAML configuration."""
+        import os
+        if not os.getenv("CEREBRAS_API_KEY"):
+            logger.debug("No CEREBRAS_API_KEY found, skipping Cerebras models")
+            return
+            
+        config_paths = [
+            Path("config/cerebras_models.yaml"),
+            Path(__file__).parent.parent.parent.parent / "config" / "cerebras_models.yaml",
+        ]
+        
+        for config_path in config_paths:
+            if config_path.exists():
+                try:
+                    with open(config_path, 'r') as f:
+                        data = yaml.safe_load(f)
+                    
+                    for model_data in data.get('models', []):
+                        model = ModelConfig(
+                            id=model_data['id'],
+                            name=model_data['name'],
+                            provider="cerebras",
+                            priority=Priority(model_data['priority']),
+                            cost_type=CostType(model_data['cost_type']),
+                            context_length=model_data.get('context_length', 8192),
+                            max_tokens=model_data.get('max_tokens', 4096),
+                            temperature=model_data.get('temperature', 0.7),
+                            api_settings=model_data.get('api_settings', {})
+                        )
+                        self.models[model.id] = model
+                    
+                    logger.info(f"Loaded {len(data.get('models', []))} Cerebras models from {config_path}")
+                    return
+                    
+                except Exception as e:
+                    logger.error(f"Failed to load Cerebras models from {config_path}: {e}")
+        
+        logger.debug("No Cerebras models configuration file found")
     
     def _load_state(self):
         """Load saved state (promotions and runtime models) from disk."""

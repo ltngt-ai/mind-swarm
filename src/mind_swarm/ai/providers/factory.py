@@ -4,6 +4,7 @@ from typing import Dict, Type
 
 from mind_swarm.ai.config import AIExecutionConfig
 from mind_swarm.ai.providers.base import AIService
+from mind_swarm.ai.providers.cerebras import CerebrasService
 from mind_swarm.ai.providers.openai_compatible import OpenAICompatibleService
 from mind_swarm.ai.providers.openrouter import OpenRouterAIService
 from mind_swarm.utils.logging import logger
@@ -13,6 +14,7 @@ from mind_swarm.utils.logging import logger
 PROVIDERS: Dict[str, Type[AIService]] = {
     "openai": OpenAICompatibleService,
     "openrouter": OpenRouterAIService,
+    "cerebras": CerebrasService,
 }
 
 

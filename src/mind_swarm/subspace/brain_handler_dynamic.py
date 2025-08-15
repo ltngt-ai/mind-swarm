@@ -224,6 +224,10 @@ class DynamicBrainHandler:
         Returns:
             Response text to write back to brain file
         """
+        # Store cyber_id on the LM instance for token tracking
+        if hasattr(self, 'lm'):
+            self.lm.current_cyber_id = cyber_id
+            
         # Emit brain activity event
         if _has_brain_monitor:
             try:
@@ -276,8 +280,9 @@ class DynamicBrainHandler:
                     # Create a ChainOfThought module with the signature
                     cot = dspy.ChainOfThought(signature_class)
                     
-                    # Execute with the provided inputs (async)
-                    result = await cot.aforward(**input_values)
+                    # Execute with the provided inputs (async), passing cyber_id for token tracking
+                    # Note: DSPy will pass extra kwargs through to the LM
+                    result = await cot.aforward(**input_values, cyber_id=cyber_id)
                     
                     # Extract outputs
                     output_values = {}
