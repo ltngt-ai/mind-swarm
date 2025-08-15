@@ -149,11 +149,6 @@ class MemoryPersistence:
                         pinned=mem_data.get('pinned', False)
                     )
                     
-                elif memory_type == MemoryType.MESSAGE:
-                    # Skip MESSAGE type - messages are now FileMemoryBlock
-                    logger.debug("Skipping MESSAGE type - messages are now FileMemoryBlock")
-                    continue
-                    
                 elif memory_type == MemoryType.OBSERVATION:
                     memory = ObservationMemoryBlock(
                         observation_type=mem_data['observation_type'],

@@ -8,12 +8,15 @@ The output is a plain text intention describing what the cyber wants to accompli
 """
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, TYPE_CHECKING
+
+
 import json
 import time
 from datetime import datetime
 
-from ..brain import BrainInterface
+if TYPE_CHECKING:
+    from ..cognitive_loop import CognitiveLoop
 from ..memory.tag_filter import TagFilter
 from ..memory import MemoryType
 
@@ -41,7 +44,7 @@ class DecisionStage:
         "action_implementation"  # Implementation details for execution stage
     }
     
-    def __init__(self, cognitive_loop):
+    def __init__(self, cognitive_loop: 'CognitiveLoop'):
         """Initialize the decision stage.
         
         Args:

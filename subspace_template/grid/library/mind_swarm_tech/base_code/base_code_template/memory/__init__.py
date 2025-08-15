@@ -4,8 +4,6 @@ from .memory_types import Priority, MemoryType
 from .memory_blocks import (
     MemoryBlock,
     FileMemoryBlock,
-    StatusMemoryBlock,
-    ContextMemoryBlock,
     ObservationMemoryBlock,
 )
 from .memory_manager import WorkingMemoryManager
@@ -21,8 +19,6 @@ __all__ = [
     "Priority",
     "MemoryType",
     "FileMemoryBlock",
-    "StatusMemoryBlock",
-    "ContextMemoryBlock",
     "ObservationMemoryBlock",
     # Core components (individual - for backward compatibility)
     "WorkingMemoryManager",

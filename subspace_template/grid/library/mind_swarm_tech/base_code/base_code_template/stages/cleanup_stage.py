@@ -12,8 +12,10 @@ The cleanup stage runs at the end of each cognitive cycle to:
 
 import logging
 import json
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, TYPE_CHECKING
 
+if TYPE_CHECKING:
+    from ..cognitive_loop import CognitiveLoop
 from ..memory.tag_filter import TagFilter
 
 logger = logging.getLogger("Cyber.stages.cleanup")
@@ -40,7 +42,7 @@ class CleanupStage:
         "tools"
     }
     
-    def __init__(self, cognitive_loop):
+    def __init__(self, cognitive_loop: 'CognitiveLoop'):
         """Initialize the cleanup stage.
         
         Args:

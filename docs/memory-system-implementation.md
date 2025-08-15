@@ -10,13 +10,8 @@ We have successfully implemented a sophisticated two-layer memory architecture f
 - **Base MemoryBlock class**: Core structure with priority, confidence, timestamps, and metadata
 - **Specialized memory types**:
   - `FileMemoryBlock`: References to file content with line ranges
-  - `MessageMemoryBlock`: Inter-cyber messages with read/unread status
   - `ObservationMemoryBlock`: Filesystem observations (new files, changes)
-  - `TaskMemoryBlock`: Current tasks with status tracking
   - `KnowledgeMemoryBlock`: Shared knowledge base entries
-  - `StatusMemoryBlock`: System status information
-  - `HistoryMemoryBlock`: cyber action history
-  - `ContextMemoryBlock`: Derived context from activities
 
 ### 2. Working Memory Manager (`memory_manager.py`)
 - Manages symbolic references without loading actual content

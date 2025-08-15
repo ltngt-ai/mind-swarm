@@ -254,11 +254,6 @@ class WorkingMemoryManager:
                             priority=Priority[mem_data.get('priority', 'MEDIUM')]
                         )
                         
-                    # Skip MESSAGE type - messages are now FileMemoryBlock
-                    elif memory_type == MemoryType.MESSAGE:
-                        logger.debug("Skipping MESSAGE type - messages are now FileMemoryBlock")
-                        continue
-                        
                     elif memory_type == MemoryType.OBSERVATION:
                         memory = ObservationMemoryBlock(
                             observation_type=mem_data['observation_type'],

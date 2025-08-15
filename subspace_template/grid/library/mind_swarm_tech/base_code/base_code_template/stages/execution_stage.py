@@ -5,14 +5,16 @@ where everything is accessed as memory through a unified interface.
 """
 
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, TYPE_CHECKING
 from datetime import datetime
 from pathlib import Path
 import json
 import traceback
 import yaml  # Still needed for reading the file
 
-from ..memory import Priority, ObservationMemoryBlock, FileMemoryBlock
+if TYPE_CHECKING:
+    from ..cognitive_loop import CognitiveLoop
+from ..memory import Priority, ObservationMemoryBlock
 from ..memory.tag_filter import TagFilter
 
 logger = logging.getLogger("Cyber.stages.execution_v3")
@@ -39,7 +41,7 @@ class ExecutionStage:
         "raw_perception"
     }
     
-    def __init__(self, cognitive_loop):
+    def __init__(self, cognitive_loop: 'CognitiveLoop'):
         """Initialize the execution stage."""
         self.cognitive_loop = cognitive_loop
         self.memory_system = cognitive_loop.memory_system

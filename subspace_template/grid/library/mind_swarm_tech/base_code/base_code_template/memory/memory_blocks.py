@@ -126,80 +126,6 @@ class FileMemoryBlock(MemoryBlock):
 
 
 @dataclass
-class StatusMemoryBlock(MemoryBlock):
-    """System status information."""
-    status_type: str
-    value: Any
-    confidence: float = 1.0
-    priority: Priority = Priority.HIGH
-    timestamp: Optional[datetime] = None
-    expiry: Optional[datetime] = None
-    metadata: Optional[Dict[str, Any]] = None
-    pinned: bool = False
-    cycle_count: Optional[int] = None
-    
-
-    def __post_init__(self):
-        """Initialize base class and set type."""
-        super().__init__(
-            confidence=self.confidence,
-            priority=self.priority,
-            timestamp=self.timestamp,
-            expiry=self.expiry,
-            metadata=self.metadata,
-            pinned=self.pinned,
-            cycle_count=self.cycle_count
-        )
-        self.type = MemoryType.STATUS
-        
-        # Status is always in system namespace
-        self.id = UnifiedMemoryID.create(MemoryType.STATUS, f"personal/system/{self.status_type}")
-
-
-# TaskMemoryBlock removed - tasks are now tracked through goals.json and active_tasks.json files
-# MessageMemoryBlock removed - messages are now FileMemoryBlock with metadata
-# KnowledgeMemoryBlock removed - knowledge is now FileMemoryBlock with block_type=KNOWLEDGE
-
-
-@dataclass
-class ContextMemoryBlock(MemoryBlock):
-    """Derived context from recent activities."""
-    context_type: str
-    summary: str
-    related_ids: Optional[List[str]] = None
-    confidence: float = 1.0
-    priority: Priority = Priority.MEDIUM
-    timestamp: Optional[datetime] = None
-    expiry: Optional[datetime] = None
-    pinned: bool = False
-    metadata: Optional[Dict[str, Any]] = None
-    cycle_count: Optional[int] = None
-    
-    def __post_init__(self):
-        """Initialize base class and set type."""
-        super().__init__(
-            confidence=self.confidence,
-            priority=self.priority,
-            timestamp=self.timestamp,
-            expiry=self.expiry,
-            metadata=self.metadata,
-            pinned=self.pinned,
-            cycle_count=self.cycle_count
-        )
-        self.type = MemoryType.CONTEXT
-        
-        # Create path with context type and timestamp
-        timestamp_str = self.timestamp.strftime('%Y%m%d-%H%M%S') if self.timestamp else "unknown"
-        path = f"personal/analysis/{self.context_type}/{timestamp_str}"
-        
-        # Include content hash based on summary
-        self.id = UnifiedMemoryID.create(MemoryType.CONTEXT, path, self.summary)
-        
-        if self.related_ids is None:
-            self.related_ids = []
-
-
-@dataclass
 class ObservationMemoryBlock(MemoryBlock):
     """Simple observation - something that happened."""
     observation_type: str  # Type of observation (action_result, file_change, new_message, etc.)
@@ -232,8 +158,3 @@ class ObservationMemoryBlock(MemoryBlock):
             self.observation_type,
             f"{self.path}:cycle_{self.cycle_count}"
         )
-
-
-
-
-# IdentityMemoryBlock removed - use pinned FileMemoryBlock for identity.json instead

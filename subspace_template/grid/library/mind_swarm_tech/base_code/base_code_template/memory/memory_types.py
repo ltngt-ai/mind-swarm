@@ -23,10 +23,6 @@ class Priority(Enum):
 class MemoryType(Enum):
     """Types of memory blocks."""
     FILE = "memory"
-    STATUS = "status"
-    MESSAGE = "message"
     KNOWLEDGE = "knowledge"
-    CONTEXT = "context"
     OBSERVATION = "observation"
-    IDENTITY = "identity"
     SYSTEM = "system"  # System-controlled memories (pipelines, dynamic context)

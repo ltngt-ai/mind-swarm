@@ -7,16 +7,16 @@ The output of this stage is reasoning about what's happening and its relevance.
 """
 
 import logging
-from typing import Dict, Any, Optional
+from typing import TYPE_CHECKING
 from datetime import datetime
-from pathlib import Path
 import json
 import time
 
-from ..memory import Priority, ObservationMemoryBlock, MemoryType
+if TYPE_CHECKING:
+    from ..cognitive_loop import CognitiveLoop
+
 from ..memory.tag_filter import TagFilter
 from ..perception import EnvironmentScanner
-from ..brain import BrainInterface
 
 logger = logging.getLogger("Cyber.stages.observation")
 
@@ -44,7 +44,7 @@ class ObservationStage:
         "background"
     }
     
-    def __init__(self, cognitive_loop):
+    def __init__(self, cognitive_loop: 'CognitiveLoop'):
         """Initialize the observation stage.
         
         Args:
@@ -52,7 +52,7 @@ class ObservationStage:
         """
         self.cognitive_loop = cognitive_loop
         self.memory_system = cognitive_loop.memory_system
-        self.environment_scanner = cognitive_loop.environment_scanner
+        self.environment_scanner: EnvironmentScanner = cognitive_loop.environment_scanner
         self.brain_interface = cognitive_loop.brain_interface
         self.memory_dir = cognitive_loop.memory_dir
         self.file_manager = cognitive_loop.file_manager
@@ -72,7 +72,7 @@ class ObservationStage:
         # First, scan environment for new observations
         logger.info("📡 Scanning for new observations...")
         self.cognitive_loop._update_dynamic_context(stage="OBSERVATION", phase="SCAN")
-        observations = self.environment_scanner.scan_environment(
+        self.environment_scanner.scan_environment(
             full_scan=False, 
             cycle_count=self.cognitive_loop.cycle_count
         )
@@ -94,13 +94,33 @@ class ObservationStage:
         
         # Use brain to analyze the situation from all observations
         logger.info("🧠 Analyzing situation from observations...")
+
+        thinking_request = {
+            "signature": {
+                "instruction": """
+Review all observations in your working memory to reason relevant changes.
+Look at recent observations and how they relate to the current situation, goals and tasks.
+Don't plan how to act on this information, just how it might be important.
+Always start your output with [[ ## reasoning ## ]]
+""",
+                "inputs": {
+                    "working_memory": "Your current working memory with all observations and context"
+                },
+                "outputs": {
+                    "reasoning": "Your comprehensive reasoning of the current situation based on all observations",
+                    "relevance": "How the observations relate to the current situation and goals",
+                },
+                "display_field": "reasoning"
+            },
+            "input_values": {
+                "working_memory": memory_context
+            },
+            "request_id": f"observe_{int(time.time()*1000)}",
+            "timestamp": datetime.now().isoformat()
+        }
         
-        # The brain will look at all observations and understand the situation
-        orientation_response = await self._analyze_situation_from_observations(memory_context)
-        
-        if not orientation_response:
-            logger.info("👁️ No significant situation to address")
-            return None
+        response = await self.brain_interface._use_brain(json.dumps(thinking_request))
+        orientation_response = json.loads(response)
         
         # Extract the useful content from the response
         output_values = orientation_response.get("output_values", {})
@@ -137,44 +157,3 @@ class ObservationStage:
         self.cognitive_loop.memory_system.touch_memory(observation_buffer.id, self.cognitive_loop.cycle_count)
         
         logger.info(f"💭 Observation written to pipeline buffer")
-    
-    async def _analyze_situation_from_observations(self, memory_context: str) -> Optional[Dict[str, Any]]:
-        """Use brain to analyze the situation from all observations.
-        
-        This is the new OBSERVE phase where the brain understands the situation
-        from all available observations in memory.
-        
-        Args:
-            memory_context: Working memory context with all observations
-            
-        Returns:
-            Orientation data including reasoning and relevance, or None
-        """
-        thinking_request = {
-            "signature": {
-                "instruction": """
-Review all observations in your working memory to reason relevant changes.
-Look at recent observations and how they relate to the current situation, goals and tasks.
-Don't plan how to act on this information, just how it might be important.
-Always start your output with [[ ## reasoning ## ]]
-""",
-                "inputs": {
-                    "working_memory": "Your current working memory with all observations and context"
-                },
-                "outputs": {
-                    "reasoning": "Your comprehensive reasoning of the current situation based on all observations",
-                    "relevance": "How the observations relate to the current situation and goals",
-                },
-                "display_field": "reasoning"
-            },
-            "input_values": {
-                "working_memory": memory_context
-            },
-            "request_id": f"observe_{int(time.time()*1000)}",
-            "timestamp": datetime.now().isoformat()
-        }
-        
-        response = await self.brain_interface._use_brain(json.dumps(thinking_request))
-        result = json.loads(response)
-        
-        return result

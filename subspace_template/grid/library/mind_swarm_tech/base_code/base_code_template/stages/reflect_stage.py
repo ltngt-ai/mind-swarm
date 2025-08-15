@@ -7,10 +7,11 @@ This is the 4th stage in the cognitive architecture.
 """
 
 import logging
-from typing import Dict, Any, Optional
+from typing import TYPE_CHECKING
 from datetime import datetime
 
-from ..brain import BrainInterface
+if TYPE_CHECKING:
+    from ..cognitive_loop import CognitiveLoop
 
 logger = logging.getLogger("Cyber.stages.reflect")
 
@@ -38,7 +39,7 @@ class ReflectStage:
         "tools"  # Tool implementation details
     }
     
-    def __init__(self, cognitive_loop):
+    def __init__(self, cognitive_loop: 'CognitiveLoop'):
         """Initialize the reflect stage.
         
         Args:

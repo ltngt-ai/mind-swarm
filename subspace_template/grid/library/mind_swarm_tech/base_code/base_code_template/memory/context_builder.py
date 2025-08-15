@@ -110,10 +110,8 @@ class ContextBuilder:
         # Build sections for each type
         type_order = [
             MemoryType.KNOWLEDGE,  # Knowledge (including pinned ROM)
-            MemoryType.MESSAGE,    # Messages
             MemoryType.OBSERVATION,  # Recent observations
             MemoryType.FILE,     # File content (includes goals.json and active_tasks.json)
-            MemoryType.CONTEXT,  # Derived context
         ]
         
         for mem_type in type_order:
@@ -139,11 +137,8 @@ class ContextBuilder:
         # Section headers
         headers = {
             MemoryType.KNOWLEDGE: "=== KNOWLEDGE ===",
-            MemoryType.MESSAGE: "=== MESSAGES ===",
             MemoryType.FILE: "=== FILE CONTENT ===",
             MemoryType.OBSERVATION: "=== OBSERVATIONS ===",
-            MemoryType.CONTEXT: "=== CONTEXT ===",
-            MemoryType.STATUS: "=== STATUS ===",
         }
         
         lines = [headers.get(mem_type, f"=== {mem_type.value.upper()} ===")]
@@ -230,9 +225,8 @@ class ContextBuilder:
             lines.append("")
         
         # Other content
-        other_memories = [m for m in memories if m.type not in 
-                         [MemoryType.KNOWLEDGE, MemoryType.OBSERVATION, MemoryType.MESSAGE]]
-        
+        other_memories = [m for m in memories if m.type not in
+                         [MemoryType.KNOWLEDGE, MemoryType.OBSERVATION]]
         if other_memories:
             lines.append("Additional relevant information:")
             for memory in other_memories[:5]:  # Limit to avoid too long

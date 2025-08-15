@@ -490,23 +490,17 @@ class CognitiveLoop:
             # (they might have been created after initialization)
             self._ensure_goals_and_tasks_in_memory()
             
-            # Stage 1: Observation - Gather and understand information
-            self._update_dynamic_context(stage="OBSERVATION", phase="STARTING")
             await self.observation_stage.observe()
             
-            # Stage 2: Decision - Choose what to do
             self._update_dynamic_context(stage="DECISION", phase="STARTING")
             await self.decision_stage.decide()
                         
-            # Stage 3: Execution - Take action
             self._update_dynamic_context(stage="EXECUTION", phase="STARTING")
             await self.execution_stage.execute()
             
-            # Stage 4: Reflect - Review what just happened
             self._update_dynamic_context(stage="REFLECT", phase="STARTING")
             await self.reflect_stage.reflect()
             
-            # Stage 5: Cleanup - Clean up obsolete memories and maintain system
             self._update_dynamic_context(stage="CLEANUP", phase="STARTING")
             await self.cleanup_stage.cleanup(self.cycle_count)
                 
