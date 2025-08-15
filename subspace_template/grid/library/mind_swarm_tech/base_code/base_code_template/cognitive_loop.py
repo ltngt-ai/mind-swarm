@@ -25,7 +25,7 @@ from .knowledge import KnowledgeManager
 from .state import CyberStateManager, ExecutionStateTracker
 from .utils import CognitiveUtils, FileManager
 from .brain import BrainInterface
-from .stages import ObservationStage, ReflectStage, DecisionStage, ExecutionStage
+from .stages import ObservationStage, ReflectStage, DecisionStage, ExecutionStage, CleanupStage
 
 logger = logging.getLogger("Cyber.cognitive")
 
@@ -83,6 +83,7 @@ class CognitiveLoop:
         self.decision_stage = DecisionStage(self)  # This is now V2
         self.execution_stage = ExecutionStage(self)  # This is now V2
         self.reflect_stage = ReflectStage(self)
+        self.cleanup_stage = CleanupStage(self)
     
     def _initialize_pipeline_buffers(self):
         """Initialize pipeline memory blocks for each stage with clear current/previous naming."""
@@ -553,193 +554,12 @@ class CognitiveLoop:
     async def cleanup(self):
         """Perform memory cleanup and system maintenance.
         
-        This is called at the end of every cognitive cycle to:
-        1. Clean up obsolete observations
-        2. Remove expired memories
-        3. Manage memory budget
-        4. Perform other maintenance tasks
+        This delegates to the CleanupStage to handle all cleanup operations.
         """
-        logger.debug(f"Starting cleanup for cycle {self.cycle_count}")
-        
-        # Get context for intelligent cleanup decisions
-        from .memory.tag_filter import TagFilter
-        memory_context = self.memory_system.build_context(
-            max_tokens=self.max_context_tokens // 4,  # Smaller context for cleanup
-            current_task="Identifying obsolete memories and observations for cleanup",
-            selection_strategy="recent",
-            tag_filter=TagFilter(blacklist={"action_guide", "action_implementation", "execution", "procedures", "tools"}),
-            exclude_types=[]
-        )
-        
-        logger.debug(f"Built cleanup context with {len(memory_context)} chars")
-        
-        # Use brain to identify what to clean up
-        logger.debug("Calling _identify_cleanup_targets...")
-        cleanup_decisions = await self._identify_cleanup_targets(memory_context)
-        logger.debug(f"Cleanup decisions: {cleanup_decisions}")
-        
-        if cleanup_decisions:
-            # Clean up identified obsolete observations
-            obsolete_observations = cleanup_decisions.get("obsolete_observations", [])
-            for obs_id in obsolete_observations:
-                if self.memory_system.remove_memory(obs_id):
-                    logger.debug(f"🧹 Removed obsolete observation: {obs_id}")
-            
-            # Clean up identified obsolete memory blocks
-            obsolete_memories = cleanup_decisions.get("obsolete_memories", [])
-            for mem_id in obsolete_memories:
-                if self.memory_system.remove_memory(mem_id):
-                    logger.debug(f"🧹 Removed obsolete memory: {mem_id}")
-        
-        # Also do automatic cleanup of expired memories
-        expired = self.memory_system.cleanup_expired()
-        old_observations = self.memory_system.cleanup_old_observations(max_age_seconds=1800)
-        
-        if expired or old_observations:
-            logger.info(f"🧹 Cleaned up {expired} expired, {old_observations} old memories")
-        
-        # Clean up old script execution files
-        script_files_cleaned = await self._cleanup_old_script_executions()
-        if script_files_cleaned > 0:
-            logger.info(f"🧹 Cleaned up {script_files_cleaned} old script execution files")
-        
-        # Log cleanup completion
-        if cleanup_decisions or expired or old_observations or script_files_cleaned:
-            logger.info(f"✨ Cleanup completed for cycle {self.cycle_count}")
+        await self.cleanup_stage.run(self.cycle_count)
     
-    async def _cleanup_old_script_executions(self, max_age_minutes: int = 30, keep_recent: int = 10) -> int:
-        """Clean up old script execution files from action_results directory.
-        
-        Args:
-            max_age_minutes: Maximum age in minutes before files are eligible for cleanup
-            keep_recent: Always keep at least this many recent files
-            
-        Returns:
-            Number of files cleaned up
-        """
-        import time
-        from pathlib import Path
-        
-        action_results_dir = self.memory_dir / "action_results"
-        if not action_results_dir.exists():
-            return 0
-        
-        # Get all script execution files
-        script_files = list(action_results_dir.glob("script_execution_*.json"))
-        if len(script_files) <= keep_recent:
-            return 0  # Don't clean up if we have fewer than the minimum to keep
-        
-        # Sort by modification time (newest first)
-        script_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
-        
-        # Always keep the most recent files
-        files_to_check = script_files[keep_recent:]
-        
-        current_time = time.time()
-        max_age_seconds = max_age_minutes * 60
-        cleaned_count = 0
-        
-        for file_path in files_to_check:
-            try:
-                file_age = current_time - file_path.stat().st_mtime
-                if file_age > max_age_seconds:
-                    # Remove associated memory if it exists
-                    memory_id = f"memory:{file_path.relative_to(self.personal.parent)}"
-                    if self.memory_system.remove_memory(memory_id):
-                        logger.debug(f"Removed memory for old script execution: {memory_id}")
-                    
-                    # Delete the file
-                    file_path.unlink()
-                    cleaned_count += 1
-                    logger.debug(f"Deleted old script execution file: {file_path.name}")
-            except Exception as e:
-                logger.error(f"Error cleaning up script file {file_path}: {e}")
-        
-        return cleaned_count
-    
-    async def _identify_cleanup_targets(self, memory_context: str) -> Optional[Dict[str, Any]]:
-        """Use brain to identify what needs cleanup.
-        
-        Args:
-            memory_context: Working memory context for cleanup decisions
-            
-        Returns:
-            Dict with cleanup targets or None
-        """
-        import time
-        
-        logger.debug("_identify_cleanup_targets called")
-        
-        thinking_request = {
-            "signature": {
-                "instruction": """
-Review your working memory to identify items that can be cleaned up.
-Each memory has a cycle_count showing when it was created.
-Look for:
-1. Old observations from many cycles ago that are no longer relevant
-2. Duplicate observations about the same thing
-3. Action results that have been superseded by newer results
-4. Observations about things that have already been handled
-5. Memory blocks for files that no longer exist (e.g., old outbox messages that were moved)
-6. Temporary memory blocks that are no longer needed
-7. Completed tasks that don't need to be tracked anymore
-
-Be conservative - only mark items as obsolete if you're certain they're no longer needed.
-Current cycle count is in your working memory.
-Always start your output with [[ ## reasoning ## ]]
-""",
-                "inputs": {
-                    "working_memory": "Your working memory with all items including their cycle counts"
-                },
-                "outputs": {
-                    "reasoning": "Why these items can be cleaned up",
-                    "obsolete_observations": "JSON array of observation IDs that are obsolete and can be removed, e.g. [\"observation:personal/action_result/old:cycle_5\"]",
-                    "obsolete_memories": "JSON array of memory IDs that are obsolete and can be removed, e.g. [\"memory:personal/outbox/msg_Alice_20250814_132424_7715.json\"]"
-                },
-                "display_field": "reasoning"
-            },
-            "input_values": {
-                "working_memory": memory_context
-            },
-            "request_id": f"cleanup_{int(time.time()*1000)}",
-            "timestamp": datetime.now().isoformat()
-        }
-        
-        logger.debug(f"Sending cleanup brain request with ID: {thinking_request['request_id']}")
-        response = await self.brain_interface._use_brain(json.dumps(thinking_request))
-        logger.debug(f"Got cleanup brain response: {response[:200] if response else 'None'}")
-        result = json.loads(response)
-        
-        output_values = result.get("output_values", {})
-        
-        # Parse the JSON arrays from strings if needed
-        obsolete_obs_json = output_values.get("obsolete_observations", "[]")
-        obsolete_mem_json = output_values.get("obsolete_memories", "[]")
-        
-        try:
-            if isinstance(obsolete_obs_json, str):
-                obsolete_observations = json.loads(obsolete_obs_json)
-            else:
-                obsolete_observations = obsolete_obs_json
-        except:
-            obsolete_observations = []
-        
-        try:
-            if isinstance(obsolete_mem_json, str):
-                obsolete_memories = json.loads(obsolete_mem_json)
-            else:
-                obsolete_memories = obsolete_mem_json
-        except:
-            obsolete_memories = []
-        
-        # Return None if nothing to clean up
-        if not obsolete_observations and not obsolete_memories:
-            return None
-            
-        return {
-            "obsolete_observations": obsolete_observations,
-            "obsolete_memories": obsolete_memories
-        }
+    # Note: _cleanup_old_script_executions and _identify_cleanup_targets have been moved to CleanupStage
+    # These methods are now part of the CleanupStage class
     
     async def maintain(self):
         """Perform maintenance tasks when idle.

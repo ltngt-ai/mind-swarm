@@ -12,7 +12,7 @@ import json
 import traceback
 import yaml  # Still needed for reading the file
 
-from ..memory import Priority, ObservationMemoryBlock
+from ..memory import Priority, ObservationMemoryBlock, FileMemoryBlock
 from ..memory.tag_filter import TagFilter
 
 logger = logging.getLogger("Cyber.stages.execution_v3")
@@ -57,47 +57,75 @@ class ExecutionStage:
         # Set up Python execution environment
         self._setup_execution_environment()
         
-        # Generate API documentation as knowledge (once)
-        self._ensure_api_docs_knowledge()
-        self._ensure_location_api_docs_knowledge()
-        self._ensure_events_api_docs_knowledge()
+        # Generate API documentation as knowledge for all modules
+        self._extract_and_save_module_docs(self.memory_api, "memory_api_docs")
+        self._extract_and_save_module_docs(self.location_api, "location_api_docs")
+        self._extract_and_save_module_docs(self.events, "events_api_docs")
     
-    def _ensure_api_docs_knowledge(self):
-        """Ensure API documentation is in working memory."""
-        api_docs_path = self.personal / ".internal" / "knowledge" / "memory_api_docs.yaml"
+    def _extract_and_save_module_docs(self, module, docs_name: str):
+        """Extract API documentation from a module and save to knowledge."""
+        import inspect
+        
+        api_docs_path = self.personal / ".internal" / "knowledge" / f"{docs_name}.yaml"
         
         # First, create the file if it doesn't exist
         if not api_docs_path.exists():
-            logger.info("Generating Memory API documentation from Python module...")
+            logger.info(f"Generating {docs_name} documentation from Python module...")
             try:
-                # Extract documentation from the actual memory module
-                docs = self._extract_api_documentation()
+                # Extract documentation from the module
+                docs = []
+                
+                # Get module docstring
+                if module.__doc__:
+                    docs.append(f"# {module.__class__.__name__ if hasattr(module, '__class__') else 'Module'} API Documentation")
+                    docs.append("")
+                    docs.append(module.__doc__.strip())
+                    docs.append("")
+                
+                # Extract all public methods and their docs
+                docs.append("## Available Methods")
+                docs.append("")
+                
+                for name in dir(module):
+                    if not name.startswith('_'):  # Public methods only
+                        attr = getattr(module, name)
+                        if callable(attr) and hasattr(attr, '__doc__') and attr.__doc__:
+                            # Get signature if possible
+                            try:
+                                sig = inspect.signature(attr)
+                                docs.append(f"### {name}{sig}")
+                            except:
+                                docs.append(f"### {name}()")
+                            
+                            docs.append(attr.__doc__.strip())
+                            docs.append("")
+                
+                docs_content = "\n".join(docs)
                 
                 # Create clean YAML with pipe syntax for content
                 api_docs_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(api_docs_path, 'w') as f:
                     # Write YAML manually for clean formatting
                     f.write("knowledge_version: '1.0'\n")
-                    f.write("title: Memory API v3 - Python Module Documentation\n")
+                    f.write(f"title: {docs_name.replace('_', ' ').title()} - Auto-extracted Documentation\n")
                     f.write("content: |\n")
                     # Indent content properly for YAML pipe syntax
-                    for line in docs.split('\n'):
+                    for line in docs_content.split('\n'):
                         f.write(f"  {line}\n")
                     f.write("metadata:\n")
                     f.write("  category: execution\n")
                     f.write("  tags:\n")
                     f.write("    - execution\n")
-                    f.write("    - memory\n")
                     f.write("    - api\n")
                     f.write("    - reference\n")
                     f.write("    - execution_only\n")
                     f.write("    - python\n")
                     f.write("  confidence: 1.0\n")
                     f.write("  priority: 1\n")
-                    f.write("  source: memory.py\n")
+                    f.write(f"  source: {module.__class__.__name__ if hasattr(module, '__class__') else 'module'}\n")
                     f.write(f"  created: '{datetime.now().isoformat()}'\n")
                     f.write("  auto_generated: true\n")
-                logger.info(f"Created Memory API documentation at {api_docs_path}")
+                logger.info(f"Created {docs_name} documentation at {api_docs_path}")
             except Exception as e:
                 logger.warning(f"Failed to generate API docs: {e}")
                 return
@@ -137,435 +165,7 @@ class ExecutionStage:
         except Exception as e:
             logger.warning(f"Failed to load API docs into memory: {e}")
     
-    def _extract_api_documentation(self) -> str:
-        """Extract documentation from the memory module using AST."""
-        import ast
-        import inspect
-        from ..python_modules import memory
-        
-        # Get the source file path
-        source_file = inspect.getsourcefile(memory)
-        if not source_file:
-            return "Failed to locate memory source file"
-        
-        # Read and parse the source
-        with open(source_file, 'r') as f:
-            source_code = f.read()
-        
-        tree = ast.parse(source_code)
-        
-        docs = []
-        docs.append("# Memory API v3 - Extracted from Python Module")
-        docs.append("")
-        
-        # Get module docstring
-        module_doc = ast.get_docstring(tree)
-        if module_doc:
-            docs.append("## Module Overview")
-            docs.append(module_doc)
-            docs.append("")
-        
-        # Process all classes and functions
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef):
-                # Get class docstring
-                class_doc = ast.get_docstring(node)
-                if class_doc:
-                    docs.append(f"## {node.name} Class")
-                    docs.append(class_doc)
-                    docs.append("")
-                    
-                    # Get methods
-                    docs.append(f"### {node.name} Methods\n")
-                    for item in node.body:
-                        if isinstance(item, ast.FunctionDef) and not item.name.startswith('_'):
-                            method_doc = ast.get_docstring(item)
-                            
-                            # Build signature
-                            args = []
-                            for arg in item.args.args:
-                                if arg.arg != 'self':
-                                    args.append(arg.arg)
-                            signature = f"({', '.join(args)})"
-                            
-                            docs.append(f"#### {item.name}{signature}")
-                            if method_doc:
-                                docs.append(method_doc)
-                            docs.append("")
-            
-            elif isinstance(node, ast.FunctionDef) and node.col_offset == 0:
-                # Module-level function
-                func_doc = ast.get_docstring(node)
-                if func_doc and not node.name.startswith('_'):
-                    args = []
-                    for arg in node.args.args:
-                        args.append(arg.arg)
-                    signature = f"({', '.join(args)})"
-                    
-                    docs.append(f"## {node.name}{signature}")
-                    docs.append(func_doc)
-                    docs.append("")
-        
-        # Add practical usage examples from actual usage patterns
-        docs.append("## Common Usage Patterns\n")
-        docs.append("```python")
-        docs.append("# The memory object is pre-initialized for you")
-        docs.append("")
-        docs.append("# READING FILES")
-        docs.append("# Text files:")
-        docs.append("content = memory.personal.notes.txt.content")
-        docs.append("content = memory['/personal/notes.txt'].content")
-        docs.append("")
-        docs.append("# JSON files (automatically parsed):")
-        docs.append("data = memory.personal.config.json.content")
-        docs.append("value = memory.personal.config.json['key']  # Direct access to JSON fields")
-        docs.append("")
-        docs.append("# WRITING FILES")
-        docs.append('memory.personal.output = "Result"')
-        docs.append('memory["/personal/log.txt"] = "Log entry"')
-        docs.append("")
-        docs.append("# JSON data:")
-        docs.append("memory.personal.data.json = {'key': 'value', 'count': 42}")
-        docs.append("memory.personal.data.json['count'] = 43  # Update JSON field")
-        docs.append("")
-        docs.append("# CREATE DIRECTORIES")
-        docs.append('memory.make_memory_group("/personal/project")')
-        docs.append("")
-        docs.append("# SEND MESSAGES")
-        docs.append('memory.outbox.new(to="user", content="Done!", msg_type="CONFIRMATION")')
-        docs.append("")
-        docs.append("# TRANSACTIONS")
-        docs.append("with memory.transaction():")
-        docs.append('    memory.personal.critical = "data"')
-        docs.append('    memory.personal.backup = memory.personal.critical.content')
-        docs.append("")
-        docs.append("# ERROR HANDLING")
-        docs.append("try:")
-        docs.append("    content = memory.personal.missing.content")
-        docs.append("except MemoryNotFoundError:")
-        docs.append('    memory.personal.missing = "default"')
-        docs.append("```")
-        
-        return "\n".join(docs)
-    
-    def _ensure_location_api_docs_knowledge(self):
-        """Ensure Location API documentation is in working memory."""
-        api_docs_path = self.personal / ".internal" / "knowledge" / "location_api_docs.yaml"
-        
-        # First, create the file if it doesn't exist
-        if not api_docs_path.exists():
-            logger.info("Generating Location API documentation from Python module...")
-            try:
-                # Extract documentation from the actual location module
-                docs = self._extract_location_api_documentation()
-                
-                # Create clean YAML with pipe syntax for content
-                api_docs_path.parent.mkdir(parents=True, exist_ok=True)
-                with open(api_docs_path, 'w') as f:
-                    # Write YAML manually for clean formatting
-                    f.write("knowledge_version: '1.0'\n")
-                    f.write("title: Location API - Python Module Documentation\n")
-                    f.write("content: |\n")
-                    # Indent content properly for YAML pipe syntax
-                    for line in docs.split('\n'):
-                        f.write(f"  {line}\n")
-                    f.write("metadata:\n")
-                    f.write("  category: execution\n")
-                    f.write("  tags:\n")
-                    f.write("    - execution\n")
-                    f.write("    - location\n")
-                    f.write("    - navigation\n")
-                    f.write("    - api\n")
-                    f.write("    - reference\n")
-                    f.write("    - execution_only\n")
-                    f.write("    - python\n")
-                    f.write("  confidence: 1.0\n")
-                    f.write("  priority: 1\n")
-                    f.write("  source: location.py\n")
-                    f.write(f"  created: '{datetime.now().isoformat()}'\n")
-                    f.write("  auto_generated: true\n")
-                logger.info(f"Created Location API documentation at {api_docs_path}")
-            except Exception as e:
-                logger.warning(f"Failed to generate Location API docs: {e}")
-                return
-        
-        # Now load it into working memory like ROM does
-        try:
-            # Load the YAML file
-            file_content = api_docs_path.read_text()
-            api_data = yaml.safe_load(file_content)
-            
-            # Create FileMemoryBlock exactly like ROM loader does
-            from ..memory import FileMemoryBlock, MemoryType
-            
-            metadata = api_data.get("metadata", {})
-            content = api_data.get("content", "")
-            
-            # Add content to metadata for brain access (like ROM does)
-            if not metadata:
-                metadata = {}
-            metadata["content"] = content
-            metadata["is_location_api_docs"] = True
-            
-            api_memory = FileMemoryBlock(
-                location=str(api_docs_path),  # Use the actual file path
-                confidence=1.0,
-                priority=Priority.FOUNDATIONAL,  # High priority so it's always included
-                metadata=metadata,
-                pinned=True,  # Pin it so it's never removed
-                cycle_count=0,
-                block_type=MemoryType.KNOWLEDGE
-            )
-            
-            # Add it to the memory system
-            self.memory_system.add_memory(api_memory)
-            logger.info("Loaded Location API documentation into working memory")
-            
-        except Exception as e:
-            logger.warning(f"Failed to load Location API docs into memory: {e}")
-    
-    def _extract_location_api_documentation(self) -> str:
-        """Extract documentation from the location module using AST."""
-        import ast
-        import inspect
-        from ..python_modules import location
-        
-        # Get the source file path
-        source_file = inspect.getsourcefile(location)
-        if not source_file:
-            return "Failed to locate location source file"
-        
-        # Read and parse the source
-        with open(source_file, 'r') as f:
-            source_code = f.read()
-        
-        tree = ast.parse(source_code)
-        
-        docs = []
-        docs.append("# Location API - Extracted from Python Module")
-        docs.append("")
-        
-        # Get module docstring
-        module_doc = ast.get_docstring(tree)
-        if module_doc:
-            docs.append("## Module Overview")
-            docs.append(module_doc)
-            docs.append("")
-        
-        # Process all classes and functions
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef):
-                # Get class docstring
-                class_doc = ast.get_docstring(node)
-                if class_doc:
-                    docs.append(f"## {node.name} Class")
-                    docs.append(class_doc)
-                    docs.append("")
-                    
-                    # Get methods
-                    docs.append(f"### {node.name} Methods\n")
-                    for item in node.body:
-                        if isinstance(item, ast.FunctionDef) and not item.name.startswith('_'):
-                            method_doc = ast.get_docstring(item)
-                            
-                            # Build signature
-                            args = []
-                            for arg in item.args.args:
-                                if arg.arg != 'self':
-                                    args.append(arg.arg)
-                            signature = f"({', '.join(args)})"
-                            
-                            docs.append(f"#### {item.name}{signature}")
-                            if method_doc:
-                                docs.append(method_doc)
-                            docs.append("")
-        
-        # Add practical usage examples
-        docs.append("## Common Usage Patterns\n")
-        docs.append("```python")
-        docs.append("# The location object is pre-initialized for you")
-        docs.append("")
-        docs.append("# GET CURRENT LOCATION")
-        docs.append("current = location.current")
-        docs.append("print(f'Currently at: {current}')")
-        docs.append("")
-        docs.append("# CHANGE LOCATION")
-        docs.append("location.current = '/grid/library/knowledge'")
-        docs.append("# Or use the change method")
-        docs.append("location.change('/personal/workspace')")
-        docs.append("")
-        docs.append("# CHECK IF LOCATION EXISTS")
-        docs.append("if location.exists('/grid/workshop'):")
-        docs.append("    location.current = '/grid/workshop'")
-        docs.append("else:")
-        docs.append("    print('Workshop does not exist')")
-        docs.append("")
-        docs.append("# ERROR HANDLING")
-        docs.append("try:")
-        docs.append("    location.current = '/invalid/path'")
-        docs.append("except LocationError as e:")
-        docs.append("    print(f'Invalid location: {e}')")
-        docs.append("```")
-        
-        return "\n".join(docs)
-    
-    def _ensure_events_api_docs_knowledge(self):
-        """Ensure Events API documentation is in working memory."""
-        api_docs_path = self.personal / ".internal" / "knowledge" / "events_api_docs.yaml"
-        
-        # First, create the file if it doesn't exist
-        if not api_docs_path.exists():
-            logger.info("Generating Events API documentation from Python module...")
-            try:
-                # Generate documentation from the events module
-                docs_content = self._generate_events_api_docs()
-                
-                # Create clean YAML with pipe syntax for content
-                api_docs_path.parent.mkdir(parents=True, exist_ok=True)
-                with open(api_docs_path, 'w') as f:
-                    # Write YAML manually for clean formatting
-                    f.write("knowledge_version: '1.0'\n")
-                    f.write("knowledge:\n")
-                    f.write("  - id: events_api\n")
-                    f.write("    type: api_documentation\n")
-                    f.write("    name: Events API Documentation\n")
-                    f.write("    tags:\n")
-                    f.write("      - events\n")
-                    f.write("      - api\n")
-                    f.write("      - python\n")
-                    f.write("      - sleep\n")
-                    f.write("      - idle\n")
-                    f.write("      - mail\n")
-                    f.write("    content: |\n")
-                    # Indent content for YAML
-                    for line in docs_content.split('\n'):
-                        f.write(f"      {line}\n")
-                    f.write("metadata:\n")
-                    f.write("  source: python_modules.events\n")
-                    f.write(f"  created: '{datetime.now().isoformat()}'\n")
-                    f.write("  auto_generated: true\n")
-                logger.info(f"Created Events API documentation at {api_docs_path}")
-            except Exception as e:
-                logger.warning(f"Failed to generate Events API docs: {e}")
-        
-        # Now load it into working memory as a FileMemoryBlock
-        if api_docs_path.exists():
-            self._add_events_api_to_memory(api_docs_path)
-    
-    def _add_events_api_to_memory(self, api_docs_path: Path):
-        """Add Events API documentation to working memory."""
-        try:
-            # Load the YAML file
-            file_content = api_docs_path.read_text()
-            api_data = yaml.safe_load(file_content)
-            
-            # Extract the content
-            if api_data and 'knowledge' in api_data:
-                knowledge_item = api_data['knowledge'][0]
-                content = knowledge_item.get('content', '')
-                metadata = knowledge_item.copy()
-                metadata.pop('content', None)
-            else:
-                # Fallback to raw content
-                content = file_content
-                metadata = {}
-            metadata["content"] = content
-            metadata["is_events_api_docs"] = True
-            
-            api_memory = FileMemoryBlock(
-                location=str(api_docs_path),  # Use the actual file path
-                confidence=1.0,
-                priority=Priority.FOUNDATIONAL,  # High priority so it's always included
-                metadata=metadata
-            )
-            
-            # Check if already in memory
-            existing_api_docs = [
-                m for m in self.cognitive_loop.memory_system.working_memory.memories
-                if isinstance(m, FileMemoryBlock) and 
-                m.metadata.get("is_events_api_docs", False)
-            ]
-            
-            if not existing_api_docs:
-                self.cognitive_loop.memory_system.working_memory.add_memory(api_memory)
-                logger.debug("Added Events API documentation to working memory")
-                
-        except Exception as e:
-            logger.warning(f"Failed to add Events API docs to memory: {e}")
-    
-    def _generate_events_api_docs(self) -> str:
-        """Generate documentation from the events module."""
-        docs = []
-        docs.append("# Events API - Efficient Idle and Wake Functionality")
-        docs.append("")
-        docs.append("The Events API allows cybers to sleep efficiently and wake on events.")
-        docs.append("")
-        docs.append("## Key Features")
-        docs.append("- Timer-based sleep with interruption support")
-        docs.append("- Wake on new mail arrival")
-        docs.append("- Combined sleep with mail monitoring")
-        docs.append("- Automatic shutdown detection")
-        docs.append("")
-        docs.append("## Quick Examples")
-        docs.append("")
-        docs.append("```python")
-        docs.append("# TIMER SLEEP")
-        docs.append("# Sleep for 30 seconds")
-        docs.append("result = events.sleep(30)")
-        docs.append("if result == 'completed':")
-        docs.append("    print('Slept for full duration')")
-        docs.append("elif result == 'shutdown':")
-        docs.append("    print('Shutdown requested')")
-        docs.append("")
-        docs.append("# WAIT FOR MAIL")
-        docs.append("# Wait up to 60 seconds for new mail")
-        docs.append("new_mail = events.wait_for_mail(60)")
-        docs.append("if new_mail:")
-        docs.append("    print(f'Got {len(new_mail)} new messages:')")
-        docs.append("    for mail_file in new_mail:")
-        docs.append("        print(f'  - {mail_file}')")
-        docs.append("")
-        docs.append("# COMBINED SLEEP AND MAIL CHECK")
-        docs.append("# Sleep 30 seconds but wake if mail arrives")
-        docs.append("new_mail = events.wait_for_mail(30)")
-        docs.append("if new_mail:")
-        docs.append("    print(f'New mail arrived: {new_mail}')")
-        docs.append("else:")
-        docs.append("    print('No mail in 30 seconds')")
-        docs.append("")
-        docs.append("# SMART IDLE DURATION")
-        docs.append("# Get recommended idle duration")
-        docs.append("duration = events.get_idle_duration()")
-        docs.append("print(f'Sleeping for {duration} seconds')")
-        docs.append("events.sleep(duration)")
-        docs.append("")
-        docs.append("# EFFICIENT IDLE LOOP")
-        docs.append("idle_count = 0")
-        docs.append("while idle_count < 10:")
-        docs.append("    # Wait for mail with 10 second timeout")
-        docs.append("    new_mail = events.wait_for_mail(10)")
-        docs.append("    ")
-        docs.append("    if new_mail:")
-        docs.append("        print(f'Processing {len(new_mail)} messages...')")
-        docs.append("        idle_count = 0  # Reset idle")
-        docs.append("    else:")
-        docs.append("        idle_count += 1")
-        docs.append("        print(f'Idle cycle {idle_count}')")
-        docs.append("")
-        docs.append("print('Been idle too long, exploring!')")
-        docs.append("```")
-        docs.append("")
-        docs.append("## Important Notes")
-        docs.append("- Maximum sleep duration is 300 seconds (5 minutes)")
-        docs.append("- Sleep can be interrupted by shutdown signals")
-        docs.append("- Mail checks look for .msg and .json files in inbox")
-        docs.append("- All durations are in seconds")
-        docs.append("- **WARNING**: Only wait ONCE per script execution")
-        docs.append("  Multiple waits in the same script are ineffective")
-        docs.append("  Return to cognitive loop to think between waits")
-        
-        return "\n".join(docs)
-    
+    # Old hardcoded documentation methods removed - now using generic _extract_and_save_module_docs
     def _setup_execution_environment(self):
         """Set up the Python execution environment with new Memory API."""
         # Safe built-ins for script execution
@@ -624,6 +224,28 @@ class ExecutionStage:
             'functools': functools,
             'collections': collections,
         }
+        
+        # Import and create API instances for documentation
+        from ..python_modules.memory import Memory
+        from ..python_modules.location import Location
+        from ..python_modules.events import Events
+        
+        # Create context for the APIs
+        context = {
+            'cognitive_loop': self.cognitive_loop,
+            'memory_system': self.memory_system,
+            'brain_interface': self.brain_interface,
+            'cyber_id': self.cyber_id,
+            'personal_dir': self.personal,
+            'outbox_dir': self.outbox_dir,
+            'memory_dir': self.memory_dir,
+            'current_location': '/personal'
+        }
+        
+        # Create instances for documentation extraction
+        self.memory_api = Memory(context)
+        self.location_api = Location(context)
+        self.events = Events(context)
     
     async def run(self) -> List[Dict[str, Any]]:
         """Run the execution stage."""
