@@ -62,33 +62,40 @@ class ExecutionStage:
         self._extract_and_save_module_docs(self.location_api, "location_api_docs")
         self._extract_and_save_module_docs(self.events, "events_api_docs")
     
-    def _extract_and_save_module_docs(self, module, docs_name: str):
+    def _extract_and_save_module_docs(self, module_instance, docs_name: str):
         """Extract API documentation from a module and save to knowledge."""
         import inspect
+        import sys
         
         api_docs_path = self.personal / ".internal" / "knowledge" / f"{docs_name}.yaml"
         
-        # First, create the file if it doesn't exist
-        if not api_docs_path.exists():
+        # Always regenerate docs to pick up any changes
+        # (or check if source module is newer than docs file)
+        regenerate = True  # For now, always regenerate to ensure latest docs
+        
+        if regenerate:
             logger.info(f"Generating {docs_name} documentation from Python module...")
             try:
                 # Extract documentation from the module
                 docs = []
                 
-                # Get module docstring
-                if module.__doc__:
-                    docs.append(f"# {module.__class__.__name__ if hasattr(module, '__class__') else 'Module'} API Documentation")
+                # Get the actual module (not the class instance)
+                module_obj = sys.modules[module_instance.__class__.__module__]
+                
+                # Get module docstring (this has the important examples!)
+                if module_obj.__doc__:
+                    docs.append(f"# {module_instance.__class__.__name__} API Documentation")
                     docs.append("")
-                    docs.append(module.__doc__.strip())
+                    docs.append(module_obj.__doc__.strip())
                     docs.append("")
                 
-                # Extract all public methods and their docs
+                # Extract all public methods and their docs from the instance
                 docs.append("## Available Methods")
                 docs.append("")
                 
-                for name in dir(module):
+                for name in dir(module_instance):
                     if not name.startswith('_'):  # Public methods only
-                        attr = getattr(module, name)
+                        attr = getattr(module_instance, name)
                         if callable(attr) and hasattr(attr, '__doc__') and attr.__doc__:
                             # Get signature if possible
                             try:
@@ -122,7 +129,7 @@ class ExecutionStage:
                     f.write("    - python\n")
                     f.write("  confidence: 1.0\n")
                     f.write("  priority: 1\n")
-                    f.write(f"  source: {module.__class__.__name__ if hasattr(module, '__class__') else 'module'}\n")
+                    f.write(f"  source: {module_instance.__class__.__module__}\n")
                     f.write(f"  created: '{datetime.now().isoformat()}'\n")
                     f.write("  auto_generated: true\n")
                 logger.info(f"Created {docs_name} documentation at {api_docs_path}")

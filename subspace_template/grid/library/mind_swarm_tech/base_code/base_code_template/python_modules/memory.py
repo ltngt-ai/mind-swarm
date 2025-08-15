@@ -1,4 +1,5 @@
-"""Memory API for cybers.
+"""
+# Memory API for Cybers.
 
 ## Core Concept: Everything is Memory
 The `memory` object provides unified access to everything in Mind-Swarm.
@@ -6,7 +7,7 @@ This provides a way to safely mutate memories and so progress towards goals and 
 
 Everything is memory. This module provides a unified interface for all memory operations
 including files, messages, goals, and any other data in the Mind-Swarm ecosystem.
-
+    
 ## Important Examples
 
 ### Reading Memory (any access will load the memory into working memory)
@@ -182,10 +183,38 @@ class TrackedDict(dict):
     """Dictionary that tracks modifications and notifies parent MemoryNode."""
     
     def __init__(self, data: dict, memory_node: 'MemoryNode'):
-        super().__init__(data)
+        # Recursively wrap nested dicts and lists before initializing
+        wrapped_data = {}
+        for k, v in data.items():
+            if isinstance(v, dict) and not isinstance(v, TrackedDict):
+                wrapped_data[k] = TrackedDict(v, memory_node)
+            elif isinstance(v, list) and not isinstance(v, TrackedList):
+                wrapped_data[k] = TrackedList(v, memory_node)
+            else:
+                wrapped_data[k] = v
+        super().__init__(wrapped_data)
         self._memory_node = memory_node
     
+    def __getitem__(self, key):
+        """Wrap nested structures when accessed."""
+        value = super().__getitem__(key)
+        # Wrap on access in case something wasn't wrapped initially
+        if isinstance(value, dict) and not isinstance(value, TrackedDict):
+            wrapped = TrackedDict(value, self._memory_node)
+            super().__setitem__(key, wrapped)
+            return wrapped
+        elif isinstance(value, list) and not isinstance(value, TrackedList):
+            wrapped = TrackedList(value, self._memory_node)
+            super().__setitem__(key, wrapped)
+            return wrapped
+        return value
+    
     def __setitem__(self, key, value):
+        # Wrap nested structures when setting
+        if isinstance(value, dict) and not isinstance(value, TrackedDict):
+            value = TrackedDict(value, self._memory_node)
+        elif isinstance(value, list) and not isinstance(value, TrackedList):
+            value = TrackedList(value, self._memory_node)
         super().__setitem__(key, value)
         self._notify_change()
     
@@ -208,10 +237,39 @@ class TrackedDict(dict):
         self._notify_change()
     
     def update(self, *args, **kwargs):
-        super().update(*args, **kwargs)
+        # Wrap any nested structures in the update
+        if args and len(args) == 1:
+            if isinstance(args[0], dict):
+                wrapped = {}
+                for k, v in args[0].items():
+                    if isinstance(v, dict) and not isinstance(v, TrackedDict):
+                        wrapped[k] = TrackedDict(v, self._memory_node)
+                    elif isinstance(v, list) and not isinstance(v, TrackedList):
+                        wrapped[k] = TrackedList(v, self._memory_node)
+                    else:
+                        wrapped[k] = v
+                super().update(wrapped)
+            else:
+                super().update(args[0])
+        else:
+            # Handle kwargs
+            wrapped_kwargs = {}
+            for k, v in kwargs.items():
+                if isinstance(v, dict) and not isinstance(v, TrackedDict):
+                    wrapped_kwargs[k] = TrackedDict(v, self._memory_node)
+                elif isinstance(v, list) and not isinstance(v, TrackedList):
+                    wrapped_kwargs[k] = TrackedList(v, self._memory_node)
+                else:
+                    wrapped_kwargs[k] = v
+            super().update(*args, **wrapped_kwargs)
         self._notify_change()
     
     def setdefault(self, key, default=None):
+        # Wrap default if it's a dict or list
+        if isinstance(default, dict) and not isinstance(default, TrackedDict):
+            default = TrackedDict(default, self._memory_node)
+        elif isinstance(default, list) and not isinstance(default, TrackedList):
+            default = TrackedList(default, self._memory_node)
         result = super().setdefault(key, default)
         self._notify_change()
         return result
@@ -253,10 +311,38 @@ class TrackedList(list):
     """List that tracks modifications and notifies parent MemoryNode."""
     
     def __init__(self, data: list, memory_node: 'MemoryNode'):
-        super().__init__(data)
+        # Recursively wrap nested dicts and lists before initializing
+        wrapped_data = []
+        for item in data:
+            if isinstance(item, dict) and not isinstance(item, TrackedDict):
+                wrapped_data.append(TrackedDict(item, memory_node))
+            elif isinstance(item, list) and not isinstance(item, TrackedList):
+                wrapped_data.append(TrackedList(item, memory_node))
+            else:
+                wrapped_data.append(item)
+        super().__init__(wrapped_data)
         self._memory_node = memory_node
     
+    def __getitem__(self, key):
+        """Wrap nested structures when accessed."""
+        value = super().__getitem__(key)
+        # Wrap on access in case something wasn't wrapped initially
+        if isinstance(value, dict) and not isinstance(value, TrackedDict):
+            wrapped = TrackedDict(value, self._memory_node)
+            super().__setitem__(key, wrapped)
+            return wrapped
+        elif isinstance(value, list) and not isinstance(value, TrackedList):
+            wrapped = TrackedList(value, self._memory_node)
+            super().__setitem__(key, wrapped)
+            return wrapped
+        return value
+    
     def __setitem__(self, key, value):
+        # Wrap nested structures when setting
+        if isinstance(value, dict) and not isinstance(value, TrackedDict):
+            value = TrackedDict(value, self._memory_node)
+        elif isinstance(value, list) and not isinstance(value, TrackedList):
+            value = TrackedList(value, self._memory_node)
         super().__setitem__(key, value)
         self._notify_change()
     
@@ -265,14 +351,33 @@ class TrackedList(list):
         self._notify_change()
     
     def append(self, value):
+        # Wrap nested structures when appending
+        if isinstance(value, dict) and not isinstance(value, TrackedDict):
+            value = TrackedDict(value, self._memory_node)
+        elif isinstance(value, list) and not isinstance(value, TrackedList):
+            value = TrackedList(value, self._memory_node)
         super().append(value)
         self._notify_change()
     
     def extend(self, iterable):
-        super().extend(iterable)
+        # Wrap nested structures in the iterable
+        wrapped = []
+        for item in iterable:
+            if isinstance(item, dict) and not isinstance(item, TrackedDict):
+                wrapped.append(TrackedDict(item, self._memory_node))
+            elif isinstance(item, list) and not isinstance(item, TrackedList):
+                wrapped.append(TrackedList(item, self._memory_node))
+            else:
+                wrapped.append(item)
+        super().extend(wrapped)
         self._notify_change()
     
     def insert(self, index, value):
+        # Wrap nested structures when inserting
+        if isinstance(value, dict) and not isinstance(value, TrackedDict):
+            value = TrackedDict(value, self._memory_node)
+        elif isinstance(value, list) and not isinstance(value, TrackedList):
+            value = TrackedList(value, self._memory_node)
         super().insert(index, value)
         self._notify_change()
     
@@ -567,18 +672,9 @@ class MemoryNode:
 
 class MemoryGroup:
     """Provides attribute-style and subscript access to a memory group (directory).
-    
     A MemoryGroup represents a directory in the memory system. You can access
     sub-memories using either attribute notation (memory.personal.notes) or
-    subscript notation (memory['personal']['notes']).
-    
-    Examples:
-        # Both of these are equivalent:
-        memory.personal.projects.task1 = "Task data"
-        memory['personal']['projects']['task1'] = "Task data"
-        
-        # You can mix styles:
-        memory.personal['dynamic_name'] = "Dynamic data"
+    subscript notation (memory['personal']['notes']).    
     """
     
     def __init__(self, base_path: str, memory_system: 'Memory'):
@@ -713,13 +809,9 @@ class OutboxHelper:
         return node
 
 class Memory:
-    """Main memory interface providing unified access to all Mind-Swarm memories.
-    The Memory class is the central API for all operations in Mind-Swarm.
-    It provides both dictionary-style and attribute-style access to memories.
-
-    Memory isn't just the working memory, you can access ALL memories.
-    Normally memory access will bring it into working memory, so other stages can see it instantly.
     """
+Main memory interface providing unified access to all Mind-Swarm memories.
+    The Memory class provides methods to read, write, and manage memories"""
     
     def __init__(self, context: Dict[str, Any]):
         """Initialize the memory system.
@@ -928,42 +1020,22 @@ class Memory:
             raise AttributeError(f"'Memory' object has no attribute '{name}'")
     
     def create(self, path: str) -> MemoryNode:
-        """Create a new memory at the specified path.
-        
-        Args:
-            path: Memory path like "/personal/notes.txt" or "knowledge:personal/notes.txt"
-            
-        Returns:
-            MemoryNode that can be modified and saved
-            
-        Example:
-            ```python
-            note = memory.create("/personal/daily_note.txt")
-            note.content = "Today's thoughts..."
-            # Automatically saved
-            ```
         """
+Create a new memory at the specified path.
+Args: path - Memory path like "/personal/notes.txt" or "knowledge:personal/notes.txt"
+Returns: MemoryNode that can be modified and saved
+"""
         clean_path = self._clean_path(path)
         return MemoryNode(clean_path, self, new=True)
     
     def make_memory_group(self, path: str):
-        """Create a memory group (directory) at the specified path.
-        
-        Memory groups organize related memories together.
-        
-        Args:
-            path: Group path like "/personal/projects" or "knowledge:personal/projects"
-            
-        Raises:
-            NotAMemoryGroupError: If a memory already exists at this path
-            MemoryError: If creation fails for other reasons
-            
-        Example:
-            ```python
-            memory.make_memory_group("/personal/experiments")
-            memory.personal.experiments.test1 = "First experiment"
-            ```
         """
+Create a memory group at the specified path.                
+Args: path - Group path like "/personal/projects" or "knowledge:personal/projects"            
+Raises:
+    NotAMemoryGroupError: If a memory already exists at this path
+    MemoryError: If creation fails for other reasons
+"""
         clean_path = self._clean_path(path)
         actual_path = self._resolve_path(clean_path)
         
@@ -981,60 +1053,31 @@ class Memory:
             raise MemoryError(f"Failed to create memory group at '{path}': {e}")
     
     def has_memory(self, path: str) -> bool:
-        """Check if a memory exists at the path.
-        
-        Args:
-            path: Memory path to check (with or without prefix)
-            
-        Returns:
-            True if memory exists, False otherwise
-            
-        Example:
-            ```python
-            if memory.has_memory("/personal/config.json"):
-                config = memory["/personal/config.json"]
-            else:
-                memory["/personal/config.json"] = "{}"
-            ```
         """
+Check if a memory exists at the path.
+Args: path - Memory path to check (with or without prefix)            
+Returns: True if memory exists, False otherwise
+"""
         clean_path = self._clean_path(path)
         actual_path = self._resolve_path(clean_path)
         return actual_path.exists() and actual_path.is_file()
     
     def has_group(self, path: str) -> bool:
-        """Check if a memory group exists at the path.
-        
-        Args:
-            path: Group path to check (with or without prefix)
-            
-        Returns:
-            True if group exists, False otherwise
-            
-        Example:
-            ```python
-            if not memory.has_group("/personal/archive"):
-                memory.make_memory_group("/personal/archive")
-            ```
         """
+Check if a memory group exists at the path.
+Args: path - Group path to check (with or without prefix)
+Returns: True if group exists, False otherwise
+"""
         clean_path = self._clean_path(path)
         actual_path = self._resolve_path(clean_path)
         return actual_path.exists() and actual_path.is_dir()
     
     def exists(self, path: str) -> bool:
-        """Check if anything (memory or group) exists at the path.
-        
-        Args:
-            path: Path to check (with or without prefix)
-            
-        Returns:
-            True if path exists, False otherwise
-            
-        Example:
-            ```python
-            if not memory.exists("/personal/data"):
-                memory.make_memory_group("/personal/data")
-            ```
         """
+Check if anything (memory or group) exists at the path.
+Args: path- Path to check (with or without prefix)
+Returns: True if path exists, False otherwise
+"""
         clean_path = self._clean_path(path)
         actual_path = self._resolve_path(clean_path)
         return actual_path.exists()
@@ -1054,82 +1097,7 @@ class Memory:
         if not actual_path.exists() or not actual_path.is_dir():
             return []
         return [item.name for item in actual_path.iterdir() if item.is_dir()]
-    
-    def remove_memory(self, path: str):
-        """⚠️ DEPRECATED: Use DANGER_remove_memory_permanently() instead.
         
-        This method is kept for backward compatibility but will require confirmation.
-        It permanently deletes a memory file from disk.
-        
-        Args:
-            path: Path to the memory to delete
-            
-        Example:
-            ```python
-            # Old way (deprecated):
-            memory.remove_memory("/personal/old.txt")
-            
-            # New way (recommended):
-            memory.DANGER_remove_memory_permanently("/personal/old.txt", confirm="DELETE")
-            ```
-        """
-        print("⚠️ DEPRECATED: remove_memory() is dangerous - use DANGER_remove_memory_permanently() instead")
-        print("   This will require confirmation in future versions.")
-        # For now, still work but show warning
-        clean_path = self._clean_path(path)
-        actual_path = self._resolve_path(clean_path)
-        if actual_path.exists() and actual_path.is_file():
-            # Track for rollback support
-            self._track_change(clean_path, 'delete')
-            # Remove from working memory
-            memory_id = f"memory:{clean_path}"
-            self._memory_system.remove_memory(memory_id)
-            # Delete file
-            actual_path.unlink()
-            print(f"🗑️ Deleted {path} (consider using DANGER_remove_memory_permanently)")
-    
-    def remove_group(self, path: str):
-        """⚠️ DEPRECATED: Use DANGER_remove_memory_group_permanently() instead.
-        
-        This method is kept for backward compatibility but will require confirmation.
-        It permanently deletes a memory group and all its contents.
-        
-        Args:
-            path: Path to the memory group to delete
-            
-        Example:
-            ```python
-            # Old way (deprecated):
-            memory.remove_group("/personal/old_dir")
-            
-            # New way (recommended):
-            memory.DANGER_remove_memory_group_permanently("/personal/old_dir", confirm="DELETE_ALL")
-            ```
-        """
-        print("⚠️ DEPRECATED: remove_group() is dangerous - use DANGER_remove_memory_group_permanently() instead")
-        print("   This will require confirmation in future versions.")
-        # For now, still work but show warning
-        clean_path = self._clean_path(path)
-        actual_path = self._resolve_path(clean_path)
-        if actual_path.exists() and actual_path.is_dir():
-            # Track for rollback support (will move to temp if in transaction)
-            self._track_change(clean_path, 'rmdir')
-            
-            # Remove from working memory
-            path_prefix = clean_path.rstrip('/') + '/'
-            for mem in list(self._memory_system.symbolic_memory):
-                if hasattr(mem, 'location') and (
-                    mem.location == clean_path or 
-                    mem.location.startswith(path_prefix)
-                ):
-                    self._memory_system.remove_memory(mem.id)
-            
-            # If not in transaction, delete immediately
-            if self._transaction_depth == 0:
-                import shutil
-                shutil.rmtree(actual_path)
-            print(f"🗑️ Deleted {path} (consider using DANGER_remove_memory_group_permanently)")
-    
     def search(self, query: str, path: str = "/personal", limit: int = 10) -> List[MemoryNode]:
         """Search for memories containing the query string."""
         results = []
@@ -1318,34 +1286,13 @@ class Memory:
                 print(f"⚠️ Failed to rollback {operation} on {path}: {e}")
     
     def evict(self, path: str) -> bool:
-        """Remove a memory from working memory but keep it on disk.
-        
-        This is useful when you want to free up working memory space without
-        losing the data permanently. The memory remains on disk and can be
-        loaded again later. Within a transaction, evictions can be rolled back
-        (the memory will be restored to working memory).
-        
-        Args:
-            path: Path to the memory to evict
-            
-        Returns:
-            True if evicted, False if not found in working memory
-            
-        Example:
-            ```python
-            # Free up working memory by evicting large files
-            memory.evict("/personal/large_dataset.json")
-            
-            # The file still exists on disk and can be loaded again
-            if memory.exists("/personal/large_dataset.json"):
-                data = memory["/personal/large_dataset.json"]  # Reloads into working memory
-            
-            # Evictions are reversible in transactions:
-            with memory.transaction():
-                memory.evict("/personal/important.json")
-                # If error occurs, important.json stays in working memory
-            ```
         """
+Remove a memory from working memory but keep it in shared memory.                
+Args:
+    path: Path to the memory to evict
+    
+Returns: True if evicted, False if not found in working memory
+"""
         clean_path = self._clean_path(path)
         
         # Find and remove from working memory
@@ -1365,33 +1312,14 @@ class Memory:
         return False
     
     def move_memory(self, old_path: str, new_path: str) -> bool:
-        """Move or rename a memory file or directory.
-        
-        This operation moves files or entire directories to new locations.
-        Within a transaction, moves can be rolled back to restore the
-        original location.
-        
-        Args:
-            old_path: Current path of the memory
-            new_path: New path for the memory
-            
-        Returns:
-            True if moved successfully, False otherwise
-            
-        Example:
-            ```python
-            # Rename a file
-            memory.move_memory("/personal/draft.txt", "/personal/final.txt")
-            
-            # Move to a different directory
-            memory.move_memory("/personal/temp/data.json", "/personal/archive/data.json")
-            
-            # Moves are reversible in transactions:
-            with memory.transaction():
-                memory.move_memory("/personal/v1", "/personal/v2")
-                # If error occurs, file/directory returns to original location
-            ```
         """
+Move or rename a memory file or directory.        
+Args:
+    old_path: Current path of the memory
+    new_path: New path for the memory            
+Returns:
+    True if moved successfully, False otherwise
+"""
         try:
             old_clean = self._clean_path(old_path)
             new_clean = self._clean_path(new_path)
@@ -1439,32 +1367,33 @@ class Memory:
             return False
     
     def DANGER_remove_memory_permanently(self, path: str, confirm: str = "") -> bool:
-        """⚠️ PERMANENTLY DELETE a memory file from disk.
-        
-        This operation deletes the file from disk. It can be rolled back if used
-        within a transaction, but once committed, the deletion is permanent.
-        
-        Args:
-            path: Path to the memory to permanently delete
-            confirm: Must be "DELETE" to confirm the operation
-            
-        Returns:
-            True if deleted, False otherwise
-            
-        Example:
-            ```python
-            # Must explicitly confirm dangerous operations
-            memory.DANGER_remove_memory_permanently(
-                "/personal/old_data.json", 
-                confirm="DELETE"
-            )
-            
-            # Safe within a transaction - can be rolled back:
-            with memory.transaction():
-                memory.DANGER_remove_memory_permanently("/personal/temp.json", confirm="DELETE")
-                # If an error occurs here, the file will be restored
-            ```
         """
+⚠️ PERMANENTLY DELETE a memory file from disk.
+
+This operation deletes the file from disk. It can be rolled back if used
+within a transaction, but once committed, the deletion is permanent.
+
+Args:
+    path: Path to the memory to permanently delete
+    confirm: Must be "DELETE" to confirm the operation
+    
+Returns:
+    True if deleted, False otherwise
+    
+Example:
+    ```python
+    # Must explicitly confirm dangerous operations
+    memory.DANGER_remove_memory_permanently(
+        "/personal/old_data.json", 
+        confirm="DELETE"
+    )
+    
+    # Safe within a transaction - can be rolled back:
+    with memory.transaction():
+        memory.DANGER_remove_memory_permanently("/personal/temp.json", confirm="DELETE")
+        # If an error occurs here, the file will be restored
+    ```
+"""
         if confirm != "DELETE":
             print("❌ DANGER: Must confirm with confirm='DELETE' to permanently delete files")
             print("    Without a transaction, this operation cannot be undone!")
@@ -1498,36 +1427,37 @@ class Memory:
             return False
     
     def DANGER_remove_memory_group_permanently(self, path: str, confirm: str = "") -> bool:
-        """⚠️ PERMANENTLY DELETE an entire memory group (directory) and all contents.
-        
-        This operation deletes an entire directory tree. Within a transaction, the
-        directory is moved to a temporary location and can be restored if rolled back.
-        Once committed, the deletion is permanent and cannot be recovered.
-        
-        Args:
-            path: Path to the memory group to permanently delete
-            confirm: Must be "DELETE_ALL" to confirm the operation
-            
-        Returns:
-            True if deleted, False otherwise
-            
-        Example:
-            ```python
-            # Must explicitly confirm dangerous operations with stronger confirmation
-            memory.DANGER_remove_memory_group_permanently(
-                "/personal/old_project", 
-                confirm="DELETE_ALL"
-            )
-            
-            # Safe within a transaction - entire directory can be restored:
-            with memory.transaction():
-                memory.DANGER_remove_memory_group_permanently(
-                    "/personal/temp_project", 
-                    confirm="DELETE_ALL"
-                )
-                # If an error occurs, the entire directory tree will be restored
-            ```
         """
+⚠️ PERMANENTLY DELETE an entire memory group (directory) and all contents.
+
+This operation deletes an entire directory tree. Within a transaction, the
+directory is moved to a temporary location and can be restored if rolled back.
+Once committed, the deletion is permanent and cannot be recovered.
+
+Args:
+    path: Path to the memory group to permanently delete
+    confirm: Must be "DELETE_ALL" to confirm the operation
+    
+Returns:
+    True if deleted, False otherwise
+    
+Example:
+    ```python
+    # Must explicitly confirm dangerous operations with stronger confirmation
+    memory.DANGER_remove_memory_group_permanently(
+        "/personal/old_project", 
+        confirm="DELETE_ALL"
+    )
+    
+    # Safe within a transaction - entire directory can be restored:
+    with memory.transaction():
+        memory.DANGER_remove_memory_group_permanently(
+            "/personal/temp_project", 
+            confirm="DELETE_ALL"
+        )
+        # If an error occurs, the entire directory tree will be restored
+    ```
+"""
         if confirm != "DELETE_ALL":
             print("❌ DANGER: Must confirm with confirm='DELETE_ALL' to permanently delete directories")
             print("    Without a transaction, this will delete ALL contents permanently!")
