@@ -470,6 +470,20 @@ class MemoryNode:
                 # Only write if serialization succeeded
                 with open(actual_path, 'w') as f:
                     f.write(json_string)
+            elif self._type == "application/yaml":
+                # Save as YAML, not JSON!
+                import yaml
+                try:
+                    yaml_string = yaml.dump(content_to_save, default_flow_style=False, sort_keys=False)
+                except Exception as e:
+                    print(f"⚠️ WARNING: Cannot save content to YAML file {self.path}")
+                    print(f"   Error: {e}")
+                    # Fall back to JSON format as last resort
+                    print(f"   Falling back to JSON format...")
+                    yaml_string = json.dumps(content_to_save, indent=2, default=str)
+                    print(f"   ⚠️ File saved as JSON despite .yaml extension")
+                with open(actual_path, 'w') as f:
+                    f.write(yaml_string)
             else:
                 with open(actual_path, 'w') as f:
                     f.write(str(content_to_save))
@@ -509,9 +523,16 @@ class MemoryNode:
             )
         self._content = value
         self._modified = True
-        # Auto-detect type if not set
+        # Auto-detect type if not set, considering file extension
         if self._type is None:
-            if isinstance(value, dict) or isinstance(value, list):
+            # Check file extension first
+            actual_path = self._memory._resolve_path(self.path)
+            if actual_path.suffix in ['.yaml', '.yml']:
+                self._type = "application/yaml"
+            elif actual_path.suffix == '.json':
+                self._type = "application/json"
+            elif isinstance(value, dict) or isinstance(value, list):
+                # Default to JSON for dict/list without explicit extension
                 self._type = "application/json"
             else:
                 self._type = "text/plain"
@@ -784,12 +805,62 @@ class Memory:
     def _track_change(self, path: str, operation: str, data: Any = None):
         """Track a change for potential rollback."""
         if self._transaction_depth > 0:
-            self._changes.append({
+            # For rollback, we need to store the previous state
+            rollback_info = {
                 'path': path,
                 'operation': operation,
                 'data': data,
                 'timestamp': datetime.now()
-            })
+            }
+            
+            # Store backup data for rollback based on operation type
+            if operation == 'write':
+                # Store previous content if file existed
+                actual_path = self._resolve_path(path)
+                if actual_path.exists():
+                    with open(actual_path, 'r') as f:
+                        rollback_info['previous_content'] = f.read()
+                    rollback_info['existed'] = True
+                else:
+                    rollback_info['existed'] = False
+                    
+            elif operation == 'delete':
+                # Store content before deletion
+                actual_path = self._resolve_path(path)
+                if actual_path.exists() and actual_path.is_file():
+                    with open(actual_path, 'r') as f:
+                        rollback_info['previous_content'] = f.read()
+                        
+            elif operation == 'mkdir':
+                # Just track that we created this directory
+                rollback_info['created'] = True
+                
+            elif operation == 'rmdir':
+                # Move to temp for potential rollback instead of immediate deletion
+                actual_path = self._resolve_path(path)
+                if actual_path.exists() and actual_path.is_dir():
+                    import tempfile
+                    import shutil
+                    # Create a temp directory to hold the backup
+                    temp_backup = tempfile.mkdtemp(prefix="rollback_", suffix=f"_{actual_path.name}")
+                    # Move the directory to temp location
+                    backup_path = Path(temp_backup) / actual_path.name
+                    shutil.move(str(actual_path), str(backup_path))
+                    rollback_info['backup_path'] = str(backup_path)
+                    rollback_info['original_path'] = str(actual_path)
+                    print(f"📦 Directory moved to temp for potential rollback: {path}")
+                    
+            elif operation == 'move':
+                # Store the move operation for reversal
+                rollback_info['from_path'] = path
+                rollback_info['to_path'] = data.get('to') if data else None
+                
+            elif operation == 'evict':
+                # Store that this was in working memory
+                rollback_info['was_in_memory'] = True
+                rollback_info['memory_id'] = f"memory:{path}"
+            
+            self._changes.append(rollback_info)
     
     def _track_access(self, path: str, file_type: str):
         """Track file access for adding to working memory on commit."""
@@ -985,21 +1056,79 @@ class Memory:
         return [item.name for item in actual_path.iterdir() if item.is_dir()]
     
     def remove_memory(self, path: str):
-        """Delete a memory."""
+        """⚠️ DEPRECATED: Use DANGER_remove_memory_permanently() instead.
+        
+        This method is kept for backward compatibility but will require confirmation.
+        It permanently deletes a memory file from disk.
+        
+        Args:
+            path: Path to the memory to delete
+            
+        Example:
+            ```python
+            # Old way (deprecated):
+            memory.remove_memory("/personal/old.txt")
+            
+            # New way (recommended):
+            memory.DANGER_remove_memory_permanently("/personal/old.txt", confirm="DELETE")
+            ```
+        """
+        print("⚠️ DEPRECATED: remove_memory() is dangerous - use DANGER_remove_memory_permanently() instead")
+        print("   This will require confirmation in future versions.")
+        # For now, still work but show warning
         clean_path = self._clean_path(path)
         actual_path = self._resolve_path(clean_path)
         if actual_path.exists() and actual_path.is_file():
-            actual_path.unlink()
+            # Track for rollback support
             self._track_change(clean_path, 'delete')
+            # Remove from working memory
+            memory_id = f"memory:{clean_path}"
+            self._memory_system.remove_memory(memory_id)
+            # Delete file
+            actual_path.unlink()
+            print(f"🗑️ Deleted {path} (consider using DANGER_remove_memory_permanently)")
     
     def remove_group(self, path: str):
-        """Delete a memory group and all its contents."""
+        """⚠️ DEPRECATED: Use DANGER_remove_memory_group_permanently() instead.
+        
+        This method is kept for backward compatibility but will require confirmation.
+        It permanently deletes a memory group and all its contents.
+        
+        Args:
+            path: Path to the memory group to delete
+            
+        Example:
+            ```python
+            # Old way (deprecated):
+            memory.remove_group("/personal/old_dir")
+            
+            # New way (recommended):
+            memory.DANGER_remove_memory_group_permanently("/personal/old_dir", confirm="DELETE_ALL")
+            ```
+        """
+        print("⚠️ DEPRECATED: remove_group() is dangerous - use DANGER_remove_memory_group_permanently() instead")
+        print("   This will require confirmation in future versions.")
+        # For now, still work but show warning
         clean_path = self._clean_path(path)
         actual_path = self._resolve_path(clean_path)
         if actual_path.exists() and actual_path.is_dir():
-            import shutil
-            shutil.rmtree(actual_path)
+            # Track for rollback support (will move to temp if in transaction)
             self._track_change(clean_path, 'rmdir')
+            
+            # Remove from working memory
+            path_prefix = clean_path.rstrip('/') + '/'
+            for mem in list(self._memory_system.symbolic_memory):
+                if hasattr(mem, 'location') and (
+                    mem.location == clean_path or 
+                    mem.location.startswith(path_prefix)
+                ):
+                    self._memory_system.remove_memory(mem.id)
+            
+            # If not in transaction, delete immediately
+            if self._transaction_depth == 0:
+                import shutil
+                shutil.rmtree(actual_path)
+            print(f"🗑️ Deleted {path} (consider using DANGER_remove_memory_group_permanently)")
     
     def search(self, query: str, path: str = "/personal", limit: int = 10) -> List[MemoryNode]:
         """Search for memories containing the query string."""
@@ -1048,6 +1177,22 @@ class Memory:
         if self._transaction_depth > 0:
             self._transaction_depth -= 1
         if self._transaction_depth == 0:
+            # Clean up any temp backups from rmdir operations
+            for change in self._changes:
+                if change['operation'] == 'rmdir' and 'backup_path' in change:
+                    import shutil
+                    backup_path = Path(change['backup_path'])
+                    if backup_path.exists():
+                        # Actually delete the backed-up directory
+                        shutil.rmtree(backup_path)
+                        # Clean up the temp directory
+                        if backup_path.parent.exists():
+                            try:
+                                backup_path.parent.rmdir()
+                            except:
+                                pass  # Might not be empty
+                        print(f"✓ Finalized deletion of {change['path']}")
+            
             # Add accessed and written files to working memory
             from ..memory.memory_blocks import FileMemoryBlock
             from ..memory.memory_types import Priority
@@ -1096,9 +1241,345 @@ class Memory:
         """Rollback changes to a specific checkpoint."""
         while len(self._changes) > checkpoint:
             change = self._changes.pop()
-            # TODO: Implement actual rollback logic
-            # This would restore previous file states
-            print(f"Rolling back: {change['operation']} on {change['path']}")
+            operation = change['operation']
+            path = change['path']
+            
+            try:
+                if operation == 'write':
+                    # Restore previous content or delete if new
+                    actual_path = self._resolve_path(path)
+                    if change.get('existed'):
+                        # Restore previous content
+                        with open(actual_path, 'w') as f:
+                            f.write(change.get('previous_content', ''))
+                        print(f"↩️ Restored {path} to previous content")
+                    else:
+                        # File was new, remove it
+                        if actual_path.exists():
+                            actual_path.unlink()
+                        print(f"↩️ Removed newly created {path}")
+                        
+                elif operation == 'delete':
+                    # Restore deleted file
+                    if 'previous_content' in change:
+                        actual_path = self._resolve_path(path)
+                        actual_path.parent.mkdir(parents=True, exist_ok=True)
+                        with open(actual_path, 'w') as f:
+                            f.write(change['previous_content'])
+                        print(f"↩️ Restored deleted file {path}")
+                        
+                elif operation == 'mkdir':
+                    # Remove newly created directory if empty
+                    if change.get('created'):
+                        actual_path = self._resolve_path(path)
+                        if actual_path.exists() and actual_path.is_dir():
+                            try:
+                                actual_path.rmdir()  # Only works if empty
+                                print(f"↩️ Removed newly created directory {path}")
+                            except OSError:
+                                print(f"⚠️ Cannot remove {path} - not empty")
+                                
+                elif operation == 'rmdir':
+                    # Restore directory from temp backup
+                    if 'backup_path' in change:
+                        import shutil
+                        backup_path = Path(change['backup_path'])
+                        original_path = Path(change['original_path'])
+                        if backup_path.exists():
+                            shutil.move(str(backup_path), str(original_path))
+                            # Clean up temp directory
+                            backup_path.parent.rmdir()
+                            print(f"↩️ Restored directory {path} from backup")
+                            
+                elif operation == 'move':
+                    # Reverse the move
+                    if change.get('to_path'):
+                        old_actual = self._resolve_path(change['to_path'])
+                        new_actual = self._resolve_path(path)
+                        if old_actual.exists():
+                            old_actual.rename(new_actual)
+                            print(f"↩️ Reversed move: {change['to_path']} → {path}")
+                            
+                elif operation == 'evict':
+                    # Re-add to working memory
+                    if change.get('was_in_memory'):
+                        from ..memory.memory_blocks import FileMemoryBlock
+                        from ..memory.memory_types import Priority
+                        memory_block = FileMemoryBlock(
+                            location=path,
+                            priority=Priority.MEDIUM,
+                            confidence=1.0,
+                            metadata={"restored": "rollback"}
+                        )
+                        self._memory_system.add_memory(memory_block)
+                        print(f"↩️ Restored {path} to working memory")
+                        
+            except Exception as e:
+                print(f"⚠️ Failed to rollback {operation} on {path}: {e}")
+    
+    def evict(self, path: str) -> bool:
+        """Remove a memory from working memory but keep it on disk.
+        
+        This is useful when you want to free up working memory space without
+        losing the data permanently. The memory remains on disk and can be
+        loaded again later. Within a transaction, evictions can be rolled back
+        (the memory will be restored to working memory).
+        
+        Args:
+            path: Path to the memory to evict
+            
+        Returns:
+            True if evicted, False if not found in working memory
+            
+        Example:
+            ```python
+            # Free up working memory by evicting large files
+            memory.evict("/personal/large_dataset.json")
+            
+            # The file still exists on disk and can be loaded again
+            if memory.exists("/personal/large_dataset.json"):
+                data = memory["/personal/large_dataset.json"]  # Reloads into working memory
+            
+            # Evictions are reversible in transactions:
+            with memory.transaction():
+                memory.evict("/personal/important.json")
+                # If error occurs, important.json stays in working memory
+            ```
+        """
+        clean_path = self._clean_path(path)
+        
+        # Find and remove from working memory
+        # The memory ID format is "memory:path"
+        memory_id = f"memory:{clean_path}"
+        
+        # Try to find the memory in the memory system
+        for mem in list(self._memory_system.symbolic_memory):
+            if mem.id == memory_id:
+                # Track the eviction for potential rollback
+                self._track_change(clean_path, 'evict')
+                self._memory_system.remove_memory(memory_id)
+                print(f"✓ Evicted {path} from working memory (still on disk)")
+                return True
+        
+        print(f"⚠️ {path} not found in working memory")
+        return False
+    
+    def move_memory(self, old_path: str, new_path: str) -> bool:
+        """Move or rename a memory file or directory.
+        
+        This operation moves files or entire directories to new locations.
+        Within a transaction, moves can be rolled back to restore the
+        original location.
+        
+        Args:
+            old_path: Current path of the memory
+            new_path: New path for the memory
+            
+        Returns:
+            True if moved successfully, False otherwise
+            
+        Example:
+            ```python
+            # Rename a file
+            memory.move_memory("/personal/draft.txt", "/personal/final.txt")
+            
+            # Move to a different directory
+            memory.move_memory("/personal/temp/data.json", "/personal/archive/data.json")
+            
+            # Moves are reversible in transactions:
+            with memory.transaction():
+                memory.move_memory("/personal/v1", "/personal/v2")
+                # If error occurs, file/directory returns to original location
+            ```
+        """
+        try:
+            old_clean = self._clean_path(old_path)
+            new_clean = self._clean_path(new_path)
+            
+            old_actual = self._resolve_path(old_clean)
+            new_actual = self._resolve_path(new_clean)
+            
+            if not old_actual.exists():
+                print(f"⚠️ Source {old_path} does not exist")
+                return False
+            
+            # Create parent directory if needed
+            new_actual.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Move the file/directory
+            old_actual.rename(new_actual)
+            
+            # Update working memory if present
+            old_memory_id = f"memory:{old_clean}"
+            for mem in list(self._memory_system.symbolic_memory):
+                if mem.id == old_memory_id:
+                    # Remove old reference
+                    self._memory_system.remove_memory(old_memory_id)
+                    # Add new reference
+                    from ..memory.memory_blocks import FileMemoryBlock
+                    from ..memory.memory_types import Priority
+                    new_block = FileMemoryBlock(
+                        location=new_clean,
+                        priority=Priority.MEDIUM,
+                        confidence=1.0,
+                        metadata={
+                            "moved_from": old_clean,
+                            "cycle": self._cognitive_loop.cycle_count
+                        }
+                    )
+                    self._memory_system.add_memory(new_block)
+                    break
+            
+            self._track_change(old_clean, 'move', {'to': new_clean})
+            print(f"✓ Moved {old_path} → {new_path}")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Failed to move {old_path}: {e}")
+            return False
+    
+    def DANGER_remove_memory_permanently(self, path: str, confirm: str = "") -> bool:
+        """⚠️ PERMANENTLY DELETE a memory file from disk.
+        
+        This operation deletes the file from disk. It can be rolled back if used
+        within a transaction, but once committed, the deletion is permanent.
+        
+        Args:
+            path: Path to the memory to permanently delete
+            confirm: Must be "DELETE" to confirm the operation
+            
+        Returns:
+            True if deleted, False otherwise
+            
+        Example:
+            ```python
+            # Must explicitly confirm dangerous operations
+            memory.DANGER_remove_memory_permanently(
+                "/personal/old_data.json", 
+                confirm="DELETE"
+            )
+            
+            # Safe within a transaction - can be rolled back:
+            with memory.transaction():
+                memory.DANGER_remove_memory_permanently("/personal/temp.json", confirm="DELETE")
+                # If an error occurs here, the file will be restored
+            ```
+        """
+        if confirm != "DELETE":
+            print("❌ DANGER: Must confirm with confirm='DELETE' to permanently delete files")
+            print("    Without a transaction, this operation cannot be undone!")
+            return False
+        
+        try:
+            clean_path = self._clean_path(path)
+            actual_path = self._resolve_path(clean_path)
+            
+            if not actual_path.exists():
+                print(f"⚠️ {path} does not exist")
+                return False
+            
+            if actual_path.is_dir():
+                print(f"❌ {path} is a directory, use DANGER_remove_memory_group_permanently")
+                return False
+            
+            # Remove from working memory first
+            memory_id = f"memory:{clean_path}"
+            self._memory_system.remove_memory(memory_id)
+            
+            # Delete from disk
+            actual_path.unlink()
+            self._track_change(clean_path, 'delete')
+            
+            print(f"🗑️ PERMANENTLY DELETED {path}")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Failed to delete {path}: {e}")
+            return False
+    
+    def DANGER_remove_memory_group_permanently(self, path: str, confirm: str = "") -> bool:
+        """⚠️ PERMANENTLY DELETE an entire memory group (directory) and all contents.
+        
+        This operation deletes an entire directory tree. Within a transaction, the
+        directory is moved to a temporary location and can be restored if rolled back.
+        Once committed, the deletion is permanent and cannot be recovered.
+        
+        Args:
+            path: Path to the memory group to permanently delete
+            confirm: Must be "DELETE_ALL" to confirm the operation
+            
+        Returns:
+            True if deleted, False otherwise
+            
+        Example:
+            ```python
+            # Must explicitly confirm dangerous operations with stronger confirmation
+            memory.DANGER_remove_memory_group_permanently(
+                "/personal/old_project", 
+                confirm="DELETE_ALL"
+            )
+            
+            # Safe within a transaction - entire directory can be restored:
+            with memory.transaction():
+                memory.DANGER_remove_memory_group_permanently(
+                    "/personal/temp_project", 
+                    confirm="DELETE_ALL"
+                )
+                # If an error occurs, the entire directory tree will be restored
+            ```
+        """
+        if confirm != "DELETE_ALL":
+            print("❌ DANGER: Must confirm with confirm='DELETE_ALL' to permanently delete directories")
+            print("    Without a transaction, this will delete ALL contents permanently!")
+            return False
+        
+        try:
+            clean_path = self._clean_path(path)
+            actual_path = self._resolve_path(clean_path)
+            
+            # Safety check - don't allow deleting root directories
+            if clean_path in ['personal', '/personal', 'grid', '/grid']:
+                print(f"❌ REFUSED: Cannot delete root directory {path}")
+                return False
+            
+            if not actual_path.exists():
+                print(f"⚠️ {path} does not exist")
+                return False
+            
+            if not actual_path.is_dir():
+                print(f"❌ {path} is not a directory, use DANGER_remove_memory_permanently")
+                return False
+            
+            # Count items to be deleted for confirmation
+            file_count = sum(1 for _ in actual_path.rglob('*') if _.is_file())
+            dir_count = sum(1 for _ in actual_path.rglob('*') if _.is_dir())
+            
+            print(f"⚠️ About to delete {file_count} files and {dir_count} directories in {path}")
+            
+            # Remove all related items from working memory
+            path_prefix = clean_path.rstrip('/') + '/'
+            for mem in list(self._memory_system.symbolic_memory):
+                if hasattr(mem, 'location') and (
+                    mem.location == clean_path or 
+                    mem.location.startswith(path_prefix)
+                ):
+                    self._memory_system.remove_memory(mem.id)
+            
+            # Track change BEFORE deletion (so it can backup if in transaction)
+            self._track_change(clean_path, 'rmdir')
+            
+            # If not in a transaction, delete immediately
+            # If in transaction, it was already moved to temp by _track_change
+            if self._transaction_depth == 0:
+                import shutil
+                shutil.rmtree(actual_path)
+            
+            print(f"🗑️ PERMANENTLY DELETED {path} ({file_count} files, {dir_count} directories)")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Failed to delete {path}: {e}")
+            return False
     
 
 
