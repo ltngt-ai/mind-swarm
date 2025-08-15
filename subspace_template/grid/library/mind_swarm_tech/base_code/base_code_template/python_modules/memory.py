@@ -398,7 +398,16 @@ class MemoryNode:
                 if actual_path.suffix == '.json':
                     self._type = "application/json"
                     with open(actual_path, 'r') as f:
-                        self._content = json.load(f)
+                        content_str = f.read()
+                    try:
+                        self._content = json.loads(content_str)
+                    except json.JSONDecodeError as e:
+                        # Give feedback to cyber about corrupted file
+                        print(f"⚠️ WARNING: Corrupted JSON file detected: {self.path}")
+                        print(f"   Error: {e}")
+                        print(f"   File content: {content_str[:100]}..." if len(content_str) > 100 else f"   File content: {content_str}")
+                        print(f"   Returning empty dict - you may want to recreate this file")
+                        self._content = {}  # Return empty dict for corrupted JSON files
                 elif actual_path.suffix in ['.yaml', '.yml']:
                     import yaml
                     self._type = "application/yaml"
@@ -447,8 +456,20 @@ class MemoryNode:
             
             # Save based on type
             if self._type == "application/json":
+                # First serialize to string to catch any errors before truncating file
+                try:
+                    json_string = json.dumps(content_to_save, indent=2)
+                except (TypeError, ValueError) as e:
+                    # Log error for cyber to see
+                    print(f"⚠️ WARNING: Cannot save non-serializable content to JSON file {self.path}")
+                    print(f"   Error: {e}")
+                    print(f"   Converting non-serializable objects to strings...")
+                    # Try again with default=str to convert non-serializable objects
+                    json_string = json.dumps(content_to_save, indent=2, default=str)
+                    print(f"   ✓ Saved with string conversion")
+                # Only write if serialization succeeded
                 with open(actual_path, 'w') as f:
-                    json.dump(content_to_save, f, indent=2)
+                    f.write(json_string)
             else:
                 with open(actual_path, 'w') as f:
                     f.write(str(content_to_save))
@@ -784,10 +805,24 @@ class Memory:
             clean_path = self._clean_path(path)
             self._written_files.append({'path': clean_path, 'type': file_type, 'new': is_new})
     
-    def __getitem__(self, path: str) -> MemoryNode:
+    def __getitem__(self, path: str):
         """Dictionary-style access to memory."""
+        # Handle root directory access
+        if path in ['personal', '/personal', 'grid', '/grid']:
+            if path.lstrip('/') == 'personal':
+                return MemoryGroup('/personal', self)
+            else:
+                return MemoryGroup('/grid', self)
+        
         # Clean the path to allow both prefixed and non-prefixed formats
         clean_path = self._clean_path(path)
+        
+        # Check if this is a directory that should return a MemoryGroup
+        actual_path = self._resolve_path(clean_path)
+        if actual_path.exists() and actual_path.is_dir():
+            return MemoryGroup('/' + clean_path.lstrip('/'), self)
+        
+        # Otherwise return a MemoryNode (file or not-yet-existing path)
         return MemoryNode(clean_path, self)
     
     def __setitem__(self, path: str, value: Any):

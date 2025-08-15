@@ -94,7 +94,7 @@ class KnowledgeManager:
             
             # Create knowledge memory block that is pinned
             # Use the actual file path from the ROM item
-            file_path = rom_item.get('file_path', f"knowledge/sections/rom/unknown/{rom_item.get('id', 'unknown')}")
+            file_path = rom_item.get('file_path', f"mind_swarm_tech/rom/unknown/{rom_item.get('id', 'unknown')}")
             if not file_path.startswith('/'):
                 file_path = '/' + file_path
             

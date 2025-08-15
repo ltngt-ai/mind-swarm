@@ -60,6 +60,7 @@ class ExecutionStage:
         # Generate API documentation as knowledge (once)
         self._ensure_api_docs_knowledge()
         self._ensure_location_api_docs_knowledge()
+        self._ensure_events_api_docs_knowledge()
     
     def _ensure_api_docs_knowledge(self):
         """Ensure API documentation is in working memory."""
@@ -408,6 +409,163 @@ class ExecutionStage:
         
         return "\n".join(docs)
     
+    def _ensure_events_api_docs_knowledge(self):
+        """Ensure Events API documentation is in working memory."""
+        api_docs_path = self.personal / ".internal" / "knowledge" / "events_api_docs.yaml"
+        
+        # First, create the file if it doesn't exist
+        if not api_docs_path.exists():
+            logger.info("Generating Events API documentation from Python module...")
+            try:
+                # Generate documentation from the events module
+                docs_content = self._generate_events_api_docs()
+                
+                # Create clean YAML with pipe syntax for content
+                api_docs_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(api_docs_path, 'w') as f:
+                    # Write YAML manually for clean formatting
+                    f.write("knowledge_version: '1.0'\n")
+                    f.write("knowledge:\n")
+                    f.write("  - id: events_api\n")
+                    f.write("    type: api_documentation\n")
+                    f.write("    name: Events API Documentation\n")
+                    f.write("    tags:\n")
+                    f.write("      - events\n")
+                    f.write("      - api\n")
+                    f.write("      - python\n")
+                    f.write("      - sleep\n")
+                    f.write("      - idle\n")
+                    f.write("      - mail\n")
+                    f.write("    content: |\n")
+                    # Indent content for YAML
+                    for line in docs_content.split('\n'):
+                        f.write(f"      {line}\n")
+                    f.write("metadata:\n")
+                    f.write("  source: python_modules.events\n")
+                    f.write(f"  created: '{datetime.now().isoformat()}'\n")
+                    f.write("  auto_generated: true\n")
+                logger.info(f"Created Events API documentation at {api_docs_path}")
+            except Exception as e:
+                logger.warning(f"Failed to generate Events API docs: {e}")
+        
+        # Now load it into working memory as a FileMemoryBlock
+        if api_docs_path.exists():
+            self._add_events_api_to_memory(api_docs_path)
+    
+    def _add_events_api_to_memory(self, api_docs_path: Path):
+        """Add Events API documentation to working memory."""
+        try:
+            # Load the YAML file
+            file_content = api_docs_path.read_text()
+            api_data = yaml.safe_load(file_content)
+            
+            # Extract the content
+            if api_data and 'knowledge' in api_data:
+                knowledge_item = api_data['knowledge'][0]
+                content = knowledge_item.get('content', '')
+                metadata = knowledge_item.copy()
+                metadata.pop('content', None)
+            else:
+                # Fallback to raw content
+                content = file_content
+                metadata = {}
+            metadata["content"] = content
+            metadata["is_events_api_docs"] = True
+            
+            api_memory = FileMemoryBlock(
+                location=str(api_docs_path),  # Use the actual file path
+                confidence=1.0,
+                priority=Priority.FOUNDATIONAL,  # High priority so it's always included
+                metadata=metadata
+            )
+            
+            # Check if already in memory
+            existing_api_docs = [
+                m for m in self.cognitive_loop.memory_system.working_memory.memories
+                if isinstance(m, FileMemoryBlock) and 
+                m.metadata.get("is_events_api_docs", False)
+            ]
+            
+            if not existing_api_docs:
+                self.cognitive_loop.memory_system.working_memory.add_memory(api_memory)
+                logger.debug("Added Events API documentation to working memory")
+                
+        except Exception as e:
+            logger.warning(f"Failed to add Events API docs to memory: {e}")
+    
+    def _generate_events_api_docs(self) -> str:
+        """Generate documentation from the events module."""
+        docs = []
+        docs.append("# Events API - Efficient Idle and Wake Functionality")
+        docs.append("")
+        docs.append("The Events API allows cybers to sleep efficiently and wake on events.")
+        docs.append("")
+        docs.append("## Key Features")
+        docs.append("- Timer-based sleep with interruption support")
+        docs.append("- Wake on new mail arrival")
+        docs.append("- Combined sleep with mail monitoring")
+        docs.append("- Automatic shutdown detection")
+        docs.append("")
+        docs.append("## Quick Examples")
+        docs.append("")
+        docs.append("```python")
+        docs.append("# TIMER SLEEP")
+        docs.append("# Sleep for 30 seconds")
+        docs.append("result = events.sleep(30)")
+        docs.append("if result == 'completed':")
+        docs.append("    print('Slept for full duration')")
+        docs.append("elif result == 'shutdown':")
+        docs.append("    print('Shutdown requested')")
+        docs.append("")
+        docs.append("# WAIT FOR MAIL")
+        docs.append("# Wait up to 60 seconds for new mail")
+        docs.append("new_mail = events.wait_for_mail(60)")
+        docs.append("if new_mail:")
+        docs.append("    print(f'Got {len(new_mail)} new messages:')")
+        docs.append("    for mail_file in new_mail:")
+        docs.append("        print(f'  - {mail_file}')")
+        docs.append("")
+        docs.append("# COMBINED SLEEP AND MAIL CHECK")
+        docs.append("# Sleep 30 seconds but wake if mail arrives")
+        docs.append("new_mail = events.wait_for_mail(30)")
+        docs.append("if new_mail:")
+        docs.append("    print(f'New mail arrived: {new_mail}')")
+        docs.append("else:")
+        docs.append("    print('No mail in 30 seconds')")
+        docs.append("")
+        docs.append("# SMART IDLE DURATION")
+        docs.append("# Get recommended idle duration")
+        docs.append("duration = events.get_idle_duration()")
+        docs.append("print(f'Sleeping for {duration} seconds')")
+        docs.append("events.sleep(duration)")
+        docs.append("")
+        docs.append("# EFFICIENT IDLE LOOP")
+        docs.append("idle_count = 0")
+        docs.append("while idle_count < 10:")
+        docs.append("    # Wait for mail with 10 second timeout")
+        docs.append("    new_mail = events.wait_for_mail(10)")
+        docs.append("    ")
+        docs.append("    if new_mail:")
+        docs.append("        print(f'Processing {len(new_mail)} messages...')")
+        docs.append("        idle_count = 0  # Reset idle")
+        docs.append("    else:")
+        docs.append("        idle_count += 1")
+        docs.append("        print(f'Idle cycle {idle_count}')")
+        docs.append("")
+        docs.append("print('Been idle too long, exploring!')")
+        docs.append("```")
+        docs.append("")
+        docs.append("## Important Notes")
+        docs.append("- Maximum sleep duration is 300 seconds (5 minutes)")
+        docs.append("- Sleep can be interrupted by shutdown signals")
+        docs.append("- Mail checks look for .msg and .json files in inbox")
+        docs.append("- All durations are in seconds")
+        docs.append("- **WARNING**: Only wait ONCE per script execution")
+        docs.append("  Multiple waits in the same script are ineffective")
+        docs.append("  Return to cognitive loop to think between waits")
+        
+        return "\n".join(docs)
+    
     def _setup_execution_environment(self):
         """Set up the Python execution environment with new Memory API."""
         # Safe built-ins for script execution
@@ -684,6 +842,14 @@ The provided API docs describe the available operations and their usage.
         location_instance = Location(context)
         namespace['location'] = location_instance
         namespace['LocationError'] = LocationError
+        
+        # Import and initialize the Events API
+        from ..python_modules.events import Events, EventsError
+        
+        # Create events instance
+        events_instance = Events(context)
+        namespace['events'] = events_instance
+        namespace['EventsError'] = EventsError
         
         # Capture output
         output_lines = []

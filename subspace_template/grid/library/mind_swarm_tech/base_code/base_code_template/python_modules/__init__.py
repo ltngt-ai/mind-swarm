@@ -5,6 +5,9 @@ It is instantiated with the cyber's context when scripts are executed.
 
 The Location class provides methods for navigating the cyber's environment.
 It is instantiated with the cyber's context when scripts are executed.
+
+The Events class provides efficient idle and wake functionality.
+It is instantiated with the cyber's context when scripts are executed.
 """
 
 # Export the Memory class and exceptions
@@ -22,6 +25,12 @@ from .location import (
     LocationError
 )
 
+# Export the Events class and exceptions
+from .events import (
+    Events,
+    EventsError
+)
+
 __all__ = [
     'Memory',
     'MemoryError',
@@ -29,5 +38,7 @@ __all__ = [
     'MemoryPermissionError',
     'MemoryTypeError',
     'Location',
-    'LocationError'
+    'LocationError',
+    'Events',
+    'EventsError'
 ]

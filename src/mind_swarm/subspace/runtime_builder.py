@@ -32,16 +32,16 @@ class AgentRuntimeBuilder:
     def _verify_base_code_templates(self):
         """Verify the base code templates exist in library.
         
-        The base_code templates are maintained in grid/library/base_code
+        The base_code templates are maintained in grid/library/mind_swarm_tech/base_code
         and copied to each Cyber's home directory when they are created.
         """
-        base_code_dir = self.library_dir / "base_code"
+        base_code_dir = self.library_dir / "mind_swarm_tech" / "base_code"
         base_template = base_code_dir / "base_code_template"
         io_template = base_code_dir / "io_cyber_template"
         
         if not base_template.exists():
             logger.error(f"Base code template not found at: {base_template}")
-            logger.error("Please ensure grid/library/base_code/base_code_template exists")
+            logger.error("Please ensure grid/library/mind_swarm_tech/base_code/base_code_template exists")
             return
         
         if not io_template.exists():

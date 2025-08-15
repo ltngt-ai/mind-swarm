@@ -395,11 +395,15 @@ class SubspaceManager:
             base_code_dir: The base_code directory in Cyber's home
             cyber_type: Type of Cyber (general, io_gateway)
         """
-        # Choose template from library/base_code based on Cyber type
+        # Get the template directory from the source, not the runtime
+        # __file__ is src/mind_swarm/subspace/sandbox.py
+        template_root = Path(__file__).parent.parent.parent.parent / "subspace_template"
+        
+        # Choose template from library/mind_swarm_tech/base_code based on Cyber type
         if cyber_type == "io_gateway":
-            template_dir = self.library_dir / "base_code" / "io_cyber_template"
+            template_dir = template_root / "grid" / "library" / "mind_swarm_tech" / "base_code" / "io_cyber_template"
         else:
-            template_dir = self.library_dir / "base_code" / "base_code_template"
+            template_dir = template_root / "grid" / "library" / "mind_swarm_tech" / "base_code" / "base_code_template"
         
         if template_dir.exists():
             # Copy entire directory structure from template
@@ -407,7 +411,7 @@ class SubspaceManager:
             
             # For I/O Cybers, first copy base template as dependency
             if cyber_type == "io_gateway":
-                base_template = self.library_dir / "base_code" / "base_code_template"
+                base_template = template_root / "grid" / "library" / "mind_swarm_tech" / "base_code" / "base_code_template"
                 if base_template.exists():
                     # Create base_code_template subdirectory
                     base_dest = base_code_dir / "base_code_template"

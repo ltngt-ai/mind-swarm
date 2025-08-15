@@ -50,6 +50,11 @@ content: |
 
   TLDR: move to /grid/library/knowledge/sections/new_cyber_introduction/further_info and read README_FIRST.md
   
+  ## Further Information
+  /grid/library/knowledge/sections provides a useful section on various topics. 
+  In particular a growing list of guides are available at /grid/library/knowledge/sections/guides.
+  Feel free to write more for your fellow Cybers!
+
 metadata:
   category: identity
   tags:

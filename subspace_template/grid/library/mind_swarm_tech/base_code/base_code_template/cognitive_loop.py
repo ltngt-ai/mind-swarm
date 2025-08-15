@@ -23,7 +23,6 @@ from .memory import (
 from .perception import EnvironmentScanner
 from .knowledge import KnowledgeManager
 from .state import CyberStateManager, ExecutionStateTracker
-from .state.goal_manager import GoalManager
 from .utils import CognitiveUtils, FileManager
 from .brain import BrainInterface
 from .stages import ObservationStage, ReflectStage, DecisionStage, ExecutionStage
@@ -219,9 +218,6 @@ class CognitiveLoop:
         # Each stage has two buffers (0 and 1) that swap between current and previous
         self._initialize_pipeline_buffers()
         
-        # Goal manager for persistent objectives
-        self.goal_manager = GoalManager(self.memory_dir)
-        
         # State management
         self.state_manager = CyberStateManager(self.cyber_id, self.memory_dir)
         self.execution_tracker = ExecutionStateTracker(self.cyber_id, self.memory_dir)
@@ -241,7 +237,7 @@ class CognitiveLoop:
         self.file_manager = FileManager()
         
         # Brain interface
-        self.brain_interface = BrainInterface(self.brain_file, self.cyber_id)
+        self.brain_interface = BrainInterface(self.brain_file, self.cyber_id, self.personal)
     
     def _initialize_systems(self):
         """Initialize all systems and load initial data."""

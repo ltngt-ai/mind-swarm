@@ -4,8 +4,9 @@
 # Paths that are always overwritten from template (no merge)
 # These are system-critical files that Cybers shouldn't modify
 template_owned:
-  - grid/library/base_code/base_code_template
-  - grid/library/base_code/io_cyber_template
+  - grid/library/mind_swarm_tech/base_code/base_code_template
+  - grid/library/mind_swarm_tech/base_code/io_cyber_template
+  - grid/library/mind_swarm_tech/rom
 
 # Paths that are never overwritten (Cyber-owned content)
 # These areas belong to Cybers and their contributions
@@ -18,6 +19,8 @@ cyber_owned:
 # Changes from both template and Cybers are preserved
 merge_required:
   - grid/library/knowledge/
+  - grid/library/mind_swarm_tech/cyber_basics.md
+  - grid/library/mind_swarm_tech/using_llms.md
   - grid/community/BULLETIN_BOARD.md
 
 # File patterns to ignore during sync

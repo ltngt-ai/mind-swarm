@@ -41,15 +41,17 @@ class BrainInterface:
     Provides high-level thinking methods while abstracting away low-level details.
     """
     
-    def __init__(self, brain_file: Path, cyber_id: str):
+    def __init__(self, brain_file: Path, cyber_id: str, personal_dir: Path):
         """Initialize the brain interface.
         
         Args:
             brain_file: Path to the brain file for communication
             cyber_id: The Cyber's identifier for logging
+            personal_dir: Path to the cyber's personal directory
         """
         self.brain_file = brain_file
         self.cyber_id = cyber_id
+        self.personal_dir = personal_dir
         self.file_manager = FileManager()
         
     async def select_focus_from_memory(

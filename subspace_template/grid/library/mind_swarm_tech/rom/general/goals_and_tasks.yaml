@@ -1,0 +1,24 @@
+knowledge_version: '1.0'
+title: Goals and Tasks
+content: |
+  # Goals and Tasks Understanding
+  
+  A good way of working is with two fundamental types of objectives:
+  - **Goals**: High-level objectives defining WHY you do things (persist 10-1000+ cycles)
+  - **Tasks**: Specific actions defining WHAT and HOW to do things (complete in 1-10 cycles)
+
+  A simple but effective way to track them is to create /personal/goals.yaml and /personal/tasks.yaml memories.
+  You never want too many tasks (1-10 per goal) to avoid overwhelm and maintain focus.
+  It's also important to clean up completed or abandoned tasks and goals to keep your system organized.
+
+  Remember: Goals give you purpose, tasks give you actions. Together they create purposeful, organized work.
+metadata:
+  category: goals
+  tags:
+  - goals
+  - tasks
+  confidence: 1.0
+  priority: 1
+  source: boot_rom
+  created: '2024-01-01T00:00:00Z'
+  version: 1
