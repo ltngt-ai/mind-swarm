@@ -52,7 +52,7 @@ class DecisionStage:
         self.brain_interface = cognitive_loop.brain_interface
         self.knowledge_manager = cognitive_loop.knowledge_manager
         
-    async def run(self) -> Dict[str, Any]:
+    async def decide(self):
         """Run the decision stage.
         
         Reads the observation from the current pipeline and decides on intentions.
@@ -60,7 +60,7 @@ class DecisionStage:
         Returns:
             Dict containing the plain text intention and context
         """
-        logger.info("=== DECISION STAGE V2 ===")
+        logger.info("=== DECISION STAGE ===")
         
         # Read observation buffer to get observation data
         observation_buffer = self.cognitive_loop.get_current_pipeline("observation")
@@ -133,9 +133,7 @@ class DecisionStage:
         self.cognitive_loop.memory_system.touch_memory(decision_buffer.id, self.cognitive_loop.cycle_count)
         
         logger.info(f"💭 Decision intention written to pipeline buffer")
-        
-        return decision_content
-    
+            
     async def _generate_intention(self, memory_context: str) -> Dict[str, Any]:
         """Use brain to generate a plain text intention.
         

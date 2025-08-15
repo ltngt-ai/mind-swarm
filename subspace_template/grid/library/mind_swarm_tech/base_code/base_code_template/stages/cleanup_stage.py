@@ -51,14 +51,10 @@ class CleanupStage:
         self.brain = cognitive_loop.brain_interface
         self.max_context_tokens = cognitive_loop.max_context_tokens
         
-    async def run(self, cycle_count: int) -> Dict[str, Any]:
+    async def cleanup(self, cycle_count: int):
         """Perform cleanup and maintenance tasks.
-        
         Args:
-            cycle_count: Current cycle number
-            
-        Returns:
-            Dict with cleanup results and statistics
+            cycle_count: Current cycle number            
         """
         logger.debug(f"Starting cleanup for cycle {cycle_count}")
         
@@ -126,8 +122,6 @@ class CleanupStage:
         
         if total_cleaned > 0:
             logger.info(f"✨ Cleanup completed for cycle {cycle_count}: {total_cleaned} items cleaned")
-            
-        return results
     
     async def _cleanup_old_script_executions(self, max_age_minutes: int = 30, keep_recent: int = 10) -> int:
         """Clean up old script execution files from action_results directory.

@@ -48,7 +48,7 @@ class ReflectStage:
         self.memory_system = cognitive_loop.memory_system
         self.brain_interface = cognitive_loop.brain_interface
         
-    async def run(self) -> None:
+    async def reflect(self) -> None:
         """Run the reflection stage.
         
         Reviews the last execution and creates reflections in memory.

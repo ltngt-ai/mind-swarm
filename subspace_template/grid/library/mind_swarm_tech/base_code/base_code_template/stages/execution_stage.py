@@ -254,7 +254,7 @@ class ExecutionStage:
         self.location_api = Location(context)
         self.events = Events(context)
     
-    async def run(self) -> List[Dict[str, Any]]:
+    async def execute(self):
         """Run the execution stage."""
         logger.info("=== EXECUTION STAGE V3 ===")
         
@@ -266,12 +266,11 @@ class ExecutionStage:
         
         if not script:
             logger.info("⚡ No script generated - likely no intention to execute")
-            return []
+            return
         
         # Phase 2: Execute the generated script
-        results = await self.execute_script(script)
+        await self.execute_script(script)
         
-        return results
     
     async def generate_script(self) -> Optional[str]:
         """Generate Python script from working memory context."""
@@ -324,7 +323,7 @@ The provided API docs describe the available operations and their usage.
                     "working_memory": "Full working memory context including decision buffer with intention"
                 },
                 "outputs": {
-                    "script": "Python script using memory API (or empty if no intention)"
+                    "script": "Python script using Cyber API's (or empty if no intention)"
                 },
                 "display_field": "script"
             },

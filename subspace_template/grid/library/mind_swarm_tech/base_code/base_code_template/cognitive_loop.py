@@ -1,22 +1,22 @@
-"""Streamlined Cognitive Loop - Three-stage architecture.
+"""Cognitive Loop - Five-stage architecture.
 
-This refactored version uses a three-stage cognitive architecture:
-1. Observation Stage (Perceive, Observe, Orient)
-2. Decision Stage (Decide)  
-3. Execution Stage (Instruct, Act)
+This refactored version uses a five-stage cognitive architecture:
+1. Observation Stage)
+2. Decision Stage
+3. Execution Stage
+4. Reflection Stage
+5. Cleanup Stage
 """
 
-import asyncio
 import json
 import logging
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any
 from datetime import datetime
 
 # Import supporting modules
 from .memory import (
     MemorySystem,
-    ObservationMemoryBlock,
     FileMemoryBlock,
     Priority, MemoryType
 )
@@ -32,13 +32,14 @@ logger = logging.getLogger("Cyber.cognitive")
 
 class CognitiveLoop:
     """
-    Streamlined cognitive processing engine using three-stage architecture.
-    
-    The cognitive loop is organized into three fundamental stages:
+    Streamlined cognitive processing engine using five-stage architecture.
+
+    The cognitive loop is organized into five fundamental stages:
     1. Observation - Gather and understand information
     2. Decision - Choose what to do
     3. Execution - Take action
     4. Reflection - Reflect on what has happened
+    5. Cleanup - See what memories aren't needed to conserve working memory space
     """
     
     def __init__(self, cyber_id: str, personal: Path, 
@@ -495,34 +496,26 @@ class CognitiveLoop:
             
             # Stage 2: Decision - Choose what to do
             self._update_dynamic_context(stage="DECISION", phase="STARTING")
-            actions = await self.decision_stage.run()
-            
-            if not actions:
-                # No actions decided, pause briefly
-                await asyncio.sleep(1.0)
-                await self._save_checkpoint()
-                self.execution_tracker.end_execution("completed", {"reason": "no_actions"})
-                return True
-            
+            await self.decision_stage.decide()
+                        
             # Stage 3: Execution - Take action
             self._update_dynamic_context(stage="EXECUTION", phase="STARTING")
-            results = await self.execution_stage.run()
+            await self.execution_stage.execute()
             
             # Stage 4: Reflect - Review what just happened
             self._update_dynamic_context(stage="REFLECT", phase="STARTING")
-            await self.reflect_stage.run()
+            await self.reflect_stage.reflect()
             
             # Stage 5: Cleanup - Clean up obsolete memories and maintain system
             self._update_dynamic_context(stage="CLEANUP", phase="STARTING")
-            await self.cleanup_stage.run(self.cycle_count)
+            await self.cleanup_stage.cleanup(self.cycle_count)
                 
             # Save checkpoint after completing all stages
             await self._save_checkpoint()
             
             # End execution tracking
             self.execution_tracker.end_execution("completed", {
-                "stages_completed": ["observation", "decision", "execution", "reflect"],
-                "actions_executed": len(results)
+                "stages_completed": ["observation", "decision", "execution", "reflect", "cleanup"],
             })
             
             return True
