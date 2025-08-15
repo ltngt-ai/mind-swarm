@@ -24,18 +24,16 @@ class BubblewrapSandbox:
         self.subspace_root = subspace_root
         self.cyber_personal = subspace_root / "cybers" / name
         self.grid_root = subspace_root / "grid"
-        self.tools_dir = subspace_root / "grid" / "workshop"
+        self.tools_dir = subspace_root / "grid" / "workshop"  # Keep for backward compat but don't create
         self.cyber_type = cyber_type
         
         # Ensure directories exist
         self.cyber_personal.mkdir(parents=True, exist_ok=True)
         self.grid_root.mkdir(parents=True, exist_ok=True)
-        self.tools_dir.mkdir(parents=True, exist_ok=True)
         
-        # Create Grid structure
+        # Create Grid structure - only community and library
         (self.grid_root / "community").mkdir(exist_ok=True)
         (self.grid_root / "library").mkdir(exist_ok=True)
-        (self.grid_root / "bulletin").mkdir(exist_ok=True)
     
     def _build_bwrap_cmd(self, cmd: List[str], env: Optional[Dict[str, str]] = None) -> List[str]:
         """Build bubblewrap command with proper isolation.
@@ -85,9 +83,6 @@ class BubblewrapSandbox:
             # The Grid - where Cybers meet and collaborate
             "--bind", str(self.grid_root), "/grid",
             
-            # Grid tools are part of the workshop
-            "--ro-bind", str(self.tools_dir), "/grid/workshop",
-            
             # Temp directory
             "--tmpfs", "/tmp",
             
@@ -97,7 +92,7 @@ class BubblewrapSandbox:
             # Clean environment
             "--setenv", "CYBER_NAME", self.name,
             "--setenv", "HOME", "/personal",
-            "--setenv", "PATH", "/grid/workshop:/usr/bin:/bin",
+            "--setenv", "PATH", "/usr/bin:/bin",
             "--setenv", "PYTHONPATH", "/personal/.internal",
             "--setenv", "CYBER_TYPE", self.cyber_type,
         ]
@@ -177,36 +172,6 @@ class BubblewrapSandbox:
             logger.error(f"Error running sandboxed command: {e}")
             return -1, "", str(e)
     
-    async def run_python_code(self, code: str, timeout: Optional[float] = None) -> Dict[str, Any]:
-        """Run Python code in the sandbox.
-        
-        Args:
-            code: Python code to execute
-            timeout: Execution timeout
-            
-        Returns:
-            Dictionary with execution results
-        """
-        # Write code to temporary file
-        code_file = self.cyber_personal / ".tmp_code.py"
-        code_file.write_text(code)
-        
-        # Run the code
-        returncode, stdout, stderr = await self.run_command(
-            ["python3", "/personal/Cyber/.tmp_code.py"],
-            timeout=timeout,
-        )
-        
-        # Clean up
-        code_file.unlink(missing_ok=True)
-        
-        return {
-            "success": returncode == 0,
-            "stdout": stdout,
-            "stderr": stderr,
-            "returncode": returncode,
-        }
-    
     def cleanup(self):
         """Clean up sandbox resources."""
         # Note: We don't delete cyber_personal as it contains persistent data
@@ -235,16 +200,12 @@ class SubspaceManager:
         # Grid subdirectories
         self.community_dir = self.grid_dir / "community"  # Questions and discussions
         self.library_dir = self.grid_dir / "library"  # Shared knowledge
-        self.workshop_dir = self.grid_dir / "workshop"  # Tools
-        self.bulletin_dir = self.grid_dir / "bulletin"  # Announcements
         
         for directory in [
             self.agents_dir,
             self.grid_dir,
             self.community_dir,
             self.library_dir,
-            self.workshop_dir,
-            self.bulletin_dir,
         ]:
             directory.mkdir(parents=True, exist_ok=True)
         
@@ -257,7 +218,6 @@ class SubspaceManager:
         from mind_swarm.subspace.runtime_builder import AgentRuntimeBuilder
         self.runtime_builder = AgentRuntimeBuilder(self.root_path)
         self.runtime_builder.prepare_runtime()
-        self.runtime_builder.create_tools_directory()
         
         logger.info(f"Initialized subspace at {self.root_path}")
     
@@ -318,7 +278,8 @@ class SubspaceManager:
             return
         
         # Initialize basic structure if missing
-        for subdir in ["community", "workshop", "library", "bulletin"]:
+        # Only copy community and library - workshop and bulletin are deprecated
+        for subdir in ["community", "library"]:
             target_dir = self.grid_dir / subdir
             if not target_dir.exists():
                 src_dir = grid_template / subdir

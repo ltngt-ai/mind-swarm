@@ -6,22 +6,19 @@
 template_owned:
   - grid/library/base_code/base_code_template
   - grid/library/base_code/io_cyber_template
-  - grid/workshop  # System tools
 
 # Paths that are never overwritten (Cyber-owned content)
 # These areas belong to Cybers and their contributions
 cyber_owned:
   - cybers/*  # All Cyber personal directories
-  - grid/community  # Shared discussions and questions
-  - grid/library/knowledge/sections/new_cyber_introduction  # Alice's contributions
-  - grid/bulletin  # Announcements from Cybers
+  - grid/community  # Shared discussions and questions - copied initially from template
+  - grid/library/knowledge/sections/new_cyber_introduction
 
 # Paths that require intelligent merging
 # Changes from both template and Cybers are preserved
 merge_required:
-  - grid/library/knowledge/schemas  # Schema updates need merging
-  - grid/library/knowledge/sections/rom  # ROM updates with Cyber insights
-  - grid/library/README.md  # Documentation updates
+  - grid/library/knowledge/
+  - grid/community/BULLETIN_BOARD.md
 
 # File patterns to ignore during sync
 ignore_patterns:

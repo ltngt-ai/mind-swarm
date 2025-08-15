@@ -52,8 +52,7 @@ class SubspaceSync:
         return {
             "template_owned": [
                 "grid/library/base_code/base_code_template",
-                "grid/library/base_code/io_cyber_template",
-                "grid/workshop"
+                "grid/library/base_code/io_cyber_template"
             ],
             "cyber_owned": [
                 "cybers/*",
@@ -61,8 +60,7 @@ class SubspaceSync:
                 "grid/library/knowledge/sections"
             ],
             "merge_required": [
-                "grid/library/knowledge/schemas",
-                "grid/bulletin"
+                "grid/library/knowledge/schemas"
             ],
             "ignore_patterns": [
                 "*.pyc",
