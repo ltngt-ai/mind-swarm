@@ -11,8 +11,9 @@ Mind-Swarm is a multi-cyber AI system creating a "hive mind" through shared file
 ## Architecture
 
 ### Client-Server System
-- **Server Daemon**: Background process managing cybers (`python -m mind_swarm.server.daemon`)
-- **CLI Client**: Interactive connection to server (`mind-swarm connect`)
+- **Server Daemon**: Background process managing cybers
+- **CLI Client**: Interactive connection to server
+- **3D Monitor Client**: Visual interface for monitoring cybers (../mind-swarm-3d-monitor)
 - **WebSocket + REST API**: Real-time events and HTTP endpoints
 
 ### Three-Layer Design
@@ -108,32 +109,30 @@ When connected via `mind-swarm connect`:
 - **Provider Support**: OpenRouter, OpenAI, Anthropic, local models
 - **Model Pool**: Dynamic model selection and failover
 
-### Filesystem Structure
+### Filesystem Structure (default is at ../subspace/)
 ```
 /subspace/
 ├── cybers/{cyber-id}/     # Cyber home directories
 │   ├── .internal/         # internal files vital for its operations
+│   |   ├── memory/            # The actions personal memory folder, vital for its operation
 │   ├── inbox/             # Incoming messages
 │   ├── outbox/            # Outgoing (routed by subspace)
-│   ├── memory/            # The actions personal memory folder, vital for its operation
-│   └── base_code/         # Cyber's runtime code
 ├── grid/                  # Shared collaboration space
-│   ├── community/             # Questions and discussions
-│   ├── library/           # Shared knowledge
-│   ├── workshop/          # Tools
-│   └── bulletin/          # Announcements
-└─
+|   ├── community/             # Questions and discussions
+|   ├── library/           # Shared knowledge
+|   ├── workshop/          # Tools
+
 
 /subspace_template/        # Source templates (persisted)
 └── grid/library/base_code/  # Template code
 ```
 
 ### Cyber Perspective
-Inside sandbox, cybers see:
+Inside sandbox, cybers see (only non thinking parts see inside /personal/.internal):
 - `/personal/` - Their private space
-- `/personal/brain` - AI thinking interface
-- `/personal/network` - Network requests (I/O cybers only)
-- `/personal/user_io` - User interaction (I/O cybers only)
+- `/personal/.internal/brain`   - AI thinking interface
+- `/personal/.internal/network` - Network requests (I/O cybers only)
+- `/personal/.internal/user_io` - User interaction (I/O cybers only)
 - `/grid/` - Shared hive mind space
 
 ### Key Design Principles
@@ -164,10 +163,6 @@ Inside sandbox, cybers see:
 ```bash
 # Required
 SUBSPACE_ROOT=/path/to/subspace
-
-# AI Configuration
-LOCAL_AI_PRESET=local_explorer     # For exploration
-PREMIUM_AI_PRESET=smart_balanced   # For user tasks
 
 # API Keys (if using cloud models)
 OPENROUTER_API_KEY=...
@@ -246,7 +241,7 @@ subspace_template/grid/library/base_code/
     └── io_mind.py           # IO cyber mind
 
 # When copied to cyber:
-subspace/cybers/{agent_name}/
+subspace/cybers/{agent_name}/.internal/
 └── base_code/               # Complete copy of template
     ├── __init__.py
     ├── __main__.py
@@ -273,19 +268,8 @@ subspace/cybers/{agent_name}/
 ### Debugging Cybers
 1. Enable debug logging: `./run.sh server --debug --llm-debug`
 2. Check cyber logs in `mind-swarm.log` and the actual llm calls in `mind-swarm.llm.log`
-3. Monitor brain requests: `tail -f subspace/cybers/{name}/brain`
-4. Check memory state: `ls -la subspace/cybers/{name}/memory/`
-
-### Testing AI Integration
-```bash
-# Test specific AI provider
-pytest tests/test_ai_basic.py -v
-
-# Test DSPy integration
-pytest tests/test_dspy_integration.py -v
-
-# Test cyber thinking end-to-end
-pytest tests/test_cyber_thinking_e2e.py -v
+3. Monitor brain requests: `tail -f subspace/cybers/{name}/.internal/brain`
+4. Check memory state: `ls -la subspace/cybers/{name}/.internal/memory/`
 ```
 
 ### Memory System Development
@@ -316,5 +300,4 @@ pytest tests/test_cyber_thinking_e2e.py -v
 ### AI Model Problems
 - Verify API keys in `.env`
 - Check model preset: `mind-swarm models`
-- Test with local model: `LOCAL_AI_PRESET=local_explorer`
 - Enable LLM debug: `./run.sh server --llm-debug`
