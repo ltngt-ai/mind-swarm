@@ -221,7 +221,7 @@ class CyberMind:
             except Exception as e:
                 logger.error(f"Error checking shutdown file: {e}")
             
-            await asyncio.sleep(0.5)  # Check every 0.5 seconds
+            await asyncio.sleep(0.1)  # Check every 0.1 seconds for faster shutdown
     
     async def _autonomous_action(self):
         """Take autonomous action when idle."""

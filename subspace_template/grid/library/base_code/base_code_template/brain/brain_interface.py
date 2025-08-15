@@ -441,7 +441,17 @@ Always start your output with [[ ## reasoning ## ]]
         
         # Wait for response
         wait_count = 0
+        shutdown_file = self.personal_dir / ".internal" / "shutdown"
+        
         while True:
+            # Check for shutdown signal
+            if shutdown_file.exists():
+                logger.warning("🛑 Shutdown detected during brain operation - cancelling")
+                # Reset brain file
+                self.brain_file.write_text("Ready for thinking.")
+                # Return empty response to let cognitive loop handle shutdown
+                return '{"cancelled": true, "reason": "shutdown"}'
+            
             content = self.brain_file.read_text()
             
             if "<<<THOUGHT_COMPLETE>>>" in content:
@@ -493,6 +503,12 @@ Always start your output with [[ ## reasoning ## ]]
         """
         try:
             result = json.loads(response)
+            
+            # Check if this was cancelled due to shutdown
+            if result.get("cancelled"):
+                logger.info("🛑 Brain operation cancelled due to shutdown")
+                return None
+                
             output_values = result.get("output_values", {})
             memory_id = output_values.get("memory_id", "")
             reasoning = output_values.get("reasoning", "")
@@ -546,6 +562,12 @@ Always start your output with [[ ## reasoning ## ]]
         """
         try:
             result = json.loads(response)
+            
+            # Check if this was cancelled due to shutdown
+            if result.get("cancelled"):
+                logger.info("🛑 Brain operation cancelled due to shutdown")
+                return {"cancelled": True, "task_type": "none"}
+                
             output = result.get("output_values", {})
             
             return {
@@ -582,6 +604,11 @@ Always start your output with [[ ## reasoning ## ]]
         
         try:
             result = json.loads(response)
+            
+            # Check if this was cancelled due to shutdown
+            if result.get("cancelled"):
+                logger.info("🛑 Brain operation cancelled due to shutdown")
+                return []
             action_data = result.get("output_values", {}).get("actions", "[]")
             
             # Clean up markdown if present
