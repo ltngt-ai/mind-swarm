@@ -1,20 +1,8 @@
 {
   "last_daily_reset": "2025-08-15",
   "daily_usage": {
-    "cerebras": 1141315
+    "cerebras": 0
   },
   "cybers": {
-    "TestCleanup": {
-      "total_tokens": 577991,
-      "input_tokens": 565097,
-      "output_tokens": 12894,
-      "last_reset": "2025-08-15T06:35:02.859442"
-    },
-    "Alice": {
-      "total_tokens": 563324,
-      "input_tokens": 555591,
-      "output_tokens": 7733,
-      "last_reset": "2025-08-15T06:35:02.897380"
-    }
   }
 }

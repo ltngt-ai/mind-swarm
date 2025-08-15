@@ -20,12 +20,12 @@ content: |
   Slow progress with more thinking is prefered than trying to solve everything right now.
 
   ## Examples
-  IF No goal but in the an location that seems relevant to my current state
+  IF No goals
   THEN return your intentions as 
       1. Create a goal to explore the Mind-Swarm grid for relevant information.
-      2. Add a task to load relevant data my current location.
+      2. Add tasks to load relevant memories as each location.
 
-  IF Have a goal that seems relevant to my current state
+  IF You have a goal that not enough information to achieve it
   THEN return your intentions as
       1. Create a task to either gain more information
       2. Create a task with explicit instruction how to mutate memory based on my current memory.
