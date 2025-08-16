@@ -191,7 +191,8 @@ class CognitiveLoop:
         grid_path = self.personal.parent.parent / "grid"
         self.environment_scanner = EnvironmentScanner(
             personal_path=self.personal,
-            grid_path=grid_path
+            grid_path=grid_path,
+            memory_system=self.memory_system
         )
         
         # Utilities

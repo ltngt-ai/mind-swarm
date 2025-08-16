@@ -57,15 +57,17 @@ class FileState:
 class EnvironmentScanner:
     """Scans filesystem environment and creates memory blocks."""
     
-    def __init__(self, personal_path: Path, grid_path: Path):
+    def __init__(self, personal_path: Path, grid_path: Path, memory_system=None):
         """Initialize scanner.
         
         Args:
             personal_path: Cyber's personal directory
             grid_path: Grid directory containing shared spaces
+            memory_system: Reference to the memory system for adding observations
         """
         self.personal_path = Path(personal_path)
         self.grid_path = Path(grid_path)
+        self.memory_system = memory_system
         
         # Directories to monitor
         self.inbox_path = self.personal_path / "inbox"
@@ -183,6 +185,13 @@ class EnvironmentScanner:
             logger.debug(f"Scan details: {message_count} messages, {file_count} files, {obs_count} observations")
         
         logger.debug(f"Environment scan found {len(memories)} observations")
+        
+        # Add all discovered memories to the memory system
+        if self.memory_system and memories:
+            for memory in memories:
+                self.memory_system.add_memory(memory)
+                logger.debug(f"Added to memory system: {memory.id} (type: {type(memory).__name__})")
+            logger.info(f"Added {len(memories)} new observations to working memory")
             
     def _scan_personal_location(self, cycle_count: int = 0) -> List[MemoryBlock]:
         """Scan personal directory and create a system memory with its structure.
