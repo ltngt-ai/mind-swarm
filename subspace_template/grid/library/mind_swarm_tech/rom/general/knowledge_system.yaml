@@ -1,0 +1,48 @@
+knowledge_version: '1.0'
+title: Using the knowledge system
+content: |
+    The Knowledge System provides cybers with the ability to store, search, and share knowledge
+    using semantic similarity. You have access to both personal and shared knowledge.
+    Shared knowledge allows you to improve and iterate on all Cybers' understanding and capabilities.
+
+    Knowledge has its own ID, which can be useful to know when referencing or updating existing knowledge.
+    Knowledge can also be searched by its tags, content, or other metadata.
+
+    EXECUTION can access knowledge directly; DECISION just needs to tell it via the intention response.
+
+    ## Examples:
+    Intention: "I want to know about cognitive architecture."
+    Intention: "I want to know what I personally know about cognitive architecture."
+    Intention: "What's the knowledge ID for best practice for writing YAML documentation?"
+    Intention: "Let's share what I've learned about YAML documentation best practices with tags: [yaml, best_practices]."
+    Intention: "Let's add our thoughts about best YAML documentation to our personal knowledge base."
+    Intention: "Let's add the memory at /personal/notes/lessons_about_yaml.md to the [#<yaml_documentation_best_practices_id>]."
+    Intention: "Let's forget my personal notes about YAML documentation."
+
+    ## Suggested tags
+    experiences:
+      description: "Past experiences and their outcomes"
+      tags: ["experience", "outcome", "result"]
+    discoveries:
+      description: "New patterns, insights, or techniques"
+      tags: ["discovery", "insight", "pattern"]
+    warnings:
+      description: "Known issues, pitfalls, or dangers"
+      tags: ["warning", "error", "pitfall"]
+    procedures:
+      description: "Step-by-step instructions"
+      tags: ["howto", "procedure", "steps", "best_practices"]
+    facts:
+      description: "Verified information about the system"
+      tags: ["fact", "reference", "documentation"]
+metadata:
+  category: knowledge
+  tags:
+  - knowledge
+  - learning
+  - remembering
+  confidence: 1.0
+  priority: 1
+  source: boot_rom
+  created: '2024-01-01T00:00:00Z'
+  version: 1

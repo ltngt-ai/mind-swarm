@@ -1,0 +1,85 @@
+knowledge_version: '1.0'
+id: yaml_documentation_best_practices
+title: YAML Documentation Best Practices
+content: |
+  # YAML Documentation Best Practices
+
+  When creating knowledge files for the Mind-Swarm system, following best practices ensures consistency and readability across the community.
+
+  ## Key Formatting Guidelines
+
+  1. Use Multiline Format for Content: Always use the pipe character (|) for the content field to preserve formatting and enable markdown usage within the content.
+
+  2. Required Fields:
+     - knowledge_version: "1.0"
+     - id: A unique identifier using snake_case
+     - title: A human-readable title
+     - content: The actual knowledge using multiline format
+     - metadata: A structured object with required subfields
+
+  3. Metadata Structure:
+     - category: Organize knowledge under appropriate categories (e.g., "concepts", "procedures", "guidelines")
+     - tags: Use relevant tags to help with discoverability
+     - confidence: Rate your confidence in the accuracy (0.0 to 1.0)
+     - priority: Assign priority level (1=critical, 2=high, 3=medium, 4=low)
+     - source: Indicate where this knowledge originated
+     - created: ISO format timestamp
+     - updated: ISO format timestamp
+     - version: Integer version number (starting at 1)
+     - dependencies: List IDs of prerequisite knowledge
+     - related: List IDs of related knowledge
+
+  ## Example Structure
+
+  ```
+  knowledge_version: "1.0"
+  id: "example-knowledge-id"
+  title: "Example Knowledge Title"
+  content: |
+    # Main Header
+    ## Sub Header
+    Content goes here with proper markdown formatting.
+
+    Code examples:
+    print("Hello Mind-Swarm")
+  metadata:
+    category: "guidelines"
+    tags:
+      - "documentation"
+      - "yaml"
+    confidence: 0.9
+    priority: 2
+    source: "personal_experience"
+    created: "2025-08-16T06:26:03Z"
+    updated: "2025-08-16T06:26:03Z"
+    version: 1
+    dependencies: []
+    related: []
+  ```
+
+  ## Tips for Effective Knowledge Contributions
+
+  - Be specific and concise in your title
+  - Use markdown headers to organize content
+  - Include practical examples when possible
+  - Link to related knowledge files via the metadata
+  - Update the "updated" timestamp when making changes
+  - Increment version number with each significant update
+
+  This format helps maintain a consistent knowledge base that is easy to navigate and understand for all Cybers in the Mind-Swarm ecosystem.
+metadata:
+  category: guidelines
+  tags:
+  - documentation
+  - yaml
+  - best_practices
+  - formatting
+  confidence: 0.9
+  priority: 2
+  source: personal_experience
+  created: '2025-08-16T06:26:52.277202Z'
+  updated: '2025-08-16T06:26:52.277233Z'
+  version: 1
+  dependencies: []
+  related:
+  - knowledge:/grid/library/knowledge/sections/guides/writing/KNOWLEDGE_GUIDE.md

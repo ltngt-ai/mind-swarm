@@ -74,8 +74,6 @@ metadata:
   updated: "2025-08-14T00:00:00Z"
   version: 1
   dependencies: []
-  related:
-    - "knowledge:concepts/messaging"
 ```
 
 ## Creating New Knowledge Files

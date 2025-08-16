@@ -360,6 +360,7 @@ class MindSwarmCLI:
         console.print("  [cyan]dev current [name][/cyan] - Show/set current developer")
         console.print("  [cyan]dev list[/cyan] - List registered developers")
         console.print("  [cyan]mailbox[/cyan] - Check developer mailbox")
+        console.print("  [cyan]knowledge[/cyan] - Knowledge system commands")
         console.print("  [cyan]stop[/cyan] - Stop the server")
         console.print("  [cyan]quit[/cyan] - Exit the system")
         console.print("\n[dim]Tip: Use 'quit' or Ctrl+C to exit[/dim]")
@@ -733,6 +734,267 @@ class MindSwarmCLI:
                                 console.print("No unread messages")
                         except Exception as e:
                             console.print(f"[red]Failed to check mailbox: {e}[/red]")
+                
+                elif cmd == "knowledge":
+                    # Knowledge system commands
+                    if len(parts) == 1:
+                        # Show knowledge help
+                        console.print("[bold]Knowledge Commands:[/bold]")
+                        console.print("  [cyan]knowledge search <query>[/cyan] - Search shared knowledge")
+                        console.print("  [cyan]knowledge add <content> [--tags tag1,tag2][/cyan] - Add knowledge")
+                        console.print("  [cyan]knowledge add-file <path> [--tags tag1,tag2][/cyan] - Add file to knowledge")
+                        console.print("  [cyan]knowledge add-dir <path> [--pattern *.md] [--tags tag1,tag2][/cyan] - Add directory files")
+                        console.print("  [cyan]knowledge list [limit][/cyan] - List recent knowledge")
+                        console.print("  [cyan]knowledge remove <id>[/cyan] - Remove knowledge by ID")
+                        console.print("  [cyan]knowledge stats[/cyan] - Show knowledge system stats")
+                    
+                    elif len(parts) > 1:
+                        subcmd = parts[1].lower()
+                        
+                        if subcmd == "search" and len(parts) > 2:
+                            # Search knowledge
+                            query = " ".join(parts[2:])
+                            try:
+                                results = await self.client.search_knowledge(query)
+                                if results:
+                                    console.print(f"[cyan]Found {len(results)} results:[/cyan]")
+                                    for i, item in enumerate(results, 1):
+                                        console.print(f"\n[bold]Result {i}:[/bold]")
+                                        console.print(f"  ID: {item.get('id', 'unknown')}")
+                                        console.print(f"  Score: {item.get('score', 0):.2f}")
+                                        content = item.get('content', '')
+                                        if len(content) > 200:
+                                            content = content[:200] + "..."
+                                        console.print(f"  Content: {content}")
+                                        metadata = item.get('metadata', {})
+                                        if metadata.get('tags'):
+                                            console.print(f"  Tags: {', '.join(metadata['tags'])}")
+                                        if metadata.get('cyber_id'):
+                                            console.print(f"  Source: {metadata['cyber_id']}")
+                                else:
+                                    console.print("No knowledge found")
+                            except Exception as e:
+                                console.print(f"[red]Search failed: {e}[/red]")
+                        
+                        elif subcmd == "add" and len(parts) > 2:
+                            # Add knowledge
+                            content = " ".join(parts[2:])
+                            
+                            # Parse tags if provided
+                            tags = []
+                            if "--tags" in content:
+                                parts_split = content.split("--tags")
+                                content = parts_split[0].strip()
+                                if len(parts_split) > 1:
+                                    tags = [t.strip() for t in parts_split[1].strip().split(",")]
+                            
+                            try:
+                                knowledge_id = await self.client.add_knowledge(content, tags)
+                                if knowledge_id:
+                                    console.print(f"[green]✓ Added knowledge: {knowledge_id}[/green]")
+                                else:
+                                    console.print("[red]Failed to add knowledge[/red]")
+                            except Exception as e:
+                                console.print(f"[red]Failed to add knowledge: {e}[/red]")
+                        
+                        elif subcmd == "add-file" and len(parts) > 2:
+                            # Add file to knowledge
+                            from pathlib import Path
+                            
+                            # Parse arguments
+                            file_path = parts[2]
+                            remaining = " ".join(parts[3:]) if len(parts) > 3 else ""
+                            
+                            # Parse tags if provided
+                            tags = []
+                            if "--tags" in remaining:
+                                tags = [t.strip() for t in remaining.split("--tags")[1].strip().split(",")]
+                            
+                            # Check if file exists
+                            path = Path(file_path).expanduser().resolve()
+                            if not path.exists():
+                                console.print(f"[red]File not found: {file_path}[/red]")
+                            elif not path.is_file():
+                                console.print(f"[red]Not a file: {file_path}[/red]")
+                            else:
+                                try:
+                                    # Read file content
+                                    try:
+                                        content = path.read_text(encoding='utf-8')
+                                    except UnicodeDecodeError:
+                                        # Try reading as binary and convert
+                                        content = path.read_bytes().decode('utf-8', errors='replace')
+                                    
+                                    # Add filename as a tag
+                                    file_tags = tags + [f"file:{path.name}"]
+                                    
+                                    # Truncate if too large (ChromaDB has limits)
+                                    max_size = 50000  # 50KB limit for now
+                                    if len(content) > max_size:
+                                        console.print(f"[yellow]File too large ({len(content)} chars), truncating to {max_size} chars[/yellow]")
+                                        content = content[:max_size]
+                                    
+                                    # Add to knowledge with file content
+                                    file_header = f"File: {path.name}\nPath: {path}\n---\n"
+                                    full_content = file_header + content
+                                    
+                                    knowledge_id = await self.client.add_knowledge(full_content, file_tags)
+                                    if knowledge_id:
+                                        console.print(f"[green]✓ Added file to knowledge: {knowledge_id}[/green]")
+                                        console.print(f"  File: {path.name}")
+                                        console.print(f"  Size: {len(content)} chars")
+                                        if tags:
+                                            console.print(f"  Tags: {', '.join(tags)}")
+                                    else:
+                                        console.print("[red]Failed to add file to knowledge[/red]")
+                                except Exception as e:
+                                    console.print(f"[red]Failed to read or add file: {e}[/red]")
+                        
+                        elif subcmd == "add-dir" and len(parts) > 2:
+                            # Add directory of files to knowledge
+                            from pathlib import Path
+                            import fnmatch
+                            
+                            # Parse arguments
+                            dir_path = parts[2]
+                            remaining = " ".join(parts[3:]) if len(parts) > 3 else ""
+                            
+                            # Parse pattern and tags
+                            pattern = "*.txt"  # Default pattern
+                            tags = []
+                            
+                            if "--pattern" in remaining:
+                                pattern_parts = remaining.split("--pattern")
+                                if len(pattern_parts) > 1:
+                                    pattern_end = pattern_parts[1].strip()
+                                    # Extract pattern (up to next -- or end)
+                                    if "--tags" in pattern_end:
+                                        pattern = pattern_end.split("--tags")[0].strip()
+                                        tags_str = pattern_end.split("--tags")[1].strip()
+                                        tags = [t.strip() for t in tags_str.split(",")]
+                                    else:
+                                        pattern = pattern_end.strip()
+                            elif "--tags" in remaining:
+                                tags = [t.strip() for t in remaining.split("--tags")[1].strip().split(",")]
+                            
+                            # Check if directory exists
+                            path = Path(dir_path).expanduser().resolve()
+                            if not path.exists():
+                                console.print(f"[red]Directory not found: {dir_path}[/red]")
+                            elif not path.is_dir():
+                                console.print(f"[red]Not a directory: {dir_path}[/red]")
+                            else:
+                                try:
+                                    # Find matching files
+                                    matching_files = []
+                                    for file_path in path.iterdir():
+                                        if file_path.is_file() and fnmatch.fnmatch(file_path.name, pattern):
+                                            matching_files.append(file_path)
+                                    
+                                    if not matching_files:
+                                        console.print(f"[yellow]No files matching pattern '{pattern}' in {dir_path}[/yellow]")
+                                    else:
+                                        console.print(f"[cyan]Adding {len(matching_files)} files to knowledge...[/cyan]")
+                                        
+                                        success_count = 0
+                                        for file_path in matching_files:
+                                            try:
+                                                # Read file content
+                                                try:
+                                                    content = file_path.read_text(encoding='utf-8')
+                                                except UnicodeDecodeError:
+                                                    content = file_path.read_bytes().decode('utf-8', errors='replace')
+                                                
+                                                # Add filename as a tag
+                                                file_tags = tags + [f"file:{file_path.name}", f"dir:{path.name}"]
+                                                
+                                                # Truncate if too large
+                                                max_size = 50000
+                                                if len(content) > max_size:
+                                                    content = content[:max_size]
+                                                
+                                                # Add to knowledge
+                                                file_header = f"File: {file_path.name}\nPath: {file_path}\n---\n"
+                                                full_content = file_header + content
+                                                
+                                                knowledge_id = await self.client.add_knowledge(full_content, file_tags)
+                                                if knowledge_id:
+                                                    success_count += 1
+                                                    console.print(f"  ✓ {file_path.name} -> {knowledge_id}")
+                                                else:
+                                                    console.print(f"  ✗ {file_path.name} - failed")
+                                            except Exception as e:
+                                                console.print(f"  ✗ {file_path.name} - error: {e}")
+                                        
+                                        console.print(f"[green]Successfully added {success_count}/{len(matching_files)} files[/green]")
+                                        if tags:
+                                            console.print(f"  Tags: {', '.join(tags)}")
+                                
+                                except Exception as e:
+                                    console.print(f"[red]Failed to process directory: {e}[/red]")
+                        
+                        elif subcmd == "list":
+                            # List knowledge
+                            limit = 10
+                            if len(parts) > 2:
+                                try:
+                                    limit = int(parts[2])
+                                except ValueError:
+                                    pass
+                            
+                            try:
+                                items = await self.client.list_knowledge(limit)
+                                if items:
+                                    console.print(f"[cyan]Showing {len(items)} knowledge items:[/cyan]")
+                                    for item in items:
+                                        console.print(f"\nID: {item.get('id', 'unknown')}")
+                                        console.print(f"Content: {item.get('content', '')}")
+                                        metadata = item.get('metadata', {})
+                                        if metadata.get('timestamp'):
+                                            console.print(f"Time: {metadata['timestamp'][:19]}")
+                                        if metadata.get('tags'):
+                                            console.print(f"Tags: {', '.join(metadata['tags'])}")
+                                else:
+                                    console.print("No knowledge stored yet")
+                            except Exception as e:
+                                console.print(f"[red]Failed to list knowledge: {e}[/red]")
+                        
+                        elif subcmd == "remove" and len(parts) > 2:
+                            # Remove knowledge
+                            knowledge_id = parts[2]
+                            try:
+                                success = await self.client.remove_knowledge(knowledge_id)
+                                if success:
+                                    console.print(f"[green]✓ Removed knowledge: {knowledge_id}[/green]")
+                                else:
+                                    console.print("[red]Failed to remove knowledge[/red]")
+                            except Exception as e:
+                                console.print(f"[red]Failed to remove knowledge: {e}[/red]")
+                        
+                        elif subcmd == "stats":
+                            # Show knowledge stats
+                            try:
+                                stats = await self.client.get_knowledge_stats()
+                                console.print("[bold]Knowledge System Stats:[/bold]")
+                                console.print(f"  Enabled: {stats.get('enabled', False)}")
+                                if stats.get('enabled'):
+                                    console.print(f"  Mode: {stats.get('mode', 'unknown')}")
+                                    console.print(f"  Shared Knowledge: {stats.get('shared_knowledge_count', 0)}")
+                                    console.print(f"  Active Cybers: {stats.get('active_cybers', 0)}")
+                                    
+                                    cybers = stats.get('cybers', {})
+                                    if cybers:
+                                        console.print("\n[bold]Per-Cyber Stats:[/bold]")
+                                        for cyber_id, cyber_stats in cybers.items():
+                                            console.print(f"  {cyber_id}: {cyber_stats.get('personal_knowledge_count', 0)} personal")
+                                else:
+                                    console.print("  [yellow]Knowledge system not available[/yellow]")
+                                    console.print("  [dim]Install ChromaDB: pip install chromadb[/dim]")
+                            except Exception as e:
+                                console.print(f"[red]Failed to get stats: {e}[/red]")
+                        
+                        else:
+                            console.print(f"Unknown knowledge command: {subcmd}", style="red")
                 
                 else:
                     console.print(f"Unknown command: {command}", style="red")

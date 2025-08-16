@@ -87,103 +87,69 @@ class CognitiveLoop:
         self.cleanup_stage = CleanupStage(self)
     
     def _initialize_pipeline_buffers(self):
-        """Initialize pipeline memory blocks for each stage with clear current/previous naming."""
+        """Initialize pipeline memory blocks for each stage."""
         import json
         
         # Create pipeline directory
         pipeline_dir = self.memory_dir / "pipeline"
         pipeline_dir.mkdir(parents=True, exist_ok=True)
         
-        # Each stage gets current and previous buffers with clear names
-        stages = ["observation", "decision", "execution", "reflect"]
+        # Each stage gets a single current buffer (except reflect which uses reflection_on_last_cycle)
+        stages = ["observation", "decision", "execution"]
         
-        # Initialize buffers with clear naming
+        # Initialize buffers
         self.pipeline_buffers = {}
         for stage in stages:
-            self.pipeline_buffers[stage] = {}
+            # Create current buffer file for each stage
+            buffer_file = pipeline_dir / f"{stage}_pipe_stage.json"
+            # Initialize with empty JSON if doesn't exist
+            if not buffer_file.exists():
+                with open(buffer_file, 'w') as f:
+                    json.dump({}, f)
             
-            # Create current and previous buffer files for each stage
-            for buffer_type in ["current", "previous"]:
-                buffer_file = pipeline_dir / f"{buffer_type}_{stage}_pipe_stage.json"
-                # Initialize with empty JSON if doesn't exist
-                if not buffer_file.exists():
-                    with open(buffer_file, 'w') as f:
-                        json.dump({}, f)
-                
-                # Create FileMemoryBlock for this buffer
-                # Use path relative to filesystem_root (self.personal.parent)
-                buffer_memory = FileMemoryBlock(
-                    location=str(buffer_file.relative_to(self.personal.parent)),
-                    priority=Priority.SYSTEM,  # System-controlled memory
-                    pinned=True,  # Pipeline buffers should never be removed
-                    metadata={
-                        "stage": stage, 
-                        "buffer_type": buffer_type, 
-                        "file_type": "pipeline_buffer",
-                        "description": f"{buffer_type.capitalize()} {stage} pipeline stage results"
-                    },
-                    cycle_count=self.cycle_count,  # When this memory was added
-                    no_cache=True,  # Pipeline buffers change frequently, don't cache
-                    block_type=MemoryType.SYSTEM  # Mark as system memory
-                )
-                
-                # Add to memory system
-                self.memory_system.add_memory(buffer_memory)
-                
-                # Store reference
-                self.pipeline_buffers[stage][buffer_type] = buffer_memory
-    
-    def _swap_pipeline_buffers(self):
-        """Move current pipeline data to previous and clear current for new cycle."""
-        import json
-        import shutil
-        
-        # For each stage, move current to previous and clear current
-        for stage in self.pipeline_buffers:
-            current_buffer = self.pipeline_buffers[stage]["current"]
-            previous_buffer = self.pipeline_buffers[stage]["previous"]
-            
-            # Get absolute paths
-            current_file = self.personal.parent / current_buffer.location
-            previous_file = self.personal.parent / previous_buffer.location
-            
-            # Copy current to previous (preserving any data written in last cycle)
-            if current_file.exists():
-                shutil.copy2(current_file, previous_file)
-            
-            # Clear current for new cycle
-            with open(current_file, 'w') as f:
-                json.dump({}, f)
-            
-            # Update the memory blocks' cycle_count
-            # Previous gets the last cycle's count
-            self.memory_system.remove_memory(previous_buffer.id)
-            updated_previous = FileMemoryBlock(
-                location=previous_buffer.location,
+            # Create FileMemoryBlock for this buffer
+            # Use sandbox path directly
+            buffer_memory = FileMemoryBlock(
+                location=f"personal/.internal/memory/pipeline/{stage}_pipe_stage.json",
                 priority=Priority.SYSTEM,  # System-controlled memory
-                pinned=True,
+                pinned=True,  # Pipeline buffers should never be removed
                 metadata={
-                    "stage": stage,
-                    "buffer_type": "previous",
+                    "stage": stage, 
                     "file_type": "pipeline_buffer",
-                    "description": f"Previous {stage} pipeline stage results"
+                    "description": f"Current {stage} pipeline stage results"
                 },
-                cycle_count=max(0, self.cycle_count - 1),  # Previous cycle
-                no_cache=True,  # Don't cache pipeline buffers
+                cycle_count=self.cycle_count,  # When this memory was added
+                no_cache=True,  # Pipeline buffers change frequently, don't cache
                 block_type=MemoryType.SYSTEM  # Mark as system memory
             )
-            self.memory_system.add_memory(updated_previous)
-            self.pipeline_buffers[stage]["previous"] = updated_previous
             
-            # Current gets this cycle's count
-            self.memory_system.remove_memory(current_buffer.id)
-            updated_current = FileMemoryBlock(
-                location=current_buffer.location,
+            # Add to memory system
+            self.memory_system.add_memory(buffer_memory)
+            
+            # Store reference
+            self.pipeline_buffers[stage] = buffer_memory
+    
+    def _clear_pipeline_buffers(self):
+        """Clear pipeline buffers for new cycle."""
+        import json
+        
+        # Clear each stage's buffer for the new cycle
+        for stage, buffer_memory in self.pipeline_buffers.items():
+            # Get absolute path
+            buffer_file = self.personal.parent / buffer_memory.location
+            
+            # Clear buffer for new cycle
+            with open(buffer_file, 'w') as f:
+                json.dump({}, f)
+            
+            # Update the memory block's cycle_count
+            self.memory_system.remove_memory(buffer_memory.id)
+            updated_buffer = FileMemoryBlock(
+                location=buffer_memory.location,
                 priority=Priority.SYSTEM,  # System-controlled memory
                 pinned=True,
                 metadata={
                     "stage": stage,
-                    "buffer_type": "current", 
                     "file_type": "pipeline_buffer",
                     "description": f"Current {stage} pipeline stage results"
                 },
@@ -191,18 +157,12 @@ class CognitiveLoop:
                 no_cache=True,  # Don't cache pipeline buffers
                 block_type=MemoryType.SYSTEM  # Mark as system memory
             )
-            self.memory_system.add_memory(updated_current)
-            self.pipeline_buffers[stage]["current"] = updated_current
-        
-        # No need to invalidate cache - pipeline buffers have no_cache=True
+            self.memory_system.add_memory(updated_buffer)
+            self.pipeline_buffers[stage] = updated_buffer
     
     def get_current_pipeline(self, stage: str) -> FileMemoryBlock:
         """Get the current buffer for a stage."""
-        return self.pipeline_buffers[stage]["current"]
-    
-    def get_previous_pipeline(self, stage: str) -> FileMemoryBlock:
-        """Get the previous buffer for a stage."""
-        return self.pipeline_buffers[stage]["previous"]
+        return self.pipeline_buffers[stage]
     
     
     def _initialize_managers(self):
@@ -216,8 +176,8 @@ class CognitiveLoop:
         # Knowledge system
         self.knowledge_manager = KnowledgeManager(cyber_type=self.cyber_type)
         
-        # Double-buffered pipeline using FileMemoryBlocks
-        # Each stage has two buffers (0 and 1) that swap between current and previous
+        # Pipeline using FileMemoryBlocks
+        # Each stage has a single buffer that gets cleared each cycle
         self._initialize_pipeline_buffers()
         
         # State management
@@ -267,15 +227,19 @@ class CognitiveLoop:
         # Initialize dynamic context file
         self._init_dynamic_context()
         
-        # Add goals and tasks files to memory if they exist
-        self._add_goals_and_tasks_files()
+        # Add location files to memory
+        self._init_location_memory()
+        
+        # Add reflection file if it exists from a previous run
+        self._ensure_reflection_in_memory()
     
     def _init_identity_memory(self):
         """Add Cyber identity file to working memory as pinned."""
         identity_file = self.personal / ".internal" / "identity.json"
         if identity_file.exists():
+            # Use the sandbox path directly - cyber sees /personal/.internal/identity.json
             identity_memory = FileMemoryBlock(
-                location=str(identity_file.relative_to(self.personal.parent)),
+                location="personal/.internal/identity.json",
                 priority=Priority.SYSTEM,  # System-controlled identity
                 confidence=1.0,
                 pinned=True,  # Always in working memory
@@ -306,7 +270,8 @@ class CognitiveLoop:
             logger.info(f"Created initial dynamic_context.json for new Cyber")
         
         # Add to memory as pinned so Cyber always sees current context
-        self.dynamic_context_location = str(self.dynamic_context_file.relative_to(self.personal.parent))
+        # Use the sandbox path directly - cyber sees /personal/.internal/memory/dynamic_context.json
+        self.dynamic_context_location = "personal/.internal/memory/dynamic_context.json"
         context_memory = FileMemoryBlock(
             location=self.dynamic_context_location,
             priority=Priority.SYSTEM,  # System-controlled runtime context
@@ -320,6 +285,95 @@ class CognitiveLoop:
         self.memory_system.add_memory(context_memory)
         self.dynamic_context_memory_id = context_memory.id
         logger.info("Initialized dynamic_context.json")
+    
+    def _init_location_memory(self):
+        """Add location tracking files to memory."""
+        self._ensure_location_files_in_memory()
+    
+    def _read_dynamic_context(self):
+        """Read the dynamic context file if it exists."""
+        try:
+            if self.dynamic_context_file.exists():
+                with open(self.dynamic_context_file, 'r') as f:
+                    return json.load(f)
+        except:
+            pass
+        return {}
+    
+    def _ensure_location_files_in_memory(self):
+        """Ensure location files are in memory, creating them if needed."""
+        # Create/update current_location.txt
+        current_location_file = self.memory_dir / "current_location.txt"
+        current_location_id = "memory:personal/.internal/memory/current_location.txt"
+        
+        # Create the file if it doesn't exist
+        if not current_location_file.exists():
+            # Get current location from dynamic context or use default
+            dynamic_context = self._read_dynamic_context()
+            current_loc = dynamic_context.get("current_location", "/personal")
+            
+            # Create basic location file content
+            current_location_file.write_text(f"| {current_loc} (📁=memory group, 📄=memory)\n")
+            logger.info(f"Created current_location.txt with location: {current_loc}")
+        
+        if current_location_file.exists():
+            # Check if already in memory
+            existing_memory = self.memory_system.get_memory(current_location_id)
+            if existing_memory:
+                # Update the cycle count to keep it fresh
+                self.memory_system.touch_memory(current_location_id, self.cycle_count)
+            else:
+                current_location_memory = FileMemoryBlock(
+                    location="personal/.internal/memory/current_location.txt",
+                    priority=Priority.CRITICAL,  # CRITICAL for first cycle visibility
+                    confidence=1.0,
+                    pinned=True,  # Always visible
+                    metadata={"file_type": "location", "description": "My current location in the grid"},
+                    cycle_count=self.cycle_count,
+                    no_cache=True,  # Always read fresh
+                    block_type=MemoryType.SYSTEM
+                )
+                self.memory_system.add_memory(current_location_memory)
+                logger.info(f"Added current_location.txt to pinned memory with id: {current_location_memory.id}")
+        
+        # Create/update personal_location.txt
+        personal_location_file = self.memory_dir / "personal_location.txt"
+        personal_location_id = "memory:personal/.internal/memory/personal_location.txt"
+        
+        # Create the file if it doesn't exist
+        if not personal_location_file.exists():
+            # Create basic personal directory listing
+            personal_content = "| /personal (your home directory)\n"
+            # List actual directories if they exist
+            if self.personal.exists():
+                for item in sorted(self.personal.iterdir()):
+                    if item.is_dir() and not item.name.startswith('.'):
+                        personal_content += f"|---- 📁 {item.name}/\n"
+                for item in sorted(self.personal.iterdir()):
+                    if item.is_file() and not item.name.startswith('.'):
+                        personal_content += f"|---- 📄 {item.name}\n"
+            personal_location_file.write_text(personal_content)
+            logger.info("Created personal_location.txt with personal directory listing")
+        
+        if personal_location_file.exists():
+            # Check if already in memory
+            existing_memory = self.memory_system.get_memory(personal_location_id)
+            if existing_memory:
+                # Update the cycle count to keep it fresh
+                self.memory_system.touch_memory(personal_location_id, self.cycle_count)
+            else:
+                personal_location_memory = FileMemoryBlock(
+                    location="personal/.internal/memory/personal_location.txt",
+                    priority=Priority.CRITICAL,  # CRITICAL for first cycle visibility
+                    confidence=1.0,
+                    pinned=True,  # Always visible
+                    metadata={"file_type": "location", "description": "Map of my personal directory"},
+                    cycle_count=self.cycle_count,
+                    no_cache=True,  # Always read fresh
+                    block_type=MemoryType.SYSTEM
+                )
+                self.memory_system.add_memory(personal_location_memory)
+                logger.info(f"Added personal_location.txt to pinned memory with id: {personal_location_memory.id}")
     
     def get_dynamic_context(self) -> Dict[str, Any]:
         """Get the current dynamic context from file.
@@ -389,70 +443,35 @@ class CognitiveLoop:
         except Exception as e:
             logger.error(f"Failed to update dynamic context: {e}")
     
-    def _ensure_goals_and_tasks_in_memory(self):
-        """Ensure goals and tasks files are in memory if they exist and have content.
+    def _ensure_reflection_in_memory(self):
+        """Ensure reflection_on_last_cycle file is in memory if it exists."""
+        reflection_file = self.memory_dir / "reflection_on_last_cycle.json"
+        reflection_memory_id = f"memory:{reflection_file.relative_to(self.personal.parent)}"
         
-        This is called each cycle to handle files created after initialization.
-        """
-        # Check goals.json
-        goals_file = self.memory_dir / "goals.json"
-        goals_memory_id = f"memory:{goals_file.relative_to(self.personal.parent)}"
-        
-        # Check if it exists, has content, and isn't already in memory
-        if goals_file.exists() and goals_file.stat().st_size > 50:  # More than just empty JSON
+        # Check if it exists and has content
+        if reflection_file.exists() and reflection_file.stat().st_size > 50:  # More than just empty JSON
             # Check if already in memory
             already_in_memory = any(
-                m.id == goals_memory_id 
+                m.id == reflection_memory_id 
                 for m in self.memory_system.symbolic_memory
             )
             if not already_in_memory:
-                goals_memory = FileMemoryBlock(
-                    location=str(goals_file.relative_to(self.personal.parent)),
-                    priority=Priority.HIGH,
+                reflection_memory = FileMemoryBlock(
+                    location="personal/.internal/memory/reflection_on_last_cycle.json",
+                    priority=Priority.MEDIUM,  # Medium priority, not as critical as goals
                     confidence=1.0,
-                    pinned=True,
+                    pinned=False,  # Not pinned, can be cleaned up if needed
                     metadata={
-                        "file_type": "goals",
-                        "description": "My goals and objectives. Goals are high-level, long-term objectives that define WHY I do things."
+                        "file_type": "reflection",
+                        "description": "Reflection on the last execution cycle"
                     },
-                    cycle_count=self.cycle_count
+                    cycle_count=self.cycle_count,
+                    no_cache=True,  # Always read fresh
+                    block_type=MemoryType.FILE
                 )
-                self.memory_system.add_memory(goals_memory)
-                logger.info(f"Added goals.json to pinned memory at cycle {self.cycle_count}")
-        
-        # Check active_tasks.json
-        tasks_file = self.memory_dir / "active_tasks.json"
-        tasks_memory_id = f"memory:{tasks_file.relative_to(self.personal.parent)}"
-        
-        # Check if it exists, has content, and isn't already in memory
-        if tasks_file.exists() and tasks_file.stat().st_size > 50:  # More than just empty JSON
-            # Check if already in memory
-            already_in_memory = any(
-                m.id == tasks_memory_id 
-                for m in self.memory_system.symbolic_memory
-            )
-            if not already_in_memory:
-                tasks_memory = FileMemoryBlock(
-                    location=str(tasks_file.relative_to(self.personal.parent)),
-                    priority=Priority.HIGH,
-                    confidence=1.0,
-                    pinned=True,
-                    metadata={
-                        "file_type": "tasks",
-                        "description": "My active tasks. Tasks are specific, actionable items that define WHAT to do and can be completed in a few cycles."
-                    },
-                    cycle_count=self.cycle_count
-                )
-                self.memory_system.add_memory(tasks_memory)
-                logger.info(f"Added active_tasks.json to pinned memory at cycle {self.cycle_count}")
+                self.memory_system.add_memory(reflection_memory)
+                logger.info(f"Added reflection_on_last_cycle.json to memory at cycle {self.cycle_count}")
     
-    def _add_goals_and_tasks_files(self):
-        """Add goals and tasks JSON files to memory as pinned FileMemoryBlocks.
-        
-        This makes the goal and task data visible to the Cyber without complexity.
-        Just calls the ensure method for initial setup.
-        """
-        self._ensure_goals_and_tasks_in_memory()
     
     
     async def run_cycle(self) -> bool:
@@ -479,16 +498,17 @@ class CognitiveLoop:
             # Increment cycle count
             self.cycle_count = self.state_manager.increment_cycle_count()
             
-            # Swap pipeline buffers at start of new cycle
-            if self.cycle_count > 0:  # Don't swap on first cycle
-                self._swap_pipeline_buffers()
+            # Clear pipeline buffers at start of new cycle
+            if self.cycle_count > 0:  # Don't clear on first cycle
+                self._clear_pipeline_buffers()
             
             # Update dynamic context at the start of each cycle
             self._update_dynamic_context(stage="STARTING", phase="INIT")
             
-            # Check if goals/tasks files need to be added to memory
-            # (they might have been created after initialization)
-            self._ensure_goals_and_tasks_in_memory()
+            # Check if location and reflection files need to be added to memory
+            # (they might have been created or updated after initialization)
+            self._ensure_location_files_in_memory()
+            self._ensure_reflection_in_memory()
             
             await self.observation_stage.observe()
             

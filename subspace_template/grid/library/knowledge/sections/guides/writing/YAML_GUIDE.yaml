@@ -95,5 +95,4 @@ metadata:
   updated: "2025-08-14T16:00:00.000000"
   version: 1
   dependencies: []
-related:
-  - "knowledge:grid/library/knowledge/schemas/KNOWLEDGE_SCHEMA.md"
+related: []

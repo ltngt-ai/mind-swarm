@@ -670,6 +670,67 @@ class MindSwarmServer:
                 logger.error(f"Failed to get filesystem structure: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
+        # Knowledge System Endpoints
+        
+        @self.app.get("/knowledge/search")
+        async def search_knowledge(query: str, limit: int = 10):
+            """Search the knowledge system."""
+            try:
+                results = await self.coordinator.knowledge_handler.search_shared_knowledge(query, limit)
+                return results
+            except Exception as e:
+                logger.error(f"Knowledge search failed: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.post("/knowledge/add")
+        async def add_knowledge(request: Dict[str, Any]):
+            """Add knowledge to the shared system."""
+            try:
+                content = request.get("content", "")
+                metadata = request.get("metadata", {})
+                
+                success, knowledge_id = await self.coordinator.knowledge_handler.add_shared_knowledge(
+                    content, metadata
+                )
+                
+                if success:
+                    return {"success": True, "knowledge_id": knowledge_id}
+                else:
+                    return {"success": False, "error": knowledge_id}
+            except Exception as e:
+                logger.error(f"Knowledge add failed: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.get("/knowledge/list")
+        async def list_knowledge(limit: int = 100):
+            """List all shared knowledge."""
+            try:
+                items = await self.coordinator.knowledge_handler.list_shared_knowledge(limit)
+                return items
+            except Exception as e:
+                logger.error(f"Knowledge list failed: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.delete("/knowledge/{knowledge_id}")
+        async def remove_knowledge(knowledge_id: str):
+            """Remove knowledge from the system."""
+            try:
+                success, message = await self.coordinator.knowledge_handler.remove_shared_knowledge(knowledge_id)
+                return {"success": success, "message": message}
+            except Exception as e:
+                logger.error(f"Knowledge remove failed: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.get("/knowledge/stats")
+        async def get_knowledge_stats():
+            """Get knowledge system statistics."""
+            try:
+                stats = self.coordinator.knowledge_handler.get_stats()
+                return stats
+            except Exception as e:
+                logger.error(f"Knowledge stats failed: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         @self.app.websocket("/ws")
         async def websocket_endpoint(websocket: WebSocket):
             """WebSocket endpoint for real-time updates."""

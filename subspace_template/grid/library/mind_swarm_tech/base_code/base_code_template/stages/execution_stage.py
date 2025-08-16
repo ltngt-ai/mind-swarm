@@ -63,6 +63,7 @@ class ExecutionStage:
         self._extract_and_save_module_docs(self.memory_api, "memory_api_docs")
         self._extract_and_save_module_docs(self.location_api, "location_api_docs")
         self._extract_and_save_module_docs(self.events, "events_api_docs")
+        self._extract_and_save_module_docs(self.knowledge_api, "knowledge_api_docs")
     
     def _extract_and_save_module_docs(self, module_instance, docs_name: str):
         """Extract API documentation from a module and save to knowledge."""
@@ -238,6 +239,7 @@ class ExecutionStage:
         from ..python_modules.memory import Memory
         from ..python_modules.location import Location
         from ..python_modules.events import Events
+        from ..python_modules.knowledge import Knowledge
         
         # Create context for the APIs
         context = {
@@ -255,6 +257,7 @@ class ExecutionStage:
         self.memory_api = Memory(context)
         self.location_api = Location(context)
         self.events = Events(context)
+        self.knowledge_api = Knowledge(self.memory_api)  # Knowledge uses Memory instance
     
     async def execute(self):
         """Run the execution stage."""

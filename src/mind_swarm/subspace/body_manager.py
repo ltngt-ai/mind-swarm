@@ -35,28 +35,30 @@ class BodyFile:
 class BodyManager:
     """Manages body files for an Cyber."""
     
-    def __init__(self, name: str, cyber_personal: Path):
+    def __init__(self, name: str, cyber_personal: Path, knowledge_handler=None):
         """Initialize body manager for an Cyber.
         
         Args:
             name: Cyber's unique name
             cyber_personal: Cyber's home directory path
+            knowledge_handler: Optional knowledge handler for knowledge body file
         """
         self.name = name
         self.cyber_personal = cyber_personal
         self.body_files: Dict[str, BodyFile] = {}
         self._watch_task: Optional[asyncio.Task] = None
+        self.knowledge_handler = knowledge_handler
         
     async def create_body_files(self):
         """Create the standard body files for an Cyber."""
         # Brain - for thinking
-        brain = BodyFile(
-            "brain",
-            "This is your brain. Write your thoughts here to think.\n"
-            "Format: Just write what you want to think about.\n"
-            "The response will appear here after you think."
-        )
+        brain = BodyFile("brain", "")
         self.body_files["brain"] = brain
+        
+        # Knowledge - for searching and storing knowledge
+        if self.knowledge_handler:
+            knowledge = BodyFile("knowledge_api", "")
+            self.body_files["knowledge_api"] = knowledge
         
         # Voice file removed - not implemented
         
@@ -169,9 +171,76 @@ class BodyManager:
                             else:
                                 logger.error(f"BODY: No handler for brain file of {self.name}")
                         
-                        elif content.strip() == body_file.help_text.strip():
-                            # Cyber has reset the file, we can process again
-                            logger.debug(f"MONITOR: Cyber {self.name} reset brain file, enabling processing")
+                        elif not content.strip() or "<<<THOUGHT_COMPLETE>>>" in content:
+                            # File is empty or has completed response, we can process again
+                            if processing.get(name, False):
+                                logger.debug(f"MONITOR: Brain file ready for next request from {self.name}")
+                            processing[name] = False
+                    
+                    # For knowledge file, check for complete request with marker
+                    elif name == "knowledge_api" and self.knowledge_handler:
+                        # Check for request completion marker
+                        if "<<<END_KNOWLEDGE_REQUEST>>>" in content and not processing.get(name, False):
+                            try:
+                                # Extract the request (everything before the marker)
+                                request_text = content.split("<<<END_KNOWLEDGE_REQUEST>>>")[0].strip()
+                                
+                                # Skip if empty
+                                if not request_text:
+                                    continue
+                                
+                                # Parse the JSON request
+                                request = json.loads(request_text)
+                                
+                                if "request_id" in request and "operation" in request:
+                                    processing[name] = True
+                                    logger.info(f"BODY: Knowledge request from {self.name}: {request.get('operation')}")
+                                    
+                                    # Process the request
+                                    response = await self.knowledge_handler.process_request(self.name, request)
+                                    
+                                    # Write response with completion marker
+                                    response_text = json.dumps(response, indent=2)
+                                    final_response = f"{response_text}\n<<<KNOWLEDGE_COMPLETE>>>"
+                                    
+                                    async with aiofiles.open(file_path, 'w') as f:
+                                        await f.write(final_response)
+                                    
+                                    logger.info(f"BODY: Knowledge response written for {self.name}")
+                                    processing[name] = False
+                                else:
+                                    logger.warning(f"Invalid knowledge request from {self.name}: missing required fields")
+                                    
+                            except json.JSONDecodeError as e:
+                                logger.error(f"Invalid JSON in knowledge request from {self.name}: {e}")
+                                # Write error response with marker
+                                error_response = {
+                                    "request_id": "error",
+                                    "status": "error",
+                                    "error": f"Invalid JSON: {str(e)}"
+                                }
+                                error_text = json.dumps(error_response, indent=2)
+                                async with aiofiles.open(file_path, 'w') as f:
+                                    await f.write(f"{error_text}\n<<<KNOWLEDGE_COMPLETE>>>")
+                                processing[name] = False
+                                
+                            except Exception as e:
+                                logger.error(f"Error processing knowledge request for {self.name}: {e}")
+                                # Write error response with marker
+                                error_response = {
+                                    "request_id": "error",
+                                    "status": "error",
+                                    "error": str(e)
+                                }
+                                error_text = json.dumps(error_response, indent=2)
+                                async with aiofiles.open(file_path, 'w') as f:
+                                    await f.write(f"{error_text}\n<<<KNOWLEDGE_COMPLETE>>>")
+                                processing[name] = False
+                        
+                        elif not content.strip() or "<<<KNOWLEDGE_COMPLETE>>>" in content:
+                            # File is empty or has completed response, we can process again  
+                            if processing.get(name, False):
+                                logger.debug(f"MONITOR: Knowledge file ready for next request from {self.name}")
                             processing[name] = False
                 
                 # Adaptive delay - longer when nothing is happening
@@ -190,9 +259,10 @@ class BodyManager:
 class BodySystemManager:
     """Manages body files for all Cybers."""
     
-    def __init__(self):
+    def __init__(self, knowledge_handler=None):
         """Initialize the body system manager."""
         self.body_managers: Dict[str, BodyManager] = {}
+        self.knowledge_handler = knowledge_handler
         
     async def create_agent_body(self, name: str, cyber_personal: Path) -> BodyManager:
         """Create body files for a new Cyber.
@@ -204,7 +274,7 @@ class BodySystemManager:
         Returns:
             BodyManager instance for the Cyber
         """
-        manager = BodyManager(name, cyber_personal)
+        manager = BodyManager(name, cyber_personal, self.knowledge_handler)
         await manager.create_body_files()
         self.body_managers[name] = manager
         return manager

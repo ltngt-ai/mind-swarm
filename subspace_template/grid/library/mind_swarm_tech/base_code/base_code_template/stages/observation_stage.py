@@ -98,17 +98,17 @@ class ObservationStage:
         thinking_request = {
             "signature": {
                 "instruction": """
-Review all observations in your working memory to reason relevant changes.
-Look at recent observations and how they relate to the current situation, goals and tasks.
+Review all observations in your working memory to identify relevant changes.
+Look at recent observations and how they relate to the current situation, goals, tasks and reflection from last cycle.
 Don't plan how to act on this information, just how it might be important.
 Always start your output with [[ ## reasoning ## ]]
 """,
                 "inputs": {
-                    "working_memory": "Your current working memory with all observations and context"
+                    "working_memory": "Your working memory"
                 },
                 "outputs": {
-                    "reasoning": "Your comprehensive reasoning of the current situation based on all observations",
-                    "relevance": "How the observations relate to the current situation and goals",
+                    "reasoning": "Your short explaination of reasoning",
+                    "relevance": "How the observations relate to the current situation",
                 },
                 "display_field": "reasoning"
             },
@@ -138,8 +138,7 @@ Always start your output with [[ ## reasoning ## ]]
         if relevance == "{relevance}" or not relevance:
             relevance = "Observations being processed for context"
         
-        orientation_data = {
-            "timestamp": datetime.now().isoformat(),
+        observartion_result_data = {
             "cycle_count": self.cognitive_loop.cycle_count,
             "reasoning": reasoning,
             "relevance": relevance
@@ -151,7 +150,7 @@ Always start your output with [[ ## reasoning ## ]]
         
         # Write the observation data to the buffer
         with open(buffer_file, 'w') as f:
-            json.dump(orientation_data, f, indent=2)
+            json.dump(observartion_result_data, f, indent=2)
         
         # Touch the memory block so it knows when the file was updated
         self.cognitive_loop.memory_system.touch_memory(observation_buffer.id, self.cognitive_loop.cycle_count)

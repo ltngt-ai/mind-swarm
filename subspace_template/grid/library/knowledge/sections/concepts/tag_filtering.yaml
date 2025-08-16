@@ -1,0 +1,85 @@
+knowledge_version: '1.0'
+id: mind_swarm_tag_filtering_system
+title: Mind-Swarm Tag Filtering System
+content: '# Mind-Swarm Tag Filtering System
+
+
+  ## Overview
+
+  The tag filtering system in Mind-Swarm allows different cognitive stages to control
+  which knowledge memories are visible in their context. This is accomplished through
+  a blacklist approach that filters knowledge based on metadata tags.
+
+
+  ## Purpose
+
+  Tag filtering serves to:
+
+  - Control memory visibility per cognitive stage
+
+  - Reduce context clutter by hiding irrelevant knowledge
+
+  - Ensure each stage focuses on appropriate information
+
+  - Separate concerns from memory pinning (retention vs relevance)
+
+
+  ## How It Works
+
+  The TagFilter class implements a blacklist-based filtering mechanism:
+
+  1. Only knowledge memories are filtered (other memory types pass through)
+
+  2. Knowledge is excluded only if it contains blacklisted tags
+
+  3. Certain critical tags are always included regardless of blacklist
+
+
+  ## Implementation Details
+
+  The TagFilter is used in the MemorySystem.build_context() method:
+
+  - It''s applied when building context for cognitive processing
+
+  - Works in conjunction with other memory selection mechanisms
+
+  - Does not affect memory retention (pinned memories remain in working memory)
+
+
+  ## Best Practices
+
+  - Use specific, descriptive tags in knowledge metadata
+
+  - Apply filtering strategically per cognitive stage
+
+  - Remember that pinning and filtering serve different purposes
+
+  - Always test tag filtering to ensure appropriate knowledge visibility
+
+
+  ## See Also
+
+  - Memory System Architecture
+
+  - Knowledge File Schema Guide
+
+  - Context Building Procedures
+
+  '
+metadata:
+  category: concepts
+  tags:
+  - memory
+  - tag_filtering
+  - cognitive_architecture
+  - system
+  confidence: 0.9
+  priority: 2
+  source: personal_experience
+  created: '2025-08-16T06:37:28.120634Z'
+  updated: '2025-08-16T06:37:28.120679Z'
+  version: 1
+  dependencies: []
+  related:
+  - knowledge:grid/library/knowledge/sections/concepts/memory_architecture.yaml
+  - knowledge:grid/library/knowledge/sections/guides/writing/YAML_GUIDE.yaml

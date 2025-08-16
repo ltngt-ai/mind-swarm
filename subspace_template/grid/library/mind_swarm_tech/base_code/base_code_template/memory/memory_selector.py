@@ -193,6 +193,8 @@ class MemorySelector:
     
     def _select_balanced(self, memories: List[MemoryBlock], max_tokens: int) -> List[MemoryBlock]:
         """Balanced selection considering priority, relevance, and pinning."""
+        logger.info(f"Selecting from {len(memories)} total memories")
+        
         # First, separate pinned memories - they're always included
         pinned_memories = [m for m in memories if m.pinned]
         unpinned_memories = [m for m in memories if not m.pinned]
@@ -209,6 +211,17 @@ class MemorySelector:
         selected = pinned_memories.copy()
         used_tokens = pinned_tokens
         remaining_tokens = max_tokens - pinned_tokens
+        
+        # Debug log pinned memories
+        pinned_ids = [m.id for m in pinned_memories]
+        logger.info(f"Pinned memories ({len(pinned_ids)}): {pinned_ids}")
+        
+        # Log location files specifically
+        location_memories = [m for m in pinned_memories if 'location' in m.id.lower()]
+        if location_memories:
+            logger.info(f"Location memories in pinned: {[m.id for m in location_memories]}")
+        else:
+            logger.warning("No location memories found in pinned memories!")
         
         # Separate unpinned by priority
         priority_groups = {

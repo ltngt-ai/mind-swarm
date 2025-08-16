@@ -417,3 +417,90 @@ class MindSwarmClient:
             return True
         except (ValueError, ProcessLookupError, PermissionError):
             return False
+    
+    # Knowledge System Methods
+    
+    async def search_knowledge(self, query: str, limit: int = 10) -> List[Dict]:
+        """Search the knowledge system.
+        
+        Args:
+            query: Search query
+            limit: Maximum results to return
+            
+        Returns:
+            List of knowledge items
+        """
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{self.base_url}/knowledge/search",
+                params={"query": query, "limit": limit}
+            )
+            response.raise_for_status()
+            return response.json()
+    
+    async def add_knowledge(self, content: str, tags: List[str] = None) -> Optional[str]:
+        """Add knowledge to the shared system.
+        
+        Args:
+            content: Knowledge content
+            tags: Optional tags for categorization
+            
+        Returns:
+            Knowledge ID if successful
+        """
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.base_url}/knowledge/add",
+                json={
+                    "content": content,
+                    "metadata": {"tags": tags or []}
+                }
+            )
+            response.raise_for_status()
+            result = response.json()
+            return result.get("knowledge_id") if result.get("success") else None
+    
+    async def list_knowledge(self, limit: int = 100) -> List[Dict]:
+        """List all shared knowledge.
+        
+        Args:
+            limit: Maximum items to return
+            
+        Returns:
+            List of knowledge items
+        """
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{self.base_url}/knowledge/list",
+                params={"limit": limit}
+            )
+            response.raise_for_status()
+            return response.json()
+    
+    async def remove_knowledge(self, knowledge_id: str) -> bool:
+        """Remove knowledge from the system.
+        
+        Args:
+            knowledge_id: ID of knowledge to remove
+            
+        Returns:
+            True if successful
+        """
+        async with httpx.AsyncClient() as client:
+            response = await client.delete(
+                f"{self.base_url}/knowledge/{knowledge_id}"
+            )
+            response.raise_for_status()
+            result = response.json()
+            return result.get("success", False)
+    
+    async def get_knowledge_stats(self) -> Dict:
+        """Get knowledge system statistics.
+        
+        Returns:
+            Statistics dictionary
+        """
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{self.base_url}/knowledge/stats")
+            response.raise_for_status()
+            return response.json()

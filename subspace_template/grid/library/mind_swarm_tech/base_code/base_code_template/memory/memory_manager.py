@@ -56,7 +56,11 @@ class WorkingMemoryManager:
         self.memory_index[block.id] = block
         self.memories_by_type[block.type].append(block)
         
-        logger.debug(f"Added memory: {block.id} (type={block.type.value}, priority={block.priority.name})")
+        # Log pinned memories at INFO level for visibility
+        if block.pinned:
+            logger.info(f"Added PINNED memory: {block.id} (type={block.type.value}, priority={block.priority.name})")
+        else:
+            logger.debug(f"Added memory: {block.id} (type={block.type.value}, priority={block.priority.name})")
     
     def remove_memory(self, memory_id: str) -> None:
         """Remove a memory block."""

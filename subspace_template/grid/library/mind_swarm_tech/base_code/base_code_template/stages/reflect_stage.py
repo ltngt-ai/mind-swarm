@@ -60,20 +60,20 @@ class ReflectStage:
         # Update dynamic context
         self.cognitive_loop._update_dynamic_context(stage="REFLECT", phase="REVIEWING")
         
-        # Check if there's a previous execution to reflect on
-        # This is in the previous buffer since we haven't swapped yet
-        prev_execution_buffer = self.cognitive_loop.get_previous_pipeline("execution")
-        prev_execution_file = self.cognitive_loop.personal.parent / prev_execution_buffer.location
+        # Check if there's an execution to reflect on from current pipeline
+        # (It was filled by the execution stage in this cycle)
+        execution_buffer = self.cognitive_loop.get_current_pipeline("execution")
+        execution_file = self.cognitive_loop.personal.parent / execution_buffer.location
         
         import json
         try:
-            with open(prev_execution_file, 'r') as f:
+            with open(execution_file, 'r') as f:
                 last_execution = json.load(f)
                 if not last_execution or last_execution == {}:
-                    logger.debug("No previous execution to reflect on")
+                    logger.debug("No execution to reflect on")
                     return
         except:
-            logger.debug("No previous execution to reflect on")
+            logger.debug("No execution to reflect on")
             return
         
         # Build context for reflection - let the brain see everything in memory
@@ -101,9 +101,6 @@ class ReflectStage:
         output_values = reflection_response.get("output_values", {})
         
         reflection_content = {
-            "timestamp": datetime.now().isoformat(),
-            "cycle_count": self.cognitive_loop.cycle_count,
-            "execution_cycle": last_execution.get("cycle_count", 0),
             "insights": output_values.get("insights", ""),
             "lessons_learned": output_values.get("lessons_learned", ""),
             "goal_updates": output_values.get("goal_updates", ""),
@@ -111,15 +108,32 @@ class ReflectStage:
             "next_focus": output_values.get("next_focus", "")
         }
         
-        # Write to reflect pipeline buffer
-        reflect_buffer = self.cognitive_loop.get_current_pipeline("reflect")
-        buffer_file = self.cognitive_loop.personal.parent / reflect_buffer.location
-        
-        with open(buffer_file, 'w') as f:
+        # Save as a reflection_on_last_cycle memory block
+        reflection_file = self.cognitive_loop.memory_dir / "reflection_on_last_cycle.json"
+        with open(reflection_file, 'w') as f:
             json.dump(reflection_content, f, indent=2)
         
-        # Touch the memory block so it knows when the file was updated
-        self.cognitive_loop.memory_system.touch_memory(reflect_buffer.id, self.cognitive_loop.cycle_count)
+        # Add or update the reflection memory block
+        from ..memory import FileMemoryBlock, Priority, MemoryType
+        reflection_memory = FileMemoryBlock(
+            location=str(reflection_file.relative_to(self.cognitive_loop.personal.parent)),
+            priority=Priority.HIGH,
+            pinned=False,  # Not pinned, can be cleaned up if needed
+            metadata={
+                "file_type": "reflection",
+                "description": "Reflection on the last execution cycle"
+            },
+            cycle_count=self.cognitive_loop.cycle_count,
+            no_cache=True,  # Don't cache, always read fresh
+            block_type=MemoryType.FILE  # Regular file memory
+        )
+        
+        # Remove old reflection if it exists and add new one
+        reflection_id = f"memory:{reflection_file.relative_to(self.cognitive_loop.personal.parent)}"
+        existing_memory = self.cognitive_loop.memory_system.get_memory(reflection_id)
+        if existing_memory:
+            self.cognitive_loop.memory_system.remove_memory(reflection_id)
+        self.cognitive_loop.memory_system.add_memory(reflection_memory)
         
         logger.info(f"💭 Created reflection for cycle {self.cognitive_loop.cycle_count}")
         

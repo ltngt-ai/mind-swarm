@@ -143,7 +143,7 @@ Inside sandbox, cybers see (only non thinking parts see inside /personal/.intern
 4. **Filesystem IPC**: All communication via filesystem operations
 5. **Dual-Model Architecture**: Premium models for tasks, local for exploration
 6. **Emergent Intelligence**: Let cybers self-organize and discover patterns
-7. **Double-Buffered Pipeline**: Memory context prepared in parallel with execution
+7. **Pipeline Architecture**: Each stage builds on previous stage results
 
 ### Message Protocol
 ```json

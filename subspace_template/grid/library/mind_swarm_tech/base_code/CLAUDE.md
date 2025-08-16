@@ -19,14 +19,15 @@ The main coordinator that:
 - Handles graceful stops after cycle completion
 
 ### Cognitive Loop (`cognitive_loop.py`)
-The thinking engine using a **four-stage cognitive architecture**:
+The thinking engine using a **five-stage cognitive architecture**:
 
 1. **Observation Stage** - Understand what's happening
 2. **Decision Stage** - Choose what to do
 3. **Execution Stage** - Take action
 4. **Reflection Stage** - Learn from results
+5. **Cleanup Stage** - Manage memory and remove outdated information
 
-The loop uses a **double-buffered pipeline system** where each stage has current and previous memory buffers, allowing parallel preparation of context while executing.
+The loop uses a **pipeline system** where each stage writes its results to a buffer that subsequent stages can read.
 
 ## Memory System Architecture
 
@@ -249,17 +250,18 @@ base_code_template/
 ```
 
 ### Memory Pipeline Flow
-1. **Observation** creates understanding → decision buffer
-2. **Decision** reads understanding → execution buffer  
-3. **Execution** performs actions → reflection buffer
-4. **Reflection** learns from results → next cycle
+1. **Observation** creates understanding → observation buffer
+2. **Decision** reads observation buffer → decision buffer  
+3. **Execution** reads decision buffer → execution buffer
+4. **Reflection** reads execution buffer → reflection_on_last_cycle file
+5. **Cleanup** manages memory → prepares for next cycle
 
 ### Key Design Principles
 
 1. **Memory-First Architecture** - Everything is a memory block
 2. **Token Budget Awareness** - Never exceed LLM context limits
 3. **Stage Isolation** - Each stage has specific knowledge filters
-4. **Double Buffering** - Parallel context preparation
+4. **Pipeline Processing** - Each stage builds on previous stage results
 5. **Priority-Based Processing** - Critical items first
 6. **Filesystem as Truth** - All state persisted to disk
 

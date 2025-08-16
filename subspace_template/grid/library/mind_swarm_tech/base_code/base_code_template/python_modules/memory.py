@@ -834,6 +834,9 @@ Main memory interface providing unified access to all Mind-Swarm memories.
         
         # Track accessed and written files for transaction commit
         self._accessed_files = []
+        
+        # Initialize knowledge API (lazy loaded)
+        self._knowledge = None
         self._written_files = []
     
     def _clean_path(self, path: str) -> str:
@@ -1511,6 +1514,36 @@ Example:
             print(f"❌ Failed to delete {path}: {e}")
             return False
     
+    @property
+    def knowledge(self):
+        """
+        Access the Knowledge API for searching and storing knowledge.
+        
+        Returns:
+            Knowledge: The Knowledge API instance
+            
+        Example:
+            ```python
+            # Search for relevant knowledge
+            results = memory.knowledge.search("how to communicate with other cybers")
+            for item in results:
+                print(f"Found: {item['content']}")
+            
+            # Store new knowledge
+            memory.knowledge.store(
+                "Cybers communicate through messages in the outbox",
+                tags=["communication", "messaging"],
+                personal=False  # Share with the hive mind
+            )
+            
+            # Get formatted knowledge for brain prompts
+            relevant = memory.knowledge.remember("current task context")
+            ```
+        """
+        if self._knowledge is None:
+            from .knowledge import Knowledge
+            self._knowledge = Knowledge(self)
+        return self._knowledge
 
 
 # Register YAML representers to make TrackedDict and TrackedList transparent

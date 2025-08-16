@@ -17,6 +17,7 @@ from mind_swarm.subspace.brain_handler_dynamic import DynamicBrainHandler
 from mind_swarm.subspace.cyber_registry import CyberRegistry
 from mind_swarm.subspace.developer_registry import DeveloperRegistry
 from mind_swarm.subspace.io_handlers import NetworkBodyHandler, UserIOBodyHandler
+from mind_swarm.subspace.knowledge_handler import KnowledgeHandler
 from mind_swarm.schemas.cyber_types import CyberType
 from mind_swarm.ai.providers.factory import create_ai_service
 from mind_swarm.utils.logging import logger
@@ -67,6 +68,16 @@ class MessageRouter:
                     async with aiofiles.open(msg_file, 'r') as f:
                         content = await f.read()
                     message = json.loads(content)
+                    
+                    # Handle double-encoded JSON (when content is a JSON string instead of dict)
+                    if isinstance(message, str):
+                        try:
+                            message = json.loads(message)
+                            logger.debug(f"Decoded double-encoded JSON for message from {cyber_name}")
+                        except json.JSONDecodeError:
+                            logger.error(f"Failed to decode double-encoded message from {cyber_name}: {msg_filename}")
+                            continue
+                    
                     to_agent = message.get("to", "")
                     logger.info(f"Routing message from {cyber_name} to {to_agent}")
                     
@@ -199,7 +210,13 @@ class SubspaceCoordinator:
         self.subspace = SubspaceManager(root_path)
         self.spawner = CyberSpawner(self.subspace)
         self.router = MessageRouter(self.subspace.root_path)
-        self.body_system = BodySystemManager()
+        
+        # Initialize knowledge handler first
+        self.knowledge_handler = KnowledgeHandler(self.subspace.root_path)
+        
+        # Pass knowledge handler to body system
+        self.body_system = BodySystemManager(self.knowledge_handler)
+        
         self.state_manager = CyberStateManager(self.subspace.root_path)
         self.agent_registry = CyberRegistry(self.subspace.root_path)
         self.developer_registry = DeveloperRegistry(self.subspace.root_path)
