@@ -1257,6 +1257,11 @@ Returns:
                 print(f"⚠️ Source {old_path} does not exist")
                 return False
             
+            # Check if destination already exists
+            if new_actual.exists():
+                print(f"⚠️ Destination {new_path} already exists")
+                return False
+            
             # Create parent directory if needed
             new_actual.parent.mkdir(parents=True, exist_ok=True)
             
@@ -1264,23 +1269,30 @@ Returns:
             old_actual.rename(new_actual)
             
             # Update working memory if present
-            # Use path directly as memory ID (no type prefix)
-            old_memory_id = old_clean
+            # Look for memory by location, not just ID
+            memory_found = False
             for mem in list(self._memory_system.symbolic_memory):
-                if mem.id == old_memory_id:
+                # Check if this is a FileMemoryBlock with matching location
+                if hasattr(mem, 'location') and mem.location == old_clean:
+                    memory_found = True
                     # Remove old reference
-                    self._memory_system.remove_memory(old_memory_id)
-                    # Add new reference
+                    self._memory_system.remove_memory(mem.id)
+                    
+                    # Create new memory block preserving properties
                     from ..memory.memory_blocks import FileMemoryBlock
                     from ..memory.memory_types import Priority
                     new_block = FileMemoryBlock(
                         location=new_clean,
-                        priority=Priority.MEDIUM,
-                        confidence=1.0,
+                        priority=mem.priority if hasattr(mem, 'priority') else Priority.MEDIUM,
+                        confidence=mem.confidence if hasattr(mem, 'confidence') else 1.0,
+                        pinned=mem.pinned if hasattr(mem, 'pinned') else False,
+                        content_type=mem.content_type if hasattr(mem, 'content_type') else None,
                         metadata={
+                            **(mem.metadata if hasattr(mem, 'metadata') else {}),
                             "moved_from": old_clean,
-                            "cycle": self._cognitive_loop.cycle_count
-                        }
+                            "moved_at_cycle": self._cognitive_loop.cycle_count
+                        },
+                        cycle_count=self._cognitive_loop.cycle_count
                     )
                     self._memory_system.add_memory(new_block)
                     break
@@ -1290,8 +1302,13 @@ Returns:
             return True
             
         except Exception as e:
-            print(f"❌ Failed to move {old_path}: {e}")
+            print(f"❌ Failed to move {old_path} to {new_path}: {e}")
+            import traceback
+            traceback.print_exc()
             return False
+    
+    # Alias for convenience
+    move = move_memory
     
     def DANGER_remove_memory_permanently(self, path: str, confirm: str = "") -> bool:
         """
