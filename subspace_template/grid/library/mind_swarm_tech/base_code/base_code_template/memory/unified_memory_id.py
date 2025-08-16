@@ -14,7 +14,7 @@ import hashlib
 import re
 from typing import Optional, Dict, Any
 from pathlib import Path
-from .memory_types import MemoryType
+# MemoryType is no longer used - we use ContentType now
 
 
 class UnifiedMemoryID:
@@ -64,7 +64,7 @@ class UnifiedMemoryID:
     
     @staticmethod
     def create(
-        mem_type: MemoryType,
+        mem_type: Any,  # Kept for compatibility but ignored
         path: str,
         content: Optional[str] = None
     ) -> str:
@@ -238,7 +238,7 @@ class UnifiedMemoryID:
         return info
     
     @staticmethod
-    def create_from_path(path: str, mem_type: MemoryType = MemoryType.FILE) -> str:
+    def create_from_path(path: str, mem_type: Any = None) -> str:
         """DEPRECATED: Create a memory ID from a filesystem path.
         
         Now just normalizes the path (type is ignored).
