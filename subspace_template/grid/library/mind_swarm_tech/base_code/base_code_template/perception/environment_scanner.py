@@ -504,9 +504,10 @@ class EnvironmentScanner:
                             logger.info(f"Found new announcement: {ann.get('title', 'untitled')}")
                         
                         # Also add the announcement file itself to working memory
+                        # Use absolute path from cyber's perspective
                         from ..memory.memory_blocks import FileMemoryBlock
                         ann_file_memory = FileMemoryBlock(
-                            location=str(ann_file.relative_to(self.grid_path.parent.parent)),
+                            location="grid/community/announcements/system_announcements.json",
                             priority=Priority.HIGH,
                             confidence=1.0,
                             metadata={
