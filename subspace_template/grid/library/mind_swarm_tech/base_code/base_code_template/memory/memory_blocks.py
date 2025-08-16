@@ -7,7 +7,7 @@ Each block represents a reference to content in the filesystem.
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List
 from datetime import datetime
-from .memory_types import Priority, MemoryType, ContentType
+from .memory_types import Priority, ContentType
 from .unified_memory_id import UnifiedMemoryID
 
 
@@ -33,8 +33,7 @@ class MemoryBlock:
         self.cycle_count = cycle_count  # Track which cycle this memory was created in
         self.content_type = content_type or ContentType.UNKNOWN  # Content type of the memory
         
-        # These must be set by subclasses
-        self.type: MemoryType
+        # This must be set by subclasses
         self.id: str  # Now just a path, no type prefix
 
 
@@ -54,7 +53,6 @@ class FileMemoryBlock(MemoryBlock):
     cycle_count: Optional[int] = None
     content_type: Optional[ContentType] = None  # Explicit content type
     no_cache: bool = False  # If True, content should not be cached (e.g., memory-mapped files)
-    block_type: Optional[MemoryType] = None  # Override the default FILE type (e.g., KNOWLEDGE)
     
 
     def __post_init__(self):
@@ -73,8 +71,6 @@ class FileMemoryBlock(MemoryBlock):
             cycle_count=self.cycle_count,
             content_type=self.content_type
         )
-        # Use provided block_type or default to FILE
-        self.type = self.block_type if self.block_type else MemoryType.FILE
         
         # CRITICAL: FileMemoryBlock MUST reference an actual file on disk
         # Working memory is a symbolic view of disk-based memory, NOT in-memory storage
@@ -174,7 +170,6 @@ class ObservationMemoryBlock(MemoryBlock):
             cycle_count=self.cycle_count,  # Pass cycle_count to parent
             content_type=content_type
         )
-        self.type = MemoryType.OBSERVATION
         
         # Use path as ID with observation type and cycle for uniqueness
         path_str = str(self.path)

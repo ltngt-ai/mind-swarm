@@ -14,7 +14,7 @@ from typing import Dict, List, Optional, Any, Set
 from .rom_loader import ROMLoader
 from ..utils.file_utils import FileManager
 from ..utils.cognitive_utils import CognitiveUtils
-from ..memory import Priority
+from ..memory import Priority, ContentType
 
 logger = logging.getLogger("Cyber.knowledge")
 
@@ -105,7 +105,7 @@ class KnowledgeManager:
                 metadata=metadata,  # Keep original metadata for content
                 pinned=True,  # ROM is always pinned so it's never removed
                 cycle_count=0,  # ROM loaded at initialization
-                block_type=MemoryType.KNOWLEDGE  # Mark as knowledge type
+                content_type=ContentType.MINDSWARM_KNOWLEDGE  # Mark as knowledge type
             )
             
             # Add content to metadata for brain access

@@ -9,7 +9,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 import logging
 
-from .memory_types import MemoryType, Priority
+from .memory_types import ContentType, Priority
 from .memory_blocks import (
     MemoryBlock,
     FileMemoryBlock,
@@ -107,11 +107,13 @@ class ContextBuilder:
                 memories_by_type[memory.type] = []
             memories_by_type[memory.type].append(memory)
         
-        # Build sections for each type
+        # Build sections for each content type category
+        # Group by major content type categories
         type_order = [
-            MemoryType.KNOWLEDGE,  # Knowledge (including pinned ROM)
-            MemoryType.OBSERVATION,  # Recent observations
-            MemoryType.FILE,     # File content (includes goals.json and active_tasks.json)
+            ContentType.MINDSWARM_KNOWLEDGE,  # Knowledge (including pinned ROM)
+            ContentType.MINDSWARM_OBSERVATION,  # Recent observations
+            ContentType.APPLICATION_JSON,     # JSON files (goals, tasks, etc.)
+            ContentType.TEXT_PLAIN,           # Plain text files
         ]
         
         for mem_type in type_order:
@@ -129,19 +131,21 @@ class ContextBuilder:
         
         return "\n\n".join(sections)
     
-    def _build_type_section(self, mem_type: MemoryType, memories: List[MemoryBlock]) -> str:
+    def _build_type_section(self, content_type: ContentType, memories: List[MemoryBlock]) -> str:
         """Build a section for a specific memory type."""
         if not memories:
             return ""
         
-        # Section headers
+        # Section headers based on content type
         headers = {
-            MemoryType.KNOWLEDGE: "=== KNOWLEDGE ===",
-            MemoryType.FILE: "=== FILE CONTENT ===",
-            MemoryType.OBSERVATION: "=== OBSERVATIONS ===",
+            ContentType.MINDSWARM_KNOWLEDGE: "=== KNOWLEDGE ===",
+            ContentType.MINDSWARM_OBSERVATION: "=== OBSERVATIONS ===",
+            ContentType.APPLICATION_JSON: "=== JSON DATA ===",
+            ContentType.TEXT_PLAIN: "=== TEXT FILES ===",
+            ContentType.MINDSWARM_SYSTEM: "=== SYSTEM ===",
         }
         
-        lines = [headers.get(mem_type, f"=== {mem_type.value.upper()} ===")]
+        lines = [headers.get(content_type, f"=== {content_type.value.upper()} ===")]
         
         # Add each memory
         for memory in memories:

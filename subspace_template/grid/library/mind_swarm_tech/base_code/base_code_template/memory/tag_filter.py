@@ -47,10 +47,10 @@ class TagFilter:
         Returns:
             True if memory should be included, False otherwise
         """
-        from .memory_types import MemoryType
+        from .memory_types import ContentType
         
         # Only filter knowledge memories - everything else passes through
-        if not hasattr(memory, 'type') or memory.type != MemoryType.KNOWLEDGE:
+        if not hasattr(memory, 'content_type') or memory.content_type != ContentType.MINDSWARM_KNOWLEDGE:
             return True
         
         # No blacklist means include all knowledge

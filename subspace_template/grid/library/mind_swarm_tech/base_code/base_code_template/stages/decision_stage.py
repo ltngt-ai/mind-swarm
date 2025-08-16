@@ -18,7 +18,7 @@ from datetime import datetime
 if TYPE_CHECKING:
     from ..cognitive_loop import CognitiveLoop
 from ..memory.tag_filter import TagFilter
-from ..memory import MemoryType
+from ..memory import ContentType
 
 logger = logging.getLogger("Cyber.stages.decision_v2")
 
@@ -95,7 +95,7 @@ class DecisionStage:
             current_task=current_task,
             selection_strategy="balanced",
             tag_filter=tag_filter,
-            exclude_types=[MemoryType.OBSERVATION]  # Don't need raw observations
+            exclude_content_types=[ContentType.MINDSWARM_OBSERVATION]  # Don't need raw observations
         )
         
         # Use brain to generate intention

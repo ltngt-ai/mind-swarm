@@ -1,6 +1,6 @@
 """Memory system for Cybers - filesystem perception and context management."""
 
-from .memory_types import Priority, MemoryType
+from .memory_types import Priority, ContentType
 from .memory_blocks import (
     MemoryBlock,
     FileMemoryBlock,
@@ -17,7 +17,7 @@ __all__ = [
     # Memory blocks
     "MemoryBlock",
     "Priority",
-    "MemoryType",
+    "ContentType",
     "FileMemoryBlock",
     "ObservationMemoryBlock",
     # Core components (individual - for backward compatibility)

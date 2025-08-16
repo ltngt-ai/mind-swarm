@@ -20,14 +20,6 @@ class Priority(Enum):
     LOW = 5           # Background info, often dropped
 
 
-class MemoryType(Enum):
-    """Types of memory blocks."""
-    FILE = "memory"
-    KNOWLEDGE = "knowledge"
-    OBSERVATION = "observation"
-    SYSTEM = "system"  # System-controlled memories (pipelines, dynamic context)
-
-
 class ContentType(Enum):
     """Content types for memory blocks using MIME types and custom Mind-Swarm types.
     

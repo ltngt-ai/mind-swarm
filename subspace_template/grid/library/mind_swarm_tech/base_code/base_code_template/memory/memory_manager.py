@@ -10,9 +10,10 @@ from pathlib import Path
 import logging
 
 from .memory_blocks import (
-    MemoryBlock, Priority, MemoryType,
+    MemoryBlock, Priority,
     FileMemoryBlock, ObservationMemoryBlock
 )
+from .memory_types import ContentType
 
 logger = logging.getLogger("Cyber.memory")
 
@@ -30,10 +31,8 @@ class WorkingMemoryManager:
         self.symbolic_memory: List[MemoryBlock] = []
         self.memory_index: Dict[str, MemoryBlock] = {}
         
-        # Track memory categories for quick access
-        self.memories_by_type: Dict[MemoryType, List[MemoryBlock]] = {
-            mem_type: [] for mem_type in MemoryType
-        }
+        # Track memory categories for quick access by content type
+        self.memories_by_content_type: Dict[str, List[MemoryBlock]] = {}
         
         # Track recent accesses for relevance
         self.access_history: Dict[str, datetime] = {}
@@ -49,18 +48,27 @@ class WorkingMemoryManager:
             # Update existing memory
             old_block = self.memory_index[block.id]
             self.symbolic_memory.remove(old_block)
-            self.memories_by_type[old_block.type].remove(old_block)
+            # Remove from content type tracking
+            content_type_str = old_block.content_type.value if hasattr(old_block.content_type, 'value') else str(old_block.content_type)
+            if content_type_str in self.memories_by_content_type:
+                if old_block in self.memories_by_content_type[content_type_str]:
+                    self.memories_by_content_type[content_type_str].remove(old_block)
         
         # Add new memory
         self.symbolic_memory.append(block)
         self.memory_index[block.id] = block
-        self.memories_by_type[block.type].append(block)
+        
+        # Track by content type
+        content_type_str = block.content_type.value if hasattr(block.content_type, 'value') else str(block.content_type)
+        if content_type_str not in self.memories_by_content_type:
+            self.memories_by_content_type[content_type_str] = []
+        self.memories_by_content_type[content_type_str].append(block)
         
         # Log pinned memories at INFO level for visibility
         if block.pinned:
-            logger.info(f"Added PINNED memory: {block.id} (type={block.type.value}, priority={block.priority.name})")
+            logger.info(f"Added PINNED memory: {block.id} (content_type={content_type_str}, priority={block.priority.name})")
         else:
-            logger.debug(f"Added memory: {block.id} (type={block.type.value}, priority={block.priority.name})")
+            logger.debug(f"Added memory: {block.id} (content_type={content_type_str}, priority={block.priority.name})")
     
     def remove_memory(self, memory_id: str) -> None:
         """Remove a memory block."""
@@ -71,9 +79,11 @@ class WorkingMemoryManager:
             if block in self.symbolic_memory:
                 self.symbolic_memory.remove(block)
             
-            # Safely remove from memories_by_type
-            if block.type in self.memories_by_type and block in self.memories_by_type[block.type]:
-                self.memories_by_type[block.type].remove(block)
+            # Safely remove from memories_by_content_type
+            content_type_str = block.content_type.value if hasattr(block.content_type, 'value') else str(block.content_type)
+            if content_type_str in self.memories_by_content_type:
+                if block in self.memories_by_content_type[content_type_str]:
+                    self.memories_by_content_type[content_type_str].remove(block)
             
             del self.memory_index[memory_id]
             
@@ -95,9 +105,10 @@ class WorkingMemoryManager:
             return self.memory_index[memory_id]
         return None
     
-    def get_memories_by_type(self, memory_type: MemoryType) -> List[MemoryBlock]:
-        """Get all memories of a specific type."""
-        return self.memories_by_type.get(memory_type, []).copy()
+    def get_memories_by_content_type(self, content_type: ContentType) -> List[MemoryBlock]:
+        """Get all memories of a specific content type."""
+        content_type_str = content_type.value if hasattr(content_type, 'value') else str(content_type)
+        return self.memories_by_content_type.get(content_type_str, []).copy()
     
     def get_recent_memories(self, seconds: int = 300) -> List[MemoryBlock]:
         """Get memories created in the last N seconds."""
@@ -143,7 +154,7 @@ class WorkingMemoryManager:
         """Remove old observation entries beyond max age (except pinned ones)."""
         cutoff = datetime.now() - timedelta(seconds=max_age_seconds)
         old_observations = [
-            m for m in self.get_memories_by_type(MemoryType.OBSERVATION)
+            m for m in self.get_memories_by_content_type(ContentType.MINDSWARM_OBSERVATION)
             if m.timestamp < cutoff and m.priority == Priority.LOW and not m.pinned
         ]
         
@@ -155,8 +166,8 @@ class WorkingMemoryManager:
     def get_memory_stats(self) -> Dict[str, Any]:
         """Get statistics about current memory state."""
         type_counts = {
-            mem_type.value: len(memories)
-            for mem_type, memories in self.memories_by_type.items()
+            content_type: len(memories)
+            for content_type, memories in self.memories_by_content_type.items()
         }
         
         priority_counts = {
@@ -246,54 +257,34 @@ class WorkingMemoryManager:
             
             for mem_data in memories:
                 try:
-                    memory_type = MemoryType(mem_data.get('type', 'UNKNOWN'))
+                    # Get content type from data
+                    content_type_str = mem_data.get('content_type', 'UNKNOWN')
+                    content_type = ContentType[content_type_str] if hasattr(ContentType, content_type_str) else ContentType.UNKNOWN
                     
-                    if memory_type == MemoryType.FILE:
+                    if content_type == ContentType.MINDSWARM_OBSERVATION:
+                        memory = ObservationMemoryBlock(
+                            observation_type=mem_data.get('observation_type', 'unknown'),
+                            path=mem_data.get('path', ''),
+                            message=mem_data.get('message', 'Restored observation'),
+                            cycle_count=mem_data.get('cycle_count', 0),
+                            content=mem_data.get('content'),
+                            confidence=mem_data.get('confidence', 1.0),
+                            priority=Priority[mem_data.get('priority', 'MEDIUM')],
+                            pinned=mem_data.get('pinned', False)
+                        )
+                    else:
+                        # Default to FileMemoryBlock for everything else
                         memory = FileMemoryBlock(
-                            location=mem_data['location'],
+                            location=mem_data.get('location', 'unknown'),
                             start_line=mem_data.get('start_line'),
                             end_line=mem_data.get('end_line'),
                             digest=mem_data.get('digest'),
                             confidence=mem_data.get('confidence', 1.0),
-                            priority=Priority[mem_data.get('priority', 'MEDIUM')]
-                        )
-                        
-                    elif memory_type == MemoryType.OBSERVATION:
-                        memory = ObservationMemoryBlock(
-                            observation_type=mem_data['observation_type'],
-                            path=mem_data.get('path', ''),
-                            message=mem_data.get('message', mem_data.get('description', 'Restored observation')),
-                            cycle_count=mem_data.get('cycle_count', 0),
-                            content=mem_data.get('content'),
-                            confidence=mem_data.get('confidence', 1.0),
-                            priority=Priority[mem_data.get('priority', 'MEDIUM')]
-                        )
-                        
-                    elif memory_type == MemoryType.KNOWLEDGE:
-                        memory = FileMemoryBlock(
-                            location=mem_data.get('location', 'restored'),
-                            confidence=mem_data.get('confidence', mem_data.get('relevance_score', 1.0)),
                             priority=Priority[mem_data.get('priority', 'MEDIUM')],
                             metadata=mem_data.get('metadata', {}),
-                            block_type=MemoryType.KNOWLEDGE
+                            pinned=mem_data.get('pinned', False),
+                            content_type=content_type
                         )
-                        
-                    elif memory_type == MemoryType.SYSTEM:
-                        # System-controlled memories (dynamic context, pipeline buffers, etc.)
-                        memory = FileMemoryBlock(
-                            location=mem_data.get('location', 'restored'),
-                            confidence=mem_data.get('confidence', 1.0),
-                            priority=Priority[mem_data.get('priority', 'SYSTEM')],
-                            metadata=mem_data.get('metadata', {}),
-                            pinned=mem_data.get('pinned', True),
-                            no_cache=mem_data.get('no_cache', True),
-                            block_type=MemoryType.SYSTEM
-                        )
-                        
-                    else:
-                        # Skip unknown types
-                        logger.warning(f"Unknown memory type: {memory_type}")
-                        continue
                     
                     # Restore timestamps
                     if 'timestamp' in mem_data:

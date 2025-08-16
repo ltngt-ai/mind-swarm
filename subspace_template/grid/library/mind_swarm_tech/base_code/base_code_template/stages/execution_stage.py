@@ -14,7 +14,7 @@ import yaml  # Still needed for reading the file
 
 if TYPE_CHECKING:
     from ..cognitive_loop import CognitiveLoop
-from ..memory import Priority, ObservationMemoryBlock
+from ..memory import Priority, ContentType, ObservationMemoryBlock
 from ..memory.tag_filter import TagFilter
 
 logger = logging.getLogger("Cyber.stages.execution_v3")
@@ -165,7 +165,7 @@ class ExecutionStage:
                 metadata=metadata,
                 pinned=True,  # Pin it so it's never removed
                 cycle_count=0,
-                block_type=MemoryType.KNOWLEDGE
+                content_type=ContentType.MINDSWARM_KNOWLEDGE
             )
             
             # Add it to the memory system

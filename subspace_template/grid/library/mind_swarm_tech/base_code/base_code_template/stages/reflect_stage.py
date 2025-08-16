@@ -125,7 +125,7 @@ class ReflectStage:
             },
             cycle_count=self.cognitive_loop.cycle_count,
             no_cache=True,  # Don't cache, always read fresh
-            block_type=MemoryType.FILE  # Regular file memory
+            # Regular file memory - content type will be auto-detected
         )
         
         # Remove old reflection if it exists and add new one

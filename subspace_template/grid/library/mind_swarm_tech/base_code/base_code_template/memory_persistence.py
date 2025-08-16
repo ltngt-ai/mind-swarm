@@ -11,7 +11,7 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 
 from .memory import (
-    WorkingMemoryManager, Priority, MemoryType,
+    WorkingMemoryManager, Priority, ContentType,
     FileMemoryBlock, ObservationMemoryBlock
 )
 
@@ -135,45 +135,35 @@ class MemoryPersistence:
         # Reconstruct memory blocks
         for mem_data in memories:
             try:
-                memory_type = MemoryType(mem_data['type'])
+                # Get content type from data
+                content_type_str = mem_data.get('content_type', 'UNKNOWN')
+                content_type = ContentType[content_type_str] if hasattr(ContentType, content_type_str) else ContentType.UNKNOWN
                 
-                # Reconstruct based on type
-                if memory_type == MemoryType.FILE:
-                    memory = FileMemoryBlock(
-                        location=mem_data['location'],
-                        start_line=mem_data.get('start_line'),
-                        end_line=mem_data.get('end_line'),
-                        digest=mem_data.get('digest'),
-                        confidence=mem_data.get('confidence', 1.0),
-                        priority=Priority[mem_data.get('priority', 'MEDIUM')],
-                        pinned=mem_data.get('pinned', False)
-                    )
-                    
-                elif memory_type == MemoryType.OBSERVATION:
+                # Reconstruct based on content type
+                if content_type == ContentType.MINDSWARM_OBSERVATION:
                     memory = ObservationMemoryBlock(
-                        observation_type=mem_data['observation_type'],
+                        observation_type=mem_data.get('observation_type', 'unknown'),
                         path=mem_data.get('path', ''),
-                        message=mem_data.get('message', mem_data.get('description', 'Restored observation')),
+                        message=mem_data.get('message', 'Restored observation'),
                         cycle_count=mem_data.get('cycle_count', 0),
                         content=mem_data.get('content'),
                         confidence=mem_data.get('confidence', 1.0),
                         priority=Priority[mem_data.get('priority', 'MEDIUM')],
                         pinned=mem_data.get('pinned', False)
                     )
-                    
-                elif memory_type == MemoryType.KNOWLEDGE:
+                else:
+                    # Default to FileMemoryBlock for everything else
                     memory = FileMemoryBlock(
-                        location=mem_data['location'],
-                        confidence=mem_data.get('confidence', mem_data.get('relevance_score', 0.8)),
+                        location=mem_data.get('location', 'unknown'),
+                        start_line=mem_data.get('start_line'),
+                        end_line=mem_data.get('end_line'),
+                        digest=mem_data.get('digest'),
+                        confidence=mem_data.get('confidence', 1.0),
                         priority=Priority[mem_data.get('priority', 'MEDIUM')],
                         metadata=mem_data.get('metadata', {}),
                         pinned=mem_data.get('pinned', False),
-                        block_type=MemoryType.KNOWLEDGE
+                        content_type=content_type
                     )
-                    
-                else:
-                    # Skip other types for now
-                    continue
                 
                 # Restore timestamps
                 if 'timestamp' in mem_data:

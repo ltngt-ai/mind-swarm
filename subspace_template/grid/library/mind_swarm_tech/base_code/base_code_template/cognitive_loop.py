@@ -18,7 +18,7 @@ from datetime import datetime
 from .memory import (
     MemorySystem,
     FileMemoryBlock,
-    Priority, MemoryType
+    Priority, ContentType
 )
 from .perception import EnvironmentScanner
 from .knowledge import KnowledgeManager
@@ -120,7 +120,7 @@ class CognitiveLoop:
                 },
                 cycle_count=self.cycle_count,  # When this memory was added
                 no_cache=True,  # Pipeline buffers change frequently, don't cache
-                block_type=MemoryType.SYSTEM  # Mark as system memory
+                content_type=ContentType.MINDSWARM_SYSTEM  # Mark as system memory
             )
             
             # Add to memory system
@@ -155,7 +155,7 @@ class CognitiveLoop:
                 },
                 cycle_count=self.cycle_count,  # Current cycle
                 no_cache=True,  # Don't cache pipeline buffers
-                block_type=MemoryType.SYSTEM  # Mark as system memory
+                content_type=ContentType.MINDSWARM_SYSTEM  # Mark as system memory
             )
             self.memory_system.add_memory(updated_buffer)
             self.pipeline_buffers[stage] = updated_buffer
@@ -245,7 +245,7 @@ class CognitiveLoop:
                 pinned=True,  # Always in working memory
                 metadata={"file_type": "identity", "description": "My identity and configuration"},
                 cycle_count=self.cycle_count,  # When this memory was added
-                block_type=MemoryType.SYSTEM  # Mark as system memory
+                content_type=ContentType.MINDSWARM_SYSTEM  # Mark as system memory
             )
             self.memory_system.add_memory(identity_memory)
             logger.info(f"Added identity.json to pinned memory")
@@ -280,7 +280,7 @@ class CognitiveLoop:
             metadata={"file_type": "dynamic_context", "description": "Current runtime context"},
             cycle_count=self.cycle_count,  # Will always match file content now
             no_cache=True,  # Don't cache, always read from disk
-            block_type=MemoryType.SYSTEM  # Mark as system memory
+            content_type=ContentType.MINDSWARM_SYSTEM  # Mark as system memory
         )
         self.memory_system.add_memory(context_memory)
         self.dynamic_context_memory_id = context_memory.id
@@ -331,7 +331,7 @@ class CognitiveLoop:
                     metadata={"file_type": "location", "description": "My current location in the grid"},
                     cycle_count=self.cycle_count,
                     no_cache=True,  # Always read fresh
-                    block_type=MemoryType.SYSTEM
+                    content_type=ContentType.MINDSWARM_SYSTEM
                 )
                 self.memory_system.add_memory(current_location_memory)
                 logger.info(f"Added current_location.txt to pinned memory with id: {current_location_memory.id}")
@@ -370,7 +370,7 @@ class CognitiveLoop:
                     metadata={"file_type": "location", "description": "Map of my personal directory"},
                     cycle_count=self.cycle_count,
                     no_cache=True,  # Always read fresh
-                    block_type=MemoryType.SYSTEM
+                    content_type=ContentType.MINDSWARM_SYSTEM
                 )
                 self.memory_system.add_memory(personal_location_memory)
                 logger.info(f"Added personal_location.txt to pinned memory with id: {personal_location_memory.id}")
@@ -468,7 +468,6 @@ class CognitiveLoop:
                     },
                     cycle_count=self.cycle_count,
                     no_cache=True,  # Always read fresh
-                    block_type=MemoryType.FILE
                 )
                 self.memory_system.add_memory(reflection_memory)
                 logger.info(f"Added reflection_on_last_cycle.json to memory at cycle {self.cycle_count}")

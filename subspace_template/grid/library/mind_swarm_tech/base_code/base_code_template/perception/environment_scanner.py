@@ -11,7 +11,7 @@ from typing import List, Dict, Optional, Set
 from datetime import datetime
 import logging
 
-from ..memory.memory_types import Priority, MemoryType
+from ..memory.memory_types import Priority, ContentType
 from ..memory.memory_blocks import (
     MemoryBlock,
     FileMemoryBlock, ObservationMemoryBlock
@@ -268,7 +268,7 @@ class EnvironmentScanner:
                 },
                 cycle_count=cycle_count,
                 no_cache=True,  # Always fresh
-                block_type=MemoryType.SYSTEM
+                content_type=ContentType.MINDSWARM_SYSTEM
             )
             memories.append(personal_memory)
             
@@ -370,7 +370,7 @@ class EnvironmentScanner:
                         "location": current_location
                     },
                     cycle_count=cycle_count,
-                    block_type=MemoryType.SYSTEM
+                    content_type=ContentType.MINDSWARM_SYSTEM
                 )
                 memories.append(location_memory)
                 return memories
@@ -432,7 +432,7 @@ class EnvironmentScanner:
                 },
                 cycle_count=cycle_count,
                 no_cache=True,  # Always fresh
-                block_type=MemoryType.SYSTEM
+                content_type=ContentType.MINDSWARM_SYSTEM
             )
             memories.append(location_memory)
             
