@@ -485,19 +485,19 @@ class MemorySystem:
         }
     
     def get_token_usage_breakdown(self) -> Dict[str, int]:
-        """Get token usage by memory type.
+        """Get token usage by content type.
         
         Returns:
-            Dictionary mapping memory types to estimated token counts
+            Dictionary mapping content types to estimated token counts
         """
         breakdown = {}
         
         # Get content type counts from manager
-        for content_type_str in self.manager.memories_by_content_type:
-            memories = self.get_memories_by_type(mem_type)
+        for content_type_str in self._memory_manager.memories_by_content_type:
+            memories = self._memory_manager.memories_by_content_type[content_type_str]
             if memories:
                 tokens = sum(self._context_builder.estimate_tokens(m) for m in memories)
-                breakdown[mem_type.value] = tokens
+                breakdown[content_type_str] = tokens
         
         return breakdown
     

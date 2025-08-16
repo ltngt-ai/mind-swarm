@@ -65,6 +65,17 @@ class ContextBuilder:
                 # Add content type for clarity
                 entry["content_type"] = memory.content_type.value if hasattr(memory.content_type, 'value') else str(memory.content_type)
                 
+                # Add line range if specified (for FileMemoryBlock)
+                if isinstance(memory, FileMemoryBlock):
+                    if memory.start_line is not None:
+                        entry["lines"] = f"{memory.start_line}-{memory.end_line or 'end'}"
+                    if memory.digest:
+                        entry["digest"] = memory.digest[:8]  # Show first 8 chars of digest
+                
+                # Add observation details (for ObservationMemoryBlock)
+                if isinstance(memory, ObservationMemoryBlock):
+                    entry["observation_type"] = memory.observation_type
+                
                 # Only add confidence if not 1.0
                 if memory.confidence < 1.0:
                     entry["confidence"] = round(memory.confidence, 2)

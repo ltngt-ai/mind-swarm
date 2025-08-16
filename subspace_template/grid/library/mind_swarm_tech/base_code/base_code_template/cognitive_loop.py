@@ -325,13 +325,13 @@ class CognitiveLoop:
             else:
                 current_location_memory = FileMemoryBlock(
                     location="personal/.internal/memory/current_location.txt",
-                    priority=Priority.CRITICAL,  # CRITICAL for first cycle visibility
+                    priority=Priority.SYSTEM,  # System-controlled location tracking
                     confidence=1.0,
                     pinned=True,  # Always visible
                     metadata={"file_type": "location", "description": "My current location in the grid"},
                     cycle_count=self.cycle_count,
                     no_cache=True,  # Always read fresh
-                    content_type=ContentType.MINDSWARM_SYSTEM
+                    content_type=ContentType.TEXT_PLAIN  # Plain text location file
                 )
                 self.memory_system.add_memory(current_location_memory)
                 logger.info(f"Added current_location.txt to pinned memory with id: {current_location_memory.id}")
@@ -364,13 +364,13 @@ class CognitiveLoop:
             else:
                 personal_location_memory = FileMemoryBlock(
                     location="personal/.internal/memory/personal_location.txt",
-                    priority=Priority.CRITICAL,  # CRITICAL for first cycle visibility
+                    priority=Priority.SYSTEM,  # System-controlled location tracking
                     confidence=1.0,
                     pinned=True,  # Always visible
                     metadata={"file_type": "location", "description": "Map of my personal directory"},
                     cycle_count=self.cycle_count,
                     no_cache=True,  # Always read fresh
-                    content_type=ContentType.MINDSWARM_SYSTEM
+                    content_type=ContentType.TEXT_PLAIN  # Plain text location file
                 )
                 self.memory_system.add_memory(personal_location_memory)
                 logger.info(f"Added personal_location.txt to pinned memory with id: {personal_location_memory.id}")

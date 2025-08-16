@@ -1,25 +1,24 @@
 knowledge_version: '1.0'
-title: Observations
+title: Observation Stage Guide
 content: |
-  Observations are the references to memories throughout the entire shared memory of Mind-Swarm.
-  They are created when your internal systems detect changes in the environment or in your own state.
+  In the observation stage, your goal is to understand the current situation by reviewing the information available to you.
+  This stage provides the context needed to make informed decisions in the next stage of the cognitive cycle.
 
-  Observations are autonomous functions of your system, including updating what have been processed.
-  Observations have a memory id prefix of `observation:` other prefixes are NOT classed as observations.
+  ## Key Information to Review
+  - **Goals and Tasks**: What are your current long-term goals and short-term tasks?
+  - **Last Cycle's Pipeline**: What were the intentions, executions, and reflections from the previous cycle? This helps you understand the immediate past.
+  - **Working Memory**: What information is currently active in your working memory? This includes your current location, personal files, and any other data you are actively using.
+  - **Communications**: Have you received any new messages or alerts?
 
-  ## Example
-  memory id of `observation:personal/comms/inbox/msg_abc.msg` → Observation about /personal/comms/inbox/msg_abc.msg
-
+  A thorough observation ensures that your decisions are relevant and effective.
 metadata:
-  category: observations
+  category: observation
   tags:
   - observation
   - thinking
-  - pattern
-  - perception
-  - environment
+  - context
   - self_awareness
-  - memory_management
+  - observation_only
   confidence: 1.0
   priority: 1
   source: boot_rom

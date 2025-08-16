@@ -297,7 +297,7 @@ class ExecutionStage:
             current_task=current_task,
             selection_strategy="balanced",  # Balanced selection like other stages
             tag_filter=tag_filter,
-            exclude_types=[]  # Include all memory types
+            exclude_content_types=[]  # Include all memory types
         )
         
         # Use brain to generate script with full working memory context
@@ -574,7 +574,7 @@ The provided API docs describe the available operations and their usage.
             current_task="Fix Python script error based on error details",
             selection_strategy="balanced",
             tag_filter=tag_filter,
-            exclude_types=[]
+            exclude_content_types=[]
         )
         
         # API documentation is already in working memory as pinned FileMemoryBlocks

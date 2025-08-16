@@ -130,15 +130,9 @@ class FileMemoryBlock(MemoryBlock):
                 if not any(path_str.startswith(prefix) for prefix in virtual_prefixes):
                     path_str = 'personal/' + path_str
         
-        # Set the ID to just the path
+        # Set the ID to just the path - no suffixes
+        # Line ranges and digests are already stored as properties
         self.id = path_str
-        
-        # Add line range or digest to ID if specified
-        if self.start_line is not None and self.end_line is not None:
-            self.id = f"{self.id}#L{self.start_line}-{self.end_line}"
-        elif self.digest:
-            # Add content hash suffix
-            self.id = f"{self.id}#{self.digest[:8]}"
 
 
 @dataclass
@@ -181,9 +175,6 @@ class ObservationMemoryBlock(MemoryBlock):
             # Default observations to personal namespace
             path_str = f"personal/observations/{path_str}"
         
-        # Create unique ID with observation type and cycle count
-        # Using hash notation for metadata that makes it unique
-        import hashlib
-        unique_suffix = f"{self.observation_type}_cycle{self.cycle_count}"
-        suffix_hash = hashlib.sha256(unique_suffix.encode()).hexdigest()[:8]
-        self.id = f"{path_str}#{suffix_hash}"
+        # Use path as ID - uniqueness is handled by properties
+        # observation_type and cycle_count are already stored as properties
+        self.id = path_str

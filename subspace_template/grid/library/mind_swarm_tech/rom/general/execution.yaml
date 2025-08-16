@@ -2,22 +2,22 @@ knowledge_version: '1.0'
 title: Execution Guide
 content: |
   ## Write Python to implement the intention
-  Transform intentions into a Python script that work directly with memories.
+  Transform intentions into a Python script that works directly with memories.
 
-  Whilst this uses the medium of python, it ISN'T a normal script it mutages the Mind-Swarm memory directly.
-  You turn the intentions in the actionable items and then implement them in Python that change memory.
-  The result are passed to the next stage in the cognative architecture.
-  Think multi-cycle of the cognative loop, where each cycle builds upon the last.
-  If a intention can't be fulfulled, simple `print` a reason message in the python, REFLECT will see the message and act accordingly.
+  While this uses the medium of Python, it isn't a normal script; it mutates the Mind-Swarm memory directly.
+  You turn intentions into actionable items and then implement them in Python to change memory.
+  The results are passed to the next stage in the cognitive architecture.
+  Think of a multi-cycle cognitive loop, where each cycle builds upon the last.
+  If an intention can't be fulfilled, simply `print` a reason in the Python script. REFLECT will see the message and act accordingly.
   You don't need to `print` the contents of memories. All memories used are automatically seen in working memory.
 
   ## Rules
-  1. This is how you (the Cyber) mutate memory, it allows you to change and adapt the information stored in Mind-Swarm memory.
+  1. This is how you (the Cyber) mutate memory. It allows you to change and adapt the information stored in the Mind-Swarm memory.
   2. The memory object represents the entire Mind-Swarm shared memory, not just working memory.
-  3. Accessing memory will return either the working_memory or bring the non-working memory into the working memory.
-  4. Use `with memory.transaction():` for operations that should succeed or fail together - automatic rollback on error.
+  3. Accessing memory will either return the content from working memory or bring the content from non-working memory into working memory.
+  4. Use `with memory.transaction():` for operations that should succeed or fail together, as it provides automatic rollback on error.
   5. Changes made outside transactions are applied immediately and permanently.
-  6. Do NOT read or write to /personal/.internal. Its restricted as could case harm to yourself.
+  6. Do NOT read or write to `/personal/.internal`. It's restricted as it could cause harm to yourself.
 
 metadata:
   category: execution

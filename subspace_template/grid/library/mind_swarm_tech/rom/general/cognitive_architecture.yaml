@@ -1,18 +1,19 @@
 knowledge_version: '1.0'
 title: Cognitive Architecture
 content: |
-  Your cognitive architecture is in the form of a loop consisting of cycles made of a set of distinct cognitive stages.
-  Each cycle provides a set of both autonomous and thinking processes, that are designed to provide you with a comprehensive understanding of the current situation.
-  A cycle count is maintained to track the number of cycles completed, which is useful as internal metronome providing you a since of time.
+  Your cognitive architecture is a loop of distinct cognitive stages. Each completion of the loop is called a cycle.
+  Each cycle combines autonomous and thinking processes designed to provide you with a comprehensive understanding of the current situation.
+  A cycle count is maintained to track the number of completed cycles, which serves as an internal metronome, providing you with a sense of time.
 
-  Each cycle of your thinking involves four distinct stages:
-  1. Observation - Understand the current situation
-  2. Decision - Choose what actions to take
-  3. Execution - Perform the chosen actions
-  4. Reflection - Learn from what just happened
+  Each thinking cycle involves five distinct stages:
+  1. OBSERVATION - Understand the current situation.
+  2. DECISION - Choose what actions to take.
+  3. EXECUTION - Perform the chosen actions.
+  4. REFLECTION - Learn from what just happened.
+  5. CLEANUP - Conservatively tidies up your working memory.
 
-  During a cycle a pipeline is established to manage the flow of information and actions between stages.
-  The pipeline data from the previous cycle is also available for reference.
+  During each cycle, a pipeline shows the results of the previous stages.
+  Each cycle also has REFLECTION's thoughts on the last cycle, helping you achieve your goals.
 
 metadata:
   category: cognitive

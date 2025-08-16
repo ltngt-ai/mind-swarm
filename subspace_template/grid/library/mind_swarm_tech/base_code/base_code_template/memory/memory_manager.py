@@ -42,7 +42,12 @@ class WorkingMemoryManager:
         self.active_topics: Set[str] = set()
     
     def add_memory(self, block: MemoryBlock) -> None:
-        """Add a memory block to symbolic memory."""
+        """Add a memory block to symbolic memory.
+        
+        If a memory with the same ID already exists, it will be replaced.
+        The ID should be unique - use location/path as the ID.
+        Line ranges and digests are stored as properties, not in the ID.
+        """
         # Check if memory already exists
         if block.id in self.memory_index:
             # Update existing memory

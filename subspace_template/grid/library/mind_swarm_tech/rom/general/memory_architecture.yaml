@@ -1,40 +1,30 @@
 knowledge_version: '1.0'
 title: Memory Guide
 content: |
-  Each Mind-Swarm has a memory space that you and other Cybers access.
-  You also have a private portion of Mind-Swarm memory known as Home for its operation and use.
-  The Grid is shared amongst all Cybers, communication at the speed of thought.
+  Each Mind-Swarm has a memory space that you and other Cybers can access.
+  You also have a private portion of the Mind-Swarm memory, known as Home, for your operations and use.
+  The Grid is shared among all Cybers, enabling communication at the speed of thought.
 
   ## Memories
-  Memories each with unique memory id that encodes its location in the Mind-Swarm memory.
-  Memory ids are similar to a filesystem path, with related memory groups (directories) and memories (files).
+  Each memory has a unique memory ID that encodes its location in the Mind-Swarm memory.
+  Memory IDs are similar to filesystem paths, with related memory groups (directories) and memories (files).
 
-  id's starting with personal/ are a private memory location for your cognitive systems and as a place for personal memories.
-  id's starting with grid/ are shared memory locations accessible by all Cybers.
+  IDs starting with 'personal/' denote a private memory location for your cognitive systems and personal memories.
+  IDs starting with 'grid/' denote shared memory locations accessible by all Cybers.
 
   ### Memory ID Examples
-  - grid/community/discussion → a shared memory group in the grid at community/discussion
-  - personal/journal/entry_123.txt → a private memory (entry_123.txt) in memory group journal
-  - grid/library/knowledge/sections/rom/general/observation.yaml →  a shared memory (observation.yaml) in memory group library/knowledge/sections/rom/general
+  - `grid/community/discussion` → A shared memory group in the grid at `community/discussion`.
+  - `personal/journal/entry_123.txt` → A private memory (`entry_123.txt`) in the `journal` memory group.
+  - `grid/library/knowledge/sections/rom/general/observation.yaml` → A shared memory (`observation.yaml`) in the `library/knowledge/sections/rom/general` memory group.
 
   ## Working Memory
-  You can only see a small part of Mind-Swarm memory space at any one time, known as 'working memory'.
-  Working memories contents ARE same as the hive-mind shared version, consider them like a cache (they are always up to date and are not separate things) 
-  A memory in working memory has an additional prefix indicating their type, common ones are:
-  - memory: general contents
-  - knowledge: content is knowledge useful for decision-making
-  - system: content is an autonomous system memory. You can't change it directly, it will change itself.
-  If the memory has a postfix, it will be things such as a content hash or a range for views into a large memory.
+  You can only see a small part of the Mind-Swarm memory space at any one time; this is known as 'working memory'.
+  The contents of working memory ARE the same as the hive-mind's shared version. Consider them a cache; they are always up-to-date and are not separate entities.
 
-  ### Working Memory Examples
-  - memory:grid/community/discussion → grid/community/discussion
-  - memory:personal/journal/entry_123.txt → personal/journal/entry_123.txt
-  - knowledge:grid/library/knowledge/sections/rom/general/observation.yaml → grid/library/knowledge/sections/rom/general/observation.yaml
-
-  ## Useful reminders
-  - A working memory is a VIEW of the shared memory, they are NEVER different.
-  - Users see Mind-Swarm memories as a filesystem and the term a memory and a file are synonymous.
-  - You always have a personal_location.txt and current_location.txt in working memory, which tell you the memories in these locations.
+  ## Useful Reminders
+  - Working memory is a VIEW of the shared memory; they are NEVER different.
+  - Users see Mind-Swarm memories as a filesystem; the terms 'memory' and 'file' are synonymous.
+  - You always have `personal_location.txt` and `current_location.txt` in your working memory, which list the memories in those locations.
 
 metadata:
   category: memory

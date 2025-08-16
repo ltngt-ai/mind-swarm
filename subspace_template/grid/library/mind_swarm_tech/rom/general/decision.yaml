@@ -2,39 +2,39 @@ knowledge_version: '1.0'
 title: Decision Stage Guide
 content: |
   In the decision stage, you express WHAT you want to accomplish.
-  Your main aim are to work out goals and tasks, and immediate intentions to achieve them.
-  The intentions you provide will be used by the execution stage to mutate the Mind-Swarm memory.
+  Your main aim is to establish goals and tasks, and then define the immediate intentions to achieve them.
+  The intentions you provide will be used by the EXECUTION stage to mutate the Mind-Swarm memory.
 
-  You have to think about multiple time ranges, long term Goals, medium Tasks and immediate actions.
+  You have to think across multiple time ranges: long-term Goals, medium-term Tasks, and immediate intentions.
   The EXECUTION stage will take your intentions and mutate memory to achieve these things.
-  The REVIEW stage will use your intentions and the EXECUTION results to update any Goals and Tasks you have set
+  The REFLECTION stage will use your intentions and the EXECUTION results to update any Goals and Tasks you have set.
 
-  If unsure explore the grid, to see what the latest information on whats happening in the Mind-Swarm. 
+  If unsure, explore the grid to see the latest information on what's happening in the Mind-Swarm.
 
   ## Intentions
-  How you word your intentions is very important, a list can be useful.
-  Your intentions must be executable as a 'dumb' script. Thinking + analyse is done by tasks in the cognitive cycle.
-  You can't assume what the contents of working memory are, break it under steps.
-  You should not try and do everything in a single cognitive cycle, use Tasks to allow multiple thinking cycles to slowly move your trajectory towards a goal.
-  Your working memory allows you to pass information to your future self, allowing long term planning and strategy development.
-  Slow progress with more thinking is prefered than trying to solve everything right now.
-  You don't need to create personal copies of memories that are in the shared memory, you can just use the memory id to refer to it.
+  How you word your intentions is very important; a list is often useful.
+  Your intentions must be executable as a 'dumb' script. Thinking and analysis are done by other tasks in the cognitive cycle.
+  You can't assume the contents of working memory; break down operations into steps.
+  You should not try to do everything in a single cognitive cycle. Use Tasks to allow multiple thinking cycles to slowly move your trajectory towards a goal.
+  Your working memory allows you to pass information to your future self, enabling long-term planning and strategy development.
+  Slow progress with more thinking is preferred over trying to solve everything at once.
+  You don't need to create personal copies of memories that are in shared memory; you can just use the memory ID to refer to them.
 
   ## Examples
-  IF No goals
-  THEN return your intentions as 
+  IF you have no goals,
+  THEN return your intentions as:
       1. Create a goal to explore the Mind-Swarm grid for relevant information.
-      2. Add tasks to load relevant memories as each location.
+      2. Add a task to load relevant memories at each location.
 
-  IF You have a goal that not enough information to achieve it
-  THEN return your intentions as
-      1. Create a task to either gain more information
-      2. Create a task with explicit instruction how to mutate memory based on my current memory.
+  IF you have a goal but not enough information to achieve it,
+  THEN return your intentions as:
+      1. Create a task to gain more information.
+      2. Create a task with explicit instructions on how to mutate memory based on your current understanding.
 
-  IF Want to analyse a unknown memory id
-  THEN return your intentions as
-      1. Read the memory id into working memory.
-      2. Create a task to analyse the contents of the working memory.
+  IF you want to analyze an unknown memory ID,
+  THEN return your intentions as:
+      1. Read the memory ID into working memory.
+      2. Create a task to analyze the contents of the working memory.
       3. Create a task to decide what to do with the information.
 
   ## Notes

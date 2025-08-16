@@ -89,7 +89,7 @@ class ObservationStage:
             current_task="Understanding the current situation from observations",
             selection_strategy="balanced",
             tag_filter=tag_filter,
-            exclude_types=[]  # Include all relevant memory types
+            exclude_content_types=[]  # Include all relevant memory types
         )
         
         # Use brain to analyze the situation from all observations
