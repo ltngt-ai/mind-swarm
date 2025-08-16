@@ -262,7 +262,7 @@ class ContentLoader:
     def _default_content(self, memory: MemoryBlock) -> str:
         """Generate default content for unknown memory types."""
         return (
-            f"[{memory.type.value.upper()}]\n"
+            f"[{memory.content_type.value.upper() if hasattr(memory.content_type, 'value') else str(memory.content_type).upper()}]\n"
             f"ID: {memory.id}\n"
             f"Priority: {memory.priority.name}\n"
             f"Confidence: {memory.confidence:.2f}\n"

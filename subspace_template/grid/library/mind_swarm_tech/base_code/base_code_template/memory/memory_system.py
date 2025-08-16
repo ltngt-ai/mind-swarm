@@ -69,7 +69,7 @@ class MemorySystem:
         """
         self._memory_manager.add_memory(memory)
         self._stats["memories_added"] += 1
-        logger.debug(f"Added memory: {memory.id} (type={memory.type.value})")
+        logger.debug(f"Added memory: {memory.id} (content_type={memory.content_type.value if hasattr(memory.content_type, 'value') else str(memory.content_type)})")
     
     def remove_memory(self, memory_id: str) -> bool:
         """Remove a memory block from the system.

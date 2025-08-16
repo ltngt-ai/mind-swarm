@@ -147,7 +147,7 @@ class ExecutionStage:
             api_data = yaml.safe_load(file_content)
             
             # Create FileMemoryBlock exactly like ROM loader does
-            from ..memory import FileMemoryBlock, MemoryType
+            from ..memory import FileMemoryBlock
             
             metadata = api_data.get("metadata", {})
             content = api_data.get("content", "")

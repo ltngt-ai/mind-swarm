@@ -87,7 +87,7 @@ class KnowledgeManager:
         rom_count = 0
         for rom_item in rom_items:
             # Import here to avoid circular imports
-            from ..memory import FileMemoryBlock, MemoryType
+            from ..memory import FileMemoryBlock
             
             metadata = rom_item.get("metadata", {})
             content = rom_item.get("content", "")

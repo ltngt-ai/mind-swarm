@@ -114,7 +114,7 @@ class ReflectStage:
             json.dump(reflection_content, f, indent=2)
         
         # Add or update the reflection memory block
-        from ..memory import FileMemoryBlock, Priority, MemoryType
+        from ..memory import FileMemoryBlock, Priority
         reflection_memory = FileMemoryBlock(
             location=str(reflection_file.relative_to(self.cognitive_loop.personal.parent)),
             priority=Priority.HIGH,

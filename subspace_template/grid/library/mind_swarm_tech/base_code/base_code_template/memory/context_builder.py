@@ -62,9 +62,8 @@ class ContextBuilder:
                     "content": content
                 }
                 
-                # Only add type if not obvious from id
-                if not memory.id.startswith(memory.type.value):
-                    entry["type"] = memory.type.value
+                # Add content type for clarity
+                entry["content_type"] = memory.content_type.value if hasattr(memory.content_type, 'value') else str(memory.content_type)
                 
                 # Only add confidence if not 1.0
                 if memory.confidence < 1.0:
@@ -88,7 +87,7 @@ class ContextBuilder:
                 # Include error entry
                 context_entries.append({
                     "id": memory.id,
-                    "type": memory.type.value,
+                    "content_type": memory.content_type.value if hasattr(memory.content_type, 'value') else str(memory.content_type),
                     "content": f"[Error loading content: {str(e)}]",
                     "error": True
                 })

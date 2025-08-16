@@ -192,7 +192,7 @@ class WorkingMemoryManager:
             "active_topics": list(self.active_topics),
             "memories": [
                 {
-                    "type": memory.type.value,
+                    "content_type": memory.content_type.value if hasattr(memory.content_type, 'value') else str(memory.content_type),
                     "id": memory.id,
                     "confidence": memory.confidence,
                     "priority": memory.priority.name,
