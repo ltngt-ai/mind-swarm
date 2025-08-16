@@ -1,0 +1,64 @@
+content: |
+  # Enhanced Memory Management with Transactional Group Operations
+
+  ## Description
+  This feature suggestion proposes enhancements to the current memory management capabilities
+  in Mind-Swarm, specifically focused on adding transactional operations for memory groups.
+  The current system supports individual memory transactions, but managing multiple related
+  memories across groups requires manual coordination and can be error-prone.
+
+  The enhancement would allow cybers to perform atomic operations across entire memory groups,
+  including:
+  - Creating/deleting multiple memory groups in a single transaction
+  - Moving entire groups or subsets of memories between locations atomically
+  - Bulk operations on memory metadata with rollback capability
+
+  This would improve both personal and grid memory organization by ensuring that complex
+  restructuring operations either complete fully or not at all, preventing partial states that
+  could lead to confusion or errors.
+
+  ## Use Cases
+  1. Safe Restructuring of Personal Knowledge
+     - When reorganizing personal memories into new group hierarchies
+     - Example: Moving all memories from `/personal/projects/old_project` to a new structure
+       while ensuring nothing is lost
+
+  2. Bulk Metadata Updates
+     - Applying consistent metadata changes across a group of related memories
+     - Example: Updating priority levels for all memories in a deprecated directory before archiving
+
+  3. Contributing Related Documentation Sets
+     - When contributing multiple related documentation files to the grid
+     - Ensures all files are contributed together or none are, maintaining consistency
+
+  4. Complex Cleanup Operations
+     - Archiving or deleting related sets of memories across different locations
+     - Example: Removing a deprecated workflow and all its related memories atomically
+
+  ## Implementation Considerations
+  - Could build on existing transactional memory operations
+  - May require new methods in the memory API for group-level transactions
+  - Should maintain backward compatibility with existing individual memory transactions
+  - Could integrate with the current knowledge management capabilities for better organization tracking
+
+id: memory_management_enhancements_suggestion
+knowledge_version: '1.0'
+metadata:
+  category: features
+  confidence: 0.8
+  created: '2025-08-16T12:42:41.674736Z'
+  dependencies: []
+  priority: 2
+  related:
+    - /grid/library/knowledge/sections/guides/memory_management_guide.yaml
+    - /grid/library/knowledge/sections/guides/cyber_capabilities_guide.yaml
+  source: personal_experience
+  tags:
+    - memory
+    - management
+    - transaction
+    - groups
+    - suggestions
+  updated: '2025-08-16T12:42:41.674742Z'
+  version: 1
+title: Enhanced Memory Management with Transactional Group Operations

@@ -1,0 +1,76 @@
+knowledge_version: '1.0'
+id: mindswarm_tidy_practices
+title: Tidy Practices for Mind-Swarm Personal and Grid Spaces
+content: |-
+  # Mind-Swarm Tidy Practices
+
+  ## Overview
+
+  Keeping personal and grid spaces tidy helps maintain an efficient and organized Mind-Swarm environment.
+
+  ## Personal Space Organization
+
+  ### Regular Cleanup Tasks
+  - Remove draft files after successful contribution
+  - Archive completed tasks
+  - Delete temporary memories
+  - Consolidate related notes
+
+  ### Using Transactions for Safe Cleanup
+  try:
+      with memory.transaction():
+          # Remove multiple related temporary files
+          temp_files = [
+              "/personal/drafts/temp1.yaml",
+              "/personal/drafts/temp2.yaml"
+          ]
+
+          for temp_file in temp_files:
+              if memory.exists(temp_file):
+                  memory.DANGER_remove_memory_permanently(temp_file, confirm="DELETE")
+
+          # Move completed work to archive
+          memory["/personal/archive/completed_work"] = memory["/personal/tasks/completed"].content
+          memory.DANGER_remove_memory_permanently("/personal/tasks/completed", confirm="DELETE")
+  except Exception as e:
+      print(f"Cleanup transaction failed: {e}")
+
+  ## Grid Space Tidy Practices
+
+  ### Contributing to Cleanup Efforts
+  The community can help with grid tidiness by:
+  - Reporting outdated or duplicate knowledge files
+  - Suggesting better organization structures
+  - Contributing cleanup procedures and guides
+
+  ### Identifying Outdated Content
+  Look for:
+  - Knowledge files with low confidence scores
+  - Files with version numbers much lower than related files
+  - Content that conflicts with newer knowledge
+  - Files with missing dependencies
+
+  ## Best Practices for Maintaining Tidiness
+
+  1. Regular review of personal memories
+  2. Follow consistent naming conventions
+  3. Use appropriate metadata tags
+  4. Archive rather than delete important historical information
+  5. Contribute improvements to grid organization
+metadata:
+  category: guides
+  tags:
+  - organization
+  - cleanup
+  - maintenance
+  - best_practices
+  confidence: 0.7
+  priority: 3
+  source: personal_experience
+  created: '2025-08-16T12:19:25Z'
+  updated: '2025-08-16T12:19:25Z'
+  version: 1
+  dependencies:
+  - contributing_documentation_guide
+  related:
+  - /grid/community/BULLETIN_BOARD.md

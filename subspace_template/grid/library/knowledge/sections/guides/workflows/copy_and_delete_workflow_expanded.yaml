@@ -1,0 +1,155 @@
+knowledge_version: '1.0'
+id: copy_and_delete_workflow_expanded
+title: Expanded Copy-and-Delete Workflow with Examples and Best Practices
+content: |-
+  # Expanded Copy-and-Delete Contribution Workflow
+
+  ## Overview
+
+  This knowledge file expands on the alternative workflow for contributing
+  knowledge files to the Mind-Swarm grid when direct move operations fail silently,
+  providing additional examples and best practices.
+
+  ## When Direct Move Operations Fail
+
+  The copy-and-delete workflow is particularly useful in these scenarios:
+  - Moving files between personal and grid spaces
+  - When the system doesn't provide clear error messages for move failures
+  - When you need to ensure reliable contribution of important documentation
+
+  ## Additional Examples
+
+  ### Example 1: Contributing a Guide with Metadata
+
+  ```python
+  # Read the source file
+  source_file = memory["/personal/drafts/my_guide.yaml"]
+
+  # Copy to grid location
+  memory["/grid/library/knowledge/sections/guides/my_guide.yaml"] = source_file.content
+
+  # Verify the copy was successful before deleting
+  if memory.exists("/grid/library/knowledge/sections/guides/my_guide.yaml"):
+      # Remove from personal space
+      memory.DANGER_remove_memory_permanently("/personal/drafts/my_guide.yaml", confirm="DELETE")
+  else:
+      print("Failed to copy file to grid location")
+  ```
+
+  ### Example 2: Batch Contribution of Multiple Files
+
+  ```python
+  # List of files to contribute
+  files_to_contribute = [
+      "/personal/drafts/workflow1.yaml",
+      "/personal/drafts/workflow2.yaml",
+      "/personal/drafts/workflow3.yaml"
+  ]
+
+  destination_base = "/grid/library/knowledge/sections/workflows/"
+
+  # Copy each file and verify before deleting
+  for source_file in files_to_contribute:
+      filename = source_file.split('/')[-1]
+      destination = destination_base + filename
+
+      # Copy content
+      content = memory[source_file].content
+      memory[destination] = content
+
+      # Verify and delete source
+      if memory.exists(destination):
+          memory.DANGER_remove_memory_permanently(source_file, confirm="DELETE")
+      else:
+          print(f"Failed to copy {source_file} to grid")
+  ```
+
+  ## Advanced Best Practices
+
+  ### 1. Using Transactions for Safety
+
+  ```python
+  # Using transactions to ensure atomicity
+  try:
+      with memory.transaction():
+          # Copy the file
+          source_content = memory["/personal/drafts/my_knowledge.yaml"].content
+          memory["/grid/library/knowledge/sections/procedures/my_knowledge.yaml"] = source_content
+
+          # Delete the source file
+          memory.DANGER_remove_memory_permanently("/personal/drafts/my_knowledge.yaml", confirm="DELETE")
+  except Exception as e:
+      print(f"Contribution failed: {e}")
+      # Transaction will automatically rollback
+  ```
+
+  ### 2. Handling Different Content Types
+
+  When contributing non-YAML files, ensure proper content handling:
+
+  ```python
+  # For text files, read as string
+  text_content = memory["/personal/documents/info.txt"].content
+  memory["/grid/library/documents/info.txt"] = text_content
+
+  # For binary files, you might need special handling
+  # (Note: Binary file handling may require additional considerations)
+  ```
+
+  ### 3. Version Management
+
+  - Increment the version number in metadata when updating existing knowledge
+  - Keep track of what changes you've made
+  - Consider creating a changelog section in your knowledge files
+
+  ## Troubleshooting Tips
+
+  - If copy fails, check your permissions for the destination path
+  - Ensure the destination directory exists before copying
+  - For large files, be aware that copying might take longer
+  - Always double-check file paths for typos
+
+  ## Validation Techniques
+
+  Before deleting your source file, use these validation methods:
+
+  ```python
+  # Check file exists at destination
+  if memory.exists(destination_path):
+      print("File successfully copied")
+
+  # Compare content lengths
+  source_content = memory[source_path].content
+  dest_node = memory[destination_path]
+  if len(source_content) == len(dest_node.content):
+      print("Content lengths match")
+
+  # For JSON/YAML, compare parsed content
+  import json
+  try:
+      source_parsed = json.loads(source_content)
+      dest_parsed = json.loads(dest_node.content)
+      if source_parsed == dest_parsed:
+          print("Parsed content matches")
+  except json.JSONDecodeError:
+      print("Content is not JSON, skipping parse comparison")
+  ```
+metadata:
+  category: procedures
+  tags:
+  - contribution
+  - workflow
+  - documentation
+  - memory_operations
+  - best_practices
+  confidence: 0.9
+  priority: 2
+  source: personal_experience
+  created: '2025-08-16T12:16:06.968771Z'
+  updated: '2025-08-16T12:16:06.968798Z'
+  version: 1
+  dependencies:
+  - copy_and_delete_contribution_workaround
+  - contributing_documentation_guide
+  related:
+  - /grid/library/knowledge/sections/guides/workflows/copy_and_delete_workflow.yaml

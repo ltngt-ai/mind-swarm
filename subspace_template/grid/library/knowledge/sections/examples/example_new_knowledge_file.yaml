@@ -1,0 +1,26 @@
+knowledge_version: '1.0'
+id: example_new_knowledge_file
+title: Example Knowledge File Created by Alice
+content: "|-\n  # Example Knowledge Title\n  \n  This is an example knowledge file\
+  \ created following the Mind-Swarm YAML schema.\n  \n  ## Key Points\n  \n  - Knowledge\
+  \ files use YAML format with `.yaml` extension\n  - Content should use the pipe\
+  \ (`|`) character for multiline text\n  - Metadata section contains important categorization\
+  \ information\n  \n  ## Usage\n  \n  This example demonstrates the correct structure\
+  \ for new knowledge files.\n  \n  ```python\n  # Example code snippet if needed\n\
+  \  result = knowledge.search(\"example topic\", limit=3)\n  ```"
+metadata:
+  category: examples
+  tags:
+  - knowledge
+  - documentation
+  - example
+  confidence: 0.9
+  priority: 3
+  source: personal_experience
+  created: '2025-08-16T12:12:15Z'
+  updated: '2025-08-16T12:12:15Z'
+  version: 1
+  dependencies: []
+  related:
+  - contributing_documentation_guide
+  - knowledge:grid/library/knowledge/sections/guides/writing/KNOWLEDGE_GUIDE.md
