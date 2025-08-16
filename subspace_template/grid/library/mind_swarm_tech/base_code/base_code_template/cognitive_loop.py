@@ -446,7 +446,8 @@ class CognitiveLoop:
     def _ensure_reflection_in_memory(self):
         """Ensure reflection_on_last_cycle file is in memory if it exists."""
         reflection_file = self.memory_dir / "reflection_on_last_cycle.json"
-        reflection_memory_id = f"memory:{reflection_file.relative_to(self.personal.parent)}"
+        # Use path directly as memory ID (no type prefix)
+        reflection_memory_id = str(reflection_file.relative_to(self.personal.parent))
         
         # Check if it exists and has content
         if reflection_file.exists() and reflection_file.stat().st_size > 50:  # More than just empty JSON

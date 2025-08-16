@@ -1,10 +1,13 @@
 """Unified Memory ID system for consistent memory referencing.
 
-This module provides a semantic ID system that:
-- Uses consistent format across all memory types
-- Enables pattern matching and relationship discovery
-- Includes content hashing for deduplication
-- Provides semantic understanding from IDs alone
+This module provides helper functions for the new simplified memory ID system where:
+- Memory IDs are just paths (no type prefix)
+- Content type is a separate property on memory blocks
+- Paths use consistent namespace prefixes (personal/ or grid/)
+- Optional hash suffixes for uniqueness (#hash)
+
+NOTE: Most functions in this module are now deprecated or simplified.
+The primary purpose is to help with path normalization.
 """
 
 import hashlib
@@ -15,10 +18,49 @@ from .memory_types import MemoryType
 
 
 class UnifiedMemoryID:
-    """Manages unified memory IDs with format: type:path[:hash]"""
+    """Helper class for memory ID operations (mostly deprecated).
     
-    # Pattern for parsing IDs: type:path[:hash]
-    ID_PATTERN = re.compile(r'^([^:]+):([^:]+)(?::([a-f0-9]{6}))?$')
+    In the new system, memory IDs are just paths with optional hash suffixes.
+    Format: path[#hash]
+    Examples:
+        personal/notes/todo.txt
+        grid/shared/data.json
+        personal/memory/cache#a3f2b1c8
+    """
+    
+    # Pattern for parsing new simplified IDs: path[#hash]
+    ID_PATTERN = re.compile(r'^([^#]+)(?:#([a-f0-9]+))?$')
+    
+    @staticmethod
+    def normalize_path(path: str) -> str:
+        """Normalize a path to ensure consistent format.
+        
+        Args:
+            path: Path to normalize
+            
+        Returns:
+            Normalized path with proper namespace prefix
+        """
+        # Remove leading slash if present
+        path = path.lstrip('/')
+        
+        # Ensure proper namespace prefix
+        if not (path.startswith('personal/') or path.startswith('grid/')):
+            # Try to extract the meaningful part
+            if '/personal/' in path:
+                # Extract everything after /personal/
+                path = 'personal/' + path.split('/personal/')[-1]
+            elif '/grid/' in path:
+                # Extract everything after /grid/
+                path = 'grid/' + path.split('/grid/')[-1]
+            else:
+                # Check for special virtual paths
+                virtual_prefixes = ['boot_rom/', 'virtual/', 'restored']
+                if not any(path.startswith(prefix) for prefix in virtual_prefixes):
+                    # Default to personal if we can't determine
+                    path = 'personal/' + path
+        
+        return path
     
     @staticmethod
     def create(
@@ -26,65 +68,81 @@ class UnifiedMemoryID:
         path: str,
         content: Optional[str] = None
     ) -> str:
-        """Create a new unified memory ID.
+        """DEPRECATED: Create a memory ID (now just returns normalized path).
+        
+        This method is kept for backward compatibility but now simply
+        returns the normalized path, optionally with a hash suffix.
         
         Args:
-            mem_type: Type of memory (MemoryType enum)
-            path: Path to the memory (should include personal/ or grid/ prefix)
+            mem_type: Type of memory (ignored in new system)
+            path: Path to the memory
             content: Optional content for hash generation
             
         Returns:
-            Unified memory ID string
+            Normalized path with optional hash suffix
         """
-        # Get string value from enum
-        type_str = mem_type.value
+        # Normalize the path
+        path = UnifiedMemoryID.normalize_path(path)
         
-        # Clean up path - remove leading slash if present
-        path = path.lstrip('/')
-        
-        # Generate content hash if content provided
+        # Add hash suffix if content provided
         if content:
-            content_hash = hashlib.sha256(content.encode()).hexdigest()[:6]
-            return f"{type_str}:{path}:{content_hash}"
+            content_hash = hashlib.sha256(content.encode()).hexdigest()[:8]
+            return f"{path}#{content_hash}"
         else:
-            return f"{type_str}:{path}"
+            return path
     
     @staticmethod
     def parse(memory_id: str) -> Dict[str, str]:
-        """Parse a unified memory ID into components.
+        """Parse a memory ID into components.
+        
+        In the new system, this just extracts the path and optional hash.
+        For backward compatibility with old IDs (type:path format),
+        it attempts to handle those as well.
         
         Args:
             memory_id: The ID to parse
             
         Returns:
-            Dict with keys: type, path, hash (optional), namespace (derived)
+            Dict with keys: path, hash (optional), namespace (derived)
         """
+        # Check for old format (type:path[:hash])
+        if ':' in memory_id and not '/' in memory_id.split(':')[0]:
+            # This looks like an old format ID
+            old_pattern = re.compile(r'^([^:]+):([^:#]+)(?:[:#]([a-f0-9]+))?$')
+            match = old_pattern.match(memory_id)
+            if match:
+                mem_type, path, content_hash = match.groups()
+                result = {
+                    'type': mem_type,  # Keep for backward compat
+                    'path': path,
+                    'namespace': 'personal' if path.startswith('personal/') else 'grid'
+                }
+                if content_hash:
+                    result['hash'] = content_hash
+                return result
+        
+        # Parse new format (path[#hash])
         match = UnifiedMemoryID.ID_PATTERN.match(memory_id)
         if not match:
-            # Invalid format, return empty result
+            # Just return as-is
             return {
-                'type': 'unknown',
                 'path': memory_id,
-                'namespace': 'unknown'
+                'namespace': 'personal' if 'personal' in memory_id else 'grid'
             }
         
-        mem_type, path, content_hash = match.groups()
+        path, content_hash = match.groups()
         
-        # Derive namespace from path for backwards compatibility
+        # Derive namespace from path
         if path.startswith('personal/'):
             namespace = 'personal'
         elif path.startswith('grid/'):
             namespace = 'grid'
-        elif path.startswith('inbox/') or path.startswith('outbox/'):
-            namespace = 'personal'
         else:
-            # Default to personal if unclear
-            namespace = 'personal'
+            namespace = 'personal'  # Default
         
         result = {
-            'type': mem_type,
             'path': path,
-            'namespace': namespace  # Derived for compatibility
+            'namespace': namespace
         }
         
         if content_hash:
@@ -181,82 +239,48 @@ class UnifiedMemoryID:
     
     @staticmethod
     def create_from_path(path: str, mem_type: MemoryType = MemoryType.FILE) -> str:
-        """Create a memory ID from a filesystem path.
+        """DEPRECATED: Create a memory ID from a filesystem path.
+        
+        Now just normalizes the path (type is ignored).
         
         Args:
             path: Filesystem path
-            mem_type: Memory type (default: MemoryType.FILE)
+            mem_type: Memory type (ignored in new system)
             
         Returns:
-            Unified memory ID
+            Normalized path
         """
-        # Clean up the path
-        path_str = str(path)
-        
-        # Remove leading slash if present
-        if path_str.startswith('/'):
-            path_str = path_str[1:]
-        
-        # If path already starts with personal/ or grid/, use as-is
-        if path_str.startswith('personal/') or path_str.startswith('grid/'):
-            return UnifiedMemoryID.create(mem_type, path_str)
-        
-        # Otherwise, try to extract the meaningful part
-        if '/personal/' in path_str:
-            # Extract everything after /personal/
-            path_str = 'personal/' + path_str.split('/personal/')[-1]
-        elif '/grid/' in path_str:
-            # Extract everything after /grid/
-            path_str = 'grid/' + path_str.split('/grid/')[-1]
-        else:
-            # Default to personal if we can't determine
-            path_str = 'personal/' + path_str
-        
-        return UnifiedMemoryID.create(mem_type, path_str)
+        return UnifiedMemoryID.normalize_path(str(path))
     
     @staticmethod
     def create_observation_id(obs_type: str, path: str) -> str:
-        """Create an observation ID that prevents duplication.
+        """DEPRECATED: Create an observation ID with uniqueness.
         
-        Uses content hash of type+path to ensure unique observations.
+        Now just creates a path with a hash suffix for uniqueness.
+        
+        Args:
+            obs_type: Type of observation
+            path: Path for the observation
+            
+        Returns:
+            Path with hash suffix for uniqueness
         """
-        # If path is a memory ID, extract just the path part
-        if ':' in path and not '/' in path.split(':')[0]:
-            # This looks like a memory ID (type:path format)
-            try:
-                parts = UnifiedMemoryID.parse(path)
-                path = parts['path']
-            except:
-                # If parsing fails, use as-is
-                pass
+        # Normalize the path
+        path_str = UnifiedMemoryID.normalize_path(str(path))
         
-        # Clean up the path
-        path_str = str(path)
-        if path_str.startswith('/'):
-            path_str = path_str[1:]
-        
-        # Use the actual path for the observation ID - don't inject obs_type into path
-        if path_str.startswith('personal/') or path_str.startswith('grid/'):
-            # Path already has namespace prefix, use as-is
-            obs_path = path_str
-        else:
-            # Determine from path content
-            if '/grid/' in path_str:
-                # Extract the grid-relative path
-                grid_idx = path_str.find('grid/')
-                obs_path = path_str[grid_idx:]
-            elif '/personal/' in path_str:
-                # Extract the personal-relative path
-                personal_idx = path_str.find('personal/')
-                obs_path = path_str[personal_idx:]
+        # Default observations to personal/observations if not namespaced
+        if not path_str.startswith('personal/observations/') and not path_str.startswith('grid/'):
+            if path_str.startswith('personal/'):
+                # Insert observations directory
+                path_str = path_str.replace('personal/', 'personal/observations/', 1)
             else:
-                # Default to personal namespace
-                obs_path = f"personal/{path_str}"
+                path_str = f"personal/observations/{path_str}"
         
-        # Create content hash from identifying information
-        content = f"{obs_type}:{path_str}"
+        # Create hash from obs_type and path for uniqueness
+        content = f"{obs_type}:{path}"
+        content_hash = hashlib.sha256(content.encode()).hexdigest()[:8]
         
-        return UnifiedMemoryID.create(MemoryType.OBSERVATION, obs_path, content)
+        return f"{path_str}#{content_hash}"
     
     @staticmethod
     def to_filesystem_path(memory_id: str, base_path: Optional[Path] = None) -> Path:

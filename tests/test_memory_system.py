@@ -6,9 +6,11 @@ import json
 from pathlib import Path
 from datetime import datetime, timedelta
 
+# Note: These imports may need to be adjusted based on actual module structure
+# Currently assuming the test can access the subspace_template modules
 from mind_swarm.agent_sandbox.memory import (
     MemoryBlock, Priority, MemoryType,
-    FileMemoryBlock, MessageMemoryBlock, ObservationMemoryBlock,
+    FileMemoryBlock, ObservationMemoryBlock,
     WorkingMemoryManager, ContentLoader, ContextBuilder, MemorySelector
 )
 from mind_swarm.agent_sandbox.perception import EnvironmentScanner
@@ -27,36 +29,29 @@ class TestMemoryBlocks:
         )
         
         assert memory.type == MemoryType.FILE
-        assert memory.id == "/test/file.py:10-20"
+        # ID is now just the normalized path with line range suffix
+        assert memory.id == "personal/test/file.py#L10-20"
         assert memory.priority == Priority.HIGH
         assert memory.confidence == 1.0
     
-    def test_message_memory_block(self):
-        """Test MessageMemoryBlock with unread status."""
-        memory = MessageMemoryBlock(
-            from_agent="Cyber-001",
-            to_agent="Cyber-002",
-            subject="Test Message",
-            preview="This is a test...",
-            full_path="/inbox/msg.json",
-            read=False
-        )
-        
-        assert memory.type == MemoryType.MESSAGE
-        assert memory.priority == Priority.HIGH  # Unread messages are high priority
-        assert not memory.read
+    # MessageMemoryBlock removed - no longer exists in current codebase
+    # Messages are now handled as FileMemoryBlock with appropriate content_type
     
     def test_observation_memory_block(self):
         """Test ObservationMemoryBlock."""
         memory = ObservationMemoryBlock(
             observation_type="file_changed",
             path="/shared/test.txt",
-            description="File was modified"
+            message="File was modified",
+            cycle_count=1
         )
         
         assert memory.type == MemoryType.OBSERVATION
         assert memory.priority == Priority.HIGH
         assert memory.observation_type == "file_changed"
+        # ID should now be a path with hash suffix
+        assert memory.id.startswith("personal/observations/") or memory.id.startswith("grid/")
+        assert "#" in memory.id  # Should have hash suffix for uniqueness
 
 
 class TestWorkingMemoryManager:
@@ -86,18 +81,14 @@ class TestWorkingMemoryManager:
         """Test unread message tracking."""
         manager = WorkingMemoryManager()
         
-        # Add unread message
-        msg1 = MessageMemoryBlock(
-            from_agent="Cyber-001",
-            to_agent="me",
-            subject="Test 1",
-            preview="...",
-            full_path="/msg1.json",
-            read=False
+        # Test with file memory instead (MessageMemoryBlock no longer exists)
+        file1 = FileMemoryBlock(
+            location="personal/inbox/msg1.json",
+            priority=Priority.HIGH
         )
-        manager.add_memory(msg1)
+        manager.add_memory(file1)
         
-        # Add read message
+        # Add another file memory
         msg2 = MessageMemoryBlock(
             from_agent="Cyber-002",
             to_agent="me",

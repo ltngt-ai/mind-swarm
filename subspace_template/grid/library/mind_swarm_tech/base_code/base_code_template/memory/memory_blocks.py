@@ -7,7 +7,7 @@ Each block represents a reference to content in the filesystem.
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List
 from datetime import datetime
-from .memory_types import Priority, MemoryType
+from .memory_types import Priority, MemoryType, ContentType
 from .unified_memory_id import UnifiedMemoryID
 
 
@@ -21,7 +21,8 @@ class MemoryBlock:
                  expiry: Optional[datetime] = None,
                  metadata: Optional[Dict[str, Any]] = None,
                  pinned: bool = False,
-                 cycle_count: Optional[int] = None):
+                 cycle_count: Optional[int] = None,
+                 content_type: Optional[ContentType] = None):
         """Initialize base memory block."""
         self.confidence = confidence
         self.priority = priority
@@ -30,10 +31,11 @@ class MemoryBlock:
         self.metadata = metadata or {}
         self.pinned = pinned  # When True, memory is never removed by memory management
         self.cycle_count = cycle_count  # Track which cycle this memory was created in
+        self.content_type = content_type or ContentType.UNKNOWN  # Content type of the memory
         
         # These must be set by subclasses
         self.type: MemoryType
-        self.id: str
+        self.id: str  # Now just a path, no type prefix
 
 
 @dataclass
@@ -50,12 +52,17 @@ class FileMemoryBlock(MemoryBlock):
     metadata: Optional[Dict[str, Any]] = None
     pinned: bool = False
     cycle_count: Optional[int] = None
+    content_type: Optional[ContentType] = None  # Explicit content type
     no_cache: bool = False  # If True, content should not be cached (e.g., memory-mapped files)
     block_type: Optional[MemoryType] = None  # Override the default FILE type (e.g., KNOWLEDGE)
     
 
     def __post_init__(self):
         """Initialize base class and set type."""
+        # Detect content type from file extension if not provided
+        if self.content_type is None:
+            self.content_type = ContentType.from_file_extension(self.location)
+        
         super().__init__(
             confidence=self.confidence,
             priority=self.priority,
@@ -63,7 +70,8 @@ class FileMemoryBlock(MemoryBlock):
             expiry=self.expiry,
             metadata=self.metadata,
             pinned=self.pinned,
-            cycle_count=self.cycle_count
+            cycle_count=self.cycle_count,
+            content_type=self.content_type
         )
         # Use provided block_type or default to FILE
         self.type = self.block_type if self.block_type else MemoryType.FILE
@@ -103,26 +111,38 @@ class FileMemoryBlock(MemoryBlock):
                 logger = logging.getLogger("Cyber.memory")
                 logger.debug(f"Path validation for FileMemoryBlock: {e}")
         
-        # Generate unified ID
-        self.id = UnifiedMemoryID.create_from_path(self.location, self.type)
+        # Use path as ID - clean it up to be consistent
+        path_str = str(self.location)
         
-        # Add line range suffix if specified
+        # Remove leading slash if present
+        if path_str.startswith('/'):
+            path_str = path_str[1:]
+        
+        # Ensure proper namespace prefix
+        if not (path_str.startswith('personal/') or path_str.startswith('grid/')):
+            # Try to extract the meaningful part
+            if '/personal/' in path_str:
+                # Extract everything after /personal/
+                path_str = 'personal/' + path_str.split('/personal/')[-1]
+            elif '/grid/' in path_str:
+                # Extract everything after /grid/
+                path_str = 'grid/' + path_str.split('/grid/')[-1]
+            else:
+                # Default to personal if we can't determine
+                # unless it's a special virtual path
+                virtual_prefixes = ['boot_rom/', 'virtual/', 'restored']
+                if not any(path_str.startswith(prefix) for prefix in virtual_prefixes):
+                    path_str = 'personal/' + path_str
+        
+        # Set the ID to just the path
+        self.id = path_str
+        
+        # Add line range or digest to ID if specified
         if self.start_line is not None and self.end_line is not None:
-            parts = UnifiedMemoryID.parse(self.id)
-            path_with_lines = f"{parts['path']}/lines-{self.start_line}-{self.end_line}"
-            self.id = UnifiedMemoryID.create(
-                self.type,
-                path_with_lines,
-                f"{self.location}:{self.start_line}-{self.end_line}"
-            )
+            self.id = f"{self.id}#L{self.start_line}-{self.end_line}"
         elif self.digest:
-            # Add content hash if we have a digest
-            parts = UnifiedMemoryID.parse(self.id)
-            self.id = UnifiedMemoryID.create(
-                self.type,
-                parts['path'],
-                self.digest
-            )
+            # Add content hash suffix
+            self.id = f"{self.id}#{self.digest[:8]}"
 
 
 @dataclass
@@ -140,6 +160,9 @@ class ObservationMemoryBlock(MemoryBlock):
     
     def __post_init__(self):
         """Initialize base class and set type."""
+        # Observations have a special Mind-Swarm content type
+        content_type = ContentType.MINDSWARM_OBSERVATION
+        
         # Don't pass timestamp to parent - we don't use it
         super().__init__(
             confidence=self.confidence,
@@ -148,13 +171,24 @@ class ObservationMemoryBlock(MemoryBlock):
             expiry=self.expiry,
             metadata=None,  # No metadata
             pinned=self.pinned,
-            cycle_count=self.cycle_count  # Pass cycle_count to parent
+            cycle_count=self.cycle_count,  # Pass cycle_count to parent
+            content_type=content_type
         )
         self.type = MemoryType.OBSERVATION
         
-        # Use unified ID that prevents duplication
-        # Include cycle count in ID to make observations unique per cycle
-        self.id = UnifiedMemoryID.create_observation_id(
-            self.observation_type,
-            f"{self.path}:cycle_{self.cycle_count}"
-        )
+        # Use path as ID with observation type and cycle for uniqueness
+        path_str = str(self.path)
+        if path_str.startswith('/'):
+            path_str = path_str[1:]
+        
+        # Ensure proper namespace prefix
+        if not (path_str.startswith('personal/') or path_str.startswith('grid/')):
+            # Default observations to personal namespace
+            path_str = f"personal/observations/{path_str}"
+        
+        # Create unique ID with observation type and cycle count
+        # Using hash notation for metadata that makes it unique
+        import hashlib
+        unique_suffix = f"{self.observation_type}_cycle{self.cycle_count}"
+        suffix_hash = hashlib.sha256(unique_suffix.encode()).hexdigest()[:8]
+        self.id = f"{path_str}#{suffix_hash}"

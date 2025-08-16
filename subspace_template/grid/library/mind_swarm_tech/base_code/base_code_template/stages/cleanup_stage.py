@@ -161,7 +161,8 @@ class CleanupStage:
                 file_age = current_time - file_path.stat().st_mtime
                 if file_age > max_age_seconds:
                     # Remove associated memory if it exists
-                    memory_id = f"memory:{file_path.relative_to(self.cognitive_loop.personal.parent)}"
+                    # Use path directly as memory ID (no type prefix)
+                    memory_id = str(file_path.relative_to(self.cognitive_loop.personal.parent))
                     if self.memory_system.remove_memory(memory_id):
                         logger.debug(f"Removed memory for old script execution: {memory_id}")
                     

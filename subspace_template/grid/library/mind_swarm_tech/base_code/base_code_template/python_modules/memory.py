@@ -887,7 +887,8 @@ Main memory interface providing unified access to all Mind-Swarm memories.
             elif operation == 'evict':
                 # Store that this was in working memory
                 rollback_info['was_in_memory'] = True
-                rollback_info['memory_id'] = f"memory:{path}"
+                # Use path directly as memory ID (no type prefix)
+                rollback_info['memory_id'] = path
             
             self._changes.append(rollback_info)
     
@@ -1221,7 +1222,8 @@ Returns: True if evicted, False if not found in working memory
         
         # Find and remove from working memory
         # The memory ID format is "memory:path"
-        memory_id = f"memory:{clean_path}"
+        # Use path directly as memory ID (no type prefix)
+        memory_id = clean_path
         
         # Try to find the memory in the memory system
         for mem in list(self._memory_system.symbolic_memory):
@@ -1262,7 +1264,8 @@ Returns:
             old_actual.rename(new_actual)
             
             # Update working memory if present
-            old_memory_id = f"memory:{old_clean}"
+            # Use path directly as memory ID (no type prefix)
+            old_memory_id = old_clean
             for mem in list(self._memory_system.symbolic_memory):
                 if mem.id == old_memory_id:
                     # Remove old reference
@@ -1336,7 +1339,8 @@ Example:
                 return False
             
             # Remove from working memory first
-            memory_id = f"memory:{clean_path}"
+            # Use path directly as memory ID (no type prefix)
+            memory_id = clean_path
             self._memory_system.remove_memory(memory_id)
             
             # Delete from disk
