@@ -46,8 +46,9 @@ class ROMLoader:
             for rom_file in rom_dir.glob(pattern):
                 rom_content = self.load_rom_file(rom_file)
                 if rom_content:
-                    # Store the file path relative to library path in the content
-                    rom_content['file_path'] = str(rom_file.relative_to(self.library_path.parent.parent))
+                    # Store the file path from cyber's perspective
+                    # ROM files are in grid/library/mind_swarm_tech/rom/{cyber_type}/
+                    rom_content['file_path'] = f"grid/library/mind_swarm_tech/rom/{self.cyber_type}/{rom_file.name}"
                     rom_data[rom_file.stem] = rom_content
                     rom_count += 1
                     

@@ -257,7 +257,7 @@ class EnvironmentScanner:
 
             # Create a memory for personal structure
             personal_memory = FileMemoryBlock(
-                location=str(personal_location_file.relative_to(self.personal_path.parent)),
+                location="personal/.internal/memory/personal_location.txt",
                 priority=Priority.SYSTEM, 
                 confidence=1.0,
                 pinned=True,  # Always in working memory
@@ -420,7 +420,7 @@ class EnvironmentScanner:
             
             # Create a SYSTEM priority memory for location contents
             location_memory = FileMemoryBlock(
-                location=str(location_contents_file.relative_to(self.personal_path.parent)),
+                location="personal/.internal/memory/current_location.txt",
                 priority=Priority.SYSTEM,  # System-controlled, like looking around
                 confidence=1.0,
                 pinned=True,  # Always visible

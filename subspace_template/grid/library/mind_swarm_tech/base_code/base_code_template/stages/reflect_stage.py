@@ -116,7 +116,7 @@ class ReflectStage:
         # Add or update the reflection memory block
         from ..memory import FileMemoryBlock, Priority
         reflection_memory = FileMemoryBlock(
-            location=str(reflection_file.relative_to(self.cognitive_loop.personal.parent)),
+            location="personal/.internal/memory/reflection_on_last_cycle.json",
             priority=Priority.HIGH,
             pinned=False,  # Not pinned, can be cleaned up if needed
             metadata={
@@ -129,7 +129,7 @@ class ReflectStage:
         )
         
         # Remove old reflection if it exists and add new one
-        reflection_id = f"memory:{reflection_file.relative_to(self.cognitive_loop.personal.parent)}"
+        reflection_id = "personal/.internal/memory/reflection_on_last_cycle.json"
         existing_memory = self.cognitive_loop.memory_system.get_memory(reflection_id)
         if existing_memory:
             self.cognitive_loop.memory_system.remove_memory(reflection_id)
