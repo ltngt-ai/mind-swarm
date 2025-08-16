@@ -100,12 +100,12 @@ class ContextBuilder:
         """Build human-readable structured context."""
         sections = []
         
-        # Group memories by type
-        memories_by_type: Dict[MemoryType, List[MemoryBlock]] = {}
+        # Group memories by content type
+        memories_by_type: Dict[ContentType, List[MemoryBlock]] = {}
         for memory in memories:
-            if memory.type not in memories_by_type:
-                memories_by_type[memory.type] = []
-            memories_by_type[memory.type].append(memory)
+            if memory.content_type not in memories_by_type:
+                memories_by_type[memory.content_type] = []
+            memories_by_type[memory.content_type].append(memory)
         
         # Build sections for each content type category
         # Group by major content type categories
@@ -190,7 +190,7 @@ class ContextBuilder:
         lines = ["Let me review what I know and what's happening:\n"]
         
         # Pinned knowledge first (acting as ROM)
-        pinned_knowledge = [m for m in memories if m.type == MemoryType.KNOWLEDGE and m.pinned]
+        pinned_knowledge = [m for m in memories if m.content_type == ContentType.MINDSWARM_KNOWLEDGE and m.pinned]
         if pinned_knowledge:
             lines.append("My core knowledge tells me:")
             for memory in pinned_knowledge:
@@ -207,7 +207,7 @@ class ContextBuilder:
             lines.append("")
         
         # Recent observations
-        obs_memories = [m for m in memories if m.type == MemoryType.OBSERVATION]
+        obs_memories = [m for m in memories if m.content_type == ContentType.MINDSWARM_OBSERVATION]
         if obs_memories:
             lines.append("I've recently observed:")
             for memory in obs_memories:
@@ -229,14 +229,14 @@ class ContextBuilder:
             lines.append("")
         
         # Other content
-        other_memories = [m for m in memories if m.type not in
-                         [MemoryType.KNOWLEDGE, MemoryType.OBSERVATION]]
+        other_memories = [m for m in memories if m.content_type not in
+                         [ContentType.MINDSWARM_KNOWLEDGE, ContentType.MINDSWARM_OBSERVATION]]
         if other_memories:
             lines.append("Additional relevant information:")
             for memory in other_memories[:5]:  # Limit to avoid too long
                 try:
                     content = self.content_loader.load_content(memory)
-                    lines.append(f"- {memory.type.value}: {content}")
+                    lines.append(f"- {memory.content_type.value}: {content}")
                 except Exception:
                     pass
         
@@ -260,7 +260,7 @@ class ContextBuilder:
                 metadata["to"] = memory.metadata.get('to_agent', 'me')
                 metadata["read"] = memory.metadata.get('read', False)
             
-        elif isinstance(memory, FileMemoryBlock) and memory.type == MemoryType.KNOWLEDGE:
+        elif isinstance(memory, FileMemoryBlock) and memory.content_type == ContentType.MINDSWARM_KNOWLEDGE:
             # Knowledge memories are just file blocks with knowledge type
             metadata["relevance"] = memory.confidence
             

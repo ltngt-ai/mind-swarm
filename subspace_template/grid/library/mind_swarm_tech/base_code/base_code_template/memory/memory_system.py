@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 import logging
 
-from .memory_types import Priority, MemoryType
+from .memory_types import Priority, ContentType
 from .memory_blocks import MemoryBlock
 from .memory_manager import WorkingMemoryManager
 from .memory_selector import MemorySelector, RelevanceScorer
@@ -142,8 +142,8 @@ class MemorySystem:
                      selection_strategy: str = "balanced",
                      format_type: str = "json",
                      tag_filter: Optional['TagFilter'] = None,
-                     exclude_types: Optional[List[MemoryType]] = None,
-                     include_types: Optional[List[MemoryType]] = None) -> str:
+                     exclude_content_types: Optional[List[ContentType]] = None,
+                     include_content_types: Optional[List[ContentType]] = None) -> str:
         """Build LLM context from current memories.
         
         Args:
@@ -152,7 +152,7 @@ class MemorySystem:
             selection_strategy: Selection strategy ("balanced", "recent", "relevant")
             format_type: Output format ("json", "structured", "narrative")
             tag_filter: Optional TagFilter to apply stage-specific filtering
-            exclude_types: List of memory types to exclude (e.g., [MemoryType.OBSERVATION])
+            exclude_content_types: List of content types to exclude (e.g., [ContentType.MINDSWARM_OBSERVATION])
             include_types: List of memory types to include (if set, only these types are included)
             
         Returns:
@@ -163,19 +163,20 @@ class MemorySystem:
         # Get memories to consider
         memories_to_select = self._memory_manager.symbolic_memory
         
-        # Debug: Log memory types in symbolic memory
-        memory_type_counts = {}
+        # Debug: Log content types in symbolic memory
+        content_type_counts = {}
         for m in memories_to_select:
-            memory_type_counts[m.type.name] = memory_type_counts.get(m.type.name, 0) + 1
-        logger.debug(f"Memory types available: {memory_type_counts}")
+            ct_name = m.content_type.name if hasattr(m.content_type, 'name') else str(m.content_type)
+            content_type_counts[ct_name] = content_type_counts.get(ct_name, 0) + 1
+        logger.debug(f"Content types available: {content_type_counts}")
         
-        # Filter by memory type if specified
-        if include_types:
-            memories_to_select = [m for m in memories_to_select if m.type in include_types]
-            logger.debug(f"Include filter: {len(memories_to_select)} memories of types {include_types}")
-        elif exclude_types:
-            memories_to_select = [m for m in memories_to_select if m.type not in exclude_types]
-            logger.debug(f"Exclude filter: kept {len(memories_to_select)} memories, excluded types {exclude_types}")
+        # Filter by content type if specified
+        if include_content_types:
+            memories_to_select = [m for m in memories_to_select if m.content_type in include_content_types]
+            logger.debug(f"Include filter: {len(memories_to_select)} memories of types {include_content_types}")
+        elif exclude_content_types:
+            memories_to_select = [m for m in memories_to_select if m.content_type not in exclude_content_types]
+            logger.debug(f"Exclude filter: kept {len(memories_to_select)} memories, excluded types {exclude_content_types}")
         
         # Apply tag filter if provided (only filters knowledge)
         if tag_filter:
@@ -245,16 +246,16 @@ class MemorySystem:
     
     # === MEMORY QUERIES ===
     
-    def get_memories_by_type(self, memory_type: MemoryType) -> List[MemoryBlock]:
-        """Get all memories of a specific type.
+    def get_memories_by_content_type(self, content_type: ContentType) -> List[MemoryBlock]:
+        """Get all memories of a specific content type.
         
         Args:
-            memory_type: Type of memories to retrieve
+            content_type: Content type of memories to retrieve
             
         Returns:
-            List of memory blocks of the specified type
+            List of memory blocks of the specified content type
         """
-        return self._memory_manager.get_memories_by_type(memory_type)
+        return self._memory_manager.get_memories_by_content_type(content_type)
     
     def get_recent_memories(self, seconds: int = 300) -> List[MemoryBlock]:
         """Get memories created in the last N seconds.
@@ -491,7 +492,8 @@ class MemorySystem:
         """
         breakdown = {}
         
-        for mem_type in MemoryType:
+        # Get content type counts from manager
+        for content_type_str in self.manager.memories_by_content_type:
             memories = self.get_memories_by_type(mem_type)
             if memories:
                 tokens = sum(self._context_builder.estimate_tokens(m) for m in memories)

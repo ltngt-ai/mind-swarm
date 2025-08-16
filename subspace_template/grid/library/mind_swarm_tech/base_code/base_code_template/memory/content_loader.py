@@ -16,7 +16,7 @@ from .memory_blocks import (
     MemoryBlock, FileMemoryBlock,
     ObservationMemoryBlock
 )
-from .memory_types import MemoryType
+from .memory_types import ContentType
 
 logger = logging.getLogger("Cyber.memory.loader")
 
@@ -98,7 +98,7 @@ class ContentLoader:
         """
         if isinstance(memory, FileMemoryBlock):
             # Check if it's a knowledge memory block
-            if hasattr(memory, 'type') and memory.type == MemoryType.KNOWLEDGE:
+            if hasattr(memory, 'content_type') and memory.content_type == ContentType.MINDSWARM_KNOWLEDGE:
                 return self.load_knowledge_content(memory)
             else:
                 return self.load_file_content(memory)

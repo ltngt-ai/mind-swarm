@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 import logging
 import re
 
-from .memory_types import Priority, MemoryType
+from .memory_types import Priority, ContentType
 from .memory_blocks import (
     MemoryBlock,
     FileMemoryBlock,
@@ -59,7 +59,7 @@ class RelevanceScorer:
         
         # Recency boost
         age = (datetime.now() - memory.timestamp).total_seconds()
-        recency_factor = self._calculate_recency_factor(age, memory.type)
+        recency_factor = self._calculate_recency_factor(age, memory.content_type)
         
         # Type-specific scoring
         type_score = self._score_by_type(memory)
@@ -77,16 +77,16 @@ class RelevanceScorer:
         
         return min(max(final_score, 0.0), 1.0)
     
-    def _calculate_recency_factor(self, age_seconds: float, mem_type: MemoryType) -> float:
+    def _calculate_recency_factor(self, age_seconds: float, content_type: ContentType) -> float:
         """Calculate recency factor based on age and type."""
         # Different decay rates for different types
         decay_rates = {
-            MemoryType.OBSERVATION: 300,    # 5 minutes
-            MemoryType.FILE: 3600,          # 1 hour
-            MemoryType.KNOWLEDGE: 86400,    # 24 hours
+            ContentType.MINDSWARM_OBSERVATION: 300,    # 5 minutes
+            ContentType.APPLICATION_JSON: 3600,         # 1 hour for JSON files
+            ContentType.MINDSWARM_KNOWLEDGE: 86400,     # 24 hours
         }
         
-        decay_rate = decay_rates.get(mem_type, 3600)
+        decay_rate = decay_rates.get(content_type, 3600)
         if decay_rate == float('inf'):
             return 1.0
         
@@ -112,7 +112,7 @@ class RelevanceScorer:
             # Recent observations are important
             return 0.8
             
-        elif isinstance(memory, FileMemoryBlock) and memory.type == MemoryType.KNOWLEDGE:
+        elif isinstance(memory, FileMemoryBlock) and memory.content_type == ContentType.MINDSWARM_KNOWLEDGE:
             # Knowledge memories use confidence as relevance
             return memory.confidence
             
