@@ -768,7 +768,12 @@ class MindSwarmCLI:
                                         console.print(f"  Content: {content}")
                                         metadata = item.get('metadata', {})
                                         if metadata.get('tags'):
-                                            console.print(f"  Tags: {', '.join(metadata['tags'])}")
+                                            # Tags are stored as comma-separated string in ChromaDB
+                                            tags_str = metadata['tags']
+                                            if isinstance(tags_str, str):
+                                                console.print(f"  Tags: {tags_str}")
+                                            else:
+                                                console.print(f"  Tags: {', '.join(tags_str)}")
                                         if metadata.get('cyber_id'):
                                             console.print(f"  Source: {metadata['cyber_id']}")
                                 else:
@@ -953,7 +958,12 @@ class MindSwarmCLI:
                                         if metadata.get('timestamp'):
                                             console.print(f"Time: {metadata['timestamp'][:19]}")
                                         if metadata.get('tags'):
-                                            console.print(f"Tags: {', '.join(metadata['tags'])}")
+                                            # Tags are stored as comma-separated string in ChromaDB
+                                            tags_str = metadata['tags']
+                                            if isinstance(tags_str, str):
+                                                console.print(f"Tags: {tags_str}")
+                                            else:
+                                                console.print(f"Tags: {', '.join(tags_str)}")
                                 else:
                                     console.print("No knowledge stored yet")
                             except Exception as e:
