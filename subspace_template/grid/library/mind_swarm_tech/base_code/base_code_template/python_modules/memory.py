@@ -12,10 +12,9 @@ including files, messages, goals, and any other data in the Mind-Swarm ecosystem
 
 ### Reading Memory (any access will load the memory into working memory)
 ```python
-# Dictionary style for dynamic paths
+# Bracket notation is the ONLY way to access memory
 info = memory["/grid/library/knowledge/sections/new_cyber_introduction/intro.yaml"]
-# Attribute style for known paths
-notes = memory.personal.notes.important
+notes = memory["/personal/notes/important"]
 # Check if memory exists
 if memory.exists("/personal/data.json"):
     data = memory["/personal/data.json"]
@@ -24,7 +23,7 @@ if memory.exists("/personal/data.json"):
 ### Writing Memory
 ```python
 # Create or update memory
-memory.personal.journal.today = "Today I learned about the memory API"
+memory["/personal/journal/today"] = "Today I learned about the memory API"
 ```
 
 ### Type Checking - Know Your Data Types!
@@ -33,7 +32,7 @@ memory.personal.journal.today = "Today I learned about the memory API"
 # Files like .yaml and .json are automatically parsed, but you should verify
 
 # Example 1: Safely handle tasks that might be JSON or string
-tasks_node = memory.personal.tasks
+tasks_node = memory["/personal/tasks"]
 if hasattr(tasks_node, 'content'):
     tasks_data = tasks_node.content
     
@@ -62,7 +61,7 @@ if hasattr(tasks_node, 'content'):
             task["status"] = "completed"
 
 # Example 2: Working with YAML/JSON files
-config = memory.personal.config.yaml.content
+config = memory["/personal/config.yaml"].content
 if isinstance(config, dict):
     # It's parsed YAML/JSON - safe to use as dict
     config["updated"] = True
@@ -71,11 +70,11 @@ elif isinstance(config, str):
     import yaml
     config = yaml.safe_load(config)
     config["updated"] = True
-    memory.personal.config.yaml = config
+    memory["/personal/config.yaml"] = config
 
 # Example 3: Type hints for better code
 def update_task(task_id: str, status: str):
-    tasks_node = memory.personal.tasks
+    tasks_node = memory["/personal/tasks"]
     content = tasks_node.content if hasattr(tasks_node, 'content') else tasks_node
     
     # Always validate type before operations
@@ -91,7 +90,7 @@ def update_task(task_id: str, status: str):
             task["status"] = status
             break
     
-    memory.personal.tasks = content
+    memory["/personal/tasks"] = content
 ```
 
 ### Transactions for Safety
@@ -100,7 +99,7 @@ def update_task(task_id: str, status: str):
 try:
     with memory.transaction():
         # Read existing data
-        data = memory.personal.config.json
+        data = memory["/personal/config.json"]
         
         # Modify JSON data directly (if it's JSON)
         if hasattr(data, 'content') and isinstance(data.content, dict):
@@ -108,14 +107,15 @@ try:
             # Changes are saved automatically
         
         # Save backup
-        memory.personal.backup.config = data.content
+        memory["/personal/backup/config"] = data.content
         
-        # Send confirmation
-        memory.outbox.new(
-            to="user", 
-            content="Config updated and backed up",
-            msg_type="CONFIRMATION"
-        )       
+        # Send confirmation message via outbox
+        import time
+        memory[f"/personal/outbox/msg_{int(time.time())}"] = {
+            "to": "user", 
+            "content": "Config updated and backed up",
+            "msg_type": "CONFIRMATION"
+        }       
 except MemoryError as e:
     print(f"Transaction failed, all changes rolled back: {e}")
 ```
@@ -126,7 +126,7 @@ except MemoryError as e:
 try:
     memory.make_memory_group("/personal/projects")
     memory.make_memory_group("/personal/projects/current")
-    memory.personal.projects.current.status = "Active"
+    memory["/personal/projects/current/status"] = "Active"
     print("Project structure created")
 except MemoryError as e:
     print(f"ERROR: {e}")
@@ -673,7 +673,7 @@ class MemoryNode:
 class MemoryGroup:
     """Provides attribute-style and subscript access to a memory group (directory).
     A MemoryGroup represents a directory in the memory system. You can access
-    sub-memories using either attribute notation (memory.personal.notes) or
+    sub-memories using
     subscript notation (memory['personal']['notes']).    
     """
     
@@ -681,52 +681,8 @@ class MemoryGroup:
         self._base_path = base_path.rstrip('/')
         self._memory = memory_system
     
-    def __getattr__(self, name: str):
-        """Access sub-memory via attribute."""
-        if name.startswith('_'):
-            raise AttributeError(f"Private attribute access not allowed: {name}")
-        
-        path = f"{self._base_path}/{name}"
-        actual_path = self._memory._resolve_path(path)
-        
-        # If it exists and is a directory, return a MemoryGroup
-        if actual_path.exists() and actual_path.is_dir():
-            return MemoryGroup(path, self._memory)
-        # If it doesn't exist, assume it will be a directory (for chained assignment)
-        elif not actual_path.exists():
-            # Return a MemoryGroup that can handle further attribute access
-            return MemoryGroup(path, self._memory)
-        # Otherwise it's a file, return a MemoryNode
-        else:
-            return self._memory[path]
-    
-    def __setattr__(self, name: str, value: Any):
-        """Set memory via attribute."""
-        if name.startswith('_'):
-            # Internal attributes
-            super().__setattr__(name, value)
-        else:
-            # Check if someone is trying to save a MemoryNode directly
-            if isinstance(value, MemoryNode):
-                raise MemoryTypeError(
-                    f"Cannot save a MemoryNode object directly to '{self._base_path}/{name}'. "
-                    f"Did you mean to use .content? "
-                    f"Example: memory.{self._base_path.lstrip('/')}.{name} = other_memory.content"
-                )
-            # Memory assignment - ensure parent directory exists
-            path = f"{self._base_path}/{name}"
-            actual_path = self._memory._resolve_path(path)
-            
-            # Create parent directory if it doesn't exist
-            parent_dir = actual_path.parent
-            if not parent_dir.exists():
-                parent_dir.mkdir(parents=True, exist_ok=True)
-                self._memory._track_change(str(parent_dir), 'mkdir')
-            
-            # Now create and save the node
-            node = MemoryNode(path, self._memory, new=True)
-            node.content = value
-            node._save()
+    # Removed __getattr__ and __setattr__ - only bracket notation is supported
+    # This prevents confusion with file extensions like .json, .txt, etc.
     
     def __getitem__(self, key: str):
         """Allow subscript access to sub-memories."""
@@ -784,29 +740,7 @@ class MemoryGroup:
         return f"MemoryGroup(path={self._base_path})"
 
 
-class OutboxHelper:
-    """Helper for creating outbox messages."""
-    
-    def __init__(self, memory_system: 'Memory'):
-        self._memory = memory_system
-    
-    def new(self, to: str, content: str, msg_type: str = "MESSAGE") -> MemoryNode:
-        """Create a new message in the outbox."""
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')[:20]
-        safe_to = to.replace('/', '_').replace(' ', '_')
-        path = f"/personal/outbox/msg_{safe_to}_{timestamp}.json"
-        
-        node = MemoryNode(path, self._memory, new=True)
-        node.type = "application/json"
-        node.content = {
-            "to": to,
-            "from": self._memory._context.get('cyber_id', 'unknown'),
-            "content": content,
-            "type": msg_type,
-            "timestamp": datetime.now().isoformat()
-        }
-        node._save()
-        return node
+# OutboxHelper removed - use bracket notation to create messages in /personal/outbox/
 
 class Memory:
     """
@@ -1006,21 +940,8 @@ Main memory interface providing unified access to all Mind-Swarm memories.
         node.content = value
         node._save()
     
-    def __getattr__(self, name: str):
-        """Attribute-style access to memory groups."""
-        if name.startswith('_'):
-            raise AttributeError(f"Private attribute access not allowed: {name}")
-        
-        # Special properties
-        if name == 'outbox':
-            return OutboxHelper(self)
-        elif name == 'personal':
-            return MemoryGroup('/personal', self)
-        elif name == 'grid':
-            return MemoryGroup('/grid', self)
-        else:
-            # Only allow known attributes - don't create arbitrary groups
-            raise AttributeError(f"'Memory' object has no attribute '{name}'")
+    # Removed __getattr__ - only bracket notation is supported
+    # Use memory["/personal/..."] or memory["/grid/..."] instead
     
     def create(self, path: str) -> MemoryNode:
         """

@@ -56,7 +56,7 @@ content: |
   Use the outbox to send messages to other Cybers:
   
   ```python
-  memory.personal.notes.example = "Example Code Text"
+  memory["/personal/notes/example"] = "Example Code Text"
   /```
   ## Sub header 2
   More details about the topic.
