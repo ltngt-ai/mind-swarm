@@ -18,6 +18,7 @@ from mind_swarm.subspace.cyber_registry import CyberRegistry
 from mind_swarm.subspace.developer_registry import DeveloperRegistry
 from mind_swarm.subspace.io_handlers import NetworkBodyHandler, UserIOBodyHandler
 from mind_swarm.subspace.knowledge_handler import KnowledgeHandler
+from mind_swarm.subspace.awareness_handler import AwarenessHandler
 from mind_swarm.schemas.cyber_types import CyberType
 from mind_swarm.ai.providers.factory import create_ai_service
 from mind_swarm.utils.logging import logger
@@ -54,8 +55,9 @@ class MessageRouter:
             # Process each message in outbox
             try:
                 outbox_files = await aiofiles.os.listdir(outbox_dir)
-                # Support both .msg (old format) and .json (new memory API format)
-                msg_files = [f for f in outbox_files if f.endswith('.msg') or f.endswith('.json')]
+                # Support multiple formats: .msg, .json, or no extension (Memory API format)
+                # Exclude hidden files and system files
+                msg_files = [f for f in outbox_files if not f.startswith('.') and f != 'README.md']
                 if msg_files:
                     logger.info(f"Found {len(msg_files)} messages in {cyber_name}'s outbox")
             except OSError as e:
@@ -77,6 +79,12 @@ class MessageRouter:
                         except json.JSONDecodeError:
                             logger.error(f"Failed to decode double-encoded message from {cyber_name}: {msg_filename}")
                             continue
+                    
+                    # Ensure the message has a 'from' field set to the sender
+                    # This prevents confusion when Cybers forget to identify themselves
+                    if not message.get("from") or message.get("from") == "unknown":
+                        message["from"] = cyber_name
+                        logger.debug(f"Auto-added sender '{cyber_name}' to message")
                     
                     to_agent = message.get("to", "")
                     logger.info(f"Routing message from {cyber_name} to {to_agent}")
@@ -214,8 +222,11 @@ class SubspaceCoordinator:
         # Initialize knowledge handler first
         self.knowledge_handler = KnowledgeHandler(self.subspace.root_path)
         
-        # Pass knowledge handler to body system
-        self.body_system = BodySystemManager(self.knowledge_handler)
+        # Initialize awareness handler
+        self.awareness_handler = AwarenessHandler(self.subspace.root_path)
+        
+        # Pass both handlers to body system
+        self.body_system = BodySystemManager(self.knowledge_handler, self.awareness_handler)
         
         self.state_manager = CyberStateManager(self.subspace.root_path)
         self.agent_registry = CyberRegistry(self.subspace.root_path)

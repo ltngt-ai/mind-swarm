@@ -693,7 +693,12 @@ class MindSwarmCLI:
                                         status = "[dim]" if msg.get('_read') else "[bold]"
                                         console.print(f"\n{status}Message {i}:{'' if msg.get('_read') else '[/bold]'}")
                                         console.print(f"  From: {msg.get('from', 'unknown')}")
-                                        console.print(f"  Time: {msg.get('timestamp', 'unknown')[:19]}")
+                                        timestamp = msg.get('timestamp', 'unknown')
+                                        # Handle both string and numeric timestamps
+                                        if isinstance(timestamp, (int, float)):
+                                            from datetime import datetime
+                                            timestamp = datetime.fromtimestamp(timestamp).isoformat()
+                                        console.print(f"  Time: {str(timestamp)[:19]}")
                                         
                                         if msg.get('type') == 'text':
                                             console.print(f"  Content: {msg.get('content', '')}")
@@ -717,7 +722,12 @@ class MindSwarmCLI:
                                     console.print(f"\n[bold]Message {i}:[/bold]")
                                     console.print(f"  From: {msg.get('from', 'unknown')}")
                                     console.print(f"  Type: {msg.get('type', 'unknown')}")
-                                    console.print(f"  Time: {msg.get('timestamp', 'unknown')[:19]}")
+                                    timestamp = msg.get('timestamp', 'unknown')
+                                    # Handle both string and numeric timestamps
+                                    if isinstance(timestamp, (int, float)):
+                                        from datetime import datetime
+                                        timestamp = datetime.fromtimestamp(timestamp).isoformat()
+                                    console.print(f"  Time: {str(timestamp)[:19]}")
                                     
                                     if msg.get('type') == 'text':
                                         console.print(f"  Content: {msg.get('content', '')}")

@@ -402,9 +402,33 @@ class EnvironmentScanner:
                 else:
                     files.append((item.name, '📄'))
             
+            # Check for nearby Cybers using awareness API
+            nearby_cybers = []
+            try:
+                # Import awareness module
+                from ..python_modules.awareness import Awareness
+                awareness = Awareness({'personal_dir': str(self.personal_path)})
+                
+                # Simple synchronous call
+                nearby_cybers = awareness.get_nearby_cybers(location=current_location)
+                logger.info(f"Found {len(nearby_cybers)} nearby Cybers at {current_location}")
+            except Exception as e:
+                logger.debug(f"Could not check for nearby Cybers: {e}")
+            
             # Build tree-style text representation
             lines = []
             lines.append(f"| {current_location} (📁=memory group, 📄=memory)")
+            
+            # Add nearby Cybers if any
+            if nearby_cybers:
+                lines.append("|")
+                lines.append("| 🤝 Nearby Cybers:")
+                for cyber in nearby_cybers:
+                    cyber_type = cyber.get('type', 'GENERAL')
+                    cyber_status = cyber.get('status', 'active')
+                    type_emoji = "🌐" if cyber_type == "IO_GATEWAY" else "🤖"
+                    lines.append(f"|   {type_emoji} {cyber['name']} ({cyber_status})")
+                lines.append("|")
             
             # Add directories first
             for name, icon in directories:
