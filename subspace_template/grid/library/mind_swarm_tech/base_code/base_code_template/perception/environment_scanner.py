@@ -449,6 +449,9 @@ class EnvironmentScanner:
     def _scan_announcements(self, cycle_count: int = 0) -> List[MemoryBlock]:
         """Scan community announcements for important updates.
         
+        For JSON announcement files, we check the actual content to detect
+        new announcements, not just file modification time.
+        
         Args:
             cycle_count: Current cycle count for observations
         """
@@ -460,23 +463,90 @@ class EnvironmentScanner:
         try:
             # Look for announcement files
             for ann_file in self.announcements_path.glob("*.json"):
-                state = self._check_file_state(ann_file)
-                if state:  # New or changed announcements
-                    try:                        
-                        # Create observation for new/updated announcements
+                try:
+                    # For JSON files, check actual announcement content
+                    import json
+                    with open(ann_file, 'r') as f:
+                        data = json.load(f)
+                    
+                    # Track which announcements we've seen
+                    current_announcements = set()
+                    new_announcements = []
+                    
+                    if 'announcements' in data:
+                        for ann in data['announcements']:
+                            ann_id = ann.get('id', f"{ann.get('date', 'unknown')}_{ann.get('title', 'untitled')}")
+                            current_announcements.add(ann_id)
+                            
+                            # Check if this announcement is new
+                            tracking_key = f"announcement_{ann_file.name}_{ann_id}"
+                            if tracking_key not in self.seen_observation_ids:
+                                self.seen_observation_ids.add(tracking_key)
+                                new_announcements.append(ann)
+                    
+                    # Create observation for new announcements
+                    if new_announcements:
+                        for ann in new_announcements:
+                            message = f"📢 NEW ANNOUNCEMENT: {ann.get('title', 'System Update')}\n"
+                            message += f"Priority: {ann.get('priority', 'NORMAL')}\n"
+                            message += f"Message: {ann.get('message', 'Check announcement file for details')}"
+                            
+                            obs_memory = ObservationMemoryBlock(
+                                observation_type="new_announcement",
+                                path=str(ann_file),
+                                message=message,
+                                cycle_count=cycle_count,
+                                priority=Priority.CRITICAL if ann.get('priority') == 'HIGH' else Priority.HIGH,
+                                content=json.dumps(ann, indent=2)  # Include full announcement in content
+                            )
+                            memories.append(obs_memory)
+                            
+                            logger.info(f"Found new announcement: {ann.get('title', 'untitled')}")
+                        
+                        # Also add the announcement file itself to working memory
+                        from ..memory.memory_blocks import FileMemoryBlock
+                        ann_file_memory = FileMemoryBlock(
+                            location=str(ann_file.relative_to(self.grid_path.parent.parent)),
+                            priority=Priority.HIGH,
+                            confidence=1.0,
+                            metadata={
+                                "file_type": "announcement",
+                                "has_new": len(new_announcements) > 0,
+                                "announcement_count": len(current_announcements)
+                            },
+                            cycle_count=cycle_count,
+                            content_type=ContentType.APPLICATION_JSON
+                        )
+                        memories.append(ann_file_memory)
+                    
+                    # Also check file state for other changes
+                    state = self._check_file_state(ann_file)
+                    if state and not new_announcements:
+                        # File changed but no new announcements - might be metadata update
+                        obs_memory = ObservationMemoryBlock(
+                            observation_type="announcement_file_update",
+                            path=str(ann_file),
+                            message=f"Announcement file {ann_file.name} was updated (metadata or format change)",
+                            cycle_count=cycle_count,
+                            priority=Priority.LOW
+                        )
+                        memories.append(obs_memory)
+                        
+                except json.JSONDecodeError as e:
+                    logger.error(f"Error parsing JSON announcement file {ann_file}: {e}")
+                    # Fall back to simple file change detection
+                    state = self._check_file_state(ann_file)
+                    if state:
                         obs_memory = ObservationMemoryBlock(
                             observation_type="announcement_update",
                             path=str(ann_file),
-                            message=f"IMPORTANT: System announcements have been updated. Check {ann_file.name} for critical information.",
+                            message=f"IMPORTANT: Announcements file {ann_file.name} changed but couldn't parse content",
                             cycle_count=cycle_count,
                             priority=Priority.HIGH
                         )
                         memories.append(obs_memory)
-                        
-                        logger.info(f"Found updated announcements in {ann_file.name}")
-                        
-                    except Exception as e:
-                        logger.error(f"Error reading announcement file {ann_file}: {e}")
+                except Exception as e:
+                    logger.error(f"Error reading announcement file {ann_file}: {e}")
         
         except Exception as e:
             logger.error(f"Error scanning announcements: {e}")
