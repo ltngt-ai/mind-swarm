@@ -379,6 +379,7 @@ class KnowledgeHandler:
         self.subspace_root = subspace_root
         self.handlers = {}  # cyber_id -> CyberKnowledgeHandler
         self.enabled = CHROMADB_AVAILABLE
+        self.embedding_fn = None  # Store embedding function for reuse
         
         if not self.enabled:
             logger.warning("Knowledge system disabled - ChromaDB not available")
@@ -410,10 +411,23 @@ class KnowledgeHandler:
                 )
                 self.client_type = 'embedded'
             
+            # Create embedding function using BGE model for better semantic search
+            # BGE (BAAI General Embedding) models are excellent for semantic similarity
+            try:
+                self.embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
+                    model_name="BAAI/bge-large-en-v1.5",
+                    device="cpu"  # Use CPU for development
+                )
+                logger.info("Using BGE-large embedding model for better semantic search")
+            except Exception as e:
+                logger.warning(f"Failed to load BGE model, using default: {e}")
+                self.embedding_fn = None  # Will use ChromaDB default
+            
             # Initialize shared collection
             self.shared_collection = self.chroma_client.get_or_create_collection(
                 name="mindswarm_shared",
-                metadata={"hnsw:space": "cosine"}
+                metadata={"hnsw:space": "cosine"},
+                embedding_function=self.embedding_fn
             )
             
             logger.info(f"Knowledge system initialized ({self.client_type} mode)")
@@ -429,10 +443,11 @@ class KnowledgeHandler:
         
         if cyber_id not in self.handlers:
             try:
-                # Create personal collection for this cyber
+                # Create personal collection for this cyber with same embedding function
                 personal_collection = self.chroma_client.get_or_create_collection(
                     name=f"cyber_{cyber_id}_personal",
-                    metadata={"hnsw:space": "cosine"}
+                    metadata={"hnsw:space": "cosine"},
+                    embedding_function=self.embedding_fn  # Use same embedding as shared
                 )
                 
                 self.handlers[cyber_id] = CyberKnowledgeHandler(
