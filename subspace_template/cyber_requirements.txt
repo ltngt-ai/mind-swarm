@@ -1,0 +1,30 @@
+# Python packages available to cybers in their sandbox environment
+# These are installed in a separate venv from the server
+
+# Basic utilities
+pyyaml>=6.0
+python-dotenv
+
+# File type detection
+python-magic>=0.4.27
+
+# Data processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Text processing
+markdown>=3.4
+beautifulsoup4>=4.12.0
+
+# JSON/YAML handling
+jsonschema>=4.0
+
+# Date/time utilities
+python-dateutil>=2.8.2
+
+# Async support (if needed)
+aiofiles>=23.0.0
+
+# Add more packages as needed for cyber capabilities
+# Note: No network packages - cybers don't have network access
+# Note: No server-specific packages - complete isolation

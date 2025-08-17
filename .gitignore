@@ -55,6 +55,11 @@ htmlcov/
 # Ignore subspace backups
 /subspace_backups/
 
+# Large directories that should be backed up separately
+cyber_rootfs/
+frozen/
+knowledge_db/
+
 logs/
 data/
 *.db

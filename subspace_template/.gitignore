@@ -1,0 +1,35 @@
+# Runtime files
+*.log
+*.pyc
+__pycache__/
+.tmp_*
+
+# Cyber temporary files
+cybers/*/.tmp_*
+cybers/*/.internal/logs/
+
+# Body files (constantly changing)
+cybers/*/brain
+cybers/*/.io_bodies/
+
+# Lock files
+*.lock
+
+# Large directories that should be backed up separately
+cyber_rootfs/
+frozen/
+knowledge_db/
+
+# Token tracking (per-subspace instance)
+token_usage.json
+
+# ChromaDB persistence
+chroma.sqlite3
+*.chroma/
+
+# Temporary and cache files
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db

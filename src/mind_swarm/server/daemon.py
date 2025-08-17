@@ -60,13 +60,28 @@ class ServerDaemon:
         for sig in (signal.SIGTERM, signal.SIGINT):
             loop.add_signal_handler(sig, self.handle_signal)
         
-        # Create PID file
+        # Define PID file path
         pid_file = Path("/tmp/mind-swarm-server.pid")
-        pid_file.write_text(str(os.getpid()))
         
         try:
             # Start the server in a separate task
+            # This will fail early if there are initialization problems (like missing rootfs)
             server_task = asyncio.create_task(self.server.run())
+            
+            # Give the server a moment to initialize and detect any startup failures
+            await asyncio.sleep(1.0)
+            
+            # Check if the server task failed immediately
+            if server_task.done():
+                # Server failed to start, get the exception
+                exc = server_task.exception()
+                if exc:
+                    logger.error(f"Server failed to start: {exc}")
+                    raise exc
+            
+            # Only create PID file after successful startup
+            pid_file.write_text(str(os.getpid()))
+            logger.debug(f"Created PID file: {pid_file}")
             
             # Wait for shutdown signal
             await self._shutdown_event.wait()

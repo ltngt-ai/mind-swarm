@@ -188,7 +188,8 @@ class TokenTracker:
         # Use SUBSPACE_ROOT if set for storage path
         if storage_path is None:
             subspace_root = os.getenv("SUBSPACE_ROOT", Path.cwd() / "subspace")
-            self.storage_path = Path(subspace_root).parent / "token_usage.json"
+            # Store token usage inside the subspace so it's tied to this specific instance
+            self.storage_path = Path(subspace_root) / "token_usage.json"
         else:
             self.storage_path = storage_path
         self.usage: Dict[str, TokenUsage] = {}

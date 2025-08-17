@@ -117,29 +117,7 @@ class SubspaceSync:
             logger.error(f"Failed to initialize git: {stderr}")
             return False
         
-        # Create .gitignore
-        gitignore_path = self.subspace_path / ".gitignore"
-        if not gitignore_path.exists() or self.dry_run:
-            gitignore_content = """# Runtime files
-*.log
-*.pyc
-__pycache__/
-.tmp_*
-
-# Cyber temporary files
-cybers/*/.tmp_*
-cybers/*/.internal/logs/
-
-# Body files (constantly changing)
-cybers/*/brain
-cybers/*/.io_bodies/
-
-# Lock files
-*.lock
-"""
-            if not self.dry_run:
-                gitignore_path.write_text(gitignore_content)
-            logger.info("Created .gitignore for subspace")
+        # .gitignore will be copied from template if it exists
         
         # Make initial commit
         self._run_git_command(["add", "."], self.subspace_path)

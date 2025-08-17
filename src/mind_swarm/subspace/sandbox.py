@@ -26,6 +26,7 @@ class BubblewrapSandbox:
         self.grid_root = subspace_root / "grid"
         self.tools_dir = subspace_root / "grid" / "workshop"  # Keep for backward compat but don't create
         self.cyber_type = cyber_type
+        self.cyber_rootfs = subspace_root / "cyber_rootfs"  # Debian rootfs for cybers
         
         # Ensure directories exist
         self.cyber_personal.mkdir(parents=True, exist_ok=True)
@@ -45,6 +46,12 @@ class BubblewrapSandbox:
         Returns:
             Complete bubblewrap command
         """
+        # Check if rootfs exists
+        if not self.cyber_rootfs.exists() or not (self.cyber_rootfs / ".mind_swarm_rootfs").exists():
+            logger.error(f"Cyber rootfs not found at {self.cyber_rootfs}")
+            logger.error("Please run: sudo ./setup_cyber_rootfs.sh")
+            raise RuntimeError("Cyber rootfs not initialized. Run setup_cyber_rootfs.sh as root.")
+        
         bwrap_cmd = [
             "bwrap",
             # Die when parent process dies - prevents zombie processes
@@ -53,31 +60,18 @@ class BubblewrapSandbox:
             "--unshare-all",
             # No network access - Cybers think through body files
             
-            # Create a minimal root filesystem
-            # Only bind what's absolutely necessary for Python to run
-            "--ro-bind", "/usr/bin/python3", "/usr/bin/python3",
-            
-            # Bind only the specific Python libraries we need
-            "--ro-bind", "/usr/lib/python3", "/usr/lib/python3",
-            "--ro-bind", "/usr/lib/python3.12", "/usr/lib/python3.12",
-            
-            # Minimal system libraries needed by Python
-            "--ro-bind", "/lib", "/lib",
-            "--ro-bind", "/lib64", "/lib64",
-            
-            # Create empty directories to provide structure
-            "--dir", "/usr",
-            "--dir", "/usr/bin",
-            "--dir", "/bin",
-            
-            # Only bind the absolute essentials
-            "--ro-bind", "/bin/sh", "/bin/sh",  # Basic shell for subprocess
-            
+            # Use the Debian rootfs as the root filesystem
+            "--bind", str(self.cyber_rootfs), "/",
+        ]
+        
+        
+        # Continue with rest of configuration
+        bwrap_cmd.extend([
             # Proc and dev
             "--proc", "/proc",
             "--dev", "/dev",
             
-            # Their Mind - their private space (just "home" to them)
+            # Their Mind - their private space
             "--bind", str(self.cyber_personal), "/personal",
             
             # The Grid - where Cybers meet and collaborate
@@ -92,10 +86,12 @@ class BubblewrapSandbox:
             # Clean environment
             "--setenv", "CYBER_NAME", self.name,
             "--setenv", "HOME", "/personal",
-            "--setenv", "PATH", "/usr/bin:/bin",
+            "--setenv", "PATH", "/usr/local/bin:/usr/bin:/bin",
             "--setenv", "PYTHONPATH", "/personal/.internal",
             "--setenv", "CYBER_TYPE", self.cyber_type,
-        ]
+            "--setenv", "USER", "cyber",
+            "--setenv", "LANG", "C.UTF-8",
+        ])
         
         # Add special body files for I/O Cybers
         if self.cyber_type == "io_gateway":
@@ -145,7 +141,7 @@ class BubblewrapSandbox:
         """
         bwrap_cmd = self._build_bwrap_cmd(cmd, env)
         
-        logger.debug(f"Running sandboxed command for {self.cyber_id}: {' '.join(cmd)}")
+        logger.debug(f"Running sandboxed command for {self.name}: {' '.join(cmd)}")
         
         proc = None  # Ensure proc is always defined
         try:
@@ -163,7 +159,7 @@ class BubblewrapSandbox:
             return proc.returncode or 0, stdout.decode(), stderr.decode()
             
         except asyncio.TimeoutError:
-            logger.warning(f"Command timed out for Cyber {self.cyber_id}")
+            logger.warning(f"Command timed out for Cyber {self.name}")
             if proc:
                 proc.terminate()
                 await proc.wait()
@@ -196,6 +192,7 @@ class SubspaceManager:
         # Create standard directories
         self.agents_dir = self.root_path / "cybers"
         self.grid_dir = self.root_path / "grid"
+        self.cyber_rootfs = self.root_path / "cyber_rootfs"  # Debian rootfs for cybers
         
         # Grid subdirectories
         self.community_dir = self.grid_dir / "community"  # Questions and discussions
@@ -213,6 +210,9 @@ class SubspaceManager:
         
         # Initialize from template if needed
         self._initialize_from_template()
+        
+        # Check for Debian rootfs
+        self._check_rootfs()
         
         # Prepare the Cyber runtime environment
         from mind_swarm.subspace.runtime_builder import AgentRuntimeBuilder
@@ -294,6 +294,20 @@ class SubspaceManager:
             if src_agent_dir.exists():
                 logger.info("Copying initial cyber_directory.json")
                 shutil.copy2(src_agent_dir, agent_dir_file)
+    
+    def _check_rootfs(self):
+        """Check if the Debian rootfs for cybers exists."""
+        if not self.cyber_rootfs.exists() or not (self.cyber_rootfs / ".mind_swarm_rootfs").exists():
+            logger.error(f"Cyber rootfs not found at {self.cyber_rootfs}")
+            logger.error("Please run: sudo ./setup_cyber_rootfs.sh")
+            logger.error("This creates a minimal Debian environment for cyber isolation")
+            raise RuntimeError(
+                f"Cyber rootfs not initialized at {self.cyber_rootfs}.\n"
+                "Please run: sudo ./setup_cyber_rootfs.sh\n"
+                "This is required for proper cyber isolation."
+            )
+        else:
+            logger.info(f"Cyber rootfs found at {self.cyber_rootfs}")
     
     def create_sandbox(self, name: str, cyber_type: str = "general") -> BubblewrapSandbox:
         """Create a sandbox for an Cyber.

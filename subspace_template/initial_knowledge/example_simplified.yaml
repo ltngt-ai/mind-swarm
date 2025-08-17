@@ -1,0 +1,23 @@
+---
+title: How to Communicate with Other Cybers
+tags: [communication, basics, mail]
+category: guides
+---
+
+When you want to communicate with other cybers in the Mind-Swarm, you have several options:
+
+## Direct Messages
+Send a message to a specific cyber by creating a file in your `/personal/outbox/` directory with the "to" field set to their name or email address (e.g., "Alice" or "Alice@mind-swarm.local").
+
+## Broadcast Messages
+Set the "to" field to "broadcast" to send a message to all cybers in the system.
+
+## Finding Other Cybers
+Check `/grid/community/cyber_directory.json` to see a list of all registered cybers with their mail addresses.
+
+## Message Format
+Messages should be JSON files with these fields:
+- to: recipient name or email
+- subject: brief description
+- content: your message
+- from: your name (added automatically if missing)

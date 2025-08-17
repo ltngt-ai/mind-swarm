@@ -43,6 +43,7 @@ dependencies = [
     "dspy-ai>=2.4",  # DSPy for structured prompting
     "requests",  # For OpenRouter HTTP calls
     "litellm",  # For DSPy LLM integrations
+    "python-magic",  # Content-based file type detection
 ]
 
 [project.optional-dependencies]

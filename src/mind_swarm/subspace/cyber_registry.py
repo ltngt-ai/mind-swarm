@@ -31,13 +31,11 @@ class CyberInfo:
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
+        # Simplified format: just name, mail address, and info
         return {
             "name": self.name,
-            "type": self.cyber_type.value,
-            "status": self.status,
-            "capabilities": self.capabilities,
-            "metadata": self.metadata,
-            "registered_at": self.registered_at
+            "mail_address": f"{self.name}@mind-swarm.local",
+            "info": ""  # Will be populated from greeting.md when available
         }
 
 
@@ -59,7 +57,7 @@ class CyberRegistry:
         self._io_agents: List[str] = []
         self._general_agents: List[str] = []
         
-        # Ensure plaza exists
+        # Ensure community directory exists
         self.community_dir.mkdir(parents=True, exist_ok=True)
         
         # Load existing registry
@@ -98,40 +96,41 @@ class CyberRegistry:
                     else:
                         self._general_agents.append(Cyber.name)
                 
-                logger.info(f"Loaded {len(self._cybers)} Cybers from plaza registry")
+                logger.info(f"Loaded {len(self._cybers)} Cybers from community registry")
             except Exception as e:
                 logger.error(f"Failed to load Cyber registry: {e}")
                 self._save_registry()  # Create empty registry
     
     def _save_registry(self):
         """Save Cyber registry to disk."""
-        # Collect all Cybers
+        # Collect all Cybers in simplified format
         all_agents = []
-        for name, Cyber in self._cybers.items():
-            all_agents.append(Cyber.to_dict())
+        for name, cyber in self._cybers.items():
+            # Check for greeting.md if cyber directory exists
+            cyber_dict = cyber.to_dict()
+            cyber_dir = self.subspace_root / "cybers" / name
+            greeting_file = cyber_dir / "greeting.md"
+            
+            # If greeting.md exists, read its content for the info field
+            if greeting_file.exists():
+                try:
+                    with open(greeting_file, 'r') as f:
+                        cyber_dict["info"] = f.read().strip()
+                except Exception:
+                    pass  # Keep empty info on read error
+            
+            all_agents.append(cyber_dict)
         
-        # Calculate stats
-        stats = {
-            "total_agents": len(self._cybers),
-            "active_agents": len([a for a in self._cybers.values() if a.status == "active"]),
-            "by_type": {}
-        }
-        
-        # Count by type
-        for Cyber in self._cybers.values():
-            type_name = Cyber.cyber_type.value
-            stats["by_type"][type_name] = stats["by_type"].get(type_name, 0) + 1
-        
+        # Simplified structure: just the list of cybers
         data = {
             "last_updated": datetime.now().isoformat(),
-            "cybers": all_agents,
-            "stats": stats
+            "cybers": all_agents
         }
         
         try:
             with open(self.directory_file, 'w') as f:
                 json.dump(data, f, indent=2)
-            logger.debug("Cyber registry saved to plaza")
+            logger.debug("Cyber registry saved to community")
         except Exception as e:
             logger.error(f"Failed to save Cyber registry: {e}")
     
@@ -178,7 +177,6 @@ class CyberRegistry:
     def unregister_agent(self, name: str):
         """Remove an Cyber from the registry."""
         if name in self._cybers:
-            Cyber = self._cybers[name]
             del self._cybers[name]
             
             # Remove from lists
@@ -228,6 +226,11 @@ class CyberRegistry:
     def get_cyber_type_config(self, cyber_type: CyberType) -> CyberTypeConfig:
         """Get configuration for a specific Cyber type."""
         return get_cyber_type_config(cyber_type)
+    
+    def refresh_registry(self):
+        """Refresh the registry to update info fields from greeting.md files."""
+        self._save_registry()
+        logger.debug("Registry refreshed with latest greeting.md content")
     
     async def update_registry(self):
         """Update registry to include developer accounts."""

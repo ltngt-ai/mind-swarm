@@ -74,10 +74,32 @@ case $COMMAND in
         fi
         CMD="$CMD start"
         $CMD
-        echo ""
-        echo -e "${CYAN}Server is running in the background.${NC}"
-        echo "View logs with: ./run.sh logs"
-        echo "Connect with: ./run.sh client"
+        RESULT=$?
+        
+        if [ $RESULT -eq 0 ]; then
+            # Wait a moment for server to start
+            sleep 2
+            
+            # Check if server is actually running
+            # We need to use the full command since mind-swarm might not be in PATH
+            if python3 -m mind_swarm.cli status --quiet 2>/dev/null || mind-swarm status --quiet 2>/dev/null; then
+                echo ""
+                echo -e "${GREEN}✓ Server started successfully!${NC}"
+                echo "View logs with: ./run.sh logs"
+                echo "Connect with: ./run.sh client"
+            else
+                echo ""
+                echo -e "${RED}✗ Server failed to start properly${NC}"
+                echo "Check logs with: ./run.sh logs"
+                echo "Or try: tail -n 50 mind-swarm.log"
+                exit 1
+            fi
+        else
+            echo ""
+            echo -e "${RED}✗ Failed to start server (exit code: $RESULT)${NC}"
+            echo "Check logs with: ./run.sh logs"
+            exit 1
+        fi
         ;;
     
     client|connect)

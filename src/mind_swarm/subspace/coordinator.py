@@ -88,27 +88,35 @@ class MessageRouter:
                         logger.debug(f"Auto-added sender '{cyber_name}' to message")
                     
                     to_agent = message.get("to", "")
-                    logger.info(f"Routing message from {cyber_name} to {to_agent}")
                     
-                    if to_agent == "broadcast":
+                    # Extract cyber name from email format if present
+                    recipient_name = to_agent
+                    if to_agent.endswith("@mind-swarm.local"):
+                        # Extract name from email format (e.g., "Alice@mind-swarm.local" -> "Alice")
+                        recipient_name = to_agent[:-len("@mind-swarm.local")]
+                        logger.debug(f"Extracted recipient name '{recipient_name}' from email format")
+                    
+                    logger.info(f"Routing message from {cyber_name} to {recipient_name}")
+                    
+                    if recipient_name == "broadcast":
                         # Broadcast to all Cybers
                         await self._broadcast_message(message, exclude=[cyber_name])
-                    elif to_agent.endswith("_dev"):
+                    elif recipient_name.endswith("_dev"):
                         # Message to a developer - store in developer's mailbox
-                        await self._deliver_to_developer(to_agent, message)
-                    elif to_agent.startswith("Cyber-") or await self._agent_exists(to_agent):
+                        await self._deliver_to_developer(recipient_name, message)
+                    elif recipient_name.startswith("Cyber-") or await self._agent_exists(recipient_name):
                         # Direct message to another Cyber
-                        if not await self._agent_exists(to_agent):
+                        if not await self._agent_exists(recipient_name):
                             # Send error back to sender
-                            await self._send_delivery_error(cyber_name, message, f"Cyber {to_agent} not found")
+                            await self._send_delivery_error(cyber_name, message, f"Cyber {recipient_name} not found")
                         else:
-                            await self._deliver_message(to_agent, message)
+                            await self._deliver_message(recipient_name, message)
                     else:
                         # Unknown recipient format - be more helpful
                         await self._send_delivery_error(
                             cyber_name, 
                             message, 
-                            f"Unknown recipient format: {to_agent}. Use 'Cyber-name' for Cybers or 'name_dev' for developers"
+                            f"Unknown recipient: {to_agent}. Use 'name@mind-swarm.local', 'Cyber-name', or 'name_dev' for developers"
                         )
                     
                     # Move to mail archive folder
@@ -262,6 +270,8 @@ class SubspaceCoordinator:
         """Start the subspace coordinator."""
         self._running = True
         
+        # Load default knowledge into ChromaDB if this is a new subspace
+        await self._load_default_knowledge()
         
         # Start message routing
         self._router_task = asyncio.create_task(self._message_routing_loop())
@@ -629,6 +639,164 @@ class SubspaceCoordinator:
         
         return all_agents
     
+    async def _load_default_knowledge(self):
+        """Load default knowledge documents into ChromaDB if not already loaded."""
+        if not self.knowledge_handler or not self.knowledge_handler.enabled:
+            logger.info("Knowledge system not available, skipping default knowledge loading")
+            return
+        
+        try:
+            # Check if we've already loaded default knowledge by looking for a marker
+            marker_check = await self.knowledge_handler.search_shared_knowledge("_default_knowledge_loaded_marker", limit=1)
+            if marker_check and any("_default_knowledge_loaded_marker" in item.get('content', '') for item in marker_check):
+                logger.info("Default knowledge already loaded, skipping")
+                return
+            
+            logger.info("Loading default knowledge into ChromaDB...")
+            
+            # Find the initial knowledge directory (separate from cyber-visible files)
+            template_dir = Path(__file__).parent.parent.parent.parent / "subspace_template"
+            knowledge_dir = template_dir / "initial_knowledge"
+            
+            if not knowledge_dir.exists():
+                logger.warning(f"Initial knowledge directory not found: {knowledge_dir}")
+                logger.info("Creating empty initial_knowledge directory for future use")
+                knowledge_dir.mkdir(parents=True, exist_ok=True)
+                return
+            
+            # Load all YAML, MD, and TXT files from the knowledge directory
+            loaded_count = 0
+            import yaml
+            
+            for file_path in knowledge_dir.rglob("*"):
+                if file_path.suffix in [".yaml", ".yml", ".md", ".txt"]:
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            raw_content = f.read()
+                        
+                        # Base metadata for all files
+                        metadata = {
+                            "source": "initial_knowledge",
+                            "file_name": file_path.name,
+                            "file_type": file_path.suffix[1:],  # Remove the dot
+                        }
+                        
+                        content = raw_content
+                        
+                        # Handle different file types
+                        if file_path.suffix in [".yaml", ".yml"]:
+                            # Try two formats: full YAML or simplified front matter
+                            if raw_content.startswith('---'):
+                                # Simplified format with front matter
+                                try:
+                                    parts = raw_content.split('---', 2)
+                                    if len(parts) >= 3:
+                                        # Parse front matter
+                                        front_matter = yaml.safe_load(parts[1])
+                                        if isinstance(front_matter, dict):
+                                            # Extract metadata
+                                            if 'title' in front_matter:
+                                                metadata['title'] = front_matter['title']
+                                            if 'tags' in front_matter:
+                                                tags = front_matter['tags']
+                                                metadata['tags'] = tags if isinstance(tags, str) else ','.join(str(t) for t in tags)
+                                            if 'category' in front_matter:
+                                                metadata['category'] = front_matter['category']
+                                            if 'author' in front_matter:
+                                                metadata['author'] = front_matter['author']
+                                        # Use content after front matter
+                                        content = parts[2].strip()
+                                except:
+                                    # If parsing fails, use the whole content
+                                    content = raw_content
+                            else:
+                                # Traditional full YAML format
+                                try:
+                                    yaml_data = yaml.safe_load(raw_content)
+                                    if isinstance(yaml_data, dict):
+                                        # Extract metadata fields
+                                        if 'title' in yaml_data:
+                                            metadata['title'] = yaml_data['title']
+                                        if 'tags' in yaml_data:
+                                            tags = yaml_data['tags']
+                                            metadata['tags'] = tags if isinstance(tags, str) else ','.join(str(t) for t in tags)
+                                        if 'category' in yaml_data:
+                                            metadata['category'] = yaml_data['category']
+                                        if 'author' in yaml_data:
+                                            metadata['author'] = yaml_data['author']
+                                        
+                                        # Use content field or description + details
+                                        if 'content' in yaml_data:
+                                            content = yaml_data['content']
+                                        elif 'description' in yaml_data:
+                                            content = yaml_data['description']
+                                            if 'details' in yaml_data:
+                                                content += "\n\n" + yaml_data['details']
+                                        else:
+                                            # If no content field, use the whole YAML as content
+                                            content = raw_content
+                                except:
+                                    # If YAML parsing fails, treat as plain text
+                                    content = raw_content
+                        
+                        elif file_path.suffix == ".md":
+                            # For markdown files, try to extract title from first # heading
+                            lines = raw_content.split('\n')
+                            for line in lines[:5]:  # Check first 5 lines
+                                if line.startswith('# '):
+                                    metadata['title'] = line[2:].strip()
+                                    break
+                            else:
+                                # Use filename without extension as title
+                                metadata['title'] = file_path.stem.replace('_', ' ').replace('-', ' ').title()
+                            
+                            content = raw_content
+                        
+                        else:  # .txt files
+                            # Use filename without extension as title
+                            metadata['title'] = file_path.stem.replace('_', ' ').replace('-', ' ').title()
+                            content = raw_content
+                        
+                        # Clean up content
+                        content = content.strip()
+                        if not content:
+                            logger.warning(f"Skipping {file_path.name} - no content found")
+                            continue
+                        
+                        # Add a concise header for context
+                        if 'title' in metadata:
+                            full_content = f"# {metadata['title']}\n\n{content}"
+                        else:
+                            full_content = content
+                        
+                        # Add to shared knowledge
+                        success, knowledge_id = await self.knowledge_handler.add_shared_knowledge(
+                            full_content, 
+                            metadata
+                        )
+                        
+                        if success:
+                            loaded_count += 1
+                            logger.debug(f"Loaded {file_path.name} -> {knowledge_id}")
+                        else:
+                            logger.warning(f"Failed to load {file_path.name}: {knowledge_id}")
+                            
+                    except Exception as e:
+                        logger.error(f"Error loading {file_path}: {e}")
+            
+            # Add a marker to indicate default knowledge has been loaded
+            if loaded_count > 0:
+                await self.knowledge_handler.add_shared_knowledge(
+                    "_default_knowledge_loaded_marker",
+                    {"source": "system", "timestamp": datetime.now().isoformat()}
+                )
+                logger.info(f"Successfully loaded {loaded_count} default knowledge files into ChromaDB")
+            else:
+                logger.warning("No default knowledge files were loaded")
+                
+        except Exception as e:
+            logger.error(f"Error loading default knowledge: {e}")
+    
     async def _start_all_agents(self):
         """Start all Cybers that have directories in the subspace."""
         logger.info("Starting all Cybers with directories...")
@@ -735,10 +903,19 @@ class SubspaceCoordinator:
         """Main loop for routing messages between Cybers."""
         logger.info("Message routing started")
         
+        refresh_counter = 0
+        REFRESH_INTERVAL = 20  # Refresh registry every 10 seconds (20 * 0.5s)
+        
         while self._running:
             try:
                 # Route messages
                 await self.router.route_outbox_messages()
+                
+                # Periodically refresh the cyber registry to update greeting.md content
+                refresh_counter += 1
+                if refresh_counter >= REFRESH_INTERVAL:
+                    self.agent_registry.refresh_registry()
+                    refresh_counter = 0
                 
                 # Small delay to prevent busy waiting
                 await asyncio.sleep(0.5)

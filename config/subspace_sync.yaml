@@ -4,6 +4,7 @@
 # Paths that are always overwritten from template (no merge)
 # These are system-critical files that Cybers shouldn't modify
 template_owned:
+  - .gitignore  # Git ignore configuration
   - grid/library/mind_swarm_tech/base_code/base_code_template
   - grid/library/mind_swarm_tech/base_code/io_cyber_template
   - grid/library/mind_swarm_tech/rom
