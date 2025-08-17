@@ -731,6 +731,87 @@ class MindSwarmServer:
                 logger.error(f"Knowledge stats failed: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
+        # Freeze/Unfreeze endpoints
+        @self.app.post("/cybers/freeze/{cyber_name}")
+        async def freeze_cyber(cyber_name: str):
+            """Freeze a single Cyber to a tar.gz archive."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            
+            try:
+                archive_path = await self.coordinator.freeze_cyber(cyber_name)
+                return {
+                    "success": True,
+                    "message": f"Cyber '{cyber_name}' frozen successfully",
+                    "archive_path": str(archive_path)
+                }
+            except FileNotFoundError as e:
+                raise HTTPException(status_code=404, detail=str(e))
+            except Exception as e:
+                logger.error(f"Failed to freeze Cyber {cyber_name}: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.post("/cybers/freeze-all")
+        async def freeze_all_cybers():
+            """Freeze all Cybers to a single tar.gz archive."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            
+            try:
+                archive_path = await self.coordinator.freeze_all_cybers()
+                return {
+                    "success": True,
+                    "message": "All Cybers frozen successfully",
+                    "archive_path": str(archive_path) if archive_path else None
+                }
+            except Exception as e:
+                logger.error(f"Failed to freeze all Cybers: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.post("/cybers/unfreeze")
+        async def unfreeze_cybers(request: dict):
+            """Unfreeze Cybers from a tar.gz archive."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            
+            archive_path = request.get("archive_path", "")
+            force = request.get("force", False)
+            
+            if not archive_path:
+                raise HTTPException(status_code=400, detail="archive_path is required")
+            
+            try:
+                from pathlib import Path
+                path = Path(archive_path)
+                unfrozen = await self.coordinator.unfreeze_cybers(path, force)
+                return {
+                    "success": True,
+                    "message": f"Unfroze {len(unfrozen)} Cybers",
+                    "cybers": unfrozen
+                }
+            except FileNotFoundError as e:
+                raise HTTPException(status_code=404, detail=str(e))
+            except Exception as e:
+                logger.error(f"Failed to unfreeze from {archive_path}: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.get("/cybers/frozen")
+        async def list_frozen_cybers():
+            """List all frozen Cyber archives."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            
+            try:
+                frozen_list = await self.coordinator.list_frozen_cybers()
+                return {
+                    "success": True,
+                    "count": len(frozen_list),
+                    "archives": frozen_list
+                }
+            except Exception as e:
+                logger.error(f"Failed to list frozen Cybers: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         @self.app.websocket("/ws")
         async def websocket_endpoint(websocket: WebSocket):
             """WebSocket endpoint for real-time updates."""

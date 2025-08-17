@@ -504,3 +504,34 @@ class MindSwarmClient:
             response = await client.get(f"{self.base_url}/knowledge/stats")
             response.raise_for_status()
             return response.json()
+    
+    # Freeze/Unfreeze Methods
+    
+    async def freeze_cyber(self, cyber_name: str) -> Dict[str, Any]:
+        """Freeze a single Cyber to a tar.gz archive."""
+        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
+            response = await client.post(f"{self.base_url}/cybers/freeze/{cyber_name}")
+            response.raise_for_status()
+            return response.json()
+    
+    async def freeze_all_cybers(self) -> Dict[str, Any]:
+        """Freeze all Cybers to a tar.gz archive."""
+        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
+            response = await client.post(f"{self.base_url}/cybers/freeze-all")
+            response.raise_for_status()
+            return response.json()
+    
+    async def unfreeze_cybers(self, archive_path: str, force: bool = False) -> Dict[str, Any]:
+        """Unfreeze Cybers from a tar.gz archive."""
+        payload = {"archive_path": archive_path, "force": force}
+        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
+            response = await client.post(f"{self.base_url}/cybers/unfreeze", json=payload)
+            response.raise_for_status()
+            return response.json()
+    
+    async def list_frozen_cybers(self) -> Dict[str, Any]:
+        """List all frozen Cyber archives."""
+        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
+            response = await client.get(f"{self.base_url}/cybers/frozen")
+            response.raise_for_status()
+            return response.json()

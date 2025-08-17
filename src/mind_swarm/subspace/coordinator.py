@@ -19,6 +19,7 @@ from mind_swarm.subspace.developer_registry import DeveloperRegistry
 from mind_swarm.subspace.io_handlers import NetworkBodyHandler, UserIOBodyHandler
 from mind_swarm.subspace.knowledge_handler import KnowledgeHandler
 from mind_swarm.subspace.awareness_handler import AwarenessHandler
+from mind_swarm.subspace.freeze_handler import FreezeHandler
 from mind_swarm.schemas.cyber_types import CyberType
 from mind_swarm.ai.providers.factory import create_ai_service
 from mind_swarm.utils.logging import logger
@@ -224,6 +225,9 @@ class SubspaceCoordinator:
         
         # Initialize awareness handler
         self.awareness_handler = AwarenessHandler(self.subspace.root_path)
+        
+        # Initialize freeze handler
+        self.freeze_handler = FreezeHandler(self.subspace.root_path)
         
         # Pass both handlers to body system
         self.body_system = BodySystemManager(self.knowledge_handler, self.awareness_handler)
@@ -1405,6 +1409,49 @@ class SubspaceCoordinator:
                 return self.developer_registry.mark_message_as_read(dev_name, message_path)
         
         return False
+    
+    async def freeze_cyber(self, cyber_name: str, output_path: Optional[Path] = None) -> Path:
+        """Freeze a single Cyber to a tar.gz archive.
+        
+        Args:
+            cyber_name: Name of the Cyber to freeze
+            output_path: Optional output path for the archive
+            
+        Returns:
+            Path to the created archive
+        """
+        return await self.freeze_handler.freeze_cyber(cyber_name, output_path)
+    
+    async def freeze_all_cybers(self, output_path: Optional[Path] = None) -> Path:
+        """Freeze all Cybers to a tar.gz archive.
+        
+        Args:
+            output_path: Optional output path for the archive
+            
+        Returns:
+            Path to the created archive
+        """
+        return await self.freeze_handler.freeze_all(output_path)
+    
+    async def unfreeze_cybers(self, archive_path: Path, force: bool = False) -> List[str]:
+        """Unfreeze Cybers from a tar.gz archive.
+        
+        Args:
+            archive_path: Path to the archive file
+            force: If True, overwrite existing Cybers
+            
+        Returns:
+            List of unfrozen Cyber names
+        """
+        return await self.freeze_handler.unfreeze_cyber(archive_path, force)
+    
+    async def list_frozen_cybers(self) -> List[Dict[str, Any]]:
+        """List all frozen Cyber archives.
+        
+        Returns:
+            List of frozen archive information
+        """
+        return await self.freeze_handler.list_frozen()
     
     async def update_announcements(self, title: str, message: str, priority: str = "HIGH", expires: Optional[str] = None) -> bool:
         """Update system announcements that all Cybers will see.

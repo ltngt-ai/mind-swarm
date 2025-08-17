@@ -361,6 +361,9 @@ class MindSwarmCLI:
         console.print("  [cyan]dev list[/cyan] - List registered developers")
         console.print("  [cyan]mailbox[/cyan] - Check developer mailbox")
         console.print("  [cyan]knowledge[/cyan] - Knowledge system commands")
+        console.print("  [cyan]freeze [name][/cyan] - Freeze Cyber(s) to backup archive")
+        console.print("  [cyan]unfreeze <path> [--force][/cyan] - Restore Cyber(s) from archive")
+        console.print("  [cyan]frozen[/cyan] - List frozen archives")
         console.print("  [cyan]stop[/cyan] - Stop the server")
         console.print("  [cyan]quit[/cyan] - Exit the system")
         console.print("\n[dim]Tip: Use 'quit' or Ctrl+C to exit[/dim]")
@@ -467,6 +470,64 @@ class MindSwarmCLI:
                     cyber_name = parts[1]
                     await self.client.terminate_agent(cyber_name)
                     console.print(f"Terminated Cyber {cyber_name}")
+                
+                elif cmd == "freeze":
+                    # freeze [cyber_name] - freeze specific Cyber or all
+                    if len(parts) > 1:
+                        cyber_name = parts[1]
+                        result = await self.client.freeze_cyber(cyber_name)
+                        if result.get("success"):
+                            console.print(f"[green]Froze Cyber '{cyber_name}' to {result['archive_path']}[/green]")
+                        else:
+                            console.print(f"[red]Failed to freeze Cyber '{cyber_name}'[/red]")
+                    else:
+                        # Freeze all Cybers
+                        result = await self.client.freeze_all_cybers()
+                        if result.get("success"):
+                            console.print(f"[green]{result['message']}[/green]")
+                            if result.get("archive_path"):
+                                console.print(f"Archive: {result['archive_path']}")
+                        else:
+                            console.print(f"[red]Failed to freeze Cybers[/red]")
+                
+                elif cmd == "unfreeze" and len(parts) > 1:
+                    # unfreeze <archive_path> [--force]
+                    archive_path = parts[1]
+                    force = "--force" in parts or "-f" in parts
+                    
+                    result = await self.client.unfreeze_cybers(archive_path, force)
+                    if result.get("success"):
+                        console.print(f"[green]{result['message']}[/green]")
+                        if result.get("cybers"):
+                            console.print("Unfrozen Cybers:")
+                            for cyber in result["cybers"]:
+                                console.print(f"  - {cyber}")
+                    else:
+                        console.print(f"[red]Failed to unfreeze from {archive_path}[/red]")
+                
+                elif cmd == "frozen":
+                    # List frozen archives
+                    result = await self.client.list_frozen_cybers()
+                    if result.get("success"):
+                        archives = result.get("archives", [])
+                        if archives:
+                            console.print(f"[cyan]Frozen Archives ({result['count']}):[/cyan]")
+                            for archive in archives:
+                                size_mb = archive.get("size", 0) / (1024 * 1024)
+                                console.print(f"\n[bold]{archive['filename']}[/bold]")
+                                console.print(f"  Size: {size_mb:.2f} MB")
+                                console.print(f"  Modified: {archive.get('modified', 'unknown')[:19]}")
+                                if archive.get("metadata"):
+                                    meta = archive["metadata"]
+                                    if meta.get("cyber_names"):
+                                        console.print(f"  Cybers: {', '.join(meta['cyber_names'])}")
+                                    elif meta.get("cyber_name"):
+                                        console.print(f"  Cyber: {meta['cyber_name']}")
+                                    console.print(f"  Frozen at: {meta.get('frozen_at', 'unknown')[:19]}")
+                        else:
+                            console.print("[yellow]No frozen archives found[/yellow]")
+                    else:
+                        console.print("[red]Failed to list frozen archives[/red]")
                 
                 elif cmd == "command" and len(parts) >= 3:
                     # command <cyber_name> <command> [params]
