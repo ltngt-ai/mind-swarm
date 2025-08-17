@@ -686,59 +686,29 @@ class SubspaceCoordinator:
                         
                         # Handle different file types
                         if file_path.suffix in [".yaml", ".yml"]:
-                            # Try two formats: full YAML or simplified front matter
-                            if raw_content.startswith('---'):
-                                # Simplified format with front matter
-                                try:
-                                    parts = raw_content.split('---', 2)
-                                    if len(parts) >= 3:
-                                        # Parse front matter
-                                        front_matter = yaml.safe_load(parts[1])
-                                        if isinstance(front_matter, dict):
-                                            # Extract metadata
-                                            if 'title' in front_matter:
-                                                metadata['title'] = front_matter['title']
-                                            if 'tags' in front_matter:
-                                                tags = front_matter['tags']
-                                                metadata['tags'] = tags if isinstance(tags, str) else ','.join(str(t) for t in tags)
-                                            if 'category' in front_matter:
-                                                metadata['category'] = front_matter['category']
-                                            if 'author' in front_matter:
-                                                metadata['author'] = front_matter['author']
-                                        # Use content after front matter
-                                        content = parts[2].strip()
-                                except:
-                                    # If parsing fails, use the whole content
-                                    content = raw_content
-                            else:
-                                # Traditional full YAML format
-                                try:
-                                    yaml_data = yaml.safe_load(raw_content)
-                                    if isinstance(yaml_data, dict):
-                                        # Extract metadata fields
-                                        if 'title' in yaml_data:
-                                            metadata['title'] = yaml_data['title']
-                                        if 'tags' in yaml_data:
-                                            tags = yaml_data['tags']
-                                            metadata['tags'] = tags if isinstance(tags, str) else ','.join(str(t) for t in tags)
-                                        if 'category' in yaml_data:
-                                            metadata['category'] = yaml_data['category']
-                                        if 'author' in yaml_data:
-                                            metadata['author'] = yaml_data['author']
-                                        
-                                        # Use content field or description + details
-                                        if 'content' in yaml_data:
-                                            content = yaml_data['content']
-                                        elif 'description' in yaml_data:
-                                            content = yaml_data['description']
-                                            if 'details' in yaml_data:
-                                                content += "\n\n" + yaml_data['details']
+                            try:
+                                data = yaml.safe_load(raw_content)
+                                if isinstance(data, dict):
+                                    # Extract metadata for searching but store COMPLETE file
+                                    for key in ['title', 'category', 'authors']:
+                                        if key in data:
+                                            metadata[key] = data[key]
+                                    
+                                    # Convert tags list to comma-separated string for searching
+                                    if 'tags' in data:
+                                        if isinstance(data['tags'], list):
+                                            metadata['tags'] = ','.join(str(t) for t in data['tags'])
                                         else:
-                                            # If no content field, use the whole YAML as content
-                                            content = raw_content
-                                except:
-                                    # If YAML parsing fails, treat as plain text
+                                            metadata['tags'] = data['tags']
+                                    
+                                    # CRITICAL: Store the ENTIRE YAML file for round-tripping
                                     content = raw_content
+                                else:
+                                    # Not a dict - use raw content
+                                    content = raw_content
+                            except Exception as e:
+                                logger.warning(f"Failed to parse YAML {file_path}: {e}")
+                                content = raw_content
                         
                         elif file_path.suffix == ".md":
                             # For markdown files, try to extract title from first # heading
@@ -770,15 +740,17 @@ class SubspaceCoordinator:
                         else:
                             full_content = content
                         
-                        # Add to shared knowledge
-                        success, knowledge_id = await self.knowledge_handler.add_shared_knowledge(
-                            full_content, 
-                            metadata
+                        # Add to shared knowledge with path as ID
+                        relative_path = str(file_path.relative_to(knowledge_dir))
+                        success, knowledge_id = await self.knowledge_handler.add_shared_knowledge_with_id(
+                            knowledge_id=relative_path,  # Use path as ID
+                            content=full_content, 
+                            metadata=metadata
                         )
                         
                         if success:
                             loaded_count += 1
-                            logger.debug(f"Loaded {file_path.name} -> {knowledge_id}")
+                            logger.debug(f"Loaded {file_path.name} with ID: {relative_path}")
                         else:
                             logger.warning(f"Failed to load {file_path.name}: {knowledge_id}")
                             
@@ -817,15 +789,8 @@ class SubspaceCoordinator:
             if not knowledge_dir.exists():
                 return {"status": "error", "message": f"Initial knowledge directory not found: {knowledge_dir}"}
             
-            # Get existing knowledge to check what needs updating
-            existing_knowledge = await self.knowledge_handler.list_shared_knowledge(limit=1000)
-            
-            # Create a map of source_path to knowledge_id for existing items
-            existing_map = {}
-            for item in existing_knowledge:
-                metadata = item.get('metadata', {})
-                if metadata.get('source') == 'initial_knowledge' and 'source_path' in metadata:
-                    existing_map[metadata['source_path']] = item['id']
+            # We'll check each file directly by its path-based ID
+            # No need to list all existing knowledge
             
             stats = {
                 "added": 0,
@@ -858,43 +823,31 @@ class SubspaceCoordinator:
                         
                         content = raw_content
                         
-                        # Handle different file types (same logic as _load_default_knowledge)
+                        # Handle different file types
                         if file_path.suffix in [".yaml", ".yml"]:
-                            if raw_content.startswith('---'):
-                                try:
-                                    parts = raw_content.split('---', 2)
-                                    if len(parts) >= 3:
-                                        front_matter = yaml.safe_load(parts[1])
-                                        if isinstance(front_matter, dict):
-                                            if 'title' in front_matter:
-                                                metadata['title'] = front_matter['title']
-                                            if 'tags' in front_matter:
-                                                tags = front_matter['tags']
-                                                metadata['tags'] = tags if isinstance(tags, str) else ','.join(str(t) for t in tags)
-                                            if 'category' in front_matter:
-                                                metadata['category'] = front_matter['category']
-                                            content = parts[2].strip()
-                                except:
-                                    pass
-                            else:
-                                try:
-                                    data = yaml.safe_load(raw_content)
-                                    if isinstance(data, dict):
-                                        if 'title' in data:
-                                            metadata['title'] = data.pop('title')
-                                        if 'tags' in data:
-                                            tags = data.pop('tags')
-                                            metadata['tags'] = tags if isinstance(tags, str) else ','.join(str(t) for t in tags)
-                                        if 'category' in data:
-                                            metadata['category'] = data.pop('category')
-                                        if 'content' in data:
-                                            content = data['content']
+                            try:
+                                data = yaml.safe_load(raw_content)
+                                if isinstance(data, dict):
+                                    # Extract metadata for searching but store COMPLETE file
+                                    for key in ['title', 'category', 'authors']:
+                                        if key in data:
+                                            metadata[key] = data[key]
+                                    
+                                    # Convert tags list to comma-separated string for searching
+                                    if 'tags' in data:
+                                        if isinstance(data['tags'], list):
+                                            metadata['tags'] = ','.join(str(t) for t in data['tags'])
                                         else:
-                                            content = yaml.dump(data, default_flow_style=False)
-                                    else:
-                                        content = raw_content
-                                except:
+                                            metadata['tags'] = data['tags']
+                                    
+                                    # CRITICAL: Store the ENTIRE YAML file for round-tripping
                                     content = raw_content
+                                else:
+                                    # Not a dict - use raw content
+                                    content = raw_content
+                            except Exception as e:
+                                logger.warning(f"Failed to parse YAML {file_path}: {e}")
+                                content = raw_content
                         
                         elif file_path.suffix == ".md":
                             lines = raw_content.split('\n')
@@ -923,30 +876,32 @@ class SubspaceCoordinator:
                         else:
                             full_content = content
                         
-                        # Check if this knowledge exists and needs updating
-                        if relative_path in existing_map:
+                        # Try to get existing knowledge by path-based ID
+                        existing = await self.knowledge_handler.get_shared_knowledge(relative_path)
+                        
+                        if existing:
                             # Update existing knowledge
-                            knowledge_id = existing_map[relative_path]
                             success, message = await self.knowledge_handler.update_shared_knowledge(
-                                knowledge_id, 
+                                relative_path,  # Use path as ID
                                 full_content, 
                                 metadata
                             )
                             if success:
                                 stats["updated"] += 1
-                                logger.debug(f"Updated {relative_path} -> {knowledge_id}")
+                                logger.debug(f"Updated {relative_path}")
                             else:
                                 stats["errors"] += 1
                                 logger.warning(f"Failed to update {relative_path}: {message}")
                         else:
-                            # Add new knowledge
-                            success, knowledge_id = await self.knowledge_handler.add_shared_knowledge(
-                                full_content, 
-                                metadata
+                            # Add new knowledge with path as ID
+                            success, knowledge_id = await self.knowledge_handler.add_shared_knowledge_with_id(
+                                knowledge_id=relative_path,  # Use path as ID
+                                content=full_content, 
+                                metadata=metadata
                             )
                             if success:
                                 stats["added"] += 1
-                                logger.debug(f"Added {relative_path} -> {knowledge_id}")
+                                logger.debug(f"Added {relative_path} with ID: {relative_path}")
                             else:
                                 stats["errors"] += 1
                                 logger.warning(f"Failed to add {relative_path}: {knowledge_id}")

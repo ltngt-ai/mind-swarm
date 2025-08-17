@@ -16,6 +16,7 @@ from .memory_manager import WorkingMemoryManager
 from .memory_selector import MemorySelector, RelevanceScorer
 from .context_builder import ContextBuilder
 from .content_loader import ContentLoader
+from .schema_validator import SchemaValidator
 
 logger = logging.getLogger("Cyber.memory.system")
 
@@ -47,6 +48,7 @@ class MemorySystem:
         self._context_builder = ContextBuilder(self._content_loader)
         self._memory_manager = WorkingMemoryManager(max_tokens)
         self._memory_selector = MemorySelector(self._context_builder)
+        self._schema_validator = SchemaValidator()
         
         # Performance tracking
         self._stats = {
@@ -67,6 +69,34 @@ class MemorySystem:
         Args:
             memory: Memory block to add
         """
+        # Only validate user-created content that needs schema checking
+        # Memory blocks are system-generated and don't need validation
+        if memory.content_type == ContentType.MINDSWARM_KNOWLEDGE:
+            # Knowledge content needs validation (from user-created knowledge files)
+            try:
+                # For knowledge, validate the content if it exists
+                if hasattr(memory, 'metadata') and memory.metadata:
+                    # In the new pure YAML format, all fields are at the top level
+                    # Just pass the metadata directly as it already contains the full knowledge structure
+                    self._schema_validator.validate_before_write(memory.metadata, "application/knowledge")
+            except ValueError as e:
+                logger.error(f"Knowledge validation failed: {e}")
+                raise
+        elif memory.content_type == ContentType.MINDSWARM_MESSAGE:
+            # Message content needs validation (from user-created messages)
+            try:
+                # For messages, validate the message structure
+                if hasattr(memory, 'metadata') and 'message_data' in memory.metadata:
+                    self._schema_validator.validate_before_write(
+                        memory.metadata['message_data'], 
+                        "application/message"
+                    )
+            except ValueError as e:
+                logger.error(f"Message validation failed: {e}")
+                raise
+        # All other content types (observations, goals, actions, etc.) are system-generated
+        # and don't need validation
+                    
         self._memory_manager.add_memory(memory)
         self._stats["memories_added"] += 1
         logger.debug(f"Added memory: {memory.id} (content_type={memory.content_type.value if hasattr(memory.content_type, 'value') else str(memory.content_type)})")
@@ -266,15 +296,7 @@ class MemorySystem:
         Returns:
             List of recent memory blocks
         """
-        return self._memory_manager.get_recent_memories(seconds)
-    
-    def get_unread_messages(self) -> List[MemoryBlock]:
-        """Get all unread message memories.
-        
-        Returns:
-            List of unread message memory blocks
-        """
-        return self._memory_manager.get_unread_messages()
+        return self._memory_manager.get_recent_memories(seconds)   
     
     def get_high_priority_memories(self) -> List[MemoryBlock]:
         """Get all high and critical priority memories.

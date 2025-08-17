@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://mind-swarm.ai/schemas/message-format.json",
+  "title": "Mind-Swarm Message Format",
+  "description": "Schema for inter-cyber messaging",
+  "type": "object",
+  "required": ["type", "from", "to", "timestamp"],
+  "properties": {
+    "from": {
+      "type": "string",
+      "description": "Sender cyber ID or name",
+      "minLength": 1
+    },
+    "to": {
+      "type": "string",
+      "description": "Recipient cyber ID or name",
+      "minLength": 1
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Message timestamp"
+    },
+    "message_id": {
+      "type": "string",
+      "description": "Unique message identifier"
+    },
+    "content": {
+      "type": "string",
+      "description": "Message content"
+    }
+  }
+}

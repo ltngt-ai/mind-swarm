@@ -197,6 +197,7 @@ class WorkingMemoryManager:
             "active_topics": list(self.active_topics),
             "memories": [
                 {
+                    "memory_class": memory.__class__.__name__,  # Save the actual class type
                     "content_type": memory.content_type.value if hasattr(memory.content_type, 'value') else str(memory.content_type),
                     "id": memory.id,
                     "confidence": memory.confidence,
@@ -244,8 +245,11 @@ class WorkingMemoryManager:
             True if successfully restored
         """
         try:
-            # Clear current memory
+            # Clear current memory - MUST clear both to stay in sync!
             self.symbolic_memory.clear()
+            self.memory_index.clear()
+            self.memories_by_content_type.clear()
+            self.access_history.clear()
             
             # Restore configuration
             if 'max_tokens' in snapshot:
@@ -266,7 +270,10 @@ class WorkingMemoryManager:
                     content_type_str = mem_data.get('content_type', 'UNKNOWN')
                     content_type = ContentType[content_type_str] if hasattr(ContentType, content_type_str) else ContentType.UNKNOWN
                     
-                    if content_type == ContentType.MINDSWARM_OBSERVATION:
+                    # Use memory_class if available, otherwise use content_type to determine class
+                    memory_class = mem_data.get('memory_class')
+                    
+                    if memory_class == 'ObservationMemoryBlock' or content_type == ContentType.MINDSWARM_OBSERVATION:
                         memory = ObservationMemoryBlock(
                             observation_type=mem_data.get('observation_type', 'unknown'),
                             path=mem_data.get('path', ''),
@@ -278,7 +285,7 @@ class WorkingMemoryManager:
                             pinned=mem_data.get('pinned', False)
                         )
                     else:
-                        # Default to FileMemoryBlock for everything else
+                        # Everything else is FileMemoryBlock
                         memory = FileMemoryBlock(
                             location=mem_data.get('location', 'unknown'),
                             start_line=mem_data.get('start_line'),

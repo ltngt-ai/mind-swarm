@@ -54,6 +54,46 @@ class DecisionStage:
         self.memory_system = cognitive_loop.memory_system
         self.brain_interface = cognitive_loop.brain_interface
         self.knowledge_manager = cognitive_loop.knowledge_manager
+    
+    def _load_stage_instructions(self):
+        """Load stage instructions from knowledge into memory."""
+        stage_data = self.knowledge_manager.get_stage_instructions('decision')
+        if stage_data:
+            from ..memory.memory_blocks import FileMemoryBlock
+            from ..memory.memory_types import Priority, ContentType
+            import yaml
+            
+            # stage_data has: content (YAML string), metadata (DB metadata), id, source
+            # Parse the YAML content to get the actual knowledge fields
+            try:
+                yaml_content = yaml.safe_load(stage_data['content'])
+                # yaml_content now has: title, category, tags, content (the actual instructions)
+            except Exception as e:
+                logger.error(f"Failed to parse stage instructions YAML: {e}")
+                return
+            
+            # Pass the parsed YAML content as metadata for validation
+            stage_memory = FileMemoryBlock(
+                location="/personal/.internal/knowledge_decision_stage",
+                confidence=1.0,
+                priority=Priority.FOUNDATIONAL,
+                metadata=yaml_content,  # This has title, category, tags, content fields
+                pinned=False,
+                cycle_count=self.cognitive_loop.cycle_count,
+                content_type=ContentType.MINDSWARM_KNOWLEDGE
+            )
+            self.memory_system.add_memory(stage_memory)
+            self.stage_knowledge_id = stage_memory.id
+            logger.debug("Loaded decision stage instructions into memory")
+        else:
+            self.stage_knowledge_id = None
+    
+    def _cleanup_stage_instructions(self):
+        """Remove stage instructions from working memory."""
+        if hasattr(self, 'stage_knowledge_id') and self.stage_knowledge_id:
+            if self.memory_system.remove_memory(self.stage_knowledge_id):
+                logger.debug("Removed decision stage instructions from memory")
+            self.stage_knowledge_id = None
         
     async def decide(self):
         """Run the decision stage.
@@ -64,6 +104,9 @@ class DecisionStage:
             Dict containing the plain text intention and context
         """
         logger.info("=== DECISION STAGE ===")
+        
+        # Load stage instructions
+        self._load_stage_instructions()
         
         # Read observation buffer to get observation data
         observation_buffer = self.cognitive_loop.get_current_pipeline("observation")
@@ -187,4 +230,9 @@ Always start your output with [[ ## reasoning ## ]]
         }
         
         response = await self.brain_interface._use_brain(json.dumps(thinking_request))
-        return json.loads(response)
+        result = json.loads(response)
+        
+        # Clean up stage instructions before leaving
+        self._cleanup_stage_instructions()
+        
+        return result

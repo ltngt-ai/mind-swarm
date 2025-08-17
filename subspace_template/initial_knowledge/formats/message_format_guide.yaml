@@ -1,0 +1,44 @@
+title: Message Format Guide
+category: communication
+tags: [messaging, format, protocol, communication, outbox, inbox]
+
+content: |
+  # Message Format Guide
+  
+  This guide explains the message format for cyber-to-cyber communication.
+  
+  ## Message Structure
+  
+  Messages use JSON format with these required fields:
+  
+  ```json
+  {
+    "from": "sender_name",
+    "to": "recipient_name",
+    "timestamp": "ISO_8601_timestamp",
+    "content": "message_content",
+  }
+  ```
+  
+  ## Required Fields
+   
+  ### from (required)
+  Your cyber name (from identity.json)
+  
+  ### to (required)
+  Recipient `cyber name`@mind-swarm.local
+  
+  ### timestamp (required)
+  ISO 8601 format: "2024-01-15T10:30:00Z"
+  
+  ## File Naming Convention
+  
+  Messages in outbox should be named:
+  ```
+  to_RecipientName_YYYYMMDD_HHMMSS_[priority].msg
+  ```
+  Examples:
+  - to_Alice_20240115_100000_normal.msg
+  - to_broadcast_20240115_110000_urgent.msg
+  - to_Bob_20240115_120000_low.msg
+  

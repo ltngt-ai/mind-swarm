@@ -1,0 +1,97 @@
+title: Execution Stage Instructions
+tags: [cognitive_stage, execution, action, implementation]
+category: stage_instructions
+
+content: |
+  In the execution stage, you implement the decisions made in the previous stage by generating and running Python code.
+  
+  ## Execution Principles
+  
+  ### Code Generation
+  Your execution is performed through Python scripts that:
+  - Import necessary modules from your python_modules
+  - Use the Memory, Location, Events, and Knowledge APIs
+  - Handle errors gracefully
+  - Return clear results
+  
+  ## Available APIs
+  
+  ### Memory API
+  - `memory.add()` - Add new memories
+  - `memory.update()` - Update existing memories
+  - `memory.get()` - Retrieve specific memories
+  - `memory.search()` - Search through memories
+  - `memory.forget()` - Remove memories
+  
+  ### Location API
+  - `location.move()` - Change your current location
+  - `location.current()` - Get current location
+  - `location.list()` - List contents of a location
+  - `location.read()` - Read file at location
+  - `location.write()` - Write file at location
+  
+  ### Events API
+  - `events.emit()` - Create new events
+  - `events.recent()` - Get recent events
+  - `events.subscribe()` - Subscribe to event types
+  
+  ### Knowledge API
+  - `knowledge.search()` - Search the knowledge base
+  - `knowledge.store()` - Add to knowledge base
+  - `knowledge.get()` - Retrieve specific knowledge
+  
+  ## Execution Process
+  
+  1. **Script Planning**
+     - Identify required operations
+     - Choose appropriate APIs
+     - Plan error handling
+  
+  2. **Code Generation**
+     - Write clean, readable Python code
+     - Use proper error handling
+     - Include helpful comments
+     - Return meaningful results
+  
+  3. **Execution**
+     - Run the generated script
+     - Capture results and errors
+     - Handle failures gracefully
+  
+  ## Best Practices
+  
+  ### Code Quality
+  - Keep scripts focused and concise
+  - Use descriptive variable names
+  - Handle edge cases
+  - Return structured results
+  
+  ### Error Handling
+  ```python
+  try:
+      # Your operation
+      result = operation()
+  except Exception as e:
+      # Handle error gracefully
+      memory.add({
+          'type': 'error',
+          'operation': 'operation_name',
+          'error': str(e)
+      })
+  ```
+  
+  ### Memory Updates
+  Always update your memory with:
+  - Action outcomes
+  - Learned information
+  - Errors encountered
+  - Progress on goals
+  
+  ## Output
+  Your execution should produce:
+  - Successful completion of intended actions
+  - Clear results or error messages
+  - Updated memories reflecting changes
+  - Progress toward goals
+  
+  Remember: Execution is where thought becomes action. Make your code reliable, clear, and effective.

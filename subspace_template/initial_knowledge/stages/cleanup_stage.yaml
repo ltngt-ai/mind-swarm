@@ -1,0 +1,105 @@
+title: Cleanup Stage Instructions
+tags: [cognitive_stage, cleanup, memory_management, optimization]
+category: stage_instructions
+content: |
+  In the cleanup stage, you manage your working memory by removing outdated information and organizing your thoughts for the next cycle.
+  
+  ## Memory Management Principles 
+  ### Token Budget Awareness
+  - Working memory has limited capacity (token budget)
+  - Prioritize keeping high-value memories
+  - Remove redundant or obsolete information
+  - Maintain balance between different memory types
+  
+  ## Cleanup Criteria  
+  ### Memories to Remove
+  1. **Obsolete Observations**
+     - Old environment scans
+     - Completed task notifications
+     - Resolved error states
+     - Outdated status information
+  2. **Redundant Information**
+     - Duplicate memories
+     - Superseded facts
+     - Repeated observations
+     - Consolidated into higher-level insights  
+  3. **Temporary Data**
+     - Intermediate calculations
+     - Transient state information
+     - One-time messages
+     - Expired time-sensitive data
+  ### Memories to Keep
+  1. **Pinned Memories**
+     - Core identity
+     - Critical system information
+     - Active goals
+     - Important persistent state
+  
+  2. **Recent Insights**
+     - Lessons from recent cycles
+     - New strategies discovered
+     - Important patterns identified
+     - Valuable knowledge gained
+  
+  3. **Active Context**
+     - Current goals and tasks
+     - Ongoing conversations
+     - Pending operations
+     - Unresolved questions
+  
+  ## Cleanup Process
+  
+  ### Memory Review
+  For each memory in working memory:
+  - Check cycle_count to determine age
+  - Evaluate current relevance
+  - Assess future utility
+  - Consider redundancy with other memories
+  
+  ### Prioritization
+  Rank memories by:
+  - **Priority level** (CRITICAL > HIGH > MEDIUM > LOW)
+  - **Recency** (newer generally more relevant)
+  - **Relevance** to active goals
+  - **Uniqueness** of information
+  
+  ### Consolidation
+  Where appropriate:
+  - Combine related observations into insights
+  - Summarize lengthy content
+  - Extract key points from verbose data
+  - Create higher-level abstractions
+  
+  ## Cleanup Best Practices  
+  ### Be Selective
+  - Don't remove everything old - some history is valuable
+  - Keep memories that provide important context
+  - Preserve lessons learned and insights
+  - Maintain continuity between cycles
+  
+  ### Be Systematic
+  - Use consistent criteria for removal
+  - Document why important items are kept
+  - Track cleanup effectiveness over time
+  - Adjust strategies based on results
+  
+  ### Be Balanced
+  - Maintain diversity of memory types
+  - Keep both facts and insights
+  - Balance detail with abstraction
+  - Preserve both short and long-term perspectives
+  
+  ## Output
+  Your cleanup should produce:
+  - A list of memory IDs to remove
+  - Rationale for significant removals
+  - Statistics on memory usage
+  - Readiness for the next cycle
+  
+  ## Optimization Goals
+  - Maximize signal-to-noise ratio
+  - Minimize token usage
+  - Preserve essential context
+  - Enable efficient future retrieval
+  
+  Remember: Effective memory management enables clearer thinking. A well-organized mind is a powerful mind.

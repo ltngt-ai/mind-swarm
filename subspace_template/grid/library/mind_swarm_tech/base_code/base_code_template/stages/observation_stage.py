@@ -56,6 +56,60 @@ class ObservationStage:
         self.brain_interface = cognitive_loop.brain_interface
         self.memory_dir = cognitive_loop.memory_dir
         self.file_manager = cognitive_loop.file_manager
+        self.knowledge_manager = cognitive_loop.knowledge_manager
+    
+    def _load_stage_instructions(self):
+        """Load stage instructions from knowledge into memory."""
+        # Fetch from knowledge system
+        stage_data = self.knowledge_manager.get_stage_instructions('observation')
+        if stage_data:
+            logger.info(f"Got stage instructions, type: {type(stage_data)}, keys: {stage_data.keys() if isinstance(stage_data, dict) else 'not a dict'}")
+            from ..memory.memory_blocks import FileMemoryBlock
+            from ..memory.memory_types import Priority, ContentType
+            import yaml
+            
+            # stage_data has: content (YAML string), metadata (DB metadata), id, source
+            # Parse the YAML content to get the actual knowledge fields
+            try:
+                content = stage_data.get('content', stage_data) if isinstance(stage_data, dict) else stage_data
+                logger.info(f"Parsing content of type {type(content)}, first 100 chars: {str(content)[:100]}")
+                yaml_content = yaml.safe_load(content)
+                logger.info(f"Parsed YAML successfully, keys: {yaml_content.keys() if isinstance(yaml_content, dict) else 'not a dict'}")
+                # yaml_content now has: title, category, tags, content (the actual instructions)
+            except Exception as e:
+                logger.error(f"Failed to parse stage instructions YAML: {e}")
+                return
+            
+            # Create a memory block for stage instructions
+            # Use .internal path so cyber knows it's system-managed
+            # Pass the parsed YAML content as metadata for validation
+            stage_memory = FileMemoryBlock(
+                location="/personal/.internal/knowledge_observation_stage",
+                confidence=1.0,
+                priority=Priority.FOUNDATIONAL,
+                metadata=yaml_content,  # This has title, category, tags, content fields
+                pinned=True,  # Stage instructions should always be included
+                cycle_count=self.cognitive_loop.cycle_count,
+                content_type=ContentType.MINDSWARM_KNOWLEDGE
+            )
+            try:
+                self.memory_system.add_memory(stage_memory)
+                self.stage_knowledge_id = stage_memory.id
+                logger.info(f"Successfully added stage memory with ID: {stage_memory.id}")
+            except Exception as e:
+                logger.error(f"Failed to add stage memory: {e}")
+                self.stage_knowledge_id = None
+                return
+        else:
+            logger.warning("No stage instructions found for observation stage")
+            self.stage_knowledge_id = None
+    
+    def _cleanup_stage_instructions(self):
+        """Remove stage instructions from working memory."""
+        if hasattr(self, 'stage_knowledge_id') and self.stage_knowledge_id:
+            if self.memory_system.remove_memory(self.stage_knowledge_id):
+                logger.debug("Removed observation stage instructions from memory")
+            self.stage_knowledge_id = None
     
     async def observe(self):
         """OBSERVE - Understand the situation from observations.
@@ -68,6 +122,9 @@ class ObservationStage:
         """
         logger.info("=== OBSERVATION STAGE ===")
         logger.info("👁️ Observing and reasoning about the situation...")
+        
+        # Load stage instructions into memory if not already present
+        self._load_stage_instructions()
         
         # First, scan environment for new observations
         logger.info("📡 Scanning for new observations...")
@@ -156,3 +213,6 @@ Always start your output with [[ ## reasoning ## ]]
         self.cognitive_loop.memory_system.touch_memory(observation_buffer.id, self.cognitive_loop.cycle_count)
         
         logger.info(f"💭 Observation written to pipeline buffer")
+        
+        # Clean up stage instructions before leaving
+        self._cleanup_stage_instructions()

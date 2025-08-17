@@ -225,6 +225,8 @@ class MemorySelector:
         
         # Separate unpinned by priority
         priority_groups = {
+            Priority.FOUNDATIONAL: [],  # ROM and boot knowledge
+            Priority.SYSTEM: [],        # System-controlled memories
             Priority.CRITICAL: [],
             Priority.HIGH: [],
             Priority.MEDIUM: [],
@@ -244,21 +246,22 @@ class MemorySelector:
         # Sort by priority first, then relevance
         scored_memories.sort(key=lambda x: (x[1], -x[2]))
         
-        # Reserve space for critical unpinned memories
-        critical_tokens = sum(
+        # Reserve space for high-priority unpinned memories
+        high_priority_tokens = sum(
             self.context_builder.estimate_tokens(m) 
-            for m in priority_groups[Priority.CRITICAL]
+            for priority in [Priority.FOUNDATIONAL, Priority.SYSTEM, Priority.CRITICAL]
+            for m in priority_groups[priority]
         )
         
-        if critical_tokens > remaining_tokens:
-            logger.warning(f"Critical unpinned memories exceed remaining budget: {critical_tokens} > {remaining_tokens}")
+        if high_priority_tokens > remaining_tokens:
+            logger.warning(f"High-priority unpinned memories exceed remaining budget: {high_priority_tokens} > {remaining_tokens}")
         
         # Add unpinned memories in order
         for memory, _, score in scored_memories:
             tokens = self.context_builder.estimate_tokens(memory)
             
-            # Always include critical unpinned
-            if memory.priority == Priority.CRITICAL:
+            # Always include foundational, system, and critical unpinned
+            if memory.priority in [Priority.FOUNDATIONAL, Priority.SYSTEM, Priority.CRITICAL]:
                 selected.append(memory)
                 used_tokens += tokens
                 continue

@@ -8,6 +8,7 @@ template_owned:
   - grid/library/mind_swarm_tech/base_code/base_code_template
   - grid/library/mind_swarm_tech/base_code/io_cyber_template
   - grid/library/mind_swarm_tech/rom
+  - grid/library/schemas  # Schema definitions for validation
 
 # Paths that are never overwritten (Cyber-owned content)
 # These areas belong to Cybers and their contributions

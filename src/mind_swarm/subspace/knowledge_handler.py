@@ -498,6 +498,71 @@ class KnowledgeHandler:
             }
     
     # CLI management methods
+    async def add_shared_knowledge_with_id(self, knowledge_id: str, content: str, metadata: Dict = None) -> Tuple[bool, str]:
+        """Add knowledge to shared collection with specific ID."""
+        if not self.enabled:
+            return False, "Knowledge system not available"
+        
+        try:
+            # Prepare metadata - convert lists to strings for ChromaDB
+            full_metadata = {
+                'source': metadata.get('source', 'initial_knowledge'),
+                'timestamp': datetime.now().isoformat(),
+                'personal': False
+            }
+            
+            if metadata:
+                for key, value in metadata.items():
+                    if isinstance(value, list):
+                        # Convert lists to comma-separated strings
+                        full_metadata[key] = ','.join(str(v) for v in value) if value else ''
+                    else:
+                        full_metadata[key] = value
+            
+            # Add to shared collection with specified ID
+            self.shared_collection.add(
+                documents=[content],
+                metadatas=[full_metadata],
+                ids=[knowledge_id]
+            )
+            
+            return True, knowledge_id
+            
+        except Exception as e:
+            return False, str(e)
+    
+    async def get_shared_knowledge(self, knowledge_id: str) -> Optional[Dict]:
+        """Get knowledge by ID from shared collection.
+        
+        Args:
+            knowledge_id: The ID to look up
+            
+        Returns:
+            Knowledge dict if found, None otherwise
+        """
+        if not self.enabled:
+            return None
+        
+        try:
+            # Try to get by exact ID
+            result = self.shared_collection.get(
+                ids=[knowledge_id],
+                include=['documents', 'metadatas']
+            )
+            
+            if result and result['documents'] and result['documents'][0]:
+                return {
+                    'id': knowledge_id,
+                    'content': result['documents'][0],
+                    'metadata': result['metadatas'][0] if result['metadatas'] else {}
+                }
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Failed to get knowledge by ID {knowledge_id}: {e}")
+            return None
+    
     async def add_shared_knowledge(self, content: str, metadata: Dict = None) -> Tuple[bool, str]:
         """Add knowledge to shared collection (for CLI use)."""
         if not self.enabled:

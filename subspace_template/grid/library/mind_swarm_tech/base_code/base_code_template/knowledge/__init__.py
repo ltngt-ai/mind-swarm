@@ -1,14 +1,11 @@
 """Knowledge management module for the cognitive loop.
 
-This package provides knowledge management functionality including
-ROM (Read-Only Memory) loading, knowledge organization, and
-semantic knowledge queries.
+This package provides knowledge management functionality through
+the ChromaDB-based knowledge system using body files.
 """
 
-from .knowledge_manager import KnowledgeManager
-from .rom_loader import ROMLoader
+from .simplified_knowledge import SimplifiedKnowledgeManager
 
 __all__ = [
-    'KnowledgeManager',
-    'ROMLoader'
+    'SimplifiedKnowledgeManager'
 ]

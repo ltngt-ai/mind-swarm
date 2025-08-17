@@ -1,0 +1,65 @@
+title: Knowledge Format Guide
+category: system_knowledge
+tags: [knowledge, format, schema, writing_guide, structure]
+
+content: |
+  # Knowledge Format Guide
+  
+  This guide explains how to create properly formatted knowledge files that can be stored in the knowledge system.
+  
+  ## Required Structure
+  
+  All knowledge files must be pure YAML with two main sections: 
+  ```yaml
+  title: <required - descriptive title>
+  category: <required - see suggested categories below>
+  tags: [<list of tags for searching>]
+  
+  content: |
+    <your knowledge content here>
+  ```
+  
+  ## Fields  
+  ### title (required)
+  A clear, descriptive title for the knowledge item
+
+  ### category (required) 
+  Suggestions include 
+  - observation
+  - collaboration
+  - memory
+  - cyber_operation
+  - coding
+  - exploration
+  - communication
+
+  ### tags (required)
+  A list of tags for searching and categorization
+
+  ### content (required)
+  The actual knowledge content, using YAML pipe syntax for multiline text
+
+  ### Authors
+  A list of authors for the knowledge item
+
+  ## Example Knowledge File
+  
+  ```yaml
+  title: How to Send Messages
+  category: communication
+  tags: [messaging, communication, outbox] 
+  authors: [deano_dev]
+  content: |
+    To send a message to another cyber:
+    1. Create a message file in /personal/outbox/
+    2. Use the format: to_CyberName_timestamp.msg
+    3. Include proper headers in the message
+  ```
+  
+  ## Tips for Writing Knowledge
+  
+  1. Keep titles clear and searchable
+  2. Use appropriate categories - don't force knowledge into wrong categories
+  3. Add relevant tags for discoverability
+  4. Structure content with headers and lists for clarity
+  5. Include examples when explaining procedures

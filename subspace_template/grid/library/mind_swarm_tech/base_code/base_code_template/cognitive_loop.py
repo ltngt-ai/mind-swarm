@@ -21,7 +21,7 @@ from .memory import (
     Priority, ContentType
 )
 from .perception import EnvironmentScanner
-from .knowledge import KnowledgeManager
+from .knowledge.simplified_knowledge import SimplifiedKnowledgeManager
 from .state import CyberStateManager, ExecutionStateTracker
 from .utils import CognitiveUtils, FileManager
 from .brain import BrainInterface
@@ -174,7 +174,7 @@ class CognitiveLoop:
         )
         
         # Knowledge system
-        self.knowledge_manager = KnowledgeManager(cyber_type=self.cyber_type)
+        self.knowledge_manager = SimplifiedKnowledgeManager()
         
         # Pipeline using FileMemoryBlocks
         # Each stage has a single buffer that gets cleared each cycle
@@ -206,12 +206,32 @@ class CognitiveLoop:
         """Initialize all systems and load initial data."""
         # Initialize managers
         self.state_manager.initialize()
-        self.knowledge_manager.initialize()
         
-        # Try to restore memory from snapshot first
-        if not self.memory_system.load_from_snapshot_file(self.memory_dir, self.knowledge_manager):
-            # No snapshot - load ROM and init fresh
-            self.knowledge_manager.load_rom_into_memory(self.memory_system)
+        # Try to restore memory from snapshot FIRST
+        self.memory_system.load_from_snapshot_file(self.memory_dir, None)
+        
+        # Always load boot ROM as a pinned memory (will replace if exists)
+        # The boot ROM is fundamental identity that should always be present
+        boot_rom = self.knowledge_manager.get_boot_rom()
+        if boot_rom:
+            # Create a pinned memory for the boot ROM
+            # Include all metadata fields for knowledge validation
+            metadata = boot_rom.copy()  # Include all fields from boot ROM
+            boot_memory = FileMemoryBlock(
+                location="/personal/.internal/boot_rom.yaml",
+                confidence=1.0,
+                priority=Priority.FOUNDATIONAL,
+                metadata=metadata,
+                pinned=True,
+                cycle_count=0,
+                content_type=ContentType.MINDSWARM_KNOWLEDGE
+            )
+            # Remove old boot ROM if exists (by ID)
+            boot_rom_id = boot_memory.id
+            self.memory_system.remove_memory(boot_rom_id)  # Safe to call even if doesn't exist
+            # Add the fresh boot ROM
+            self.memory_system.add_memory(boot_memory)
+            logger.info("Loaded boot ROM into working memory")
         
         # Load state
         existing_state = self.state_manager.load_state()

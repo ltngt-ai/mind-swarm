@@ -343,6 +343,9 @@ class SubspaceManager:
             logger.info(f"Updating base_code for existing Cyber {name}")
             self._copy_agent_base_code(base_code, cyber_type)
             
+            # Also update boot ROM
+            self._copy_boot_rom(internal_dir, cyber_type)
+            
             # Create organized directory structure
             # Mail directories (directly under personal)
             for subdir in ["inbox", "outbox", "mail_archive"]:
@@ -388,6 +391,9 @@ class SubspaceManager:
         # Copy Cyber code to base_code directory
         self._copy_agent_base_code(base_code, cyber_type)
         
+        # Copy boot ROM for this cyber type
+        self._copy_boot_rom(internal_dir, cyber_type)
+        
         logger.info(f"Created sandbox for Cyber {name}")
         return sandbox
     
@@ -401,6 +407,30 @@ class SubspaceManager:
             self.sandboxes[name].cleanup()
             del self.sandboxes[name]
             logger.info(f"Removed sandbox for Cyber {name}")
+    
+    def _copy_boot_rom(self, internal_dir: Path, cyber_type: str = "general"):
+        """Copy the appropriate boot ROM to the cyber's internal directory.
+        
+        Args:
+            internal_dir: The .internal directory in the cyber's home
+            cyber_type: Type of cyber (general, io_gateway)
+        """
+        # Get the template directory
+        template_root = Path(__file__).parent.parent.parent.parent / "subspace_template"
+        
+        # Select boot ROM based on cyber type
+        if cyber_type == "io_gateway":
+            boot_rom_src = template_root / "boot_rom" / "io_gateway.yaml"
+        else:
+            boot_rom_src = template_root / "boot_rom" / "general.yaml"
+            
+        if boot_rom_src.exists():
+            boot_rom_dest = internal_dir / "boot_rom.yaml"
+            import shutil
+            shutil.copy2(boot_rom_src, boot_rom_dest)
+            logger.debug(f"Copied boot ROM for {cyber_type} cyber")
+        else:
+            logger.warning(f"Boot ROM not found at {boot_rom_src}")
     
     def _copy_agent_base_code(self, base_code_dir: Path, cyber_type: str = "general"):
         """Copy Cyber base code to the Cyber's home directory.

@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://mind-swarm.ai/schemas/knowledge-format.json",
+  "title": "Mind-Swarm Knowledge Format",
+  "description": "Schema for Mind-Swarm knowledge YAML files",
+  "type": "object",
+  "required": ["title", "category", "tags", "content"],
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Title of the knowledge item",
+      "minLength": 1
+    },
+    "category": {
+      "type": "string",
+      "description": "Category of knowledge"
+    },
+    "tags": {
+      "type": "array",
+      "description": "Tags for categorization and search",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "authors": {
+      "type": "array",
+      "description": "Author(s) of the knowledge item",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "content": {
+      "type": "string",
+      "description": "The actual knowledge content in markdown format",
+      "minLength": 1
+    }
+  }
+}

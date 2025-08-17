@@ -65,6 +65,47 @@ class ExecutionStage:
         self._extract_and_save_module_docs(self.events, "events_api_docs")
         self._extract_and_save_module_docs(self.knowledge_api, "knowledge_api_docs")
     
+    def _load_stage_instructions(self):
+        """Load stage instructions from knowledge into memory."""
+        stage_data = self.knowledge_manager.get_stage_instructions('execution')
+        if stage_data:
+            from ..memory.memory_blocks import FileMemoryBlock
+            from ..memory.memory_types import Priority, ContentType
+            
+            import yaml
+            
+            # stage_data has: content (YAML string), metadata (DB metadata), id, source
+            # Parse the YAML content to get the actual knowledge fields
+            try:
+                yaml_content = yaml.safe_load(stage_data['content'])
+                # yaml_content now has: title, category, tags, content (the actual instructions)
+            except Exception as e:
+                logger.error(f"Failed to parse stage instructions YAML: {e}")
+                return
+            
+            # Pass the parsed YAML content as metadata for validation
+            stage_memory = FileMemoryBlock(
+                location="/personal/.internal/knowledge_execution_stage",
+                confidence=1.0,
+                priority=Priority.FOUNDATIONAL,
+                metadata=yaml_content,  # This has title, category, tags, content fields
+                pinned=False,
+                cycle_count=self.cognitive_loop.cycle_count,
+                content_type=ContentType.MINDSWARM_KNOWLEDGE
+            )
+            self.memory_system.add_memory(stage_memory)
+            self.stage_knowledge_id = stage_memory.id
+            logger.debug("Loaded execution stage instructions into memory")
+        else:
+            self.stage_knowledge_id = None
+    
+    def _cleanup_stage_instructions(self):
+        """Remove stage instructions from working memory."""
+        if hasattr(self, 'stage_knowledge_id') and self.stage_knowledge_id:
+            if self.memory_system.remove_memory(self.stage_knowledge_id):
+                logger.debug("Removed execution stage instructions from memory")
+            self.stage_knowledge_id = None
+    
     def _extract_and_save_module_docs(self, module_instance, docs_name: str):
         """Extract API documentation from a module and save to knowledge."""
         import inspect
@@ -112,29 +153,27 @@ class ExecutionStage:
                 
                 docs_content = "\n".join(docs)
                 
-                # Create clean YAML with pipe syntax for content
+                # Create pure YAML format matching the schema
                 api_docs_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(api_docs_path, 'w') as f:
-                    # Write YAML manually for clean formatting
-                    f.write("knowledge_version: '1.0'\n")
-                    f.write(f"title: {docs_name.replace('_', ' ').title()} - Auto-extracted Documentation\n")
-                    f.write("content: |\n")
-                    # Indent content properly for YAML pipe syntax
-                    for line in docs_content.split('\n'):
-                        f.write(f"  {line}\n")
+                    # Write pure YAML format with metadata and content sections
                     f.write("metadata:\n")
-                    f.write("  category: execution\n")
+                    f.write(f"  title: {docs_name.replace('_', ' ').title()} - Auto-extracted Documentation\n")
+                    f.write("  category: action_guide\n")  # Use allowed category
                     f.write("  tags:\n")
                     f.write("    - execution\n")
                     f.write("    - api\n")
                     f.write("    - reference\n")
                     f.write("    - execution_only\n")
                     f.write("    - python\n")
-                    f.write("  confidence: 1.0\n")
-                    f.write("  priority: 1\n")
                     f.write(f"  source: {module_instance.__class__.__module__}\n")
                     f.write(f"  created: '{datetime.now().isoformat()}'\n")
                     f.write("  auto_generated: true\n")
+                    f.write("\n")
+                    f.write("content: |\n")
+                    # Indent content properly for YAML pipe syntax
+                    for line in docs_content.split('\n'):
+                        f.write(f"  {line}\n")
                 logger.info(f"Created {docs_name} documentation at {api_docs_path}")
             except Exception as e:
                 logger.warning(f"Failed to generate API docs: {e}")
@@ -263,6 +302,9 @@ class ExecutionStage:
         """Run the execution stage."""
         logger.info("=== EXECUTION STAGE V3 ===")
         
+        # Load stage instructions
+        self._load_stage_instructions()
+        
         # The decision is already in working memory - just generate and execute
         # The brain will see the decision buffer content in working memory context
         
@@ -271,10 +313,14 @@ class ExecutionStage:
         
         if not script:
             logger.info("⚡ No script generated - likely no intention to execute")
+            self._cleanup_stage_instructions()
             return
         
         # Phase 2: Execute the generated script
         await self.execute_script(script)
+        
+        # Clean up stage instructions
+        self._cleanup_stage_instructions()
         
     
     async def generate_script(self) -> Optional[str]:
