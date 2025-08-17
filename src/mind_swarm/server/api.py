@@ -768,22 +768,22 @@ class MindSwarmServer:
                 logger.error(f"Failed to freeze all Cybers: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
+        from pydantic import BaseModel
+        
+        class UnfreezeRequest(BaseModel):
+            archive_path: str
+            force: bool = False
+        
         @self.app.post("/cybers/unfreeze")
-        async def unfreeze_cybers(request: dict):
+        async def unfreeze_cybers(request: UnfreezeRequest):
             """Unfreeze Cybers from a tar.gz archive."""
             if not self.coordinator:
                 raise HTTPException(status_code=503, detail="Server not initialized")
             
-            archive_path = request.get("archive_path", "")
-            force = request.get("force", False)
-            
-            if not archive_path:
-                raise HTTPException(status_code=400, detail="archive_path is required")
-            
             try:
                 from pathlib import Path
-                path = Path(archive_path)
-                unfrozen = await self.coordinator.unfreeze_cybers(path, force)
+                path = Path(request.archive_path)
+                unfrozen = await self.coordinator.unfreeze_cybers(path, request.force)
                 return {
                     "success": True,
                     "message": f"Unfroze {len(unfrozen)} Cybers",
@@ -792,7 +792,7 @@ class MindSwarmServer:
             except FileNotFoundError as e:
                 raise HTTPException(status_code=404, detail=str(e))
             except Exception as e:
-                logger.error(f"Failed to unfreeze from {archive_path}: {e}")
+                logger.error(f"Failed to unfreeze from {request.archive_path}: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
         @self.app.get("/cybers/frozen")
