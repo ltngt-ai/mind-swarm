@@ -30,6 +30,12 @@ class CommandRequest(BaseModel):
     params: Optional[Dict[str, Any]] = None
 
 
+class UnfreezeRequest(BaseModel):
+    """Request to unfreeze Cybers from an archive."""
+    archive_path: str
+    force: bool = False
+
+
 class MessageRequest(BaseModel):
     """Request to send a message to an Cyber."""
     content: str
@@ -767,12 +773,6 @@ class MindSwarmServer:
             except Exception as e:
                 logger.error(f"Failed to freeze all Cybers: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
-        
-        from pydantic import BaseModel
-        
-        class UnfreezeRequest(BaseModel):
-            archive_path: str
-            force: bool = False
         
         @self.app.post("/cybers/unfreeze")
         async def unfreeze_cybers(request: UnfreezeRequest):
