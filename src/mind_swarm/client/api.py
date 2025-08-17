@@ -505,6 +505,17 @@ class MindSwarmClient:
             response.raise_for_status()
             return response.json()
     
+    async def sync_knowledge(self) -> Dict[str, Any]:
+        """Sync knowledge from initial_knowledge templates to ChromaDB.
+        
+        Returns:
+            Sync result with statistics
+        """
+        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as client:
+            response = await client.post(f"{self.base_url}/knowledge/sync")
+            response.raise_for_status()
+            return response.json()
+    
     # Freeze/Unfreeze Methods
     
     async def freeze_cyber(self, cyber_name: str) -> Dict[str, Any]:

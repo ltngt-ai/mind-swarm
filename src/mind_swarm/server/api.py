@@ -737,6 +737,21 @@ class MindSwarmServer:
                 logger.error(f"Knowledge stats failed: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
+        @self.app.post("/knowledge/sync")
+        async def sync_knowledge():
+            """Sync knowledge from initial_knowledge templates to ChromaDB."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            
+            try:
+                result = await self.coordinator.sync_knowledge()
+                if result["status"] == "error":
+                    raise HTTPException(status_code=500, detail=result["message"])
+                return result
+            except Exception as e:
+                logger.error(f"Knowledge sync failed: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         # Freeze/Unfreeze endpoints
         @self.app.post("/cybers/freeze/{cyber_name}")
         async def freeze_cyber(cyber_name: str):

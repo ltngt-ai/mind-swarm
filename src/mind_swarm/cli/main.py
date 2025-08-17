@@ -818,6 +818,7 @@ class MindSwarmCLI:
                         console.print("  [cyan]knowledge list [limit][/cyan] - List recent knowledge")
                         console.print("  [cyan]knowledge remove <id>[/cyan] - Remove knowledge by ID")
                         console.print("  [cyan]knowledge stats[/cyan] - Show knowledge system stats")
+                        console.print("  [cyan]knowledge sync[/cyan] - Sync knowledge from initial_knowledge templates")
                     
                     elif len(parts) > 1:
                         subcmd = parts[1].lower()
@@ -1073,6 +1074,24 @@ class MindSwarmCLI:
                                     console.print("  [dim]Install ChromaDB: pip install chromadb[/dim]")
                             except Exception as e:
                                 console.print(f"[red]Failed to get stats: {e}[/red]")
+                        
+                        elif subcmd == "sync":
+                            # Sync knowledge from templates
+                            console.print("[cyan]Syncing knowledge from initial_knowledge templates...[/cyan]")
+                            try:
+                                result = await self.client.sync_knowledge()
+                                if result["status"] == "success":
+                                    stats = result.get("stats", {})
+                                    console.print(f"[green]✓ Knowledge sync complete![/green]")
+                                    console.print(f"  Total files: {stats.get('total_files', 0)}")
+                                    console.print(f"  Added: {stats.get('added', 0)}")
+                                    console.print(f"  Updated: {stats.get('updated', 0)}")
+                                    console.print(f"  Unchanged: {stats.get('unchanged', 0)}")
+                                    console.print(f"  Errors: {stats.get('errors', 0)}")
+                                else:
+                                    console.print(f"[red]Sync failed: {result.get('message', 'Unknown error')}[/red]")
+                            except Exception as e:
+                                console.print(f"[red]Failed to sync knowledge: {e}[/red]")
                         
                         else:
                             console.print(f"Unknown knowledge command: {subcmd}", style="red")

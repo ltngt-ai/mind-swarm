@@ -70,12 +70,33 @@ if ! mountpoint -q "$ROOTFS_DIR/dev/pts"; then
     mount --bind /dev/pts "$ROOTFS_DIR/dev/pts"
 fi
 
+# Mount the actual grid folder so you can see what cybers see
+GRID_DIR="$SUBSPACE_ROOT/grid"
+if [ -d "$GRID_DIR" ]; then
+    if ! mountpoint -q "$ROOTFS_DIR/grid"; then
+        echo -e "${GREEN}Mounting grid folder from subspace...${NC}"
+        mount --bind "$GRID_DIR" "$ROOTFS_DIR/grid"
+    fi
+fi
+
+# Mount cybers folder to /cybers for convenience (optional)
+CYBERS_DIR="$SUBSPACE_ROOT/cybers"
+if [ -d "$CYBERS_DIR" ]; then
+    if ! mountpoint -q "$ROOTFS_DIR/cybers"; then
+        mkdir -p "$ROOTFS_DIR/cybers"
+        echo -e "${GREEN}Mounting cybers folder from subspace...${NC}"
+        mount --bind "$CYBERS_DIR" "$ROOTFS_DIR/cybers"
+    fi
+fi
+
 # Create a cleanup function
 cleanup() {
     echo ""
     echo -e "${YELLOW}Cleaning up...${NC}"
     
     # Unmount in reverse order
+    umount "$ROOTFS_DIR/cybers" 2>/dev/null || true
+    umount "$ROOTFS_DIR/grid" 2>/dev/null || true
     umount "$ROOTFS_DIR/dev/pts" 2>/dev/null || true
     umount "$ROOTFS_DIR/dev" 2>/dev/null || true
     umount "$ROOTFS_DIR/sys" 2>/dev/null || true

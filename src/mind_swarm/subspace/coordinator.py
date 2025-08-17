@@ -679,6 +679,7 @@ class SubspaceCoordinator:
                             "source": "initial_knowledge",
                             "file_name": file_path.name,
                             "file_type": file_path.suffix[1:],  # Remove the dot
+                            "source_path": str(file_path.relative_to(knowledge_dir)),  # Track relative path for sync
                         }
                         
                         content = raw_content
@@ -796,6 +797,174 @@ class SubspaceCoordinator:
                 
         except Exception as e:
             logger.error(f"Error loading default knowledge: {e}")
+    
+    async def sync_knowledge(self) -> Dict[str, Any]:
+        """Sync knowledge from initial_knowledge templates to ChromaDB.
+        
+        Returns:
+            Dictionary with sync statistics
+        """
+        if not self.knowledge_handler or not self.knowledge_handler.enabled:
+            return {"status": "error", "message": "Knowledge system not available"}
+        
+        try:
+            logger.info("Syncing knowledge from templates...")
+            
+            # Find the initial knowledge directory
+            template_dir = Path(__file__).parent.parent.parent.parent / "subspace_template"
+            knowledge_dir = template_dir / "initial_knowledge"
+            
+            if not knowledge_dir.exists():
+                return {"status": "error", "message": f"Initial knowledge directory not found: {knowledge_dir}"}
+            
+            # Get existing knowledge to check what needs updating
+            existing_knowledge = await self.knowledge_handler.list_shared_knowledge(limit=1000)
+            
+            # Create a map of source_path to knowledge_id for existing items
+            existing_map = {}
+            for item in existing_knowledge:
+                metadata = item.get('metadata', {})
+                if metadata.get('source') == 'initial_knowledge' and 'source_path' in metadata:
+                    existing_map[metadata['source_path']] = item['id']
+            
+            stats = {
+                "added": 0,
+                "updated": 0,
+                "unchanged": 0,
+                "errors": 0,
+                "total_files": 0
+            }
+            
+            import yaml
+            
+            # Process all files in the knowledge directory
+            for file_path in knowledge_dir.rglob("*"):
+                if file_path.suffix in [".yaml", ".yml", ".md", ".txt"]:
+                    stats["total_files"] += 1
+                    relative_path = str(file_path.relative_to(knowledge_dir))
+                    
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            raw_content = f.read()
+                        
+                        # Base metadata for all files
+                        metadata = {
+                            "source": "initial_knowledge",
+                            "file_name": file_path.name,
+                            "file_type": file_path.suffix[1:],
+                            "source_path": relative_path,
+                            "synced_at": datetime.now().isoformat()
+                        }
+                        
+                        content = raw_content
+                        
+                        # Handle different file types (same logic as _load_default_knowledge)
+                        if file_path.suffix in [".yaml", ".yml"]:
+                            if raw_content.startswith('---'):
+                                try:
+                                    parts = raw_content.split('---', 2)
+                                    if len(parts) >= 3:
+                                        front_matter = yaml.safe_load(parts[1])
+                                        if isinstance(front_matter, dict):
+                                            if 'title' in front_matter:
+                                                metadata['title'] = front_matter['title']
+                                            if 'tags' in front_matter:
+                                                tags = front_matter['tags']
+                                                metadata['tags'] = tags if isinstance(tags, str) else ','.join(str(t) for t in tags)
+                                            if 'category' in front_matter:
+                                                metadata['category'] = front_matter['category']
+                                            content = parts[2].strip()
+                                except:
+                                    pass
+                            else:
+                                try:
+                                    data = yaml.safe_load(raw_content)
+                                    if isinstance(data, dict):
+                                        if 'title' in data:
+                                            metadata['title'] = data.pop('title')
+                                        if 'tags' in data:
+                                            tags = data.pop('tags')
+                                            metadata['tags'] = tags if isinstance(tags, str) else ','.join(str(t) for t in tags)
+                                        if 'category' in data:
+                                            metadata['category'] = data.pop('category')
+                                        if 'content' in data:
+                                            content = data['content']
+                                        else:
+                                            content = yaml.dump(data, default_flow_style=False)
+                                    else:
+                                        content = raw_content
+                                except:
+                                    content = raw_content
+                        
+                        elif file_path.suffix == ".md":
+                            lines = raw_content.split('\n')
+                            for line in lines[:5]:
+                                if line.startswith('# '):
+                                    metadata['title'] = line[2:].strip()
+                                    break
+                            else:
+                                metadata['title'] = file_path.stem.replace('_', ' ').replace('-', ' ').title()
+                            content = raw_content
+                        
+                        else:  # .txt files
+                            metadata['title'] = file_path.stem.replace('_', ' ').replace('-', ' ').title()
+                            content = raw_content
+                        
+                        # Clean up content
+                        content = content.strip()
+                        if not content:
+                            logger.warning(f"Skipping {file_path.name} - no content found")
+                            stats["unchanged"] += 1
+                            continue
+                        
+                        # Add title header if available
+                        if 'title' in metadata:
+                            full_content = f"# {metadata['title']}\n\n{content}"
+                        else:
+                            full_content = content
+                        
+                        # Check if this knowledge exists and needs updating
+                        if relative_path in existing_map:
+                            # Update existing knowledge
+                            knowledge_id = existing_map[relative_path]
+                            success, message = await self.knowledge_handler.update_shared_knowledge(
+                                knowledge_id, 
+                                full_content, 
+                                metadata
+                            )
+                            if success:
+                                stats["updated"] += 1
+                                logger.debug(f"Updated {relative_path} -> {knowledge_id}")
+                            else:
+                                stats["errors"] += 1
+                                logger.warning(f"Failed to update {relative_path}: {message}")
+                        else:
+                            # Add new knowledge
+                            success, knowledge_id = await self.knowledge_handler.add_shared_knowledge(
+                                full_content, 
+                                metadata
+                            )
+                            if success:
+                                stats["added"] += 1
+                                logger.debug(f"Added {relative_path} -> {knowledge_id}")
+                            else:
+                                stats["errors"] += 1
+                                logger.warning(f"Failed to add {relative_path}: {knowledge_id}")
+                                
+                    except Exception as e:
+                        stats["errors"] += 1
+                        logger.error(f"Error processing {file_path}: {e}")
+            
+            logger.info(f"Knowledge sync complete: {stats}")
+            return {
+                "status": "success",
+                "stats": stats,
+                "message": f"Synced {stats['total_files']} files: {stats['added']} added, {stats['updated']} updated, {stats['errors']} errors"
+            }
+            
+        except Exception as e:
+            logger.error(f"Error syncing knowledge: {e}")
+            return {"status": "error", "message": str(e)}
     
     async def _start_all_agents(self):
         """Start all Cybers that have directories in the subspace."""
