@@ -134,8 +134,35 @@ class ReflectStage:
         # Use brain to reflect on what happened
         logger.info("🔍 Reflecting on previous execution...")
         
-        # The brain will analyze the execution results and create reflections
-        reflection_response = await self.brain_interface.reflect_on_execution(memory_context)
+        import time
+        thinking_request = {
+            "signature": {
+                "instruction": """
+Review the previous execution results in your memory. Reflect on what worked, what didn't, 
+and what you learned. Consider how this affects your goals and priorities.
+Your pipeline memory contains the last execution results.
+""",
+                "inputs": {
+                    "working_memory": "Your current working memory including execution results"
+                },
+                "outputs": {
+                    "insights": "Key insights from the execution results",
+                    "lessons_learned": "What you learned that will help in future",
+                    "goal_updates": "How your goals or priorities should change based on results",
+                    "priority_adjustments": "What priorities need adjustment", 
+                    "next_focus": "What you should focus on next based on this reflection"
+                },
+                "display_field": "insights"
+            },
+            "input_values": {
+                "working_memory": memory_context
+            },
+            "request_id": f"reflect_{int(time.time()*1000)}",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        response = await self.brain_interface._use_brain(json.dumps(thinking_request))
+        reflection_response = json.loads(response)
         
         if not reflection_response:
             logger.debug("No reflections generated")
