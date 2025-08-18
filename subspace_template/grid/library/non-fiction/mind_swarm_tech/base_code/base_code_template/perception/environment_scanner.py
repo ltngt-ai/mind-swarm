@@ -220,12 +220,17 @@ class EnvironmentScanner:
                     continue
                 
                 if item.is_dir():
-                    directories.append(item.name)
+                    directories.append((item.name, None))
                 else:
-                    files.append(item.name)
+                    # Get file size for files
+                    try:
+                        size = item.stat().st_size
+                    except:
+                        size = 0
+                    files.append((item.name, size))
             
             # Add directories first with their contents
-            for dir_name in directories:
+            for dir_name, _ in directories:
                 lines.append(f"|---- 📁 {dir_name}/")
                 
                 # Show contents of important directories (goals, tasks)
@@ -247,9 +252,20 @@ class EnvironmentScanner:
                         else:
                             lines.append("|       (empty)")
             
-            # Then files
-            for file_name in files:
-                lines.append(f"|---- 📄 {file_name}")
+            # Then files with sizes
+            for file_name, size in files:
+                if size is not None and size > 0:
+                    if size < 1024:
+                        size_str = f"{size}B"
+                    elif size < 1024 * 1024:
+                        size_str = f"{size/1024:.1f}KB"
+                    elif size < 1024 * 1024 * 1024:
+                        size_str = f"{size/(1024*1024):.1f}MB"
+                    else:
+                        size_str = f"{size/(1024*1024*1024):.1f}GB"
+                    lines.append(f"|---- 📄 {file_name} ({size_str})")
+                else:
+                    lines.append(f"|---- 📄 {file_name}")
             
             # If nothing visible, add a note
             if not directories and not files:
@@ -397,9 +413,14 @@ class EnvironmentScanner:
                 self.file_states[item_str] = FileState(item)
                 
                 if item.is_dir():
-                    directories.append((item.name, '📁'))
+                    directories.append((item.name, '📁', None))
                 else:
-                    files.append((item.name, '📄'))
+                    # Get file size for files
+                    try:
+                        size = item.stat().st_size
+                    except:
+                        size = 0
+                    files.append((item.name, '📄', size))
             
             # Check for nearby Cybers using awareness API
             nearby_cybers = []
@@ -451,12 +472,24 @@ class EnvironmentScanner:
                 lines.append("|")
             
             # Add directories first
-            for name, icon in directories:
+            for name, icon, _ in directories:
                 lines.append(f"|---- {icon} {name}")
             
-            # Then files
-            for name, icon in files:
-                lines.append(f"|---- {icon} {name}")
+            # Then files with size information
+            for name, icon, size in files:
+                # Format size in human-readable format
+                if size is not None:
+                    if size < 1024:
+                        size_str = f"{size}B"
+                    elif size < 1024 * 1024:
+                        size_str = f"{size/1024:.1f}KB"
+                    elif size < 1024 * 1024 * 1024:
+                        size_str = f"{size/(1024*1024):.1f}MB"
+                    else:
+                        size_str = f"{size/(1024*1024*1024):.1f}GB"
+                    lines.append(f"|---- {icon} {name} ({size_str})")
+                else:
+                    lines.append(f"|---- {icon} {name}")
             
             # If empty, add a note
             if not directories and not files:

@@ -216,11 +216,9 @@ Your pipeline memory contains the last execution results.
             logger.info(f"🔍 Executing suggested knowledge query: {query[:100]}...")
             
             # Search the knowledge base using the correct method
-            results = self.knowledge_manager.search_knowledge(query, limit=3)
+            results = self.knowledge_manager.remember_knowledge(query, limit=1)
             
             if results:
-                logger.info(f"📚 Found {len(results)} knowledge results")
-                
                 # Create a memory block for the knowledge query results
                 from ..memory import FileMemoryBlock, Priority
                 

@@ -54,7 +54,23 @@ class SimplifiedKnowledgeManager:
             logger.error(f"Failed to fetch stage instructions for {stage_name}: {e}")
             
         return None
+
+    def remember_knowledge(self, query: str, limit: int = 1) -> str:
+        """You the remember shortcut for fetching the results the knowledge base.
         
+        Args:
+            query: Search query
+            limit: Maximum number of results
+            
+        Returns:
+            List of matching knowledge items
+        """
+        try:
+            return self.knowledge.remember(context=query, limit=limit)
+        except Exception as e:
+            logger.error(f"Knowledge search failed: {e}")
+            return ""
+
     def search_knowledge(self, query: str, limit: int = 5) -> list:
         """Search the knowledge base.
         
