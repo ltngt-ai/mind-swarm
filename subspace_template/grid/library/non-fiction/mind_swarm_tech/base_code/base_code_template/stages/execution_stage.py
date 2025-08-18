@@ -530,6 +530,13 @@ The provided API docs describe the available operations and their usage.
         namespace['events'] = events_instance
         namespace['EventsError'] = EventsError
         
+        # Import and initialize the Knowledge API
+        from ..python_modules.knowledge import Knowledge
+        
+        # Create knowledge instance (uses Memory instance)
+        knowledge_instance = Knowledge(memory_instance)
+        namespace['knowledge'] = knowledge_instance
+        
         # Capture output
         output_lines = []
         
