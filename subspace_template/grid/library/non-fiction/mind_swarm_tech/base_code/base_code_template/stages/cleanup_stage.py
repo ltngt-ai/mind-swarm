@@ -110,12 +110,10 @@ class CleanupStage:
         if expired or old_observations:
             logger.info(f"🧹 Cleaned up {expired} expired, {old_observations} old memories")
         
-        # Clean up old script execution files
-        script_files_cleaned = await self._cleanup_old_script_executions()
+        # Note: Script execution results are now only stored in pipeline buffers
+        # which are automatically cleared each cycle, so no cleanup needed
+        script_files_cleaned = 0
         results["script_files_cleaned"] = script_files_cleaned
-        
-        if script_files_cleaned > 0:
-            logger.info(f"🧹 Cleaned up {script_files_cleaned} old script execution files")
         
         # Log cleanup completion
         total_cleaned = (len(results["obsolete_observations"]) + 
@@ -125,8 +123,10 @@ class CleanupStage:
         if total_cleaned > 0:
             logger.info(f"✨ Cleanup completed for cycle {cycle_count}: {total_cleaned} items cleaned")
     
-    async def _cleanup_old_script_executions(self, max_age_minutes: int = 30, keep_recent: int = 10) -> int:
-        """Clean up old script execution files from action_results directory.
+    # NOTE: This method is no longer needed as script execution results are now only
+    # stored in pipeline buffers which are automatically cleared each cycle
+    async def _cleanup_old_script_executions_DEPRECATED(self, max_age_minutes: int = 30, keep_recent: int = 10) -> int:
+        """[DEPRECATED] Clean up old script execution files from action_results directory.
         
         Args:
             max_age_minutes: Maximum age in minutes before files are eligible for cleanup

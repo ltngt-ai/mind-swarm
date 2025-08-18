@@ -455,10 +455,9 @@ The provided API docs describe the available operations and their usage.
                 "attempts": attempt
             }]
         
-        # Save execution results
-        await self._save_execution_results(final_results, current_script)
-        
         # Write to execution pipeline buffer
+        # Note: We don't need separate script_execution memory files anymore
+        # The pipeline buffer contains all the execution information
         execution_content = {
             "timestamp": datetime.now().isoformat(),
             "cycle_count": self.cognitive_loop.cycle_count,
@@ -692,38 +691,3 @@ Remember: NO async/await, all operations are synchronous.
         
         return None
     
-    async def _save_execution_results(self, results: List[Dict], script: str):
-        """Save execution results as memory observations."""
-        results_dir = Path("/personal/.internal/memory/action_results")
-        results_dir.mkdir(parents=True, exist_ok=True)
-        
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:20]
-        filename = f"script_execution_{timestamp}.json"
-        filepath = results_dir / filename
-        
-        result_data = {
-            "observation_type": "script_execution",
-            "timestamp": datetime.now().isoformat(),
-            "script": script,
-            "results": results,
-            "cycle_count": self.cognitive_loop.cycle_count,
-            "api_version": "v3_memory"
-        }
-        
-        with open(filepath, 'w') as f:
-            json.dump(result_data, f, indent=2, default=str)
-        
-        # Create observation
-        success = results[0]["status"] == "completed" if results else False
-        message = f"Script execution {'succeeded' if success else 'failed'}"
-        
-        observation = ObservationMemoryBlock(
-            observation_type="script_execution",
-            path=str(filepath),
-            message=message,
-            cycle_count=self.cognitive_loop.cycle_count,
-            priority=Priority.HIGH if not success else Priority.MEDIUM
-        )
-        
-        if self.memory_system:
-            self.memory_system.add_memory(observation)
