@@ -12,8 +12,7 @@ import logging
 from .memory_types import ContentType, Priority
 from .memory_blocks import (
     MemoryBlock,
-    FileMemoryBlock,
-    ObservationMemoryBlock
+    FileMemoryBlock
 )
 from .content_loader import ContentLoader
 
@@ -72,9 +71,7 @@ class ContextBuilder:
                     if memory.digest:
                         entry["digest"] = memory.digest[:8]  # Show first 8 chars of digest
                 
-                # Add observation details (for ObservationMemoryBlock)
-                if isinstance(memory, ObservationMemoryBlock):
-                    entry["observation_type"] = memory.observation_type
+                # ObservationMemoryBlock removed - observations are now ephemeral
                 
                 # Only add confidence if not 1.0
                 if memory.confidence < 1.0:
@@ -172,8 +169,7 @@ class ContextBuilder:
                     from_agent = memory.metadata.get('from_agent', 'unknown')
                     subject = memory.metadata.get('subject', 'No subject')
                     lines.append(f"\n--- Message [{status}] from {from_agent}: {subject} ---")
-                elif isinstance(memory, ObservationMemoryBlock):
-                    lines.append(f"\n--- {memory.observation_type} ---")
+                # ObservationMemoryBlock removed - observations are now ephemeral
                 else:
                     lines.append(f"\n--- {memory.id} ---")
                 
@@ -221,8 +217,8 @@ class ContextBuilder:
         if obs_memories:
             lines.append("I've recently observed:")
             for memory in obs_memories:
-                if isinstance(memory, ObservationMemoryBlock):
-                    lines.append(f"- {memory.observation_type}: {memory.path}")
+                # ObservationMemoryBlock removed - observations are now ephemeral
+                pass
             lines.append("")
         
         # Messages (now FileMemoryBlock with message metadata)
@@ -274,9 +270,7 @@ class ContextBuilder:
             # Knowledge memories are just file blocks with knowledge type
             metadata["relevance"] = memory.confidence
             
-        elif isinstance(memory, ObservationMemoryBlock):
-            metadata["observation_type"] = memory.observation_type
-            metadata["path"] = memory.path
+        # ObservationMemoryBlock removed - observations are now ephemeral
         
         return metadata
     

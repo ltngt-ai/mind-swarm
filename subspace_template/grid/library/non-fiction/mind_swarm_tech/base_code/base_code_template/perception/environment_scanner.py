@@ -7,14 +7,14 @@ for relevant changes and observations.
 import json
 import hashlib
 from pathlib import Path
-from typing import List, Dict, Optional, Set
+from typing import List, Dict, Optional, Set, Any
 from datetime import datetime
 import logging
 
 from ..memory.memory_types import Priority, ContentType
 from ..memory.memory_blocks import (
     MemoryBlock,
-    FileMemoryBlock, ObservationMemoryBlock
+    FileMemoryBlock
 )
 
 logger = logging.getLogger("Cyber.perception")
@@ -132,13 +132,15 @@ class EnvironmentScanner:
         
         logger.debug(f"Initialized baseline with {baseline_count} files")
     
-    def scan_environment(self, full_scan: bool = False, cycle_count: int = 0):
-        """Scan environment and adds new observations as memory blocks.
+    def scan_environment(self, full_scan: bool = False, cycle_count: int = 0) -> List[Dict[str, Any]]:
+        """Scan environment and return observations as data structures.
         Args:
             full_scan: If True, ignore baseline and scan everything as new.
                       If False, only report actual changes since baseline.
             cycle_count: Current cycle count for observations
             
+        Returns:
+            List of observation dictionaries
         """
         if full_scan:
             # Clear baseline to treat everything as new
@@ -146,50 +148,59 @@ class EnvironmentScanner:
             self.file_states.clear()
             self.seen_observation_ids.clear()
             
-            self._do_scan(cycle_count)
+            observations = self._do_scan(cycle_count)
             
             # Restore baseline for future scans
             self.file_states = old_baseline
         else:
-            self._do_scan(cycle_count)
+            observations = self._do_scan(cycle_count)
+        
+        return observations
 
-    def _do_scan(self, cycle_count: int = 0):
+    def _do_scan(self, cycle_count: int = 0) -> List[Dict[str, Any]]:
         """Perform the actual environment scan.
         
         Args:
             cycle_count: Current cycle count for observations
+            
+        Returns:
+            List of observation dictionaries
         """
+        observations = []
         memories = []
         scan_start = datetime.now()
         
         # Always scan current location first (like looking around the room)
+        # This returns FileMemoryBlocks for location files, not observations
         memories.extend(self._scan_current_location(cycle_count))
         
         # Also scan personal directory structure (like knowing your home)
         memories.extend(self._scan_personal_location(cycle_count))
         
-        # Scan different areas
-        memories.extend(self._scan_inbox(cycle_count))
-        memories.extend(self._scan_announcements(cycle_count))
+        # Scan different areas - these return observations and FileMemoryBlocks
+        inbox_results = self._scan_inbox(cycle_count)
+        observations.extend(inbox_results)
+        
+        announcement_results = self._scan_announcements(cycle_count)
+        observations.extend(announcement_results)
         
         self.last_scan = scan_start
         
         # Log summary of what was found
-        if memories:
-            # Count message files by checking metadata
-            message_count = len([m for m in memories if isinstance(m, FileMemoryBlock) and m.metadata.get('file_type') == 'message'])
+        if observations or memories:
             file_count = len([m for m in memories if isinstance(m, FileMemoryBlock)])
-            obs_count = len([m for m in memories if isinstance(m, ObservationMemoryBlock)])
-            logger.debug(f"Scan details: {message_count} messages, {file_count} files, {obs_count} observations")
+            logger.debug(f"Scan details: {len(observations)} observations, {file_count} file memories")
         
-        logger.debug(f"Environment scan found {len(memories)} observations")
+        logger.debug(f"Environment scan found {len(observations)} observations and {len(memories)} memories")
         
-        # Add all discovered memories to the memory system
+        # Add FileMemoryBlocks to the memory system (location files, etc)
         if self.memory_system and memories:
             for memory in memories:
                 self.memory_system.add_memory(memory)
                 logger.debug(f"Added to memory system: {memory.id} (type: {type(memory).__name__})")
-            logger.info(f"Added {len(memories)} new observations to working memory")
+            logger.info(f"Added {len(memories)} memories to working memory")
+        
+        return observations
             
     def _scan_personal_location(self, cycle_count: int = 0) -> List[MemoryBlock]:
         """Scan personal directory and create a system memory with its structure.
@@ -532,7 +543,7 @@ class EnvironmentScanner:
         
         return memories
     
-    def _scan_announcements(self, cycle_count: int = 0) -> List[MemoryBlock]:
+    def _scan_announcements(self, cycle_count: int = 0) -> List[Dict[str, Any]]:
         """Scan community announcements for important updates.
         
         For JSON announcement files, we check the actual content to detect
@@ -540,11 +551,14 @@ class EnvironmentScanner:
         
         Args:
             cycle_count: Current cycle count for observations
+            
+        Returns:
+            List of observation dictionaries
         """
-        memories = []
+        observations = []
         
         if not self.announcements_path or not self.announcements_path.exists():
-            return memories
+            return observations
         
         try:
             # Look for announcement files
@@ -577,79 +591,67 @@ class EnvironmentScanner:
                             message += f"Priority: {ann.get('priority', 'NORMAL')}\n"
                             message += f"Message: {ann.get('message', 'Check announcement file for details')}"
                             
-                            obs_memory = ObservationMemoryBlock(
-                                observation_type="new_announcement",
-                                path=str(ann_file),
-                                message=message,
-                                cycle_count=cycle_count,
-                                priority=Priority.CRITICAL if ann.get('priority') == 'HIGH' else Priority.HIGH,
-                                content=json.dumps(ann, indent=2)  # Include full announcement in content
-                            )
-                            memories.append(obs_memory)
+                            observation = {
+                                "observation_type": "new_announcement",
+                                "path": str(ann_file),
+                                "message": message,
+                                "cycle_count": cycle_count,
+                                "priority": "CRITICAL" if ann.get('priority') == 'HIGH' else "HIGH",
+                                "content": json.dumps(ann, indent=2),  # Include full announcement
+                                "title": ann.get('title', 'System Update'),
+                                "announcement_priority": ann.get('priority', 'NORMAL')
+                            }
+                            observations.append(observation)
                             
                             logger.info(f"Found new announcement: {ann.get('title', 'untitled')}")
-                        
-                        # Also add the announcement file itself to working memory
-                        # Use absolute path from cyber's perspective
-                        from ..memory.memory_blocks import FileMemoryBlock
-                        ann_file_memory = FileMemoryBlock(
-                            location="grid/community/announcements/system_announcements.json",
-                            priority=Priority.HIGH,
-                            confidence=1.0,
-                            metadata={
-                                "file_type": "announcement",
-                                "has_new": len(new_announcements) > 0,
-                                "announcement_count": len(current_announcements)
-                            },
-                            cycle_count=cycle_count,
-                            content_type=ContentType.APPLICATION_JSON
-                        )
-                        memories.append(ann_file_memory)
                     
                     # Also check file state for other changes
                     state = self._check_file_state(ann_file)
                     if state and not new_announcements:
                         # File changed but no new announcements - might be metadata update
-                        obs_memory = ObservationMemoryBlock(
-                            observation_type="announcement_file_update",
-                            path=str(ann_file),
-                            message=f"Announcement file {ann_file.name} was updated (metadata or format change)",
-                            cycle_count=cycle_count,
-                            priority=Priority.LOW
-                        )
-                        memories.append(obs_memory)
+                        observation = {
+                            "observation_type": "announcement_file_update",
+                            "path": str(ann_file),
+                            "message": f"Announcement file {ann_file.name} was updated (metadata or format change)",
+                            "cycle_count": cycle_count,
+                            "priority": "LOW"
+                        }
+                        observations.append(observation)
                         
                 except json.JSONDecodeError as e:
                     logger.error(f"Error parsing JSON announcement file {ann_file}: {e}")
                     # Fall back to simple file change detection
                     state = self._check_file_state(ann_file)
                     if state:
-                        obs_memory = ObservationMemoryBlock(
-                            observation_type="announcement_update",
-                            path=str(ann_file),
-                            message=f"IMPORTANT: Announcements file {ann_file.name} changed but couldn't parse content",
-                            cycle_count=cycle_count,
-                            priority=Priority.HIGH
-                        )
-                        memories.append(obs_memory)
+                        observation = {
+                            "observation_type": "announcement_update",
+                            "path": str(ann_file),
+                            "message": f"IMPORTANT: Announcements file {ann_file.name} changed but couldn't parse content",
+                            "cycle_count": cycle_count,
+                            "priority": "HIGH"
+                        }
+                        observations.append(observation)
                 except Exception as e:
                     logger.error(f"Error reading announcement file {ann_file}: {e}")
         
         except Exception as e:
             logger.error(f"Error scanning announcements: {e}")
         
-        return memories
+        return observations
     
-    def _scan_inbox(self, cycle_count: int = 0) -> List[MemoryBlock]:
+    def _scan_inbox(self, cycle_count: int = 0) -> List[Dict[str, Any]]:
         """Scan inbox for new messages.
         
         Args:
             cycle_count: Current cycle count for observations
+            
+        Returns:
+            List of observation dictionaries
         """
-        memories = []
+        observations = []
         
         if not self.inbox_path.exists():
-            return memories
+            return observations
         
         try:
             # Look for message files
@@ -661,15 +663,17 @@ class EnvironmentScanner:
                     # Read message header for metadata
                     msg_data = json.loads(msg_file.read_text())
                     
-                    # Create observation pointing to the message file
-                    obs_memory = ObservationMemoryBlock(
-                        observation_type="new_message",
-                        path=str(msg_file),  # Direct path to the file
-                        message=f"New message from {msg_data.get('from', 'unknown')}: {msg_data.get('subject', 'No subject')}",
-                        cycle_count=cycle_count,
-                        priority=Priority.HIGH
-                    )
-                    memories.append(obs_memory)
+                    # Create observation dictionary
+                    observation = {
+                        "observation_type": "new_message",
+                        "path": str(msg_file),  # Direct path to the file
+                        "message": f"New message from {msg_data.get('from', 'unknown')}: {msg_data.get('subject', 'No subject')}",
+                        "cycle_count": cycle_count,
+                        "priority": "HIGH",
+                        "from": msg_data.get('from', 'unknown'),
+                        "subject": msg_data.get('subject', 'No subject')
+                    }
+                    observations.append(observation)
                     
                     self.processed_messages.add(str(msg_file))
                     
@@ -679,9 +683,9 @@ class EnvironmentScanner:
         except Exception as e:
             logger.error(f"Error scanning inbox: {e}")
         
-        return memories
+        return observations
     
-    def _scan_directory(self, directory: Path, obs_type: str, description: str, cycle_count: int = 0) -> List[MemoryBlock]:
+    def _scan_directory(self, directory: Path, obs_type: str, description: str, cycle_count: int = 0) -> List[Dict[str, Any]]:
         """Scan a directory for new or changed files.
         
         Args:
@@ -689,27 +693,30 @@ class EnvironmentScanner:
             obs_type: Type of observation
             description: Description of the observation
             cycle_count: Current cycle count for observations
+            
+        Returns:
+            List of observation dictionaries
         """
-        memories = []
+        observations = []
         
         try:
             for file_path in directory.iterdir():
                 if file_path.is_file() and not file_path.name.startswith('.'):
                     state = self._check_file_state(file_path)
                     if state:  # New or changed
-                        obs_memory = self._create_observation(
+                        observation = self._create_observation_dict(
                             obs_type,
                             str(file_path),
-                            Priority.MEDIUM,
+                            "MEDIUM",
                             cycle_count
                         )
-                        if obs_memory:
-                            memories.append(obs_memory)
+                        if observation:
+                            observations.append(observation)
         
         except Exception as e:
             logger.error(f"Error scanning {directory}: {e}")
         
-        return memories
+        return observations
     
     def _check_file_state(self, file_path: Path) -> Optional[FileState]:
         """Check if file is new or changed, update tracking."""
@@ -739,8 +746,8 @@ class EnvironmentScanner:
         """Mark a message as processed."""
         self.processed_messages.add(message_path)
     
-    def _create_observation(self, obs_type: str, path: str, priority: Priority, cycle_count: int = 0) -> Optional[ObservationMemoryBlock]:
-        """Create an observation with deduplication.
+    def _create_observation_dict(self, obs_type: str, path: str, priority: str, cycle_count: int = 0) -> Optional[Dict[str, Any]]:
+        """Create an observation dictionary with deduplication.
         
         Returns None if this exact observation has been seen before.
         """
@@ -755,23 +762,25 @@ class EnvironmentScanner:
         else:
             message = f"{obs_type}: {file_name}"
         
-        # Create the observation memory block
-        obs_memory = ObservationMemoryBlock(
-            observation_type=obs_type,
-            path=path,
-            message=message,
-            cycle_count=cycle_count,
-            priority=priority
-        )
+        # Create unique ID for deduplication
+        obs_id = f"{path}_{obs_type}_{cycle_count}"
         
         # Check if we've seen this exact observation before
-        if obs_memory.id in self.seen_observation_ids:
-            logger.debug(f"Skipping duplicate observation: {obs_memory.id}")
+        if obs_id in self.seen_observation_ids:
+            logger.debug(f"Skipping duplicate observation: {obs_id}")
             return None
         
         # Track this observation
-        self.seen_observation_ids.add(obs_memory.id)
-        return obs_memory
+        self.seen_observation_ids.add(obs_id)
+        
+        # Create the observation dictionary
+        return {
+            "observation_type": obs_type,
+            "path": path,
+            "message": message,
+            "cycle_count": cycle_count,
+            "priority": priority
+        }
     
     def reset_tracking(self):
         """Reset all tracking state (for testing or fresh start)."""

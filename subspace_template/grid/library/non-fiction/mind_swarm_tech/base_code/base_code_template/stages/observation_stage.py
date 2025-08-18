@@ -129,10 +129,23 @@ class ObservationStage:
         # First, scan environment for new observations
         logger.info("📡 Scanning for new observations...")
         self.cognitive_loop._update_dynamic_context(stage="OBSERVATION", phase="SCAN")
-        self.environment_scanner.scan_environment(
+        observations = self.environment_scanner.scan_environment(
             full_scan=False, 
             cycle_count=self.cognitive_loop.cycle_count
         )
+        
+        # Log observations summary
+        if observations:
+            logger.info(f"📋 Found {len(observations)} new observations")
+            # Group by type for logging
+            obs_by_type = {}
+            for obs in observations:
+                obs_type = obs.get('observation_type', 'unknown')
+                obs_by_type[obs_type] = obs_by_type.get(obs_type, 0) + 1
+            for obs_type, count in obs_by_type.items():
+                logger.debug(f"  - {obs_type}: {count}")
+        else:
+            logger.debug("No new observations found")
         
         # Update dynamic context before LLM call - OBSERVE phase
         self.cognitive_loop._update_dynamic_context(stage="OBSERVATION", phase="OBSERVE")
@@ -149,6 +162,23 @@ class ObservationStage:
             exclude_content_types=[]  # Include all relevant memory types
         )
         
+        # Include observations in the context for brain analysis
+        observation_summary = ""
+        if observations:
+            observation_summary = "\n\n=== NEW OBSERVATIONS ===\n"
+            for obs in observations:
+                obs_type = obs.get('observation_type', 'unknown')
+                message = obs.get('message', '')
+                priority = obs.get('priority', 'MEDIUM')
+                observation_summary += f"[{priority}] {obs_type}: {message}\n"
+                # Include additional details if present
+                if 'content' in obs and obs['content']:
+                    # Truncate long content
+                    content = obs['content']
+                    if len(content) > 500:
+                        content = content[:497] + "..."
+                    observation_summary += f"  Details: {content}\n"
+        
         # Use brain to analyze the situation from all observations
         logger.info("🧠 Analyzing situation from observations...")
 
@@ -161,7 +191,8 @@ Don't plan how to act on this information, just how it might be important.
 Always start your output with [[ ## reasoning ## ]]
 """,
                 "inputs": {
-                    "working_memory": "Your working memory"
+                    "working_memory": "Your working memory",
+                    "new_observations": "Recent observations from environment scan"
                 },
                 "outputs": {
                     "reasoning": "Your short explaination of reasoning",
@@ -170,7 +201,8 @@ Always start your output with [[ ## reasoning ## ]]
                 "display_field": "reasoning"
             },
             "input_values": {
-                "working_memory": memory_context
+                "working_memory": memory_context,
+                "new_observations": observation_summary if observation_summary else "No new observations"
             },
             "request_id": f"observe_{int(time.time()*1000)}",
             "timestamp": datetime.now().isoformat()
@@ -198,7 +230,8 @@ Always start your output with [[ ## reasoning ## ]]
         observartion_result_data = {
             "cycle_count": self.cognitive_loop.cycle_count,
             "reasoning": reasoning,
-            "relevance": relevance
+            "relevance": relevance,
+            "observations": observations  # Include raw observations for reference
         }
         
         # Write to observation pipeline buffer

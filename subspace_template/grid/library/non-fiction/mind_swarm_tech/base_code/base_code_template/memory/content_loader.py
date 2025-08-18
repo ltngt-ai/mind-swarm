@@ -13,8 +13,7 @@ from datetime import datetime, timedelta
 import logging
 
 from .memory_blocks import (
-    MemoryBlock, FileMemoryBlock,
-    ObservationMemoryBlock
+    MemoryBlock, FileMemoryBlock
 )
 from .memory_types import ContentType
 
@@ -102,8 +101,7 @@ class ContentLoader:
                 return self.load_knowledge_content(memory)
             else:
                 return self.load_file_content(memory)
-        elif isinstance(memory, ObservationMemoryBlock):
-            return self.format_observation(memory)
+        # ObservationMemoryBlock removed - observations are now ephemeral
         else:
             # For other types, return a string representation
             return self._default_content(memory)
@@ -221,9 +219,7 @@ class ContentLoader:
             logger.error(f"Error loading knowledge {memory.location}: {e}")
             return f"[Error loading knowledge: {memory.topic}]"
     
-    def format_observation(self, memory: ObservationMemoryBlock) -> str:
-        """Format an observation for context."""
-        return memory.message
+    # ObservationMemoryBlock removed - observations are now ephemeral
     
     def _resolve_path(self, path_str: str) -> Path:
         """Resolve a path relative to filesystem root."""

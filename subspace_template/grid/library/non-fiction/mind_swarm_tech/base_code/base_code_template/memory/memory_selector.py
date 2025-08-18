@@ -15,8 +15,7 @@ import re
 from .memory_types import Priority, ContentType
 from .memory_blocks import (
     MemoryBlock,
-    FileMemoryBlock,
-    ObservationMemoryBlock
+    FileMemoryBlock
 )
 from .context_builder import ContextBuilder
 
@@ -108,9 +107,7 @@ class RelevanceScorer:
         # No special handling for messages - they're just files
         # The LLM can read the content and understand it's a message
             
-        elif isinstance(memory, ObservationMemoryBlock):
-            # Recent observations are important
-            return 0.8
+        # ObservationMemoryBlock removed - observations are now ephemeral
             
         elif isinstance(memory, FileMemoryBlock) and memory.content_type == ContentType.MINDSWARM_KNOWLEDGE:
             # Knowledge memories use confidence as relevance

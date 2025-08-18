@@ -135,46 +135,5 @@ class FileMemoryBlock(MemoryBlock):
         self.id = path_str
 
 
-@dataclass
-class ObservationMemoryBlock(MemoryBlock):
-    """Simple observation - something that happened."""
-    observation_type: str  # Type of observation (action_result, file_change, new_message, etc.)
-    path: str  # Path to the file containing details
-    message: str  # What happened (e.g., "Result of action 'respond': Message sent successfully")
-    cycle_count: int  # Which cycle this happened in
-    content: Optional[str] = None  # Optional - small content included directly (< 1KB)
-    confidence: float = 1.0
-    priority: Priority = Priority.HIGH
-    expiry: Optional[datetime] = None
-    pinned: bool = False
-    
-    def __post_init__(self):
-        """Initialize base class and set type."""
-        # Observations have a special Mind-Swarm content type
-        content_type = ContentType.MINDSWARM_OBSERVATION
-        
-        # Don't pass timestamp to parent - we don't use it
-        super().__init__(
-            confidence=self.confidence,
-            priority=self.priority,
-            timestamp=None,  # No timestamp needed
-            expiry=self.expiry,
-            metadata=None,  # No metadata
-            pinned=self.pinned,
-            cycle_count=self.cycle_count,  # Pass cycle_count to parent
-            content_type=content_type
-        )
-        
-        # Use path as ID with observation type and cycle for uniqueness
-        path_str = str(self.path)
-        if path_str.startswith('/'):
-            path_str = path_str[1:]
-        
-        # Ensure proper namespace prefix
-        if not (path_str.startswith('personal/') or path_str.startswith('grid/')):
-            # Default observations to personal namespace
-            path_str = f"personal/observations/{path_str}"
-        
-        # Use path as ID - uniqueness is handled by properties
-        # observation_type and cycle_count are already stored as properties
-        self.id = path_str
+# ObservationMemoryBlock has been removed - observations are now passed directly as dictionaries
+# to the observation stage and don't persist as memory blocks

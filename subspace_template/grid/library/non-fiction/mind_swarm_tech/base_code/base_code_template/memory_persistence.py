@@ -12,7 +12,7 @@ from datetime import datetime
 
 from .memory import (
     WorkingMemoryManager, Priority, ContentType,
-    FileMemoryBlock, ObservationMemoryBlock
+    FileMemoryBlock
 )
 
 logger = logging.getLogger("Cyber.memory_persistence")
@@ -140,17 +140,10 @@ class MemoryPersistence:
                 content_type = ContentType[content_type_str] if hasattr(ContentType, content_type_str) else ContentType.UNKNOWN
                 
                 # Reconstruct based on content type
+                # ObservationMemoryBlock removed - observations are now ephemeral
                 if content_type == ContentType.MINDSWARM_OBSERVATION:
-                    memory = ObservationMemoryBlock(
-                        observation_type=mem_data.get('observation_type', 'unknown'),
-                        path=mem_data.get('path', ''),
-                        message=mem_data.get('message', 'Restored observation'),
-                        cycle_count=mem_data.get('cycle_count', 0),
-                        content=mem_data.get('content'),
-                        confidence=mem_data.get('confidence', 1.0),
-                        priority=Priority[mem_data.get('priority', 'MEDIUM')],
-                        pinned=mem_data.get('pinned', False)
-                    )
+                    logger.debug(f"Skipping obsolete ObservationMemoryBlock from persistence: {mem_data.get('id')}")
+                    continue
                 else:
                     # Default to FileMemoryBlock for everything else
                     memory = FileMemoryBlock(

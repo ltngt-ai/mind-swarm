@@ -4,7 +4,6 @@ from .memory_types import Priority, ContentType
 from .memory_blocks import (
     MemoryBlock,
     FileMemoryBlock,
-    ObservationMemoryBlock,
 )
 from .memory_manager import WorkingMemoryManager
 from .content_loader import ContentLoader
@@ -19,7 +18,6 @@ __all__ = [
     "Priority",
     "ContentType",
     "FileMemoryBlock",
-    "ObservationMemoryBlock",
     # Core components (individual - for backward compatibility)
     "WorkingMemoryManager",
     "ContentLoader",

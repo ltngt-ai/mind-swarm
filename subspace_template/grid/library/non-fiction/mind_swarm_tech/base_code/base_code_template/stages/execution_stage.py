@@ -1,4 +1,4 @@
-"""Execution Stage V3 - Python script execution with elegant memory API.
+"""Execution Stage - Python script execution with elegant memory API.
 
 This stage generates and executes Python scripts using the new memory-centric API
 where everything is accessed as memory through a unified interface.
@@ -14,10 +14,10 @@ import yaml  # Still needed for reading the file
 
 if TYPE_CHECKING:
     from ..cognitive_loop import CognitiveLoop
-from ..memory import Priority, ContentType, ObservationMemoryBlock
+from ..memory import Priority, ContentType
 from ..memory.tag_filter import TagFilter
 
-logger = logging.getLogger("Cyber.stages.execution_v3")
+logger = logging.getLogger("Cyber.stages.execution")
 
 
 class ExecutionStage:

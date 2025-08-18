@@ -11,7 +11,7 @@ import logging
 
 from .memory_blocks import (
     MemoryBlock, Priority,
-    FileMemoryBlock, ObservationMemoryBlock
+    FileMemoryBlock
 )
 from .memory_types import ContentType
 
@@ -155,18 +155,8 @@ class WorkingMemoryManager:
         
         return len(expired)
     
-    def cleanup_old_observations(self, max_age_seconds: int = 3600) -> int:
-        """Remove old observation entries beyond max age (except pinned ones)."""
-        cutoff = datetime.now() - timedelta(seconds=max_age_seconds)
-        old_observations = [
-            m for m in self.get_memories_by_content_type(ContentType.MINDSWARM_OBSERVATION)
-            if m.timestamp < cutoff and m.priority == Priority.LOW and not m.pinned
-        ]
-        
-        for memory in old_observations:
-            self.remove_memory(memory.id)
-        
-        return len(old_observations)
+    # ObservationMemoryBlock removed - observations are now ephemeral
+    # cleanup_old_observations method removed
     
     def get_memory_stats(self) -> Dict[str, Any]:
         """Get statistics about current memory state."""
@@ -224,12 +214,8 @@ class WorkingMemoryManager:
                 "end_line": memory.end_line,
                 "digest": memory.digest
             })
+        # ObservationMemoryBlock removed - observations are now ephemeral
         # Removed MessageMemoryBlock handling - messages are now FileMemoryBlock
-        elif isinstance(memory, ObservationMemoryBlock):
-            fields.update({
-                "observation_type": memory.observation_type,
-                "path": memory.path
-            })
         # Add other types as needed
         
         return fields

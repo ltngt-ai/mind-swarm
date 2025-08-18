@@ -458,19 +458,8 @@ class MemorySystem:
             logger.info(f"Cleaned up {count} expired memories")
         return count
     
-    def cleanup_old_observations(self, max_age_seconds: int = 3600) -> int:
-        """Remove old observation memories.
-        
-        Args:
-            max_age_seconds: Maximum age for observations
-            
-        Returns:
-            Number of observations removed
-        """
-        count = self._memory_manager.cleanup_old_observations(max_age_seconds)
-        if count > 0:
-            logger.info(f"Cleaned up {count} old observations")
-        return count
+    # ObservationMemoryBlock removed - observations are now ephemeral
+    # cleanup_old_observations method removed
     
     def cleanup_cache(self) -> int:
         """Clean up expired cache entries.

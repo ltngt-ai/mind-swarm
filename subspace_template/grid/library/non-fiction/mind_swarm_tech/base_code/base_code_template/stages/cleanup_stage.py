@@ -102,13 +102,13 @@ class CleanupStage:
         
         # Also do automatic cleanup of expired memories
         expired = self.memory_system.cleanup_expired()
-        old_observations = self.memory_system.cleanup_old_observations(max_age_seconds=1800)
+        # ObservationMemoryBlock removed - no need to clean up observations
         
         results["expired_count"] = expired
-        results["old_observations_count"] = old_observations
+        results["old_observations_count"] = 0  # Observations are now ephemeral
         
-        if expired or old_observations:
-            logger.info(f"🧹 Cleaned up {expired} expired, {old_observations} old memories")
+        if expired:
+            logger.info(f"🧹 Cleaned up {expired} expired memories")
         
         # Note: Script execution results are now only stored in pipeline buffers
         # which are automatically cleared each cycle, so no cleanup needed
