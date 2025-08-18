@@ -20,6 +20,23 @@ if memory.exists("/personal/data.json"):
     data = memory["/personal/data.json"]
 ```
 
+### File Size Limits
+The Memory API enforces limits to prevent memory system overload:
+- **Full file read**: Max 10,000 lines or 10MB
+- **Ranged read**: Max 5,000 lines per call
+
+If a file exceeds these limits, you'll get a helpful error:
+```python
+try:
+    # This might fail if file is too large
+    content = memory["/personal/huge_dataset.csv"].content
+except MemoryError as e:
+    print(e)  # Shows how to use read_lines() instead
+    
+    # Use ranged reading for large files
+    preview = memory.read_lines("/personal/huge_dataset.csv", end_line=100)
+```
+
 ### Writing Memory
 ```python
 # Create or update memory
@@ -535,6 +552,40 @@ class MemoryNode:
                 # For directories, content is the list of items
                 self._content = [item.name for item in actual_path.iterdir()]
             else:
+                # Check file size limits BEFORE reading
+                file_stat = actual_path.stat()
+                file_size = file_stat.st_size
+                
+                # Check size limit
+                if file_size > Memory.MAX_FILE_SIZE:
+                    raise MemoryError(
+                        f"File too large to load entirely: {self.path}\n"
+                        f"Size: {file_size:,} bytes (limit: {Memory.MAX_FILE_SIZE:,} bytes)\n"
+                        f"Use memory.read_lines() to read specific ranges instead:\n"
+                        f"  preview = memory.read_lines('{self.path}', end_line=100)\n"
+                        f"  middle = memory.read_lines('{self.path}', start_line=1000, end_line=2000)"
+                    )
+                
+                # Check line count for text files (skip for known binary extensions)
+                binary_extensions = {'.pyc', '.pyo', '.so', '.dll', '.exe', '.bin', '.dat', 
+                                   '.jpg', '.jpeg', '.png', '.gif', '.mp3', '.mp4', '.zip', '.tar', '.gz'}
+                if actual_path.suffix.lower() not in binary_extensions:
+                    try:
+                        with open(actual_path, 'r', encoding='utf-8') as f:
+                            line_count = sum(1 for _ in f)
+                        
+                        if line_count > Memory.MAX_FILE_LINES:
+                            raise MemoryError(
+                                f"File has too many lines to load entirely: {self.path}\n"
+                                f"Lines: {line_count:,} (limit: {Memory.MAX_FILE_LINES:,})\n"
+                                f"Use memory.read_lines() to read specific ranges instead:\n"
+                                f"  first_100 = memory.read_lines('{self.path}', end_line=100)\n"
+                                f"  last_100 = memory.read_lines('{self.path}', start_line={line_count - 100})"
+                            )
+                    except UnicodeDecodeError:
+                        # Binary file, size check already done
+                        pass
+                
                 # Determine type from extension
                 if actual_path.suffix == '.json':
                     self._type = "application/json"
@@ -782,6 +833,11 @@ class Memory:
     """
 Main memory interface providing unified access to all Mind-Swarm memories.
     The Memory class provides methods to read, write, and manage memories"""
+    
+    # Safety limits to prevent memory system overload
+    MAX_FILE_LINES = 10000  # Maximum lines for full file read
+    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB max for full file read
+    MAX_RANGE_LINES = 5000  # Maximum lines for ranged read
     
     def __init__(self, context: Dict[str, Any]):
         """Initialize the memory system.
@@ -1348,6 +1404,16 @@ Returns: True if path exists, False otherwise
             
         if actual_path.is_dir():
             raise MemoryTypeError(f"Cannot read lines from directory: {path}")
+        
+        # Check if range is too large
+        if start_line and end_line:
+            range_size = end_line - start_line + 1
+            if range_size > self.MAX_RANGE_LINES:
+                raise MemoryError(
+                    f"Requested range too large: {range_size} lines\n"
+                    f"Maximum range size: {self.MAX_RANGE_LINES} lines\n"
+                    f"Try reading in smaller chunks or use multiple calls"
+                )
         
         # Track access for working memory
         self._track_access(clean_path, 'text/plain')
