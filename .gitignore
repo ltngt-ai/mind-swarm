@@ -45,20 +45,9 @@ htmlcov/
 .env
 .env.local
 
-# Mind-Swarm specific
-# Ignore entire runtime subspace (created from template)
-/subspace/
-
-# But keep the template in git
-!/subspace_template/
-
 # Ignore subspace backups
 /subspace_backups/
-
-# Large directories that should be backed up separately
-cyber_rootfs/
-frozen/
-knowledge_db/
+/knowledge_exports/
 
 logs/
 data/
@@ -69,4 +58,6 @@ mind-swarm.log
 
 # OS
 .DS_Store
-Thumbs.db*.10x
+Thumbs.db
+*:Zone.Identifier
+*.10x
