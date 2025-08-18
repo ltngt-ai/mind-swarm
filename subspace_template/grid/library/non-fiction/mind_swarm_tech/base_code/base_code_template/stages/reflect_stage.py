@@ -223,7 +223,7 @@ Your pipeline memory contains the last execution results.
                 from ..memory import FileMemoryBlock, Priority
                 
                 # Save the results to a file
-                knowledge_results_file = self.cognitive_loop.memory_dir / "knowledge_query_results.json"
+                knowledge_results_file = self.cognitive_loop.memory_dir / "reflection_knowledge_query_results.json"
                 knowledge_data = {
                     "query": query,
                     "timestamp": datetime.now().isoformat(),
@@ -236,7 +236,7 @@ Your pipeline memory contains the last execution results.
                 
                 # Add to working memory - use regular JSON content type, not KNOWLEDGE
                 knowledge_memory = FileMemoryBlock(
-                    location="personal/.internal/memory/knowledge_query_results.json",
+                    location="personal/.internal/memory/reflection_knowledge_query_results.json",
                     priority=Priority.HIGH,
                     pinned=False,
                     metadata={
@@ -251,17 +251,14 @@ Your pipeline memory contains the last execution results.
                 )
                 
                 # Remove old knowledge results if they exist
-                knowledge_id = "personal/.internal/memory/knowledge_query_results.json"
+                knowledge_id = "personal/.internal/memory/reflection_knowledge_query_results.json"
                 existing = self.cognitive_loop.memory_system.get_memory(knowledge_id)
                 if existing:
                     self.cognitive_loop.memory_system.remove_memory(knowledge_id)
                     
                 self.cognitive_loop.memory_system.add_memory(knowledge_memory)
                 logger.info(f"✅ Added knowledge query results to working memory")
-                
-                # Log first result title for visibility
-                if results[0].get("metadata", {}).get("title"):
-                    logger.info(f"  Top result: {results[0]['metadata']['title']}")
+            
             else:
                 logger.info("📚 No knowledge results found for query")
             

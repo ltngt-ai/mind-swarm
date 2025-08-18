@@ -418,7 +418,14 @@ Returns:
             # Add metadata if available
             metadata = item.get('metadata', {})
             if metadata.get('tags'):
-                knowledge_text += f"   Tags: {', '.join(metadata['tags'])}\n"
+                # Tags might be stored as a comma-separated string in ChromaDB
+                tags = metadata['tags']
+                if isinstance(tags, str):
+                    knowledge_text += f"   Tags: {tags}\n"
+                elif isinstance(tags, list):
+                    knowledge_text += f"   Tags: {', '.join(tags)}\n"
+                else:
+                    knowledge_text += f"   Tags: {tags}\n"
             if metadata.get('cyber_id'):
                 knowledge_text += f"   Source: {metadata['cyber_id']}\n"
             if item.get('score', 0) > 0:
