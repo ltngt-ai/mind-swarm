@@ -118,7 +118,7 @@ class CleanupStage:
         # Log cleanup completion
         total_cleaned = (len(results["obsolete_observations"]) + 
                         len(results["obsolete_memories"]) + 
-                        expired + old_observations + script_files_cleaned)
+                        expired + script_files_cleaned)
         
         if total_cleaned > 0:
             logger.info(f"✨ Cleanup completed for cycle {cycle_count}: {total_cleaned} items cleaned")
