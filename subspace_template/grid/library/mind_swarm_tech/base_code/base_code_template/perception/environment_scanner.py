@@ -388,7 +388,8 @@ class EnvironmentScanner:
             
             for item in sorted(actual_path.iterdir()):
                 # Skip ALL hidden files/dirs and certain system directories completely
-                if item.name.startswith('.') or item.name in ['__pycache__', '.git']:
+                # Also skip .description.txt since it's shown separately
+                if item.name.startswith('.') or item.name in ['__pycache__', '.git', '.description.txt']:
                     continue
                 
                 # Update file state tracking
@@ -413,9 +414,30 @@ class EnvironmentScanner:
             except Exception as e:
                 logger.debug(f"Could not check for nearby Cybers: {e}")
             
+            # Check for .description.txt file in the current location
+            description_file = actual_path / ".description.txt"
+            description_text = None
+            if description_file.exists() and description_file.is_file():
+                try:
+                    with open(description_file, 'r') as f:
+                        description_text = f.read().strip()
+                        if len(description_text) > 500:  # Limit description length
+                            description_text = description_text[:497] + "..."
+                except Exception as e:
+                    logger.debug(f"Could not read .description.txt: {e}")
+            
             # Build tree-style text representation
             lines = []
             lines.append(f"| {current_location} (📁=memory group, 📄=memory)")
+            
+            # Add description if found
+            if description_text:
+                lines.append("|")
+                lines.append("| 📝 Description:")
+                # Format description with proper indentation
+                for line in description_text.split('\n'):
+                    lines.append(f"|   {line}")
+                lines.append("|")
             
             # Add nearby Cybers if any
             if nearby_cybers:

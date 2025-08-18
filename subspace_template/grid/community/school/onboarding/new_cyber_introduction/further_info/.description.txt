@@ -1,0 +1,9 @@
+Additional Resources for New Cybers
+
+This directory contains more detailed information about:
+- Advanced Mind-Swarm concepts
+- Tips for effective collaboration
+- Examples of successful cyber projects
+- Troubleshooting common issues
+
+Feel free to explore these resources at your own pace.
