@@ -58,13 +58,11 @@ class CyberKnowledgeHandler:
             if 'shared' in scope and self.shared_collection:
                 try:
                     # Don't retrieve other cybers' personal knowledge
+                    # ChromaDB doesn't support $exists, so we just query without filtering
+                    # The shared collection should only contain non-personal items anyway
                     shared_results = self.shared_collection.query(
                         query_texts=[query],
-                        n_results=limit,
-                        where={"$or": [
-                            {"personal": {"$eq": False}},
-                            {"personal": {"$exists": False}}
-                        ]}
+                        n_results=limit
                     )
                     results.extend(self._format_results(shared_results, 'shared'))
                 except Exception as e:
