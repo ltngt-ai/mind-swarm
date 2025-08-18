@@ -131,6 +131,42 @@ try:
 except MemoryError as e:
     print(f"ERROR: {e}")
 ```
+
+### Working with Large Files
+```python
+# Get file info before reading
+info = memory.get_info("/personal/large_dataset.csv")
+print(f"File has {info['lines']} lines and {info['size']} bytes")
+
+if info['lines'] > 10000:
+    # Read only first 100 lines for preview
+    preview = memory.read_lines("/personal/large_dataset.csv", end_line=100)
+    print("Preview:", preview)
+    
+    # Read specific range
+    middle = memory.read_lines("/personal/large_dataset.csv", start_line=5000, end_line=5100)
+    
+    # Read from line 9000 to end
+    tail = memory.read_lines("/personal/large_dataset.csv", start_line=9000)
+else:
+    # Small enough to read entirely
+    full_content = memory["/personal/large_dataset.csv"].content
+```
+
+### Appending to Files
+```python
+# Append to log without reading existing content
+import time
+memory.append("/personal/activity.log", f"[{time.time()}] Process started\n")
+
+# Append multiple lines
+memory.append("/personal/notes.txt", """
+## New Section
+This content is appended without loading the entire file.
+Much more efficient for large files!
+""")
+```
+
 ## Key Rules
 1. **Automatic save** - Changes persist immediately, unless in a transaction
 2. **Transaction safety** - Use transactions for critical operations
@@ -884,6 +920,15 @@ Main memory interface providing unified access to all Mind-Swarm memories.
                 rollback_info['from_path'] = path
                 rollback_info['to_path'] = data.get('to') if data else None
                 
+            elif operation == 'append':
+                # Store the file size before append for truncation on rollback
+                actual_path = self._resolve_path(path)
+                if actual_path.exists():
+                    rollback_info['original_size'] = actual_path.stat().st_size
+                else:
+                    rollback_info['original_size'] = 0
+                    rollback_info['was_new'] = True
+                    
             elif operation == 'evict':
                 # Store that this was in working memory
                 rollback_info['was_in_memory'] = True
@@ -1193,6 +1238,18 @@ Returns: True if path exists, False otherwise
                             old_actual.rename(new_actual)
                             print(f"↩️ Reversed move: {change['to_path']} → {path}")
                             
+                elif operation == 'append':
+                    # Truncate file to original size or delete if new
+                    actual_path = self._resolve_path(path)
+                    if change.get('was_new') and actual_path.exists():
+                        actual_path.unlink()
+                        print(f"↩️ Removed newly created file {path}")
+                    elif actual_path.exists():
+                        original_size = change.get('original_size', 0)
+                        with open(actual_path, 'r+b') as f:
+                            f.truncate(original_size)
+                        print(f"↩️ Truncated {path} to original size")
+                        
                 elif operation == 'evict':
                     # Re-add to working memory
                     if change.get('was_in_memory'):
@@ -1209,6 +1266,165 @@ Returns: True if path exists, False otherwise
                         
             except Exception as e:
                 print(f"⚠️ Failed to rollback {operation} on {path}: {e}")
+    
+    def get_info(self, path: str) -> Dict[str, Any]:
+        """
+        Get metadata about a memory without loading its content.
+        
+        Args:
+            path: Memory path to inspect
+            
+        Returns:
+            Dict with keys:
+            - exists: bool - whether the memory exists
+            - size: int - size in bytes
+            - lines: int - number of lines (for text files)
+            - type: str - 'file' or 'directory'
+            - modified: datetime - last modified time
+            
+        Example:
+            info = memory.get_info("/personal/large_file.txt")
+            if info['lines'] > 1000:
+                # Use ranged read for large files
+                first_100 = memory.read_lines("/personal/large_file.txt", end_line=100)
+        """
+        clean_path = self._clean_path(path)
+        actual_path = self._resolve_path(clean_path)
+        
+        info = {
+            'exists': actual_path.exists(),
+            'path': path
+        }
+        
+        if not actual_path.exists():
+            return info
+            
+        if actual_path.is_dir():
+            info['type'] = 'directory'
+            info['size'] = sum(f.stat().st_size for f in actual_path.rglob('*') if f.is_file())
+            info['items'] = len(list(actual_path.iterdir()))
+        else:
+            info['type'] = 'file'
+            stat = actual_path.stat()
+            info['size'] = stat.st_size
+            info['modified'] = datetime.fromtimestamp(stat.st_mtime)
+            
+            # Count lines for text files
+            try:
+                with open(actual_path, 'r', encoding='utf-8') as f:
+                    info['lines'] = sum(1 for _ in f)
+            except (UnicodeDecodeError, IOError):
+                info['lines'] = None  # Binary or unreadable file
+                
+        return info
+    
+    def read_lines(self, path: str, start_line: int = None, end_line: int = None) -> str:
+        """
+        Read specific lines from a memory without loading the entire file.
+        
+        Args:
+            path: Memory path to read
+            start_line: First line to read (1-based, inclusive). None means from beginning.
+            end_line: Last line to read (1-based, inclusive). None means to end.
+            
+        Returns:
+            String containing the requested lines
+            
+        Example:
+            # Read first 100 lines
+            header = memory.read_lines("/personal/data.csv", end_line=100)
+            
+            # Read lines 50-150
+            middle = memory.read_lines("/personal/log.txt", start_line=50, end_line=150)
+            
+            # Read from line 1000 to end
+            tail = memory.read_lines("/personal/output.txt", start_line=1000)
+        """
+        clean_path = self._clean_path(path)
+        actual_path = self._resolve_path(clean_path)
+        
+        if not actual_path.exists():
+            raise MemoryNotFoundError(path)
+            
+        if actual_path.is_dir():
+            raise MemoryTypeError(f"Cannot read lines from directory: {path}")
+        
+        # Track access for working memory
+        self._track_access(clean_path, 'text/plain')
+        
+        # Also add to working memory with line range info
+        if self._memory_system:
+            from ..memory.memory_blocks import FileMemoryBlock
+            from ..memory.memory_types import Priority
+            
+            memory_block = FileMemoryBlock(
+                location=clean_path,
+                start_line=start_line,
+                end_line=end_line,
+                priority=Priority.MEDIUM,
+                confidence=1.0,
+                metadata={
+                    "source": "script_read_lines",
+                    "cycle": self._cognitive_loop.cycle_count if self._cognitive_loop else 0
+                }
+            )
+            self._memory_system.add_memory(memory_block)
+        
+        lines = []
+        with open(actual_path, 'r', encoding='utf-8') as f:
+            for i, line in enumerate(f, 1):
+                if start_line and i < start_line:
+                    continue
+                if end_line and i > end_line:
+                    break
+                lines.append(line)
+                
+        return ''.join(lines)
+    
+    def append(self, path: str, content: str) -> None:
+        """
+        Append content to a memory without reading the existing content.
+        
+        Args:
+            path: Memory path to append to
+            content: Content to append
+            
+        Example:
+            # Append to a log file
+            memory.append("/personal/activity.log", f"[{datetime.now()}] Task completed\n")
+            
+            # Append multiple lines
+            memory.append("/personal/notes.txt", "\n## New Section\nMore content here\n")
+        """
+        clean_path = self._clean_path(path)
+        actual_path = self._resolve_path(clean_path)
+        
+        # Track the append operation
+        self._track_change(clean_path, 'append', {'content': content})
+        self._track_write(clean_path, 'text/plain', not actual_path.exists())
+        
+        # Create parent directory if needed
+        actual_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Append to file
+        with open(actual_path, 'a', encoding='utf-8') as f:
+            f.write(content)
+            
+        # Also add to working memory
+        if self._memory_system:
+            from ..memory.memory_blocks import FileMemoryBlock
+            from ..memory.memory_types import Priority
+            
+            memory_block = FileMemoryBlock(
+                location=clean_path,
+                priority=Priority.MEDIUM,
+                confidence=1.0,
+                metadata={
+                    "source": "script_append",
+                    "cycle": self._cognitive_loop.cycle_count if self._cognitive_loop else 0
+                }
+            )
+            self._memory_system.add_memory(memory_block)
     
     def evict(self, path: str) -> bool:
         """
