@@ -182,7 +182,7 @@ class MemorySystem:
             selection_strategy: Selection strategy ("balanced", "recent", "relevant")
             format_type: Output format ("json", "structured", "narrative")
             tag_filter: Optional TagFilter to apply stage-specific filtering
-            exclude_content_types: List of content types to exclude (e.g., [ContentType.MINDSWARM_OBSERVATION])
+            exclude_content_types: List of content types to exclude
             include_types: List of memory types to include (if set, only these types are included)
             
         Returns:

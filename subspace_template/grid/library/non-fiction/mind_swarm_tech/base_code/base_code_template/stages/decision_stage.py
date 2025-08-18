@@ -138,7 +138,7 @@ class DecisionStage:
             current_task=current_task,
             selection_strategy="balanced",
             tag_filter=tag_filter,
-            exclude_content_types=[ContentType.MINDSWARM_OBSERVATION]  # Don't need raw observations
+            exclude_content_types=[]  # No exclusions needed (observations already removed)
         )
         
         # Use brain to generate intention

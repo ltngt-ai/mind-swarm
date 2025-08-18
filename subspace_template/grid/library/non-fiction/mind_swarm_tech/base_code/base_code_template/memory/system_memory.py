@@ -1,6 +1,6 @@
 """System memory utilities for creating simple JSON data bag memories.
 
-System memories are JSON files with ContentType.MINDSWARM_SYSTEM that don't
+System memories are JSON files with ContentType.APPLICATION_JSON that don't
 require formal structure - they're just bags of JSON data.
 """
 
@@ -22,7 +22,7 @@ def create_system_memory(location: str,
     """Create a system memory block for a JSON data bag.
     
     System memories are simple JSON files without formal structure.
-    They use ContentType.MINDSWARM_SYSTEM and Priority.SYSTEM by default.
+    They use ContentType.APPLICATION_JSON and Priority.SYSTEM by default.
     
     Args:
         location: Path to the JSON file (relative to cyber's view)
@@ -47,7 +47,7 @@ def create_system_memory(location: str,
     """
     return FileMemoryBlock(
         location=location,
-        content_type=ContentType.MINDSWARM_SYSTEM,
+        content_type=ContentType.APPLICATION_JSON,
         priority=Priority.SYSTEM,
         confidence=1.0,
         pinned=pinned,

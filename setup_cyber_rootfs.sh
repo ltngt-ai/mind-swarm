@@ -55,8 +55,9 @@ echo "Release: $DEBIAN_RELEASE"
 echo ""
 
 # Create minimal Debian system
+# Include libmagic1 for python-magic file type detection
 debootstrap --variant=minbase \
-    --include=python3,python3-pip,python3-venv,ca-certificates,python3-dev,build-essential \
+    --include=python3,python3-pip,python3-venv,ca-certificates,python3-dev,build-essential,libmagic1 \
     "$DEBIAN_RELEASE" \
     "$ROOTFS_DIR" \
     "$DEBIAN_MIRROR"

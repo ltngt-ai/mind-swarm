@@ -50,16 +50,9 @@ class ContentType(Enum):
     IMAGE_JPEG = "image/jpeg"
     IMAGE_GIF = "image/gif"
     
-    # Mind-Swarm specific types
-    MINDSWARM_OBSERVATION = "application/x-mindswarm-observation"
-    MINDSWARM_GOAL = "application/x-mindswarm-goal"
-    MINDSWARM_TASK = "application/x-mindswarm-task"
+    # Mind-Swarm specific types (only 2 currently defined)
     MINDSWARM_MESSAGE = "application/x-mindswarm-message"
     MINDSWARM_KNOWLEDGE = "application/x-mindswarm-knowledge"
-    MINDSWARM_ACTION = "application/x-mindswarm-action"
-    MINDSWARM_CONCEPT = "application/x-mindswarm-concept"
-    MINDSWARM_INSTRUCTION = "application/x-mindswarm-instruction"
-    MINDSWARM_SYSTEM = "application/x-mindswarm-system"
     
     # Unknown/default
     UNKNOWN = "application/octet-stream"

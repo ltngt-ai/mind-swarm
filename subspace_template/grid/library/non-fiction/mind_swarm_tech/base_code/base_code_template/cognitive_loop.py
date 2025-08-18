@@ -120,7 +120,7 @@ class CognitiveLoop:
                 },
                 cycle_count=self.cycle_count,  # When this memory was added
                 no_cache=True,  # Pipeline buffers change frequently, don't cache
-                content_type=ContentType.MINDSWARM_SYSTEM  # Mark as system memory
+                content_type=ContentType.APPLICATION_JSON  # System JSON file
             )
             
             # Add to memory system
@@ -155,7 +155,7 @@ class CognitiveLoop:
                 },
                 cycle_count=self.cycle_count,  # Current cycle
                 no_cache=True,  # Don't cache pipeline buffers
-                content_type=ContentType.MINDSWARM_SYSTEM  # Mark as system memory
+                content_type=ContentType.APPLICATION_JSON  # System JSON file
             )
             self.memory_system.add_memory(updated_buffer)
             self.pipeline_buffers[stage] = updated_buffer
@@ -266,7 +266,7 @@ class CognitiveLoop:
                 pinned=True,  # Always in working memory
                 metadata={"file_type": "identity", "description": "My identity and configuration"},
                 cycle_count=self.cycle_count,  # When this memory was added
-                content_type=ContentType.MINDSWARM_SYSTEM  # Mark as system memory
+                content_type=ContentType.APPLICATION_JSON  # System JSON file
             )
             self.memory_system.add_memory(identity_memory)
             logger.info(f"Added identity.json to pinned memory")
@@ -301,7 +301,7 @@ class CognitiveLoop:
             metadata={"file_type": "dynamic_context", "description": "Current runtime context"},
             cycle_count=self.cycle_count,  # Will always match file content now
             no_cache=True,  # Don't cache, always read from disk
-            content_type=ContentType.MINDSWARM_SYSTEM  # Mark as system memory
+            content_type=ContentType.APPLICATION_JSON  # System JSON file
         )
         self.memory_system.add_memory(context_memory)
         self.dynamic_context_memory_id = context_memory.id

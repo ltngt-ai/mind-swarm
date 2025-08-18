@@ -80,7 +80,7 @@ class RelevanceScorer:
         """Calculate recency factor based on age and type."""
         # Different decay rates for different types
         decay_rates = {
-            ContentType.MINDSWARM_OBSERVATION: 300,    # 5 minutes
+            # MINDSWARM_OBSERVATION removed - observations are ephemeral
             ContentType.APPLICATION_JSON: 3600,         # 1 hour for JSON files
             ContentType.MINDSWARM_KNOWLEDGE: 86400,     # 24 hours
         }

@@ -7,6 +7,21 @@ This provides a way to safely mutate memories and so progress towards goals and 
 
 Everything is memory. This module provides a unified interface for all memory operations
 including files, messages, goals, and any other data in the Mind-Swarm ecosystem.
+
+## Working Memory vs Python Memory
+**IMPORTANT DISTINCTION:**
+- **Working Memory**: Affects token limits for cognitive processing (thinking)
+- **Python Memory**: Just variables in your script, doesn't affect cognition
+
+Methods that ADD to working memory (use sparingly for large files):
+- `memory[path]` - Reading files this way
+- `memory.read_lines()` - Reading specific ranges
+- `memory.append()` - Appending to files
+
+Methods that DON'T add to working memory (use for large file processing):
+- `memory.read_raw()` - Read files directly into Python
+- `memory.write_raw()` - Write files directly from Python
+- `memory.get_info()` - Get metadata only
     
 ## Important Examples
 
@@ -173,15 +188,29 @@ else:
 ### Appending to Files
 ```python
 # Append to log without reading existing content
-import time
 memory.append("/personal/activity.log", f"[{time.time()}] Process started\n")
+```
 
-# Append multiple lines
-memory.append("/personal/notes.txt", """
-## New Section
-This content is appended without loading the entire file.
-Much more efficient for large files!
-""")
+### Processing Large Files Without Cognitive Overhead
+```python
+# read_raw() loads files into Python memory WITHOUT adding to working memory
+# This doesn't affect token limits for cognitive processing!
+
+# Process a huge CSV file
+raw_csv = memory.read_raw("/personal/huge_dataset.csv")  # No working memory!
+lines = raw_csv.split('\n')
+
+# Do heavy processing in Python
+filtered = []
+for line in lines:
+    if 'important' in line:
+        filtered.append(line)
+
+# Only save results to working memory
+memory["/personal/filtered.csv"] = '\n'.join(filtered)  # This goes to working memory
+
+# Or save results without working memory
+memory.write_raw("/personal/filtered.csv", '\n'.join(filtered))  # Stays out of working memory
 ```
 
 ## Key Rules
@@ -190,6 +219,8 @@ Much more efficient for large files!
 3. **Everything is memory** - Think in terms of memory, not files
 4. **Type checking** - Always verify data types before operations (use isinstance())
 5. **Parse when needed** - YAML/JSON files auto-parse but always check type first
+6. **Working memory is precious** - Use read_raw()/write_raw() for large file processing
+7. **Size limits exist** - Files over 10MB or 10,000 lines need special handling
 """
 
 import json
@@ -199,6 +230,10 @@ from typing import Any, Dict, List
 from datetime import datetime
 from contextlib import contextmanager
 from collections.abc import MutableMapping, MutableSequence
+
+# Python-magic is required for consistent MIME type detection
+# The Debian rootfs environment must have this installed
+import magic
 
 
 class MemoryError(Exception):
@@ -552,6 +587,9 @@ class MemoryNode:
                 # For directories, content is the list of items
                 self._content = [item.name for item in actual_path.iterdir()]
             else:
+                # Use centralized content type detection (with python-magic when available)
+                self._type = self._memory._detect_content_type(actual_path)
+                
                 # Check file size limits BEFORE reading
                 file_stat = actual_path.stat()
                 file_size = file_stat.st_size
@@ -566,10 +604,8 @@ class MemoryNode:
                         f"  middle = memory.read_lines('{self.path}', start_line=1000, end_line=2000)"
                     )
                 
-                # Check line count for text files (skip for known binary extensions)
-                binary_extensions = {'.pyc', '.pyo', '.so', '.dll', '.exe', '.bin', '.dat', 
-                                   '.jpg', '.jpeg', '.png', '.gif', '.mp3', '.mp4', '.zip', '.tar', '.gz'}
-                if actual_path.suffix.lower() not in binary_extensions:
+                # Check line count for text files
+                if self._type.startswith('text/') or self._type in ['application/json', 'application/yaml']:
                     try:
                         with open(actual_path, 'r', encoding='utf-8') as f:
                             line_count = sum(1 for _ in f)
@@ -583,12 +619,12 @@ class MemoryNode:
                                 f"  last_100 = memory.read_lines('{self.path}', start_line={line_count - 100})"
                             )
                     except UnicodeDecodeError:
-                        # Binary file, size check already done
+                        # Misdetected as text, actually binary - continue anyway
                         pass
                 
-                # Determine type from extension
-                if actual_path.suffix == '.json':
-                    self._type = "application/json"
+                # Load content based on detected type
+                if self._type in ["application/json", "application/x-mindswarm-message"]:
+                    # JSON-based formats (including Mind-Swarm messages)
                     with open(actual_path, 'r') as f:
                         content_str = f.read()
                     try:
@@ -600,24 +636,19 @@ class MemoryNode:
                         print(f"   File content: {content_str[:100]}..." if len(content_str) > 100 else f"   File content: {content_str}")
                         print(f"   Returning empty dict - you may want to recreate this file")
                         self._content = {}  # Return empty dict for corrupted JSON files
-                elif actual_path.suffix in ['.yaml', '.yml']:
+                elif self._type in ["application/yaml", "application/x-mindswarm-knowledge"]:
+                    # YAML-based formats (including Mind-Swarm knowledge)
                     import yaml
-                    self._type = "application/yaml"
                     with open(actual_path, 'r') as f:
                         self._content = yaml.safe_load(f)
+                elif self._type == "application/octet-stream":
+                    # Binary file - return as bytes
+                    with open(actual_path, 'rb') as f:
+                        self._content = f.read()
                 else:
-                    # For files without extension, try to detect JSON content
+                    # Text file (including text/plain, text/markdown, and other text/* types)
                     with open(actual_path, 'r') as f:
-                        content_str = f.read()
-                    
-                    # Try to parse as JSON first
-                    try:
-                        self._content = json.loads(content_str)
-                        self._type = "application/json"
-                    except (json.JSONDecodeError, ValueError):
-                        # Not JSON, treat as plain text
-                        self._type = "text/plain"
-                        self._content = content_str
+                        self._content = f.read()
                 
                 # Track that this file was accessed for transaction commit
                 if not actual_path.is_dir():
@@ -647,7 +678,8 @@ class MemoryNode:
                 content_to_save = list(self._content)
             
             # Save based on type
-            if self._type == "application/json":
+            if self._type in ["application/json", "application/x-mindswarm-message"]:
+                # JSON-based formats (including Mind-Swarm messages)
                 # First serialize to string to catch any errors before truncating file
                 try:
                     json_string = json.dumps(content_to_save, indent=2)
@@ -662,8 +694,8 @@ class MemoryNode:
                 # Only write if serialization succeeded
                 with open(actual_path, 'w') as f:
                     f.write(json_string)
-            elif self._type == "application/yaml":
-                # Save as YAML, not JSON!
+            elif self._type in ["application/yaml", "application/x-mindswarm-knowledge"]:
+                # YAML-based formats (including Mind-Swarm knowledge)
                 import yaml
                 try:
                     yaml_string = yaml.dump(content_to_save, default_flow_style=False, sort_keys=False)
@@ -676,7 +708,16 @@ class MemoryNode:
                     print(f"   ⚠️ File saved as JSON despite .yaml extension")
                 with open(actual_path, 'w') as f:
                     f.write(yaml_string)
+            elif self._type == "application/octet-stream":
+                # Binary content
+                with open(actual_path, 'wb') as f:
+                    if isinstance(content_to_save, bytes):
+                        f.write(content_to_save)
+                    else:
+                        # Convert to bytes if needed
+                        f.write(str(content_to_save).encode('utf-8'))
             else:
+                # Text content (including text/plain, text/markdown, and other text/* types)
                 with open(actual_path, 'w') as f:
                     f.write(str(content_to_save))
             
@@ -715,19 +756,25 @@ class MemoryNode:
             )
         self._content = value
         self._modified = True
-        # Auto-detect type if not set, considering file extension
+        # Auto-detect type if not set, using centralized detection
         if self._type is None:
-            # Check file extension first
             actual_path = self._memory._resolve_path(self.path)
-            if actual_path.suffix in ['.yaml', '.yml']:
-                self._type = "application/yaml"
-            elif actual_path.suffix == '.json':
-                self._type = "application/json"
-            elif isinstance(value, dict) or isinstance(value, list):
-                # Default to JSON for dict/list without explicit extension
-                self._type = "application/json"
+            # If file exists, use proper detection
+            if actual_path.exists():
+                self._type = self._memory._detect_content_type(actual_path)
             else:
-                self._type = "text/plain"
+                # For new files, infer from extension or content type
+                if actual_path.suffix in ['.yaml', '.yml']:
+                    self._type = "application/yaml"
+                elif actual_path.suffix == '.json':
+                    self._type = "application/json"
+                elif isinstance(value, dict) or isinstance(value, list):
+                    # Default to JSON for dict/list without explicit extension
+                    self._type = "application/json"
+                elif isinstance(value, bytes):
+                    self._type = "application/octet-stream"
+                else:
+                    self._type = "text/plain"
         # Auto-save in transaction mode
         if self._memory._auto_save:
             self._save()
@@ -861,16 +908,11 @@ Main memory interface providing unified access to all Mind-Swarm memories.
         # Track accessed and written files for transaction commit
         self._accessed_files = []
         
-        # Initialize knowledge API (lazy loaded)
-        self._knowledge = None
         self._written_files = []
     
     def _clean_path(self, path: str) -> str:
-        """Clean a path by removing any type prefix.
-        
-        Accepts both formats:
-        - "knowledge:personal/goals/..." -> "personal/goals/..."
-        - "personal/goals/..." -> "personal/goals/..." (unchanged)
+        """Clean a path by removing any type prefix.       
+        - "personal/goals/..." -> "personal/goals/..."
         
         Note: We only run on Linux, so no need to handle Windows paths.
         """
@@ -1048,7 +1090,7 @@ Main memory interface providing unified access to all Mind-Swarm memories.
     def create(self, path: str) -> MemoryNode:
         """
 Create a new memory at the specified path.
-Args: path - Memory path like "/personal/notes.txt" or "knowledge:personal/notes.txt"
+Args: path - Memory path like "/personal/notes.txt"
 Returns: MemoryNode that can be modified and saved
 """
         clean_path = self._clean_path(path)
@@ -1057,7 +1099,7 @@ Returns: MemoryNode that can be modified and saved
     def make_memory_group(self, path: str):
         """
 Create a memory group at the specified path.                
-Args: path - Group path like "/personal/projects" or "knowledge:personal/projects"            
+Args: path - Group path like "/personal/projects"            
 Raises:
     NotAMemoryGroupError: If a memory already exists at this path
     MemoryError: If creation fails for other reasons
@@ -1231,6 +1273,99 @@ Returns: True if path exists, False otherwise
         self._accessed_files.clear()
         self._written_files.clear()
     
+    def _detect_content_type(self, path: Path) -> str:
+        """
+        Detect content type using the same logic as server's MimeHandler.
+        This ensures consistency between get_info() and actual memory loading.
+        
+        Priority:
+        1. Check Mind-Swarm specific double extensions (.knowledge.yaml, .msg.json, etc.)
+        2. Check directory-based hints (/inbox/, /knowledge/, etc.)
+        3. Use python-magic for base MIME type detection (REQUIRED)
+        4. Content sniffing for Mind-Swarm specific YAML/JSON types
+        
+        No fallbacks - python-magic must be available in the Debian rootfs environment.
+        """
+        path_str = str(path)
+        
+        # 1. Check Mind-Swarm specific double extensions (only 2 types currently)
+        if path_str.endswith('.knowledge.yaml') or path_str.endswith('.knowledge.yml'):
+            return 'application/x-mindswarm-knowledge'
+        elif path_str.endswith('.msg.json') or path_str.endswith('.msg.yaml'):
+            return 'application/x-mindswarm-message'
+        
+        # 2. Directory-based hints (only for the 2 types we support)
+        if '/knowledge/' in path_str or '/initial_knowledge/' in path_str:
+            if path.suffix in ['.yaml', '.yml']:
+                return 'application/x-mindswarm-knowledge'
+        elif '/inbox/' in path_str or '/outbox/' in path_str:
+            if path.suffix in ['.json', '.yaml', '.yml']:
+                return 'application/x-mindswarm-message'
+        
+        # 3. Use python-magic for base type detection (REQUIRED - no fallback)
+        if not path.exists():
+            raise MemoryError(f"Cannot detect content type: {path} does not exist")
+        
+        magic_mime = magic.Magic(mime=True)
+        detected_type = magic_mime.from_file(str(path))
+        
+        # For text/plain, YAML, and JSON, continue to content sniffing
+        # to detect Mind-Swarm specific types
+        if detected_type not in ['text/plain', 'application/json', 'text/x-yaml', 'application/x-yaml']:
+            # For other types (images, PDFs, etc.), trust magic
+            return detected_type
+        
+        # 4. Content sniffing for Mind-Swarm specific types
+        if path.suffix in ['.yaml', '.yml', '.json']:
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    content_sample = f.read(1024)  # Read first 1KB for sniffing
+                
+                # Sniff YAML files
+                if path.suffix in ['.yaml', '.yml']:
+                    try:
+                        # Front matter style - likely knowledge
+                        if content_sample.startswith('---'):
+                            return 'application/x-mindswarm-knowledge'
+                        
+                        data = yaml.safe_load(content_sample)
+                        if isinstance(data, dict):
+                            # Check for knowledge markers
+                            if any(key in data for key in ['title', 'tags', 'category', 'content', 'description']):
+                                return 'application/x-mindswarm-knowledge'
+                            # Check for message markers
+                            elif any(key in data for key in ['to', 'from', 'subject', 'body']):
+                                return 'application/x-mindswarm-message'
+                    except:
+                        pass
+                    return 'application/yaml'  # Generic YAML
+                
+                # Sniff JSON files
+                elif path.suffix == '.json':
+                    try:
+                        # Handle truncated samples
+                        if len(content_sample) == 1024:
+                            # Add closing brackets for partial parse
+                            test_content = content_sample + ']}' * 10
+                        else:
+                            test_content = content_sample
+                        
+                        data = json.loads(test_content)
+                        if isinstance(data, dict):
+                            # Check for message markers (only type we support for JSON)
+                            if any(key in data for key in ['to', 'from', 'subject']):
+                                return 'application/x-mindswarm-message'
+                    except:
+                        pass
+                    return 'application/json'  # Generic JSON
+                    
+            except (UnicodeDecodeError, IOError):
+                # If we can't read/parse the file for sniffing, return what magic detected
+                return detected_type
+        
+        # If no Mind-Swarm specific type was detected, return what magic detected
+        return detected_type
+    
     def _rollback_to(self, checkpoint: int):
         """Rollback changes to a specific checkpoint."""
         while len(self._changes) > checkpoint:
@@ -1334,9 +1469,11 @@ Returns: True if path exists, False otherwise
             Dict with keys:
             - exists: bool - whether the memory exists
             - size: int - size in bytes
-            - lines: int - number of lines (for text files)
-            - type: str - 'file' or 'directory'
-            - modified: datetime - last modified time
+            - lines: int - number of lines (for text memories)
+            - type: str - 'memory' or 'memory_group'
+            - content_type: str - MIME type like 'application/json', 'text/plain', etc. (for memories only)
+            - modified: datetime - last modified time (for memories only)
+            - items: int - number of items in the group (for memory_groups only)
             
         Example:
             info = memory.get_info("/personal/large_file.txt")
@@ -1356,21 +1493,28 @@ Returns: True if path exists, False otherwise
             return info
             
         if actual_path.is_dir():
-            info['type'] = 'directory'
+            info['type'] = 'memory_group'
             info['size'] = sum(f.stat().st_size for f in actual_path.rglob('*') if f.is_file())
             info['items'] = len(list(actual_path.iterdir()))
         else:
-            info['type'] = 'file'
+            info['type'] = 'memory'
             stat = actual_path.stat()
             info['size'] = stat.st_size
             info['modified'] = datetime.fromtimestamp(stat.st_mtime)
             
+            # Determine content type using our centralized detection method
+            # This ensures consistency with how memories are typed when loaded
+            info['content_type'] = self._detect_content_type(actual_path)
+            
             # Count lines for text files
-            try:
-                with open(actual_path, 'r', encoding='utf-8') as f:
-                    info['lines'] = sum(1 for _ in f)
-            except (UnicodeDecodeError, IOError):
-                info['lines'] = None  # Binary or unreadable file
+            if info['content_type'].startswith('text/') or info['content_type'] == 'application/json' or info['content_type'] == 'application/yaml':
+                try:
+                    with open(actual_path, 'r', encoding='utf-8') as f:
+                        info['lines'] = sum(1 for _ in f)
+                except (UnicodeDecodeError, IOError):
+                    info['lines'] = None  # Can't count lines
+            else:
+                info['lines'] = None  # Binary file
                 
         return info
     
@@ -1446,6 +1590,95 @@ Returns: True if path exists, False otherwise
                 lines.append(line)
                 
         return ''.join(lines)
+    
+    def read_raw(self, path: str, binary: bool = False) -> Any:
+        """
+        Read a file directly WITHOUT adding it to working memory.
+        
+        This is useful for processing large files that don't need to be part of
+        cognitive context. The file is loaded into Python memory only, not the
+        cyber's working memory that affects token limits.
+        
+        Args:
+            path: Memory path to read
+            binary: If True, read as binary data (bytes). If False, read as text (str).
+            
+        Returns:
+            File contents as string (text mode) or bytes (binary mode)
+            
+        Example:
+            # Process a large CSV without affecting working memory
+            csv_data = memory.read_raw("/personal/large_dataset.csv")
+            lines = csv_data.split('\n')
+            
+            # Process each line without cognitive overhead
+            results = []
+            for line in lines:
+                cols = line.split(',')
+                if len(cols) > 3 and cols[2] == 'important':
+                    results.append(cols)
+            
+            # Only save results to working memory
+            memory["/personal/filtered_results.json"] = results
+            
+            # Read binary file
+            image_data = memory.read_raw("/personal/photo.jpg", binary=True)
+        """
+        clean_path = self._clean_path(path)
+        actual_path = self._resolve_path(clean_path)
+        
+        if not actual_path.exists():
+            raise MemoryNotFoundError(path)
+            
+        if actual_path.is_dir():
+            raise MemoryTypeError(f"Cannot read raw content from directory: {path}")
+        
+        # NO tracking for working memory - that's the whole point!
+        # Just read the file directly
+        if binary:
+            with open(actual_path, 'rb') as f:
+                return f.read()
+        else:
+            with open(actual_path, 'r', encoding='utf-8') as f:
+                return f.read()
+    
+    def write_raw(self, path: str, content: Any, binary: bool = False) -> None:
+        """
+        Write content directly to a file WITHOUT adding it to working memory.
+        
+        This is useful for saving processed results from large datasets without
+        affecting the cyber's cognitive context.
+        
+        Args:
+            path: Memory path to write to
+            content: Content to write (str for text, bytes for binary)
+            binary: If True, write as binary data. If False, write as text.
+            
+        Example:
+            # Process large file and save results without cognitive overhead
+            raw_data = memory.read_raw("/personal/input.txt")
+            processed = raw_data.upper()  # Some processing
+            memory.write_raw("/personal/output.txt", processed)
+            
+            # Write binary data (example with safe bytes)
+            memory.write_raw("/personal/data.bin", b'\\x41\\x42\\x43', binary=True)
+        """
+        clean_path = self._clean_path(path)
+        actual_path = self._resolve_path(clean_path)
+        
+        # Track the write for rollback purposes
+        self._track_change(clean_path, 'write', {'content': content if not binary else '<binary>'})
+        
+        # Create parent directory if needed
+        actual_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Write the file WITHOUT adding to working memory
+        if binary:
+            with open(actual_path, 'wb') as f:
+                f.write(content)
+        else:
+            with open(actual_path, 'w', encoding='utf-8') as f:
+                f.write(content)
     
     def append(self, path: str, content: str) -> None:
         """
@@ -1738,38 +1971,6 @@ Example:
             print(f"❌ Failed to delete {path}: {e}")
             return False
     
-    @property
-    def knowledge(self):
-        """
-        Access the Knowledge API for searching and storing knowledge.
-        
-        Returns:
-            Knowledge: The Knowledge API instance
-            
-        Example:
-            ```python
-            # Search for relevant knowledge
-            results = memory.knowledge.search("how to communicate with other cybers")
-            for item in results:
-                print(f"Found: {item['content']}")
-            
-            # Store new knowledge
-            memory.knowledge.store(
-                "Cybers communicate through messages in the outbox",
-                tags=["communication", "messaging"],
-                personal=False  # Share with the hive mind
-            )
-            
-            # Get formatted knowledge for brain prompts
-            relevant = memory.knowledge.remember("current task context")
-            ```
-        """
-        if self._knowledge is None:
-            from .knowledge import Knowledge
-            self._knowledge = Knowledge(self)
-        return self._knowledge
-
-
 # Register YAML representers to make TrackedDict and TrackedList transparent
 # This ensures Cybers never see these internal implementation classes
 def _represent_tracked_dict(dumper, data):

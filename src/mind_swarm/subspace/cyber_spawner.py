@@ -327,10 +327,10 @@ class AgentProcessManager:
         if name in self.cybers:  # Double check in case monitor removed it
             del self.cybers[name]
         
-        logger.info(f"Removing sandbox for {name}")
+        logger.info(f"Removing sandbox for {name} (keeping personal folder)")
         try:
-            self.subspace.remove_sandbox(name)
-            logger.info(f"Sandbox removed for {name}")
+            self.subspace.remove_sandbox(name, delete_personal=False)
+            logger.info(f"Sandbox removed for {name} (personal folder kept for resume)")
         except Exception as e:
             logger.error(f"Error removing sandbox for {name}: {e}")
         
@@ -359,10 +359,10 @@ class AgentProcessManager:
         if name in self.cybers:  # Double check in case monitor removed it
             del self.cybers[name]
         
-        logger.info(f"Removing sandbox for {name}")
+        logger.info(f"Removing sandbox for {name} (with deletion)")
         try:
-            self.subspace.remove_sandbox(name)
-            logger.info(f"Sandbox removed for {name}")
+            self.subspace.remove_sandbox(name, delete_personal=True)
+            logger.info(f"Sandbox removed and cyber folder deleted for {name}")
         except Exception as e:
             logger.error(f"Error removing sandbox for {name}: {e}")
         

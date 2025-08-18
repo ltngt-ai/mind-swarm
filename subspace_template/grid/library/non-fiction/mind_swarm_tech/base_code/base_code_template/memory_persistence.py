@@ -141,7 +141,8 @@ class MemoryPersistence:
                 
                 # Reconstruct based on content type
                 # ObservationMemoryBlock removed - observations are now ephemeral
-                if content_type == ContentType.MINDSWARM_OBSERVATION:
+                # ObservationMemoryBlock and MINDSWARM_OBSERVATION removed - skip any old ones
+                if mem_data.get('memory_class') == 'ObservationMemoryBlock':
                     logger.debug(f"Skipping obsolete ObservationMemoryBlock from persistence: {mem_data.get('id')}")
                     continue
                 else:

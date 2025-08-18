@@ -14,16 +14,17 @@ template_owned:
 # These areas belong to Cybers and their contributions
 cyber_owned:
   - cybers/*  # All Cyber personal directories
-  - grid/community  # Shared discussions and questions - copied initially from template
-  - grid/community/school/onboarding/new_cyber_introduction
+  - grid/community/school/onboarding/new_cyber_introduction  # Cyber intro is cyber-owned
 
 # Paths that require intelligent merging
 # Changes from both template and Cybers are preserved
 merge_required:
   - grid/library/knowledge/
+  - grid/library/fiction/  # Fiction content
   - grid/library/non-fiction/mind_swarm_tech/cyber_basics.md
   - grid/library/non-fiction/mind_swarm_tech/using_llms.md
   - grid/community/BULLETIN_BOARD.md
+  - grid/community/school  # School lessons - both template and cybers can contribute
 
 # File patterns to ignore during sync
 ignore_patterns:

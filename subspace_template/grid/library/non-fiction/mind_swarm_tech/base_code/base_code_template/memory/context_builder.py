@@ -92,6 +92,7 @@ class ContextBuilder:
                 
             except Exception as e:
                 logger.error(f"Error building context for {memory.id}: {e}")
+                
                 # Include error entry
                 context_entries.append({
                     "id": memory.id,
@@ -118,7 +119,7 @@ class ContextBuilder:
         # Group by major content type categories
         type_order = [
             ContentType.MINDSWARM_KNOWLEDGE,  # Knowledge (including pinned ROM)
-            ContentType.MINDSWARM_OBSERVATION,  # Recent observations
+            # ContentType.MINDSWARM_OBSERVATION removed - observations are ephemeral now
             ContentType.APPLICATION_JSON,     # JSON files (goals, tasks, etc.)
             ContentType.TEXT_PLAIN,           # Plain text files
         ]
@@ -146,10 +147,10 @@ class ContextBuilder:
         # Section headers based on content type
         headers = {
             ContentType.MINDSWARM_KNOWLEDGE: "=== KNOWLEDGE ===",
-            ContentType.MINDSWARM_OBSERVATION: "=== OBSERVATIONS ===",
+            # MINDSWARM_OBSERVATION removed
             ContentType.APPLICATION_JSON: "=== JSON DATA ===",
             ContentType.TEXT_PLAIN: "=== TEXT FILES ===",
-            ContentType.MINDSWARM_SYSTEM: "=== SYSTEM ===",
+            # System files are just APPLICATION_JSON with Priority.SYSTEM
         }
         
         lines = [headers.get(content_type, f"=== {content_type.value.upper()} ===")]
@@ -212,13 +213,7 @@ class ContextBuilder:
             lines.append("I'm currently working on tasks from active_tasks.json")
             lines.append("")
         
-        # Recent observations
-        obs_memories = [m for m in memories if m.content_type == ContentType.MINDSWARM_OBSERVATION]
-        if obs_memories:
-            lines.append("I've recently observed:")
-            for memory in obs_memories:
-                # ObservationMemoryBlock removed - observations are now ephemeral
-                pass
+        # Observations removed - they're now ephemeral and passed directly in pipeline
             lines.append("")
         
         # Messages (now FileMemoryBlock with message metadata)
@@ -236,7 +231,7 @@ class ContextBuilder:
         
         # Other content
         other_memories = [m for m in memories if m.content_type not in
-                         [ContentType.MINDSWARM_KNOWLEDGE, ContentType.MINDSWARM_OBSERVATION]]
+                         [ContentType.MINDSWARM_KNOWLEDGE]]
         if other_memories:
             lines.append("Additional relevant information:")
             for memory in other_memories[:5]:  # Limit to avoid too long

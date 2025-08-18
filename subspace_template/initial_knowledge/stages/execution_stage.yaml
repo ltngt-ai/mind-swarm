@@ -17,28 +17,30 @@ content: |
   ## Available APIs
   
   ### Memory API
-  - `memory.add()` - Add new memories
-  - `memory.update()` - Update existing memories
-  - `memory.get()` - Retrieve specific memories
-  - `memory.search()` - Search through memories
-  - `memory.forget()` - Remove memories
+  - `memory[path]` - Read memory/file content (loads into working memory)
+  - `memory[path] = content` - Write content to memory/file
+  - `memory.exists(path)` - Check if memory/file exists
+  - `memory.delete(path)` - Remove memory/file
+  - `memory.get_info(path)` - Get metadata without loading content
+  - `memory.read_lines(path, start, end)` - Read specific line range
+  - `memory.append(path, content)` - Append to existing file
+  - `memory.read_raw(path)` - Read without affecting working memory
+  - `memory.write_raw(path, content)` - Write without affecting working memory
   
   ### Location API
-  - `location.move()` - Change your current location
-  - `location.current()` - Get current location
-  - `location.list()` - List contents of a location
-  - `location.read()` - Read file at location
-  - `location.write()` - Write file at location
+  - `location.move(path)` - Change your current location
+  - `location.get_location()` - Get current location path
+  - `location.look()` - Examine current location contents
   
   ### Events API
-  - `events.emit()` - Create new events
-  - `events.recent()` - Get recent events
-  - `events.subscribe()` - Subscribe to event types
+  - `events.emit(event_type, data)` - Create new events
+  - `events.recent(minutes)` - Get recent events
   
   ### Knowledge API
-  - `knowledge.search()` - Search the knowledge base
-  - `knowledge.store()` - Add to knowledge base
-  - `knowledge.get()` - Retrieve specific knowledge
+  - `knowledge.search(query)` - Search the knowledge base
+  - `knowledge.store(item_id, data)` - Add to knowledge base
+  - `knowledge.remember(item_id, data)` - Alternative to store
+  - `knowledge.forget(item_id)` - Remove from knowledge base
   
   ## Execution Process
   
@@ -73,11 +75,14 @@ content: |
       result = operation()
   except Exception as e:
       # Handle error gracefully
-      memory.add({
+      import json
+      error_data = {
           'type': 'error',
           'operation': 'operation_name',
-          'error': str(e)
-      })
+          'error': str(e),
+          'timestamp': datetime.now().isoformat()
+      }
+      memory['/personal/errors/last_error.json'] = json.dumps(error_data)
   ```
   
   ### Memory Updates

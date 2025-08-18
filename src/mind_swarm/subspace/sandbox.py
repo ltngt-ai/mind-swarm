@@ -168,12 +168,26 @@ class BubblewrapSandbox:
             logger.error(f"Error running sandboxed command: {e}")
             return -1, "", str(e)
     
-    def cleanup(self):
-        """Clean up sandbox resources."""
-        # Note: We don't delete cyber_personal as it contains persistent data
-        # Only clean temporary files
+    def cleanup(self, delete_personal=False):
+        """Clean up sandbox resources.
+        
+        Args:
+            delete_personal: If True, delete the entire cyber personal directory.
+                           Used when terminating a cyber permanently.
+        """
+        # Clean temporary files
         for tmp_file in self.cyber_personal.glob(".tmp_*"):
             tmp_file.unlink(missing_ok=True)
+        
+        # If requested, delete the entire cyber directory (for termination)
+        if delete_personal and self.cyber_personal.exists():
+            import shutil
+            logger.info(f"Deleting cyber personal directory: {self.cyber_personal}")
+            try:
+                shutil.rmtree(self.cyber_personal)
+                logger.info(f"Successfully deleted {self.cyber_personal}")
+            except Exception as e:
+                logger.error(f"Failed to delete {self.cyber_personal}: {e}")
 
 
 class SubspaceManager:
@@ -397,16 +411,17 @@ class SubspaceManager:
         logger.info(f"Created sandbox for Cyber {name}")
         return sandbox
     
-    def remove_sandbox(self, name: str):
+    def remove_sandbox(self, name: str, delete_personal=True):
         """Remove a sandbox and clean up resources.
         
         Args:
             name: Cyber name
+            delete_personal: If True, delete the cyber's personal directory (default: True for termination)
         """
         if name in self.sandboxes:
-            self.sandboxes[name].cleanup()
+            self.sandboxes[name].cleanup(delete_personal=delete_personal)
             del self.sandboxes[name]
-            logger.info(f"Removed sandbox for Cyber {name}")
+            logger.info(f"Removed sandbox for Cyber {name} (delete_personal={delete_personal})")
     
     def _copy_boot_rom(self, internal_dir: Path, cyber_type: str = "general"):
         """Copy the appropriate boot ROM to the cyber's internal directory.

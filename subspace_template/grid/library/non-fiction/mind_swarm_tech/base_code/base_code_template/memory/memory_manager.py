@@ -259,17 +259,10 @@ class WorkingMemoryManager:
                     # Use memory_class if available, otherwise use content_type to determine class
                     memory_class = mem_data.get('memory_class')
                     
-                    if memory_class == 'ObservationMemoryBlock' or content_type == ContentType.MINDSWARM_OBSERVATION:
-                        memory = ObservationMemoryBlock(
-                            observation_type=mem_data.get('observation_type', 'unknown'),
-                            path=mem_data.get('path', ''),
-                            message=mem_data.get('message', 'Restored observation'),
-                            cycle_count=mem_data.get('cycle_count', 0),
-                            content=mem_data.get('content'),
-                            confidence=mem_data.get('confidence', 1.0),
-                            priority=Priority[mem_data.get('priority', 'MEDIUM')],
-                            pinned=mem_data.get('pinned', False)
-                        )
+                    # ObservationMemoryBlock removed - skip any old ones
+                    if memory_class == 'ObservationMemoryBlock':
+                        logger.debug(f"Skipping obsolete ObservationMemoryBlock: {mem_data.get('id')}")
+                        continue
                     else:
                         # Everything else is FileMemoryBlock
                         memory = FileMemoryBlock(

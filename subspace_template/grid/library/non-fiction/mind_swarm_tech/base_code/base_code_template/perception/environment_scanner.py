@@ -302,7 +302,7 @@ class EnvironmentScanner:
                 },
                 cycle_count=cycle_count,
                 no_cache=True,  # Always fresh
-                content_type=ContentType.MINDSWARM_SYSTEM
+                content_type=ContentType.APPLICATION_JSON  # System JSON file
             )
             memories.append(personal_memory)
             
@@ -404,7 +404,7 @@ class EnvironmentScanner:
                         "location": current_location
                     },
                     cycle_count=cycle_count,
-                    content_type=ContentType.MINDSWARM_SYSTEM
+                    content_type=ContentType.APPLICATION_JSON  # System JSON file
                 )
                 memories.append(location_memory)
                 return memories
@@ -529,7 +529,7 @@ class EnvironmentScanner:
                 },
                 cycle_count=cycle_count,
                 no_cache=True,  # Always fresh
-                content_type=ContentType.MINDSWARM_SYSTEM
+                content_type=ContentType.APPLICATION_JSON  # System JSON file
             )
             memories.append(location_memory)
             

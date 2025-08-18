@@ -209,7 +209,7 @@ class ExecutionStage:
             
             # Add it to the memory system
             self.memory_system.add_memory(api_memory)
-            logger.info("Loaded Memory API documentation into working memory")
+            logger.info(f"Loaded {docs_name} documentation into working memory")
             
         except Exception as e:
             logger.warning(f"Failed to load API docs into memory: {e}")
