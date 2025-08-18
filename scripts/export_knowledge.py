@@ -38,13 +38,11 @@ class KnowledgeExporter:
         self.export_dir = Path(export_dir)
         self.knowledge_handler = None
         
-    async def initialize(self):
+    def initialize(self):
         """Initialize the knowledge handler."""
         self.knowledge_handler = KnowledgeHandler(
-            subspace_root=self.subspace_root,
-            cyber_id="export_tool"
+            subspace_root=self.subspace_root
         )
-        await self.knowledge_handler.initialize()
         logger.info("Knowledge handler initialized")
         
     async def export_all_knowledge(self) -> Dict[str, Any]:
@@ -54,7 +52,7 @@ class KnowledgeExporter:
             Dictionary with export statistics
         """
         if not self.knowledge_handler:
-            await self.initialize()
+            self.initialize()
             
         # Create export directory structure
         self.export_dir.mkdir(parents=True, exist_ok=True)
@@ -73,7 +71,7 @@ class KnowledgeExporter:
         
         # Get all knowledge
         logger.info("Fetching all knowledge from ChromaDB...")
-        all_docs = await self.knowledge_handler.get_all_knowledge()
+        all_docs = await self.knowledge_handler.list_shared_knowledge(limit=10000)
         
         if not all_docs:
             logger.warning("No knowledge found in database")
@@ -226,11 +224,11 @@ This directory contains an export of all knowledge from the ChromaDB database.
             Dictionary with export statistics
         """
         if not self.knowledge_handler:
-            await self.initialize()
+            self.initialize()
             
         # Search for matching knowledge
         logger.info(f"Searching for knowledge matching: {query}")
-        results = await self.knowledge_handler.search_knowledge(query, n_results=n_results)
+        results = await self.knowledge_handler.search_shared_knowledge(query, limit=n_results)
         
         if not results:
             logger.warning(f"No knowledge found matching query: {query}")

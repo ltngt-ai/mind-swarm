@@ -35,13 +35,11 @@ class KnowledgeImporter:
         self.subspace_root = Path(subspace_root)
         self.knowledge_handler = None
         
-    async def initialize(self):
+    def initialize(self):
         """Initialize the knowledge handler."""
         self.knowledge_handler = KnowledgeHandler(
-            subspace_root=self.subspace_root,
-            cyber_id="import_tool"
+            subspace_root=self.subspace_root
         )
-        await self.knowledge_handler.initialize()
         logger.info("Knowledge handler initialized")
         
     async def import_file(self, file_path: Path, knowledge_id: Optional[str] = None) -> bool:
@@ -55,7 +53,7 @@ class KnowledgeImporter:
             True if import was successful
         """
         if not self.knowledge_handler:
-            await self.initialize()
+            self.initialize()
             
         try:
             # Read and parse YAML file
@@ -93,14 +91,18 @@ class KnowledgeImporter:
             content = yaml.dump(data, default_flow_style=False, sort_keys=False)
             
             # Store in ChromaDB
-            await self.knowledge_handler.store_shared_knowledge(
+            success, message = await self.knowledge_handler.add_shared_knowledge_with_id(
                 knowledge_id=knowledge_id,
                 content=content,
                 metadata=metadata
             )
             
-            logger.info(f"✓ Imported: {knowledge_id}")
-            return True
+            if success:
+                logger.info(f"✓ Imported: {knowledge_id}")
+                return True
+            else:
+                logger.error(f"Failed to import {knowledge_id}: {message}")
+                return False
             
         except Exception as e:
             logger.error(f"Failed to import {file_path}: {e}")
@@ -117,7 +119,7 @@ class KnowledgeImporter:
             Dictionary with import statistics
         """
         if not self.knowledge_handler:
-            await self.initialize()
+            self.initialize()
             
         stats = {
             "total_files": 0,
