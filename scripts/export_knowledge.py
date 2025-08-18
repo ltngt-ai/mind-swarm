@@ -45,7 +45,7 @@ class KnowledgeExporter:
         )
         logger.info("Knowledge handler initialized")
         
-    async def export_all_knowledge(self) -> Dict[str, Any]:
+    async def export_all_knowledge(self, include_personal: bool = True) -> Dict[str, Any]:
         """Export all knowledge from ChromaDB.
         
         Returns:
@@ -65,13 +65,18 @@ class KnowledgeExporter:
         by_tags = export_subdir / "by_tags"
         by_cyber = export_subdir / "by_cyber"
         all_knowledge = export_subdir / "all"
+        shared_knowledge = export_subdir / "shared"
+        personal_knowledge = export_subdir / "personal"
         
-        for dir in [by_category, by_tags, by_cyber, all_knowledge]:
+        for dir in [by_category, by_tags, by_cyber, all_knowledge, shared_knowledge, personal_knowledge]:
             dir.mkdir(exist_ok=True)
         
-        # Get all knowledge with full content
-        logger.info("Fetching all knowledge from ChromaDB...")
-        all_docs = await self.knowledge_handler.export_all_knowledge(limit=10000)
+        # Get all knowledge with full content (including personal collections if requested)
+        if include_personal:
+            logger.info("Fetching all knowledge from ChromaDB (shared and personal)...")
+        else:
+            logger.info("Fetching shared knowledge from ChromaDB...")
+        all_docs = await self.knowledge_handler.export_all_knowledge(limit=10000, include_personal=include_personal)
         
         if not all_docs:
             logger.warning("No knowledge found in database")
@@ -93,6 +98,7 @@ class KnowledgeExporter:
             doc_id = doc.get('id', f'unknown_{i}')
             metadata = doc.get('metadata', {})
             content = doc.get('content', '')
+            collection = doc.get('collection', 'unknown')
             
             # Clean up the ID for use as filename
             safe_id = doc_id.replace('/', '_').replace('\\', '_')
@@ -120,6 +126,7 @@ class KnowledgeExporter:
             # Add metadata from ChromaDB
             yaml_data['_export_metadata'] = {
                 "id": doc_id,
+                "collection": collection,
                 "exported_at": datetime.now().isoformat(),
                 "chromadb_metadata": metadata
             }
@@ -128,6 +135,19 @@ class KnowledgeExporter:
             all_path = all_knowledge / safe_id
             with open(all_path, 'w') as f:
                 yaml.dump(yaml_data, f, default_flow_style=False, sort_keys=False, width=80)
+            
+            # Also save to shared or personal directory based on collection
+            if collection == 'shared':
+                shared_path = shared_knowledge / safe_id
+                with open(shared_path, 'w') as f:
+                    yaml.dump(yaml_data, f, default_flow_style=False, sort_keys=False, width=80)
+            elif collection.startswith('personal_'):
+                cyber_name = collection.replace('personal_', '')
+                personal_cyber_dir = personal_knowledge / cyber_name
+                personal_cyber_dir.mkdir(exist_ok=True)
+                personal_path = personal_cyber_dir / safe_id
+                with open(personal_path, 'w') as f:
+                    yaml.dump(yaml_data, f, default_flow_style=False, sort_keys=False, width=80)
             
             # Save by category
             category = metadata.get('category', 'uncategorized')
@@ -192,6 +212,8 @@ This directory contains an export of all knowledge from the ChromaDB database.
 
 ## Directory Structure
 - `all/` - All knowledge documents in one place
+- `shared/` - Shared knowledge accessible to all cybers
+- `personal/` - Personal knowledge collections by cyber
 - `by_category/` - Documents organized by category
 - `by_tags/` - Documents organized by tags (documents may appear in multiple tag directories)
 - `by_cyber/` - Documents organized by the cyber who created/updated them
@@ -289,6 +311,11 @@ async def main():
         default=100,
         help="Maximum results for query export (default: 100)"
     )
+    parser.add_argument(
+        "--no-personal",
+        action="store_true",
+        help="Exclude personal cyber collections from export"
+    )
     
     args = parser.parse_args()
     
@@ -305,7 +332,7 @@ async def main():
         if args.query:
             stats = await exporter.export_by_query(args.query, args.max_results)
         else:
-            stats = await exporter.export_all_knowledge()
+            stats = await exporter.export_all_knowledge(include_personal=not args.no_personal)
         
         # Print summary
         print("\n" + "="*60)

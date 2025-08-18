@@ -678,11 +678,12 @@ class KnowledgeHandler:
         except Exception as e:
             return False, str(e)
     
-    async def export_all_knowledge(self, limit: int = 10000) -> List[Dict]:
+    async def export_all_knowledge(self, limit: int = 10000, include_personal: bool = True) -> List[Dict]:
         """Export all knowledge with full content (for backup/export).
         
         Args:
             limit: Maximum number of items to return (default 10000)
+            include_personal: Whether to include cyber personal collections (default True)
             
         Returns:
             List of knowledge documents with full content
@@ -690,11 +691,12 @@ class KnowledgeHandler:
         if not self.enabled:
             return []
         
+        formatted = []
+        
         try:
-            # Get all documents (up to limit) with full content
+            # Get shared knowledge
             results = self.shared_collection.get(limit=limit)
             
-            formatted = []
             if results:
                 documents = results.get('documents', [])
                 metadatas = results.get('metadatas', [])
@@ -705,8 +707,34 @@ class KnowledgeHandler:
                         formatted.append({
                             'id': ids[i] if i < len(ids) else None,
                             'content': doc,  # Full content, no truncation
-                            'metadata': metadatas[i] if i < len(metadatas) else {}
+                            'metadata': metadatas[i] if i < len(metadatas) else {},
+                            'collection': 'shared'
                         })
+            
+            # Get personal knowledge from each cyber if requested
+            if include_personal:
+                for cyber_id, handler in self.handlers.items():
+                    try:
+                        personal_results = handler.personal_collection.get(limit=limit)
+                        if personal_results:
+                            documents = personal_results.get('documents', [])
+                            metadatas = personal_results.get('metadatas', [])
+                            ids = personal_results.get('ids', [])
+                            
+                            for i, doc in enumerate(documents):
+                                if doc:
+                                    # Add cyber_id to metadata for tracking
+                                    meta = metadatas[i] if i < len(metadatas) else {}
+                                    meta['cyber_owner'] = cyber_id
+                                    
+                                    formatted.append({
+                                        'id': ids[i] if i < len(ids) else None,
+                                        'content': doc,
+                                        'metadata': meta,
+                                        'collection': f'personal_{cyber_id}'
+                                    })
+                    except Exception as e:
+                        logger.warning(f"Error exporting personal knowledge for {cyber_id}: {e}")
             
             return formatted
             
