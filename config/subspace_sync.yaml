@@ -5,9 +5,9 @@
 # These are system-critical files that Cybers shouldn't modify
 template_owned:
   - .gitignore  # Git ignore configuration
-  - grid/library/mind_swarm_tech/base_code/base_code_template
-  - grid/library/mind_swarm_tech/base_code/io_cyber_template
-  - grid/library/mind_swarm_tech/rom
+  - grid/library/non-fiction/mind_swarm_tech/base_code/base_code_template
+  - grid/library/non-fiction/mind_swarm_tech/base_code/io_cyber_template
+  - grid/library/non-fiction/mind_swarm_tech/rom
   - grid/library/schemas  # Schema definitions for validation
 
 # Paths that are never overwritten (Cyber-owned content)
@@ -21,8 +21,8 @@ cyber_owned:
 # Changes from both template and Cybers are preserved
 merge_required:
   - grid/library/knowledge/
-  - grid/library/mind_swarm_tech/cyber_basics.md
-  - grid/library/mind_swarm_tech/using_llms.md
+  - grid/library/non-fiction/mind_swarm_tech/cyber_basics.md
+  - grid/library/non-fiction/mind_swarm_tech/using_llms.md
   - grid/community/BULLETIN_BOARD.md
 
 # File patterns to ignore during sync

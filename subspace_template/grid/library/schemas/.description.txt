@@ -1,0 +1,1 @@
+Schemas for important Mind Swarm technology components, these are used to verify writes of these content_types are correct.

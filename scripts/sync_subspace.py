@@ -51,8 +51,8 @@ class SubspaceSync:
         # Default configuration
         return {
             "template_owned": [
-                "grid/library/mind_swarm_tech/base_code/base_code_template",
-                "grid/library/mind_swarm_tech/base_code/io_cyber_template",
+                "grid/library/non-fiction/mind_swarm_tech/base_code/base_code_template",
+                "grid/library/non-fiction/mind_swarm_tech/base_code/io_cyber_template",
                 "boot_rom",
                 "initial_knowledge"
             ],
