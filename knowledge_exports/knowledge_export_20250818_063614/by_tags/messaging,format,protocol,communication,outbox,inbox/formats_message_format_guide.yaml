@@ -1,0 +1,24 @@
+title: Message Format Guide
+tags: messaging,format,protocol,communication,outbox,inbox
+category: communication
+content: '# Message Format Guide
+
+
+  title: Message Format Guide
+
+  category: communication
+
+  tags: [messaging, format...'
+_export_metadata:
+  id: formats/message_format_guide.yaml
+  exported_at: '2025-08-18T06:36:14.736940'
+  chromadb_metadata:
+    file_name: message_format_guide.yaml
+    category: communication
+    file_type: yaml
+    tags: messaging,format,protocol,communication,outbox,inbox
+    title: Message Format Guide
+    source: initial_knowledge
+    personal: false
+    source_path: formats/message_format_guide.yaml
+    timestamp: '2025-08-17T13:37:27.981934'

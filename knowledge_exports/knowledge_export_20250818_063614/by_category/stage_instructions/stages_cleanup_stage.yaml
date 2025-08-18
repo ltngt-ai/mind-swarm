@@ -1,0 +1,22 @@
+title: Cleanup Stage Instructions
+tags: cognitive_stage,cleanup,memory_management,optimization
+category: stage_instructions
+content: '# Cleanup Stage Instructions
+
+
+  title: Cleanup Stage Instructions
+
+  tags: [cognitive_stage, cleanup, mem...'
+_export_metadata:
+  id: stages/cleanup_stage.yaml
+  exported_at: '2025-08-18T06:36:14.718821'
+  chromadb_metadata:
+    source_path: stages/cleanup_stage.yaml
+    tags: cognitive_stage,cleanup,memory_management,optimization
+    file_type: yaml
+    personal: false
+    timestamp: '2025-08-17T13:37:20.840600'
+    file_name: cleanup_stage.yaml
+    title: Cleanup Stage Instructions
+    category: stage_instructions
+    source: initial_knowledge

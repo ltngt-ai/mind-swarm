@@ -1,0 +1,24 @@
+title: Knowledge Format Guide
+tags: knowledge,format,schema,writing_guide,structure
+category: system_knowledge
+content: '# Knowledge Format Guide
+
+
+  title: Knowledge Format Guide
+
+  category: system_knowledge
+
+  tags: [knowledge,...'
+_export_metadata:
+  id: formats/knowledge_format_guide.yaml
+  exported_at: '2025-08-18T06:36:14.740555'
+  chromadb_metadata:
+    file_type: yaml
+    source_path: formats/knowledge_format_guide.yaml
+    source: initial_knowledge
+    tags: knowledge,format,schema,writing_guide,structure
+    category: system_knowledge
+    title: Knowledge Format Guide
+    personal: false
+    file_name: knowledge_format_guide.yaml
+    timestamp: '2025-08-17T13:37:28.469950'

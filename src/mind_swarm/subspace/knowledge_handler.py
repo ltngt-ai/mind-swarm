@@ -678,8 +678,49 @@ class KnowledgeHandler:
         except Exception as e:
             return False, str(e)
     
-    async def list_shared_knowledge(self, limit: int = 100) -> List[Dict]:
-        """List all shared knowledge (for CLI use)."""
+    async def export_all_knowledge(self, limit: int = 10000) -> List[Dict]:
+        """Export all knowledge with full content (for backup/export).
+        
+        Args:
+            limit: Maximum number of items to return (default 10000)
+            
+        Returns:
+            List of knowledge documents with full content
+        """
+        if not self.enabled:
+            return []
+        
+        try:
+            # Get all documents (up to limit) with full content
+            results = self.shared_collection.get(limit=limit)
+            
+            formatted = []
+            if results:
+                documents = results.get('documents', [])
+                metadatas = results.get('metadatas', [])
+                ids = results.get('ids', [])
+                
+                for i, doc in enumerate(documents):
+                    if doc:
+                        formatted.append({
+                            'id': ids[i] if i < len(ids) else None,
+                            'content': doc,  # Full content, no truncation
+                            'metadata': metadatas[i] if i < len(metadatas) else {}
+                        })
+            
+            return formatted
+            
+        except Exception as e:
+            logger.error(f"Export error: {e}")
+            return []
+    
+    async def list_shared_knowledge(self, limit: int = 100, truncate: bool = True) -> List[Dict]:
+        """List all shared knowledge.
+        
+        Args:
+            limit: Maximum number of items to return
+            truncate: Whether to truncate content for display (default True for CLI)
+        """
         if not self.enabled:
             return []
         
@@ -695,9 +736,11 @@ class KnowledgeHandler:
                 
                 for i, doc in enumerate(documents):
                     if doc:
+                        # Only truncate if requested (for CLI display)
+                        content = doc[:100] + '...' if (truncate and len(doc) > 100) else doc
                         formatted.append({
                             'id': ids[i] if i < len(ids) else None,
-                            'content': doc[:100] + '...' if len(doc) > 100 else doc,
+                            'content': content,
                             'metadata': metadatas[i] if i < len(metadatas) else {}
                         })
             

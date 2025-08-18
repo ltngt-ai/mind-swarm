@@ -69,9 +69,9 @@ class KnowledgeExporter:
         for dir in [by_category, by_tags, by_cyber, all_knowledge]:
             dir.mkdir(exist_ok=True)
         
-        # Get all knowledge
+        # Get all knowledge with full content
         logger.info("Fetching all knowledge from ChromaDB...")
-        all_docs = await self.knowledge_handler.list_shared_knowledge(limit=10000)
+        all_docs = await self.knowledge_handler.export_all_knowledge(limit=10000)
         
         if not all_docs:
             logger.warning("No knowledge found in database")
