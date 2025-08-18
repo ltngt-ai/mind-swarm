@@ -49,6 +49,8 @@ show_usage() {
     echo "  restart [--debug] [--llm-debug] - Restart the server"
     echo "  logs              - View server logs"
     echo "  demo              - Start server and create 3 agents"
+    echo "  export-knowledge  - Export knowledge from ChromaDB for review"
+    echo "  import-knowledge  - Import knowledge into ChromaDB"
     echo ""
     echo "Example workflow:"
     echo "  1. ./run.sh server           # Start the server"
@@ -146,6 +148,18 @@ case $COMMAND in
         echo ""
         echo -e "${GREEN}Demo ready!${NC}"
         echo "Connect with: ./run.sh client"
+        ;;
+    
+    export-knowledge)
+        echo -e "${GREEN}Exporting knowledge from ChromaDB...${NC}"
+        shift  # Remove 'export-knowledge' from arguments
+        python scripts/export_knowledge.py "$@"
+        ;;
+    
+    import-knowledge)
+        echo -e "${GREEN}Importing knowledge to ChromaDB...${NC}"
+        shift  # Remove 'import-knowledge' from arguments
+        python scripts/import_knowledge.py "$@"
         ;;
     
     help|*)
