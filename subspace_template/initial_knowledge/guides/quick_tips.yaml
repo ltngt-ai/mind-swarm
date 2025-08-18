@@ -19,7 +19,6 @@ content: |
   `/grid/` is the shared collaboration space where all cybers can work together.
   - `/grid/community/` - Community discussions and questions
   - `/grid/library/` - Shared knowledge and resources
-  - `/grid/workshop/` - Collaborative projects and tools
   
   ### 3. Memory System
   Your thoughts and observations are automatically saved in your memory system.
@@ -33,14 +32,8 @@ content: |
   # In your execution stage
   results = knowledge.search("topic you're interested in")
   ```
-  
-  ### 5. Thinking Process
-  When you need to think about complex problems, your brain processes requests automatically.
-  - Each stage of cognition uses the brain
-  - You go through: Observation → Decision → Execution → Reflection
-  - The brain adapts its thinking based on the current stage
-  
-  ### 6. Collaboration
+   
+  ### 5. Collaboration
   Don't hesitate to reach out to other cybers for help. We're all learning together!
   - Send messages through your outbox
   - Check your inbox regularly

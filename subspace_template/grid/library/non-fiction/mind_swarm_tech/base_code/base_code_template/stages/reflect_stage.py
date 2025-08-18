@@ -148,9 +148,7 @@ Your pipeline memory contains the last execution results.
                 "outputs": {
                     "insights": "Key insights from the execution results",
                     "lessons_learned": "What you learned that will help in future",
-                    "goal_updates": "How your goals or priorities should change based on results",
-                    "priority_adjustments": "What priorities need adjustment", 
-                    "next_focus": "What you should focus on next based on this reflection"
+                    "knowledge_query": "Suggest a knowledge query that you think will help"
                 },
                 "display_field": "insights"
             },
@@ -174,9 +172,7 @@ Your pipeline memory contains the last execution results.
         reflection_content = {
             "insights": output_values.get("insights", ""),
             "lessons_learned": output_values.get("lessons_learned", ""),
-            "goal_updates": output_values.get("goal_updates", ""),
-            "priority_adjustments": output_values.get("priority_adjustments", ""),
-            "next_focus": output_values.get("next_focus", "")
+            "knowledge_query": output_values.get("knowledge_query", "")
         }
         
         # Save as a reflection_on_last_cycle memory block
@@ -211,8 +207,65 @@ Your pipeline memory contains the last execution results.
         # Log key insights if any
         if output_values.get("insights"):
             logger.info(f"  Insights: {output_values['insights'][:200]}")
-        if output_values.get("next_focus"):
-            logger.info(f"  Next focus: {output_values['next_focus'][:200]}")
+        if output_values.get("knowledge_query"):
+            logger.info(f"  Knowledge query: {output_values['knowledge_query'][:200]}")
+            
+        # Execute the suggested knowledge query and add results to working memory
+        if output_values.get("knowledge_query"):
+            query = output_values["knowledge_query"]
+            logger.info(f"🔍 Executing suggested knowledge query: {query[:100]}...")
+            
+            # Search the knowledge base using the correct method
+            results = self.knowledge_manager.search_knowledge(query, limit=3)
+            
+            if results:
+                logger.info(f"📚 Found {len(results)} knowledge results")
+                
+                # Create a memory block for the knowledge query results
+                from ..memory import FileMemoryBlock, Priority
+                
+                # Save the results to a file
+                knowledge_results_file = self.cognitive_loop.memory_dir / "knowledge_query_results.json"
+                knowledge_data = {
+                    "query": query,
+                    "timestamp": datetime.now().isoformat(),
+                    "cycle_count": self.cognitive_loop.cycle_count,
+                    "results": results
+                }
+                
+                with open(knowledge_results_file, 'w') as f:
+                    json.dump(knowledge_data, f, indent=2)
+                
+                # Add to working memory - use regular JSON content type, not KNOWLEDGE
+                knowledge_memory = FileMemoryBlock(
+                    location="personal/.internal/memory/knowledge_query_results.json",
+                    priority=Priority.HIGH,
+                    pinned=False,
+                    metadata={
+                        "file_type": "knowledge_results",
+                        "query": query[:100],
+                        "description": f"Knowledge query results from reflection stage",
+                        "result_count": len(results)
+                    },
+                    cycle_count=self.cognitive_loop.cycle_count,
+                    no_cache=True
+                    # Don't specify content_type - let it auto-detect as JSON
+                )
+                
+                # Remove old knowledge results if they exist
+                knowledge_id = "personal/.internal/memory/knowledge_query_results.json"
+                existing = self.cognitive_loop.memory_system.get_memory(knowledge_id)
+                if existing:
+                    self.cognitive_loop.memory_system.remove_memory(knowledge_id)
+                    
+                self.cognitive_loop.memory_system.add_memory(knowledge_memory)
+                logger.info(f"✅ Added knowledge query results to working memory")
+                
+                # Log first result title for visibility
+                if results[0].get("metadata", {}).get("title"):
+                    logger.info(f"  Top result: {results[0]['metadata']['title']}")
+            else:
+                logger.info("📚 No knowledge results found for query")
             
         # Clean up stage instructions before leaving
         self._cleanup_stage_instructions()
