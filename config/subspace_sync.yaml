@@ -15,7 +15,7 @@ template_owned:
 cyber_owned:
   - cybers/*  # All Cyber personal directories
   - grid/community  # Shared discussions and questions - copied initially from template
-  - grid/library/knowledge/sections/new_cyber_introduction
+  - grid/community/school/onboarding/new_cyber_introduction
 
 # Paths that require intelligent merging
 # Changes from both template and Cybers are preserved

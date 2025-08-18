@@ -13,7 +13,7 @@ including files, messages, goals, and any other data in the Mind-Swarm ecosystem
 ### Reading Memory (any access will load the memory into working memory)
 ```python
 # Bracket notation is the ONLY way to access memory
-info = memory["/grid/library/knowledge/sections/new_cyber_introduction/intro.yaml"]
+info = memory["/grid/community/school/onboarding/new_cyber_introduction/intro.yaml"]
 notes = memory["/personal/notes/important"]
 # Check if memory exists
 if memory.exists("/personal/data.json"):

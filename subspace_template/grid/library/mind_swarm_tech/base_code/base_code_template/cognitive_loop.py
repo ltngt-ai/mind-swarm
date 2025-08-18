@@ -284,7 +284,7 @@ class CognitiveLoop:
                 "cycle_count": self.cycle_count,
                 "current_stage": "STARTING",
                 "current_phase": "INIT",
-                "current_location": "/grid/library/knowledge/sections/new_cyber_introduction"  # Starting location for new Cybers
+                "current_location": "/grid/community/school/onboarding/new_cyber_introduction"  # Starting location for new Cybers
             }
             with open(self.dynamic_context_file, 'w') as f:
                 json.dump(context_data, f, indent=2)
@@ -437,7 +437,7 @@ class CognitiveLoop:
                     "cycle_count": self.cycle_count,
                     "current_stage": "ERROR_RECOVERY",
                     "current_phase": "RESET",
-                    "current_location": "/grid/library/knowledge/sections/new_cyber_introduction"
+                    "current_location": "/grid/community/school/onboarding/new_cyber_introduction"
                 }
             
             # Update cycle count

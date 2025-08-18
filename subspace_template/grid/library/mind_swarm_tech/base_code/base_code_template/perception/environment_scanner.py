@@ -112,8 +112,6 @@ class EnvironmentScanner:
             paths_to_baseline.append(self.community_path)
         if self.announcements_path and self.announcements_path.exists():
             paths_to_baseline.append(self.announcements_path)
-        if self.workshop_path and self.workshop_path.exists():
-            paths_to_baseline.append(self.workshop_path)
         
         # Scan all these paths and record their current state
         baseline_count = 0
