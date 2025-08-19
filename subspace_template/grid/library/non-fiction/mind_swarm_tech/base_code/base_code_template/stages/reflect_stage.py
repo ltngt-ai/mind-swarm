@@ -141,6 +141,7 @@ class ReflectStage:
                 "instruction": """
 Review the previous execution results in your memory. 
 and reflect on what worked, what didn't, and what you learned.
+Its important to record the results of the execution stage, as next cycle the pipeline buffers will be cleared.
 To help your other Cybers, rate this cycle's solution on a scale from 0.0 to 1.0.
 This score should represent how well the execution's results addressed the decision's intentions and the observation's suggested problem.
 """,
@@ -187,10 +188,25 @@ This score should represent how well the execution's results addressed the decis
         except:
             solution_score = 0.5  # Default to partial success
                 
+        # Extract execution output if available (truncate to prevent overflow)
+        execution_output = ""
+        max_output_chars = 2000  # Reasonable limit for diagnostic output
+        if last_execution and "results" in last_execution:
+            for result in last_execution.get("results", []):
+                if result.get("output"):
+                    output = result["output"]
+                    if len(output) > max_output_chars:
+                        # Truncate with indicator
+                        execution_output = output[:max_output_chars] + f"\n... (truncated {len(output) - max_output_chars} chars)"
+                    else:
+                        execution_output = output
+                    break
+        
         reflection_content = {
             "insights": output_values.get("insights", ""),
             "lessons_learned": output_values.get("lessons_learned", ""),
-            "solution_score": solution_score
+            "solution_score": solution_score,
+            "execution_output": execution_output  # Add print output from execution
         }
         
         # Save as a reflection_on_last_cycle memory block

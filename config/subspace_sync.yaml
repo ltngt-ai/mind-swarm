@@ -7,24 +7,24 @@ template_owned:
   - .gitignore  # Git ignore configuration
   - grid/library/non-fiction/mind_swarm_tech/base_code/base_code_template
   - grid/library/non-fiction/mind_swarm_tech/base_code/io_cyber_template
-  - grid/library/non-fiction/mind_swarm_tech/rom
   - grid/library/schemas  # Schema definitions for validation
 
 # Paths that are never overwritten (Cyber-owned content)
 # These areas belong to Cybers and their contributions
 cyber_owned:
   - cybers/*  # All Cyber personal directories
-  - grid/community/school/onboarding/new_cyber_introduction  # Cyber intro is cyber-owned
 
 # Paths that require intelligent merging
 # Changes from both template and Cybers are preserved
 merge_required:
   - grid/library/knowledge/
   - grid/library/fiction/  # Fiction content
+  - grid/library/non-fiction/  # Non-fiction content
   - grid/library/non-fiction/mind_swarm_tech/cyber_basics.md
   - grid/library/non-fiction/mind_swarm_tech/using_llms.md
   - grid/community/BULLETIN_BOARD.md
   - grid/community/school  # School lessons - both template and cybers can contribute
+  - grid/community/school/onboarding/new_cyber_introduction
 
 # File patterns to ignore during sync
 ignore_patterns:
