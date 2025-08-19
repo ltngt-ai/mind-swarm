@@ -143,7 +143,15 @@ Review the previous execution results in your memory.
 First, clearly state what problem you were trying to solve this cycle.
 Then reflect on what worked, what didn't, and what you learned.
 Finally, imagine another Cyber facing the same problem - what specific advice would you give them?
-Consider how this affects your goals and priorities.
+
+IMPORTANT: For solution_score, rate how well YOU solved YOUR problem this cycle:
+- 1.0 = Complete success, problem fully solved as intended
+- 0.7-0.9 = Mostly successful with minor issues
+- 0.5-0.7 = Partial success, made progress but incomplete
+- 0.2-0.5 = Limited success, encountered significant problems
+- 0.0-0.2 = Failed to solve the problem
+
+Do NOT rate your advice quality - rate your actual solution's success!
 """,
                 "inputs": {
                     "working_memory": "Your current working memory including execution results"
@@ -153,8 +161,9 @@ Consider how this affects your goals and priorities.
                     "insights": "Key insights from the execution results",
                     "lessons_learned": "What you learned that will help in future",
                     "advice_for_others": "What specific advice would you give to another Cyber facing this same problem? Be practical and specific.",
+                    "advice_confidence": "How confident are you that your advice would help another Cyber solve a similar problem? Rate 0.0-1.0",
                     "knowledge_query": "Suggest a NLP knowledge query that you think will help the next cycle",
-                    "solution_score": "Rate the success of your solution from 0.0 to 1.0 (0=failure, 0.5=partial, 1.0=complete success)"
+                    "solution_score": "How successfully did you solve the problem THIS cycle? Rate 0.0-1.0 based on actual execution results (NOT advice quality)"
                 },
                 "display_field": "insights"
             },
@@ -190,11 +199,25 @@ Consider how this affects your goals and priorities.
         except:
             solution_score = 0.5  # Default to partial success
         
+        # Extract advice confidence score
+        advice_confidence_str = output_values.get("advice_confidence", "0.5")
+        try:
+            if isinstance(advice_confidence_str, (int, float)):
+                advice_confidence = float(advice_confidence_str)
+            else:
+                import re
+                match = re.search(r'(\d*\.?\d+)', str(advice_confidence_str))
+                advice_confidence = float(match.group(1)) if match else 0.5
+            advice_confidence = max(0.0, min(1.0, advice_confidence))
+        except:
+            advice_confidence = 0.5
+        
         reflection_content = {
             "problem_solved": output_values.get("problem_solved", ""),
             "insights": output_values.get("insights", ""),
             "lessons_learned": output_values.get("lessons_learned", ""),
             "advice_for_others": output_values.get("advice_for_others", ""),
+            "advice_confidence": advice_confidence,
             "knowledge_query": output_values.get("knowledge_query", ""),
             "solution_score": solution_score
         }
@@ -388,7 +411,8 @@ Consider how this affects your goals and priorities.
                 metadata={
                     "cycle_count": self.cognitive_loop.cycle_count,
                     "cbr_cases_used": decision_data.get("cbr_cases_used", []),
-                    "has_advice": bool(advice)  # Flag to indicate this case contains advice
+                    "has_advice": bool(advice),  # Flag to indicate this case contains advice
+                    "advice_confidence": reflection_content.get('advice_confidence', 0.5)  # How confident the advice is
                 },
                 timeout=3.0
             )
