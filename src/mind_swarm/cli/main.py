@@ -1410,5 +1410,112 @@ def server(
         console.print("Valid actions: start, stop, restart, logs")
 
 
+@app.command()
+def cbr_export(
+    output_file: str = typer.Argument("cbr_backup.json", help="Output file for CBR cases"),
+    include_shared: bool = typer.Option(True, "--include-shared/--no-shared", help="Include shared CBR cases")
+):
+    """Export all CBR cases to a JSON file for backup."""
+    import asyncio
+    from pathlib import Path
+    
+    async def export():
+        try:
+            # Initialize CBR handler
+            from mind_swarm.subspace.cbr_handler import CBRHandler
+            
+            subspace_root = Path(os.environ.get("SUBSPACE_ROOT", "../subspace"))
+            if not subspace_root.exists():
+                console.print(f"[red]Subspace root not found: {subspace_root}[/red]")
+                return
+            
+            cbr_handler = CBRHandler(subspace_root)
+            
+            # Export cases
+            console.print("[cyan]Exporting CBR cases...[/cyan]")
+            cases = await cbr_handler.export_all_cases(include_shared=include_shared)
+            
+            if not cases:
+                console.print("[yellow]No CBR cases found to export[/yellow]")
+                return
+            
+            # Save to file
+            output_path = Path(output_file)
+            with open(output_path, 'w') as f:
+                json.dump(cases, f, indent=2, default=str)
+            
+            console.print(f"[green]✓ Exported {len(cases)} CBR cases to {output_path}[/green]")
+            
+        except Exception as e:
+            console.print(f"[red]Error exporting CBR cases: {e}[/red]")
+            import traceback
+            traceback.print_exc()
+    
+    asyncio.run(export())
+
+
+@app.command()
+def cbr_import(
+    input_file: str = typer.Argument(..., help="Input file containing CBR cases"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview import without making changes")
+):
+    """Import CBR cases from a JSON backup file."""
+    import asyncio
+    from pathlib import Path
+    
+    async def import_cases():
+        try:
+            # Check input file
+            input_path = Path(input_file)
+            if not input_path.exists():
+                console.print(f"[red]Input file not found: {input_path}[/red]")
+                return
+            
+            # Load cases
+            with open(input_path, 'r') as f:
+                cases = json.load(f)
+            
+            console.print(f"[cyan]Found {len(cases)} CBR cases to import[/cyan]")
+            
+            if dry_run:
+                # Preview what would be imported
+                cyber_counts = {}
+                for case in cases:
+                    cyber_id = case.get('cyber_id', 'unknown')
+                    collection = case.get('collection', 'personal')
+                    key = f"{cyber_id} ({collection})"
+                    cyber_counts[key] = cyber_counts.get(key, 0) + 1
+                
+                console.print("\n[yellow]DRY RUN - Would import:[/yellow]")
+                for key, count in sorted(cyber_counts.items()):
+                    console.print(f"  • {key}: {count} cases")
+                return
+            
+            # Initialize CBR handler
+            from mind_swarm.subspace.cbr_handler import CBRHandler
+            
+            subspace_root = Path(os.environ.get("SUBSPACE_ROOT", "../subspace"))
+            if not subspace_root.exists():
+                console.print(f"[red]Subspace root not found: {subspace_root}[/red]")
+                return
+            
+            cbr_handler = CBRHandler(subspace_root)
+            
+            # Import cases
+            console.print("[cyan]Importing CBR cases...[/cyan]")
+            success, failed = await cbr_handler.import_cases(cases)
+            
+            console.print(f"[green]✓ Successfully imported {success} cases[/green]")
+            if failed > 0:
+                console.print(f"[yellow]⚠ Failed to import {failed} cases[/yellow]")
+            
+        except Exception as e:
+            console.print(f"[red]Error importing CBR cases: {e}[/red]")
+            import traceback
+            traceback.print_exc()
+    
+    asyncio.run(import_cases())
+
+
 if __name__ == "__main__":
     app()

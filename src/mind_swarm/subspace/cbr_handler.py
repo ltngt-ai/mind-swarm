@@ -656,3 +656,126 @@ class CBRHandler:
                 "status": "error",
                 "error": f"Unknown operation: {operation}"
             }
+    
+    async def export_all_cases(self, include_shared: bool = True) -> List[Dict]:
+        """Export all CBR cases for backup/preservation.
+        
+        Args:
+            include_shared: Whether to include shared collection cases
+            
+        Returns:
+            List of all CBR cases with full metadata
+        """
+        if not self.enabled:
+            return []
+        
+        all_cases = []
+        
+        try:
+            # Export from personal collections
+            for cyber_id, handler in self.handlers.items():
+                if handler.personal_cbr:
+                    try:
+                        results = handler.personal_cbr.get(limit=10000)
+                        if results and results.get('documents'):
+                            for i, doc in enumerate(results['documents']):
+                                if doc:
+                                    case = {
+                                        'id': results['ids'][i] if i < len(results['ids']) else None,
+                                        'problem': doc,  # The problem context
+                                        'metadata': results['metadatas'][i] if i < len(results['metadatas']) else {},
+                                        'cyber_id': cyber_id,
+                                        'collection': 'personal'
+                                    }
+                                    all_cases.append(case)
+                    except Exception as e:
+                        logger.error(f"Error exporting personal CBR for {cyber_id}: {e}")
+            
+            # Export from shared collection
+            if include_shared and self.shared_cbr:
+                try:
+                    results = self.shared_cbr.get(limit=10000)
+                    if results and results.get('documents'):
+                        for i, doc in enumerate(results['documents']):
+                            if doc:
+                                metadata = results['metadatas'][i] if i < len(results['metadatas']) else {}
+                                case = {
+                                    'id': results['ids'][i] if i < len(results['ids']) else None,
+                                    'problem': doc,
+                                    'metadata': metadata,
+                                    'cyber_id': metadata.get('cyber_id', 'unknown'),
+                                    'collection': 'shared'
+                                }
+                                all_cases.append(case)
+                except Exception as e:
+                    logger.error(f"Error exporting shared CBR: {e}")
+            
+            logger.info(f"Exported {len(all_cases)} CBR cases")
+            return all_cases
+            
+        except Exception as e:
+            logger.error(f"Error during CBR export: {e}")
+            return []
+    
+    async def import_cases(self, cases: List[Dict]) -> Tuple[int, int]:
+        """Import CBR cases from backup.
+        
+        Args:
+            cases: List of case dictionaries to import
+            
+        Returns:
+            Tuple of (successful_imports, failed_imports)
+        """
+        if not self.enabled:
+            return 0, 0
+        
+        success = 0
+        failed = 0
+        
+        for case in cases:
+            try:
+                cyber_id = case.get('cyber_id', 'unknown')
+                collection_type = case.get('collection', 'personal')
+                
+                # Get or create handler for cyber
+                handler = self.get_handler(cyber_id)
+                if not handler:
+                    # Create handler if needed
+                    handler = CyberCBRHandler(
+                        cyber_id,
+                        self._get_or_create_collection(f"cbr_personal_{cyber_id}"),
+                        self.shared_cbr
+                    )
+                    self.handlers[cyber_id] = handler
+                
+                # Determine target collection
+                if collection_type == 'shared':
+                    collection = self.shared_cbr
+                else:
+                    collection = handler.personal_cbr
+                
+                if collection:
+                    # Prepare data for import
+                    case_id = case.get('id', f"imported_{cyber_id}_{int(time.time()*1000)}")
+                    problem = case.get('problem', '')
+                    metadata = case.get('metadata', {})
+                    
+                    # Ensure cyber_id is in metadata
+                    metadata['cyber_id'] = cyber_id
+                    
+                    # Add to collection
+                    collection.add(
+                        documents=[problem],
+                        metadatas=[metadata],
+                        ids=[case_id]
+                    )
+                    success += 1
+                else:
+                    failed += 1
+                    
+            except Exception as e:
+                logger.error(f"Error importing case: {e}")
+                failed += 1
+        
+        logger.info(f"Imported {success} cases successfully, {failed} failed")
+        return success, failed
