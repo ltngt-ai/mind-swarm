@@ -114,6 +114,19 @@ class DecisionStage:
         # Create tag filter for decision stage with our blacklist
         tag_filter = TagFilter(blacklist=self.KNOWLEDGE_BLACKLIST)
         
+        # Read the suggested problem from observation buffer
+        observation_buffer = self.cognitive_loop.get_current_pipeline("observation")
+        observation_file = self.cognitive_loop.personal.parent / observation_buffer.location
+        
+        suggested_problem = None
+        try:
+            with open(observation_file, 'r') as f:
+                observation_data = json.load(f)
+                suggested_problem = observation_data.get("suggested_problem", "")
+                logger.debug(f"Using suggested problem from observation: {suggested_problem[:100]}...")
+        except Exception as e:
+            logger.debug(f"Could not read observation buffer: {e}")
+        
         # Build decision context - goals and tasks come from working memory
         current_task = "Deciding what to do based on current situation, goals and tasks"
         
@@ -125,8 +138,8 @@ class DecisionStage:
             exclude_content_types=[]
         )
         
-        # Retrieve similar CBR cases to help with decision making
-        cbr_cases = await self._retrieve_cbr_cases(decision_context)
+        # Retrieve similar CBR cases using the suggested problem
+        cbr_cases = await self._retrieve_cbr_cases(suggested_problem if suggested_problem else decision_context)
         
         # Use brain to generate intention
         logger.info("🤔 Generating intention based on situation...")
@@ -161,11 +174,11 @@ class DecisionStage:
         
         logger.info(f"💭 Decision intention written to pipeline buffer")
             
-    async def _retrieve_cbr_cases(self, context: str) -> list:
+    async def _retrieve_cbr_cases(self, problem_or_context: str) -> list:
         """Retrieve similar CBR cases to help with decision making.
         
         Args:
-            context: Current decision context
+            problem_or_context: Either a specific problem statement or decision context
             
         Returns:
             List of relevant CBR cases
@@ -187,9 +200,8 @@ class DecisionStage:
             
             cbr_api = CBR(MemoryMock(cbr_context))
             
-            # Extract key information from context for better matching
-            # Focus on goals, tasks, and current situation
-            context_summary = context[:1000]  # Use first 1000 chars as summary
+            # Use the problem statement directly if it's short, otherwise summarize
+            context_summary = problem_or_context[:1000]  # Use first 1000 chars
             
             # Retrieve similar cases
             cases = cbr_api.retrieve_similar_cases(

@@ -185,9 +185,10 @@ class ObservationStage:
         thinking_request = {
             "signature": {
                 "instruction": """
-Review all observations in your working memory to identify relevant changes.
-Look at recent observations and how they relate to the current situation, goals, tasks and reflection from last cycle.
-Don't plan how to act on this information, just how it might be important.
+Review all observations to identify relevant changes.
+Consider how they relate to the situation, goals, tasks and reflections from last cycle.
+Based on your observations, suggest what problem should be addressed this cycle.
+Don't plan how to act on this information, just identify what needs attention.
 Always start your output with [[ ## reasoning ## ]]
 """,
                 "inputs": {
@@ -197,6 +198,7 @@ Always start your output with [[ ## reasoning ## ]]
                 "outputs": {
                     "reasoning": "Your short explaination of reasoning",
                     "relevance": "How the observations relate to the current situation",
+                    "suggested_problem": "A clear statement of what problem or task should be addressed this cycle (1-2 sentences)",
                 },
                 "display_field": "reasoning"
             },
@@ -220,17 +222,21 @@ Always start your output with [[ ## reasoning ## ]]
         # Create orientation data - handle template placeholders
         reasoning = output_values.get("reasoning", "")
         relevance = output_values.get("relevance", "")
+        suggested_problem = output_values.get("suggested_problem", "")
         
         # Check for template placeholders and replace with meaningful defaults
         if reasoning == "{reasoning}" or not reasoning:
             reasoning = "Analyzing current observations"
         if relevance == "{relevance}" or not relevance:
             relevance = "Observations being processed for context"
+        if suggested_problem == "{suggested_problem}" or not suggested_problem:
+            suggested_problem = "Continue exploring and understanding the environment"
         
         observartion_result_data = {
             "cycle_count": self.cognitive_loop.cycle_count,
             "reasoning": reasoning,
             "relevance": relevance,
+            "suggested_problem": suggested_problem,
             "observations": observations  # Include raw observations for reference
         }
         

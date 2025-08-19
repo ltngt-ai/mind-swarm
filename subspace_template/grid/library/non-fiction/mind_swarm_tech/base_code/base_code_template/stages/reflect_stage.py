@@ -139,13 +139,16 @@ class ReflectStage:
         thinking_request = {
             "signature": {
                 "instruction": """
-Review the previous execution results in your memory. Reflect on what worked, what didn't, 
-and what you learned. Consider how this affects your goals and priorities.
+Review the previous execution results in your memory. 
+First, clearly state what problem you were trying to solve this cycle.
+Then reflect on what worked, what didn't, and what you learned.
+Consider how this affects your goals and priorities.
 """,
                 "inputs": {
                     "working_memory": "Your current working memory including execution results"
                 },
                 "outputs": {
+                    "problem_solved": "A clear statement of what problem or task you were trying to solve this cycle (1-2 sentences)",
                     "insights": "Key insights from the execution results",
                     "lessons_learned": "What you learned that will help in future",
                     "knowledge_query": "Suggest a NLP knowledge query that you think will help the next cycle",
@@ -186,6 +189,7 @@ and what you learned. Consider how this affects your goals and priorities.
             solution_score = 0.5  # Default to partial success
         
         reflection_content = {
+            "problem_solved": output_values.get("problem_solved", ""),
             "insights": output_values.get("insights", ""),
             "lessons_learned": output_values.get("lessons_learned", ""),
             "knowledge_query": output_values.get("knowledge_query", ""),
@@ -311,12 +315,18 @@ and what you learned. Consider how this affects your goals and priorities.
             with open(observation_file, 'r') as f:
                 observation_data = json.load(f)
             
-            # Extract problem context from observation
-            problem_context = observation_data.get("reasoning", "")[:500]  # First 500 chars
-            if not problem_context:
-                problem_context = observation_data.get("observation", "No observation available")[:500]
+            # Use the problem_solved from reflection - the AI explicitly states what it was solving
+            problem_context = reflection_content.get("problem_solved", "")
             
-            # Extract solution from decision and execution
+            # If no explicit problem stated in reflection, try to get it from observation's suggested_problem
+            if not problem_context:
+                problem_context = observation_data.get("suggested_problem", "")
+            
+            # Final fallback to decision intention if still no problem
+            if not problem_context:
+                problem_context = f"Task: {decision_data.get('intention', 'Unknown task')[:200]}"
+            
+            # Extract solution (the intention/action taken)
             solution = decision_data.get("intention", "")[:500]
             if not solution:
                 solution = "No clear intention recorded"
