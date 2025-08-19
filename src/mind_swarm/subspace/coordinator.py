@@ -514,14 +514,14 @@ class SubspaceCoordinator:
         
         await self.spawner.send_message_to_agent(name, message)
     
-    async def send_message(self, to_agent: str, content: str, message_type: str = "text",
+    async def send_message(self, to_agent: str, content: str, subject: Optional[str] = None,
                           from_developer: Optional[str] = None):
         """Send a regular message to an Cyber.
         
         Args:
             to_agent: Target Cyber name
             content: Message content
-            message_type: Type of message (default: "text")
+            subject: Optional message subject
             from_developer: Optional developer name override
         """
         # Determine sender identity
@@ -544,10 +544,13 @@ class SubspaceCoordinator:
         message = {
             "from": sender,
             "to": to_agent,
-            "type": message_type,
             "content": content,
             "timestamp": datetime.now().isoformat()
         }
+        
+        # Add subject if provided
+        if subject:
+            message["subject"] = subject
         
         await self.spawner.send_message_to_agent(to_agent, message)
     

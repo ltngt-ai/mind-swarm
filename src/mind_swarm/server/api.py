@@ -39,7 +39,7 @@ class UnfreezeRequest(BaseModel):
 class MessageRequest(BaseModel):
     """Request to send a message to an Cyber."""
     content: str
-    message_type: str = "text"
+    subject: Optional[str] = None
 
 
 class QuestionRequest(BaseModel):
@@ -357,7 +357,7 @@ class MindSwarmServer:
                 await self.coordinator.send_message(
                     name, 
                     request.content,
-                    request.message_type
+                    request.subject
                 )
                 return {"message": f"Message sent to {name}"}
             except Exception as e:

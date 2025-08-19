@@ -347,7 +347,7 @@ class MindSwarmCLI:
         console.print("  [cyan]create [--io] [name][/cyan] - Create a new AI Cyber")
         console.print("  [cyan]terminate <name>[/cyan] - Terminate an Cyber")
         console.print("  [cyan]command <name> <command> [params][/cyan] - Send command to Cyber")
-        console.print("  [cyan]message <name> <text>[/cyan] - Send message to Cyber")
+        console.print("  [cyan]message <name> <subject> | <text>[/cyan] - Send message to Cyber (| is optional)")
         console.print("  [cyan]question <text>[/cyan] - Create a shared question")
         console.print("  [cyan]announce <title> | <message>[/cyan] - Create system announcement")
         console.print("  [cyan]clear-announcements[/cyan] - Clear all system announcements")
@@ -547,12 +547,26 @@ class MindSwarmCLI:
                     console.print(f"Command '{command}' sent to {cyber_name}")
                 
                 elif cmd == "message" and len(parts) >= 3:
-                    # message <cyber_name> <text>
+                    # message <cyber_name> <subject> | <content>
+                    # or message <cyber_name> <content> (no subject)
                     cyber_name = parts[1]
                     message_text = " ".join(parts[2:])
                     
-                    await self.client.send_message(cyber_name, message_text)
-                    console.print(f"Message sent to {cyber_name}")
+                    # Parse subject and content separated by |
+                    if "|" in message_text:
+                        subject, content = message_text.split("|", 1)
+                        subject = subject.strip()
+                        content = content.strip()
+                    else:
+                        # No separator means no subject, entire text is content
+                        subject = None
+                        content = message_text
+                    
+                    await self.client.send_message(cyber_name, content, subject)
+                    if subject:
+                        console.print(f"Message sent to {cyber_name}: {subject}")
+                    else:
+                        console.print(f"Message sent to {cyber_name}")
                 
                 elif cmd == "question" and len(parts) > 1:
                     # Post a question to the Community

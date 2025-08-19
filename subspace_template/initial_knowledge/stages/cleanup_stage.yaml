@@ -35,6 +35,7 @@ content: |
      - New strategies discovered
      - Important patterns identified
      - Valuable knowledge gained
+     - Recent messages, it might take several cycles for them to fully integrate
   
   3. **Active Context**
      - Current goals and tasks
@@ -56,33 +57,15 @@ content: |
   - **Priority level** (CRITICAL > HIGH > MEDIUM > LOW)
   - **Recency** (newer generally more relevant)
   - **Relevance** to active goals
-  - **Uniqueness** of information
-  
-  ### Consolidation
-  Where appropriate:
-  - Summarize lengthy content
-  - Extract key points from verbose data
-  - Create higher-level abstractions
-  
+   
   ## Cleanup Best Practices  
   ### Be Selective
   - Don't remove everything old - some history is valuable
   - Keep memories that provide important context
   - Preserve lessons learned and insights
   - Maintain continuity between cycles
-  
-  ### Be Systematic
-  - Use consistent criteria for removal
-  - Document why important items are kept
-  - Track cleanup effectiveness over time
-  - Adjust strategies based on results
-  
-  ### Be Balanced
-  - Maintain diversity of memory types
-  - Keep both facts and insights
-  - Balance detail with abstraction
-  - Preserve both short and long-term perspectives
-  
+   
+ 
   ## Output
   Your cleanup should produce:
   - A list of memory IDs to remove

@@ -141,19 +141,20 @@ class MindSwarmClient:
         self,
         cyber_id: str,
         content: str,
-        message_type: str = "text"
+        subject: Optional[str] = None
     ):
         """Send a message to an Cyber.
         
         Args:
             cyber_id: Target Cyber name
             content: Message content
-            message_type: Type of message (default: "text")
+            subject: Optional message subject
         """
         payload = {
-            "content": content,
-            "message_type": message_type
+            "content": content
         }
+        if subject:
+            payload["subject"] = subject
         
         async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
             response = await client.post(
