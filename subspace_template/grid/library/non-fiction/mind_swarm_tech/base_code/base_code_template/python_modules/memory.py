@@ -178,8 +178,11 @@ if info['lines'] > 10000:
     # Read specific range
     middle = memory.read_lines("/personal/large_dataset.csv", start_line=5000, end_line=5100)
     
+    # Read last 100 lines using negative indexing (Python-style)
+    tail = memory.read_lines("/personal/large_dataset.csv", start_line=-100)
+    
     # Read from line 9000 to end
-    tail = memory.read_lines("/personal/large_dataset.csv", start_line=9000)
+    end_section = memory.read_lines("/personal/large_dataset.csv", start_line=9000)
 else:
     # Small enough to read entirely
     full_content = memory["/personal/large_dataset.csv"].content
@@ -1524,8 +1527,10 @@ Returns: True if path exists, False otherwise
         
         Args:
             path: Memory path to read
-            start_line: First line to read (1-based, inclusive). None means from beginning.
-            end_line: Last line to read (1-based, inclusive). None means to end.
+            start_line: First line to read. Supports Python-style negative indexing.
+                       1-based for positive, -1 is last line. None means from beginning.
+            end_line: Last line to read (inclusive). Supports negative indexing.
+                      None means to end.
             
         Returns:
             String containing the requested lines
@@ -1539,6 +1544,12 @@ Returns: True if path exists, False otherwise
             
             # Read from line 1000 to end
             tail = memory.read_lines("/personal/output.txt", start_line=1000)
+            
+            # Read last 100 lines (Python-style negative indexing)
+            tail = memory.read_lines("/personal/log.txt", start_line=-100)
+            
+            # Read last 50 lines
+            tail = memory.read_lines("/personal/output.txt", start_line=-50, end_line=-1)
         """
         clean_path = self._clean_path(path)
         actual_path = self._resolve_path(clean_path)
@@ -1548,6 +1559,18 @@ Returns: True if path exists, False otherwise
             
         if actual_path.is_dir():
             raise MemoryTypeError(f"Cannot read lines from directory: {path}")
+        
+        # Handle negative indices by counting lines first if needed
+        if start_line and start_line < 0 or end_line and end_line < 0:
+            # Need to count total lines for negative indexing
+            with open(actual_path, 'r', encoding='utf-8') as f:
+                total_lines = sum(1 for _ in f)
+            
+            # Convert negative indices to positive
+            if start_line and start_line < 0:
+                start_line = max(1, total_lines + start_line + 1)  # -1 becomes total_lines
+            if end_line and end_line < 0:
+                end_line = max(1, total_lines + end_line + 1)
         
         # Check if range is too large
         if start_line and end_line:
