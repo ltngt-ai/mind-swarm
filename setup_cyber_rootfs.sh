@@ -13,7 +13,7 @@ NC='\033[0m' # No Color
 # Configuration
 SUBSPACE_ROOT="${SUBSPACE_ROOT:-../subspace}"
 ROOTFS_DIR="$SUBSPACE_ROOT/cyber_rootfs"
-DEBIAN_RELEASE="bookworm"  # Debian 12
+DEBIAN_RELEASE="trixie"  # Debian 13
 DEBIAN_MIRROR="http://deb.debian.org/debian"
 
 echo -e "${GREEN}Mind-Swarm Cyber Environment Setup${NC}"
@@ -55,9 +55,9 @@ echo "Release: $DEBIAN_RELEASE"
 echo ""
 
 # Create minimal Debian system
-# Include libmagic1 for python-magic file type detection
+# Include libmagic1t64 for python-magic file type detection
 debootstrap --variant=minbase \
-    --include=python3,python3-pip,python3-venv,ca-certificates,python3-dev,build-essential,libmagic1 \
+    --include=python3,python3-pip,python3-venv,ca-certificates,python3-dev,build-essential,libmagic1t64 \
     "$DEBIAN_RELEASE" \
     "$ROOTFS_DIR" \
     "$DEBIAN_MIRROR"

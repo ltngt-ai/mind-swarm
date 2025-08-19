@@ -13,11 +13,6 @@ content: |
   
   ## Cleanup Criteria  
   ### Memories to Remove
-  1. **Obsolete Observations**
-     - Old environment scans
-     - Completed task notifications
-     - Resolved error states
-     - Outdated status information
   2. **Redundant Information**
      - Duplicate memories
      - Superseded facts
@@ -65,7 +60,6 @@ content: |
   
   ### Consolidation
   Where appropriate:
-  - Combine related observations into insights
   - Summarize lengthy content
   - Extract key points from verbose data
   - Create higher-level abstractions

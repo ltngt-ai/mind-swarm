@@ -37,8 +37,8 @@ if memory.exists("/personal/data.json"):
 
 ### File Size Limits
 The Memory API enforces limits to prevent memory system overload:
-- **Full file read**: Max 10,000 lines or 10MB
-- **Ranged read**: Max 5,000 lines per call
+- **Full file read**: Max 1,000 lines or 32KB
+- **Ranged read**: Max 500 lines per call
 
 If a file exceeds these limits, you'll get a helpful error:
 ```python
@@ -882,9 +882,9 @@ Main memory interface providing unified access to all Mind-Swarm memories.
     The Memory class provides methods to read, write, and manage memories"""
     
     # Safety limits to prevent memory system overload
-    MAX_FILE_LINES = 10000  # Maximum lines for full file read
-    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB max for full file read
-    MAX_RANGE_LINES = 5000  # Maximum lines for ranged read
+    MAX_FILE_LINES = 1000  # Maximum lines for full file read
+    MAX_FILE_SIZE = 32 * 1024  # 32KB max for full file read
+    MAX_RANGE_LINES = 500  # Maximum lines for ranged read
     
     def __init__(self, context: Dict[str, Any]):
         """Initialize the memory system.

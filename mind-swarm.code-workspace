@@ -7,5 +7,7 @@
 			"path": "../subspace"
 		}
 	],
-	"settings": {}
+	"settings": {
+		"git.ignoreLimitWarning": true
+	}
 }

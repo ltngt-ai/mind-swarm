@@ -8,6 +8,12 @@ It is instantiated with the cyber's context when scripts are executed.
 
 The Events class provides efficient idle and wake functionality.
 It is instantiated with the cyber's context when scripts are executed.
+
+The Environment class provides system interaction capabilities.
+It is instantiated with the cyber's context when scripts are executed.
+
+The CBR class provides Case-Based Reasoning for learning from past solutions.
+It is instantiated with the Memory instance when scripts are executed.
 """
 
 # Export the Memory class and exceptions
@@ -31,6 +37,19 @@ from .events import (
     EventsError
 )
 
+# Export the Environment class and exceptions
+from .environment import (
+    Environment,
+    EnvironmentError,
+    EnvironmentTimeoutError
+)
+
+# Export the CBR class and exceptions
+from .cbr import (
+    CBR,
+    CBRError
+)
+
 __all__ = [
     'Memory',
     'MemoryError',
@@ -40,5 +59,10 @@ __all__ = [
     'Location',
     'LocationError',
     'Events',
-    'EventsError'
+    'EventsError',
+    'Environment',
+    'EnvironmentError',
+    'EnvironmentTimeoutError',
+    'CBR',
+    'CBRError'
 ]

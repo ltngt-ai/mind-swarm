@@ -85,14 +85,7 @@ class CleanupStage:
         cleanup_decisions = await self._identify_cleanup_targets(memory_context)
         logger.debug(f"Cleanup decisions: {cleanup_decisions}")
         
-        if cleanup_decisions:
-            # Clean up identified obsolete observations
-            obsolete_observations = cleanup_decisions.get("obsolete_observations", [])
-            for obs_id in obsolete_observations:
-                if self.memory_system.remove_memory(obs_id):
-                    logger.debug(f"🧹 Removed obsolete observation: {obs_id}")
-                    results["obsolete_observations"].append(obs_id)
-            
+        if cleanup_decisions:          
             # Clean up identified obsolete memory blocks
             obsolete_memories = cleanup_decisions.get("obsolete_memories", [])
             for mem_id in obsolete_memories:
@@ -102,78 +95,16 @@ class CleanupStage:
         
         # Also do automatic cleanup of expired memories
         expired = self.memory_system.cleanup_expired()
-        # ObservationMemoryBlock removed - no need to clean up observations
         
         results["expired_count"] = expired
-        results["old_observations_count"] = 0  # Observations are now ephemeral
-        
         if expired:
             logger.info(f"🧹 Cleaned up {expired} expired memories")
         
-        # Note: Script execution results are now only stored in pipeline buffers
-        # which are automatically cleared each cycle, so no cleanup needed
-        script_files_cleaned = 0
-        results["script_files_cleaned"] = script_files_cleaned
         
         # Log cleanup completion
-        total_cleaned = (len(results["obsolete_observations"]) + 
-                        len(results["obsolete_memories"]) + 
-                        expired + script_files_cleaned)
-        
+        total_cleaned = len(results["obsolete_memories"]) + expired
         if total_cleaned > 0:
             logger.info(f"✨ Cleanup completed for cycle {cycle_count}: {total_cleaned} items cleaned")
-    
-    # NOTE: This method is no longer needed as script execution results are now only
-    # stored in pipeline buffers which are automatically cleared each cycle
-    async def _cleanup_old_script_executions_DEPRECATED(self, max_age_minutes: int = 30, keep_recent: int = 10) -> int:
-        """[DEPRECATED] Clean up old script execution files from action_results directory.
-        
-        Args:
-            max_age_minutes: Maximum age in minutes before files are eligible for cleanup
-            keep_recent: Always keep at least this many recent files
-            
-        Returns:
-            Number of files cleaned up
-        """
-        import time
-        
-        action_results_dir = self.cognitive_loop.memory_dir / "action_results"
-        if not action_results_dir.exists():
-            return 0
-        
-        # Get all script execution files
-        script_files = list(action_results_dir.glob("script_execution_*.json"))
-        if len(script_files) <= keep_recent:
-            return 0  # Don't clean up if we have fewer than the minimum to keep
-        
-        # Sort by modification time (newest first)
-        script_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
-        
-        # Always keep the most recent files
-        files_to_check = script_files[keep_recent:]
-        
-        current_time = time.time()
-        max_age_seconds = max_age_minutes * 60
-        cleaned_count = 0
-        
-        for file_path in files_to_check:
-            try:
-                file_age = current_time - file_path.stat().st_mtime
-                if file_age > max_age_seconds:
-                    # Remove associated memory if it exists
-                    # Construct the memory ID from the cyber's perspective
-                    memory_id = f"personal/.internal/memory/action_results/{file_path.name}"
-                    if self.memory_system.remove_memory(memory_id):
-                        logger.debug(f"Removed memory for old script execution: {memory_id}")
-                    
-                    # Delete the file
-                    file_path.unlink()
-                    cleaned_count += 1
-                    logger.debug(f"Deleted old script execution file: {file_path.name}")
-            except Exception as e:
-                logger.error(f"Error cleaning up script file {file_path}: {e}")
-        
-        return cleaned_count
     
     async def _identify_cleanup_targets(self, memory_context: str) -> Optional[Dict[str, Any]]:
         """Use brain to identify what needs cleanup.
@@ -195,21 +126,14 @@ class CleanupStage:
 Review your working memory to identify items that can be cleaned up.
 Each memory has a cycle_count showing when it was created.
 Look for:
-1. Old observations from many cycles ago that are no longer relevant
-2. Duplicate observations about the same thing
-3. Memories that no longer need to be in working memory
-4. Observations about files that no longer exist
-5. Duplicate memories
-
-Only suggest cleanup for items that are truly obsolete and no longer needed.
-Be conservative - when in doubt, keep the memory.
+1. Memories that no longer need to be in working memory
+2. Duplicate memories
 """,
                 "inputs": {
                     "working_memory": "Your current working memory with all items including their cycle counts"
                 },
                 "outputs": {
                     "reasoning": "Brief explanation of cleanup decisions",
-                    "obsolete_observations": "JSON array of observation IDs that can be removed (e.g. [\"obs_123\", \"obs_456\"])",
                     "obsolete_memories": "JSON array of other memory IDs that can be removed"
                 },
                 "display_field": "reasoning"
@@ -221,11 +145,7 @@ Be conservative - when in doubt, keep the memory.
             "timestamp": datetime.now().isoformat()
         }
         
-        start_time = time.time()
         response = await self.brain._use_brain(json.dumps(thinking_request))
-        elapsed = time.time() - start_time
-        logger.debug(f"Brain cleanup identification took {elapsed:.2f}s")
-        
         if response:
             try:
                 result = json.loads(response)
@@ -233,16 +153,8 @@ Be conservative - when in doubt, keep the memory.
                 logger.debug(f"Cleanup identification result: {output_values}")
                 
                 # Parse the cleanup targets
-                obsolete_observations = output_values.get("obsolete_observations", [])
                 obsolete_memories = output_values.get("obsolete_memories", [])
-                
-                # Parse JSON strings if needed
-                if isinstance(obsolete_observations, str):
-                    try:
-                        obsolete_observations = json.loads(obsolete_observations)
-                    except:
-                        obsolete_observations = []
-                
+                                
                 if isinstance(obsolete_memories, str):
                     try:
                         obsolete_memories = json.loads(obsolete_memories)
@@ -250,7 +162,6 @@ Be conservative - when in doubt, keep the memory.
                         obsolete_memories = []
                 
                 return {
-                    "obsolete_observations": obsolete_observations,
                     "obsolete_memories": obsolete_memories,
                     "reasoning": output_values.get("reasoning", "")
                 }
