@@ -14,6 +14,9 @@ It is instantiated with the cyber's context when scripts are executed.
 
 The CBR class provides Case-Based Reasoning for learning from past solutions.
 It is instantiated with the Memory instance when scripts are executed.
+
+The Communication class provides inter-Cyber messaging capabilities.
+It is instantiated with the cyber's context when scripts are executed.
 """
 
 # Export the Memory class and exceptions
@@ -50,6 +53,12 @@ from .cbr import (
     CBRError
 )
 
+# Export the Communication class and exceptions
+from .communication import (
+    Communication,
+    CommunicationError
+)
+
 __all__ = [
     'Memory',
     'MemoryError',
@@ -64,5 +73,7 @@ __all__ = [
     'EnvironmentError',
     'EnvironmentTimeoutError',
     'CBR',
-    'CBRError'
+    'CBRError',
+    'Communication',
+    'CommunicationError'
 ]

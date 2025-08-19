@@ -48,9 +48,11 @@ class MessageRouter:
             if not await aiofiles.os.path.isdir(cyber_dir):
                 continue
                 
-            outbox_dir = cyber_dir / "outbox"
+            # Check only the new .internal/outbox location
+            outbox_dir = cyber_dir / ".internal" / "outbox"
+            
             if not await aiofiles.os.path.exists(outbox_dir):
-                logger.debug(f"No outbox directory for {cyber_name}")
+                # No messages to route for this cyber
                 continue
             
             # Process each message in outbox
@@ -119,8 +121,8 @@ class MessageRouter:
                             f"Unknown recipient: {to_agent}. Use 'name@mind-swarm.local', 'Cyber-name', or 'name_dev' for developers"
                         )
                     
-                    # Move to mail archive folder
-                    archive_dir = cyber_dir / "mail_archive"
+                    # Move to mail archive folder in .internal
+                    archive_dir = cyber_dir / ".internal" / "mail_archive"
                     try:
                         await aiofiles.os.makedirs(archive_dir, exist_ok=True)
                     except OSError:
@@ -180,28 +182,19 @@ class MessageRouter:
         return await aiofiles.os.path.exists(cyber_dir)
     
     async def _deliver_to_developer(self, to_dev: str, message: Dict[str, Any]):
-        """Deliver a message to a developer's mailbox.
+        """Log a message intended for a developer.
+        
+        Since developers interact through the CLI, not as cybers, we just log these.
         
         Args:
-            to_dev: Developer cyber name (e.g., "deano_dev")
-            message: Message to deliver
+            to_dev: Developer identifier (e.g., "deano_dev")
+            message: Message content
         """
-        # Create the developer's inbox directory if it doesn't exist
-        dev_inbox = self.agents_dir / to_dev / "inbox"
-        try:
-            await aiofiles.os.makedirs(dev_inbox, exist_ok=True)
-        except OSError:
-            pass  # Directory might already exist
-        
-        # Generate unique filename
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:20]
-        msg_id = message.get("id", f"msg_{timestamp}")
-        msg_file = dev_inbox / f"{msg_id}.msg"
-        
-        # Write message
-        async with aiofiles.open(msg_file, 'w') as f:
-            await f.write(json.dumps(message, indent=2))
-        logger.info(f"Delivered message to developer {to_dev}")
+        # Log the message for developer visibility
+        logger.info(f"📧 Message to developer {to_dev}:")
+        logger.info(f"  From: {message.get('from', 'unknown')}")
+        logger.info(f"  Subject: {message.get('subject', 'No subject')}")
+        logger.info(f"  Content: {message.get('content', message)}")
     
     async def _send_delivery_error(self, sender: str, original_message: Dict[str, Any], error_reason: str):
         """Send a delivery error message back to the sender."""
@@ -574,7 +567,6 @@ class SubspaceCoordinator:
             if await aiofiles.os.path.exists(cyber_dir):
                 # Count messages
                 inbox_dir = cyber_dir / "inbox"
-                outbox_dir = cyber_dir / "outbox"
                 
                 inbox_count = 0
                 if await aiofiles.os.path.exists(inbox_dir):
@@ -583,14 +575,6 @@ class SubspaceCoordinator:
                         inbox_count = len([f for f in files if f.endswith('.msg')])
                     except OSError:
                         inbox_count = 0
-                
-                outbox_count = 0
-                if await aiofiles.os.path.exists(outbox_dir):
-                    try:
-                        files = await aiofiles.os.listdir(outbox_dir)
-                        outbox_count = len([f for f in files if f.endswith('.msg') or f.endswith('.json')])
-                    except OSError:
-                        outbox_count = 0
                 
                 # Get current location from dynamic_context.json
                 current_location = None
@@ -607,7 +591,6 @@ class SubspaceCoordinator:
                 
                 state.update({
                     "inbox_count": inbox_count,
-                    "outbox_count": outbox_count,
                     "current_location": current_location or "/personal",
                 })
             

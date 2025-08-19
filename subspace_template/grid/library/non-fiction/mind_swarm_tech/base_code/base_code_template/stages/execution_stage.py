@@ -66,6 +66,7 @@ class ExecutionStage:
         self._extract_and_save_module_docs(self.knowledge_api, "knowledge_api_docs")
         self._extract_and_save_module_docs(self.environment_api, "environment_api_docs")
         self._extract_and_save_module_docs(self.cbr_api, "cbr_api_docs")
+        self._extract_and_save_module_docs(self.communication_api, "communication_api_docs")
     
     def _load_stage_instructions(self):
         """Load stage instructions from knowledge into memory."""
@@ -286,6 +287,7 @@ class ExecutionStage:
         from ..python_modules.knowledge import Knowledge
         from ..python_modules.environment import Environment
         from ..python_modules.cbr import CBR
+        from ..python_modules.communication import Communication
         
         # Create context for the APIs
         context = {
@@ -306,6 +308,7 @@ class ExecutionStage:
         self.knowledge_api = Knowledge(self.memory_api)  # Knowledge uses Memory instance
         self.environment_api = Environment(context)
         self.cbr_api = CBR(self.memory_api)  # CBR uses Memory instance
+        self.communication_api = Communication(context)
     
     async def execute(self):
         """Run the execution stage."""
@@ -561,6 +564,14 @@ The provided API docs describe the available operations and their usage.
         cbr_instance = CBR(memory_instance)
         namespace['cbr'] = cbr_instance
         namespace['CBRError'] = CBRError
+        
+        # Import and initialize the Communication API
+        from ..python_modules.communication import Communication, CommunicationError
+        
+        # Create communication instance
+        communication_instance = Communication(context)
+        namespace['communication'] = communication_instance
+        namespace['CommunicationError'] = CommunicationError
         
         # Capture output
         output_lines = []
