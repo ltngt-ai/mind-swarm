@@ -140,30 +140,18 @@ class ReflectStage:
             "signature": {
                 "instruction": """
 Review the previous execution results in your memory. 
-First, clearly state what problem you were trying to solve this cycle.
-Then reflect on what worked, what didn't, and what you learned.
-Finally, imagine another Cyber facing the same problem - what specific advice would you give them?
-
-IMPORTANT: For solution_score, rate how well YOU solved YOUR problem this cycle:
-- 1.0 = Complete success, problem fully solved as intended
-- 0.7-0.9 = Mostly successful with minor issues
-- 0.5-0.7 = Partial success, made progress but incomplete
-- 0.2-0.5 = Limited success, encountered significant problems
-- 0.0-0.2 = Failed to solve the problem
-
-Do NOT rate your advice quality - rate your actual solution's success!
+and reflect on what worked, what didn't, and what you learned.
+To help your other Cybers, rate this cycle's solution on a scale from 0.0 to 1.0.
+This score should represent how well the execution's results addressed the decision's intentions and the observation's suggested problem.
 """,
                 "inputs": {
                     "working_memory": "Your current working memory including execution results"
                 },
                 "outputs": {
-                    "problem_solved": "A clear statement of what problem or task you were trying to solve this cycle (1-2 sentences)",
                     "insights": "Key insights from the execution results",
                     "lessons_learned": "What you learned that will help in future",
-                    "advice_for_others": "What specific advice would you give to another Cyber facing this same problem? Be practical and specific.",
-                    "advice_confidence": "How confident are you that your advice would help another Cyber solve a similar problem? Rate 0.0-1.0",
                     "knowledge_query": "Suggest a NLP knowledge query that you think will help the next cycle",
-                    "solution_score": "How successfully did you solve the problem THIS cycle? Rate 0.0-1.0 based on actual execution results (NOT advice quality)"
+                    "solution_score": "How well the execution's results addressed the decision's intentions and the observation's suggested problem"
                 },
                 "display_field": "insights"
             },
@@ -198,27 +186,10 @@ Do NOT rate your advice quality - rate your actual solution's success!
             solution_score = max(0.0, min(1.0, solution_score))  # Clamp to [0, 1]
         except:
             solution_score = 0.5  # Default to partial success
-        
-        # Extract advice confidence score
-        advice_confidence_str = output_values.get("advice_confidence", "0.5")
-        try:
-            if isinstance(advice_confidence_str, (int, float)):
-                advice_confidence = float(advice_confidence_str)
-            else:
-                import re
-                match = re.search(r'(\d*\.?\d+)', str(advice_confidence_str))
-                advice_confidence = float(match.group(1)) if match else 0.5
-            advice_confidence = max(0.0, min(1.0, advice_confidence))
-        except:
-            advice_confidence = 0.5
-        
+                
         reflection_content = {
-            "problem_solved": output_values.get("problem_solved", ""),
             "insights": output_values.get("insights", ""),
             "lessons_learned": output_values.get("lessons_learned", ""),
-            "advice_for_others": output_values.get("advice_for_others", ""),
-            "advice_confidence": advice_confidence,
-            "knowledge_query": output_values.get("knowledge_query", ""),
             "solution_score": solution_score
         }
         
@@ -239,7 +210,6 @@ Do NOT rate your advice quality - rate your actual solution's success!
             },
             cycle_count=self.cognitive_loop.cycle_count,
             no_cache=True,  # Don't cache, always read fresh
-            # Regular file memory - content type will be auto-detected
         )
         
         # Remove old reflection if it exists and add new one
@@ -252,7 +222,7 @@ Do NOT rate your advice quality - rate your actual solution's success!
         logger.info(f"💭 Created reflection for cycle {self.cognitive_loop.cycle_count}")
         
         # Store successful solutions as CBR cases
-        await self._store_cbr_case(solution_score, reflection_content, last_execution)
+        await self._store_cbr_case(solution_score, reflection_content)
         
         # Log key insights if any
         if output_values.get("insights"):
@@ -297,7 +267,6 @@ Do NOT rate your advice quality - rate your actual solution's success!
                     },
                     cycle_count=self.cognitive_loop.cycle_count,
                     no_cache=True
-                    # Don't specify content_type - let it auto-detect as JSON
                 )
                 
                 # Remove old knowledge results if they exist
@@ -315,7 +284,7 @@ Do NOT rate your advice quality - rate your actual solution's success!
         # Clean up stage instructions before leaving
         self._cleanup_stage_instructions()
     
-    async def _store_cbr_case(self, solution_score: float, reflection_content: dict, execution_data: dict):
+    async def _store_cbr_case(self, solution_score: float, reflection_content: dict):
         """Store a CBR case if the solution was successful enough.
         
         Args:
@@ -323,11 +292,7 @@ Do NOT rate your advice quality - rate your actual solution's success!
             reflection_content: The reflection data
             execution_data: The execution pipeline data
         """
-        # Only store cases with reasonable success (> 0.6)
-        if solution_score < 0.6:
-            logger.debug(f"Not storing CBR case - score too low: {solution_score:.2f}")
-            return
-        
+      
         try:
             # Get the decision and observation data for context
             decision_buffer = self.cognitive_loop.get_current_pipeline("decision")
@@ -340,31 +305,17 @@ Do NOT rate your advice quality - rate your actual solution's success!
                 decision_data = json.load(f)
             with open(observation_file, 'r') as f:
                 observation_data = json.load(f)
-            
-            # Use the problem_solved from reflection - the AI explicitly states what it was solving
-            problem_context = reflection_content.get("problem_solved", "")
-            
-            # If no explicit problem stated in reflection, try to get it from observation's suggested_problem
-            if not problem_context:
-                problem_context = observation_data.get("suggested_problem", "")
-            
-            # Final fallback to decision intention if still no problem
-            if not problem_context:
-                problem_context = f"Task: {decision_data.get('intention', 'Unknown task')[:200]}"
-            
+            problem_context = observation_data.get("suggested_problem", "")
+
             # Extract solution (the intention/action taken)
             solution = decision_data.get("intention", "")[:500]
             if not solution:
                 solution = "No clear intention recorded"
             
             # Extract outcome from execution results
-            outcome = execution_data.get("results", "")
+            outcome = reflection_content.get("lessons_learned", "")
             if isinstance(outcome, list):
                 outcome = str(outcome)  # Convert list to string
-            outcome = outcome[:500] if outcome else ""
-            if not outcome:
-                error = execution_data.get("error", "Unknown outcome")
-                outcome = str(error)[:500] if error else "Unknown outcome"
             
             # Determine tags based on content
             tags = []
@@ -392,45 +343,20 @@ Do NOT rate your advice quality - rate your actual solution's success!
                     self._context = context
             
             cbr_api = CBR(MemoryMock(cbr_context))
-            
-            # Include the advice in the outcome for future reference
-            advice = reflection_content.get('advice_for_others', '')
-            enhanced_outcome = outcome
-            if advice:
-                enhanced_outcome += f"\n\nAdvice for other Cybers:\n{advice}"
-            if reflection_content.get('insights'):
-                enhanced_outcome += f"\n\nInsights: {reflection_content.get('insights', '')}"
-            
+                       
             # Store the case with advice included
             case_id = cbr_api.store_case(
                 problem=problem_context,
                 solution=solution,
-                outcome=enhanced_outcome,
+                outcome=outcome,
                 success_score=solution_score,
                 tags=tags,
                 metadata={
                     "cycle_count": self.cognitive_loop.cycle_count,
                     "cbr_cases_used": decision_data.get("cbr_cases_used", []),
-                    "has_advice": bool(advice),  # Flag to indicate this case contains advice
-                    "advice_confidence": reflection_content.get('advice_confidence', 0.5)  # How confident the advice is
                 },
                 timeout=3.0
             )
-            
-            if case_id:
-                logger.info(f"📚 Stored CBR case {case_id} with score {solution_score:.2f}")
-                
-                # Update scores of any CBR cases that were used
-                cases_used = decision_data.get("cbr_cases_used", [])
-                if cases_used and solution_score > 0.7:
-                    for used_case_id in cases_used:
-                        if used_case_id:
-                            cbr_api.update_case_score(
-                                case_id=used_case_id,
-                                reused=True,
-                                timeout=2.0
-                            )
-                            logger.debug(f"Updated reuse count for case {used_case_id}")
             
         except Exception as e:
             logger.error(f"Failed to store CBR case: {e}")

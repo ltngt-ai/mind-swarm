@@ -240,17 +240,12 @@ class DecisionStage:
         if cbr_cases:
             cbr_context = "\n\n## Similar Past Solutions\n"
             for i, case in enumerate(cbr_cases, 1):
-                score = case.get('metadata', {}).get('success_score', 0)
-                has_advice = case.get('metadata', {}).get('has_advice', False)
-                
+                score = case.get('metadata', {}).get('success_score', 0)               
                 cbr_context += f"\n{i}. [Success: {score:.2f}]"
-                if has_advice:
-                    cbr_context += " 💡 [Contains Advice]"
                 cbr_context += "\n"
-                
-                cbr_context += f"   Problem: {case.get('problem_context', 'N/A')}\n"
-                cbr_context += f"   Solution: {case.get('solution', 'N/A')}\n"
-                cbr_context += f"   Result: {case.get('outcome', 'N/A')}\n"
+                cbr_context += f"  Problem: {case.get('problem_context', 'N/A')}\n"
+                cbr_context += f"  Solution: {case.get('solution', 'N/A')}\n"
+                cbr_context += f"  Result: {case.get('outcome', 'N/A')}\n"
             logger.info(f"📚 Added CBR context with {len(cbr_cases)} cases to decision prompt")
             logger.debug(f"CBR context preview: {cbr_context[:200]}...")
         else:
@@ -274,7 +269,6 @@ class DecisionStage:
 Review your working memory to understand the current situation and what needs to be done.
 
 If similar past solutions are provided, consider whether they might help with the current situation.
-Pay special attention to any advice from other Cybers who have solved similar problems.
 Learn from past successes but adapt to the current context.
 
 Decide what you want to do over 3 scales, goals, tasks and the next cycle.
