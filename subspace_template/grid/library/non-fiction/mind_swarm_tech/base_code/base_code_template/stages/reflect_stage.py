@@ -142,6 +142,7 @@ class ReflectStage:
 Review the previous execution results in your memory. 
 First, clearly state what problem you were trying to solve this cycle.
 Then reflect on what worked, what didn't, and what you learned.
+Finally, imagine another Cyber facing the same problem - what specific advice would you give them?
 Consider how this affects your goals and priorities.
 """,
                 "inputs": {
@@ -151,6 +152,7 @@ Consider how this affects your goals and priorities.
                     "problem_solved": "A clear statement of what problem or task you were trying to solve this cycle (1-2 sentences)",
                     "insights": "Key insights from the execution results",
                     "lessons_learned": "What you learned that will help in future",
+                    "advice_for_others": "What specific advice would you give to another Cyber facing this same problem? Be practical and specific.",
                     "knowledge_query": "Suggest a NLP knowledge query that you think will help the next cycle",
                     "solution_score": "Rate the success of your solution from 0.0 to 1.0 (0=failure, 0.5=partial, 1.0=complete success)"
                 },
@@ -192,6 +194,7 @@ Consider how this affects your goals and priorities.
             "problem_solved": output_values.get("problem_solved", ""),
             "insights": output_values.get("insights", ""),
             "lessons_learned": output_values.get("lessons_learned", ""),
+            "advice_for_others": output_values.get("advice_for_others", ""),
             "knowledge_query": output_values.get("knowledge_query", ""),
             "solution_score": solution_score
         }
@@ -367,16 +370,25 @@ Consider how this affects your goals and priorities.
             
             cbr_api = CBR(MemoryMock(cbr_context))
             
-            # Store the case
+            # Include the advice in the outcome for future reference
+            advice = reflection_content.get('advice_for_others', '')
+            enhanced_outcome = outcome
+            if advice:
+                enhanced_outcome += f"\n\nAdvice for other Cybers:\n{advice}"
+            if reflection_content.get('insights'):
+                enhanced_outcome += f"\n\nInsights: {reflection_content.get('insights', '')}"
+            
+            # Store the case with advice included
             case_id = cbr_api.store_case(
                 problem=problem_context,
                 solution=solution,
-                outcome=outcome + f"\nInsights: {reflection_content.get('insights', '')}",
+                outcome=enhanced_outcome,
                 success_score=solution_score,
                 tags=tags,
                 metadata={
                     "cycle_count": self.cognitive_loop.cycle_count,
-                    "cbr_cases_used": decision_data.get("cbr_cases_used", [])
+                    "cbr_cases_used": decision_data.get("cbr_cases_used", []),
+                    "has_advice": bool(advice)  # Flag to indicate this case contains advice
                 },
                 timeout=3.0
             )
