@@ -17,12 +17,13 @@ Methods that ADD to working memory (use sparingly for large files):
 - `memory[path]` - Reading files this way
 - `memory.read_lines()` - Reading specific ranges
 - `memory.append()` - Appending to files
+You NEVER need to `print` these, as you will automatically `see` them in later cycles.
 
 Methods that DON'T add to working memory (use for large file processing):
 - `memory.read_raw()` - Read files directly into Python
 - `memory.write_raw()` - Write files directly from Python
 - `memory.get_info()` - Get metadata only
-    
+
 ## Important Examples
 
 ### Reading Memory (any access will load the memory into working memory)
@@ -34,24 +35,6 @@ notes = memory["/personal/notes/important"]
 if memory.exists("/personal/data.json"):
     data = memory["/personal/data.json"]
 ```
-
-### File Size Limits
-The Memory API enforces limits to prevent memory system overload:
-- **Full file read**: Max 1,000 lines or 32KB
-- **Ranged read**: Max 500 lines per call
-
-If a file exceeds these limits, you'll get a helpful error:
-```python
-try:
-    # This might fail if file is too large
-    content = memory["/personal/huge_dataset.csv"].content
-except MemoryError as e:
-    print(e)  # Shows how to use read_lines() instead
-    
-    # Use ranged reading for large files
-    preview = memory.read_lines("/personal/huge_dataset.csv", end_line=100)
-```
-
 ### Writing Memory
 ```python
 # Create or update memory
@@ -60,69 +43,13 @@ memory["/personal/journal/today"] = "Today I learned about the memory API"
 
 ### Type Checking - Know Your Data Types!
 ```python
-# IMPORTANT: Always check content type before using it
+# Check content_type before using it, if you are unsure what a memory contains
 # Files like .yaml and .json are automatically parsed, but you should verify
-
-# Example 1: Safely handle tasks that might be JSON or string
-tasks_node = memory["/personal/tasks"]
-if hasattr(tasks_node, 'content'):
-    tasks_data = tasks_node.content
-    
-    # Check if it's already parsed (list/dict) or raw string
-    if isinstance(tasks_data, str):
-        # It's a raw string, parse it
-        import json
-        try:
-            tasks = json.loads(tasks_data)
-        except json.JSONDecodeError:
-            print(f"Tasks is plain text: {tasks_data}")
-            tasks = []
-    elif isinstance(tasks_data, list):
-        # Already parsed as list
-        tasks = tasks_data
-    elif isinstance(tasks_data, dict):
-        # Already parsed as dict
-        tasks = tasks_data.get('tasks', [])
-    else:
-        print(f"Unexpected type: {type(tasks_data)}")
-        tasks = []
-        
-    # Now safely iterate
-    for task in tasks:
-        if isinstance(task, dict) and task.get("id") == "task_001":
-            task["status"] = "completed"
-
-# Example 2: Working with YAML/JSON files
-config = memory["/personal/config.yaml"].content
-if isinstance(config, dict):
-    # It's parsed YAML/JSON - safe to use as dict
-    config["updated"] = True
-elif isinstance(config, str):
-    # It's raw text - parse it first
-    import yaml
-    config = yaml.safe_load(config)
-    config["updated"] = True
-    memory["/personal/config.yaml"] = config
-
-# Example 3: Type hints for better code
-def update_task(task_id: str, status: str):
-    tasks_node = memory["/personal/tasks"]
-    content = tasks_node.content if hasattr(tasks_node, 'content') else tasks_node
-    
-    # Always validate type before operations
-    if not isinstance(content, list):
-        if isinstance(content, str):
-            import json
-            content = json.loads(content)
-        else:
-            raise TypeError(f"Expected list or JSON string, got {type(content)}")
-    
-    for task in content:
-        if isinstance(task, dict) and task.get("id") == task_id:
-            task["status"] = status
-            break
-    
-    memory["/personal/tasks"] = content
+if memory["/personal/tasks.json"].content_type == "application/json":
+    tasks = memory["/personal/tasks.json"].content
+    # ... process the json here
+else:
+    print("Tasks memory is not in JSON format")
 ```
 
 ### Transactions for Safety
@@ -134,7 +61,7 @@ try:
         data = memory["/personal/config.json"]
         
         # Modify JSON data directly (if it's JSON)
-        if hasattr(data, 'content') and isinstance(data.content, dict):
+        if memory["/personal/tasks.json"].content_type == "application/json" and isinstance(data.content, dict):
             data.content["updated"] = "2024-01-01"
             # Changes are saved automatically
         
@@ -166,23 +93,10 @@ except MemoryError as e:
 
 ### Working with Large Files
 ```python
-# Get file info before reading
 info = memory.get_info("/personal/large_dataset.csv")
-print(f"File has {info['lines']} lines and {info['size']} bytes")
-
-if info['lines'] > 10000:
-    # Read only first 100 lines for preview
-    preview = memory.read_lines("/personal/large_dataset.csv", end_line=100)
-    print("Preview:", preview)
-    
+if info['lines'] > 1000:
     # Read specific range
-    middle = memory.read_lines("/personal/large_dataset.csv", start_line=5000, end_line=5100)
-    
-    # Read last 100 lines using negative indexing (Python-style)
-    tail = memory.read_lines("/personal/large_dataset.csv", start_line=-100)
-    
-    # Read from line 9000 to end
-    end_section = memory.read_lines("/personal/large_dataset.csv", start_line=9000)
+    middle = memory.read_lines("/personal/large_dataset.csv", start_line=5000, end_line=5500)    
 else:
     # Small enough to read entirely
     full_content = memory["/personal/large_dataset.csv"].content
@@ -202,16 +116,13 @@ memory.append("/personal/activity.log", f"[{time.time()}] Process started\n")
 # Process a huge CSV file
 raw_csv = memory.read_raw("/personal/huge_dataset.csv")  # No working memory!
 lines = raw_csv.split('\n')
-
 # Do heavy processing in Python
 filtered = []
 for line in lines:
     if 'important' in line:
         filtered.append(line)
-
 # Only save results to working memory
 memory["/personal/filtered.csv"] = '\n'.join(filtered)  # This goes to working memory
-
 # Or save results without working memory
 memory.write_raw("/personal/filtered.csv", '\n'.join(filtered))  # Stays out of working memory
 ```
@@ -220,10 +131,10 @@ memory.write_raw("/personal/filtered.csv", '\n'.join(filtered))  # Stays out of 
 1. **Automatic save** - Changes persist immediately, unless in a transaction
 2. **Transaction safety** - Use transactions for critical operations
 3. **Everything is memory** - Think in terms of memory, not files
-4. **Type checking** - Always verify data types before operations (use isinstance())
+4. **Type checking** - Always verify data types before operations (use .content_type)
 5. **Parse when needed** - YAML/JSON files auto-parse but always check type first
 6. **Working memory is precious** - Use read_raw()/write_raw() for large file processing
-7. **Size limits exist** - Files over 10MB or 10,000 lines need special handling
+7. **Size limits exist** - Files over 32KB or 1,000 lines need special handling
 """
 
 import json
@@ -237,7 +148,6 @@ from collections.abc import MutableMapping, MutableSequence
 # Python-magic is required for consistent MIME type detection
 # The Debian rootfs environment must have this installed
 import magic
-
 
 class MemoryError(Exception):
     """Base exception for memory operations."""
@@ -932,7 +842,6 @@ Main memory interface providing unified access to all Mind-Swarm memories.
         - 'personal/...' - Relative personal path
         - '/grid/...' - Absolute grid path
         - 'grid/...' - Relative grid path
-        - 'type:path' - Memory ID format (prefix will be stripped)
         
         Restricted paths:
         - Paths containing '.internal' are forbidden (system use only)
@@ -1086,10 +995,7 @@ Main memory interface providing unified access to all Mind-Swarm memories.
         node = MemoryNode(clean_path, self, new=True)
         node.content = value
         node._save()
-    
-    # Removed __getattr__ - only bracket notation is supported
-    # Use memory["/personal/..."] or memory["/grid/..."] instead
-    
+        
     def create(self, path: str) -> MemoryNode:
         """
 Create a new memory at the specified path.
@@ -1326,11 +1232,7 @@ Returns: True if path exists, False otherwise
                 
                 # Sniff YAML files
                 if path.suffix in ['.yaml', '.yml']:
-                    try:
-                        # Front matter style - likely knowledge
-                        if content_sample.startswith('---'):
-                            return 'application/x-mindswarm-knowledge'
-                        
+                    try:                       
                         data = yaml.safe_load(content_sample)
                         if isinstance(data, dict):
                             # Check for knowledge markers
@@ -1470,7 +1372,6 @@ Returns: True if path exists, False otherwise
             
         Returns:
             Dict with keys:
-            - exists: bool - whether the memory exists
             - size: int - size in bytes
             - lines: int - number of lines (for text memories)
             - type: str - 'memory' or 'memory_group'
@@ -1478,22 +1379,25 @@ Returns: True if path exists, False otherwise
             - modified: datetime - last modified time (for memories only)
             - items: int - number of items in the group (for memory_groups only)
             
+        Raises:
+            MemoryNotFoundError: If the path doesn't exist
+            
         Example:
-            info = memory.get_info("/personal/large_file.txt")
-            if info['lines'] > 1000:
-                # Use ranged read for large files
-                first_100 = memory.read_lines("/personal/large_file.txt", end_line=100)
+            try:
+                info = memory.get_info("/personal/large_file.txt")
+                if info['lines'] > 1000:
+                    # Use ranged read for large files
+                    first_100 = memory.read_lines("/personal/large_file.txt", end_line=100)
+            except MemoryNotFoundError:
+                print("File doesn't exist")
         """
         clean_path = self._clean_path(path)
         actual_path = self._resolve_path(clean_path)
         
-        info = {
-            'exists': actual_path.exists(),
-            'path': path
-        }
-        
         if not actual_path.exists():
-            return info
+            raise MemoryNotFoundError(f"Memory does not exist: {path}")
+        
+        info = {}
             
         if actual_path.is_dir():
             info['type'] = 'memory_group'
@@ -1520,8 +1424,8 @@ Returns: True if path exists, False otherwise
                 info['lines'] = None  # Binary file
                 
         return info
-    
-    def read_lines(self, path: str, start_line: int = None, end_line: int = None) -> str:
+
+    def read_lines(self, path: str, start_line: int | None = 0, end_line: int | None = None) -> str:
         """
         Read specific lines from a memory without loading the entire file.
         
@@ -1537,17 +1441,13 @@ Returns: True if path exists, False otherwise
             
         Example:
             # Read first 100 lines
-            header = memory.read_lines("/personal/data.csv", end_line=100)
-            
+            header = memory.read_lines("/personal/data.csv", end_line=100)           
             # Read lines 50-150
-            middle = memory.read_lines("/personal/log.txt", start_line=50, end_line=150)
-            
+            middle = memory.read_lines("/personal/log.txt", start_line=50, end_line=150)            
             # Read from line 1000 to end
-            tail = memory.read_lines("/personal/output.txt", start_line=1000)
-            
+            tail = memory.read_lines("/personal/output.txt", start_line=1000)            
             # Read last 100 lines (Python-style negative indexing)
-            tail = memory.read_lines("/personal/log.txt", start_line=-100)
-            
+            tail = memory.read_lines("/personal/log.txt", start_line=-100)            
             # Read last 50 lines
             tail = memory.read_lines("/personal/output.txt", start_line=-50, end_line=-1)
         """
@@ -1656,7 +1556,6 @@ Returns: True if path exists, False otherwise
         if actual_path.is_dir():
             raise MemoryTypeError(f"Cannot read raw content from directory: {path}")
         
-        # NO tracking for working memory - that's the whole point!
         # Just read the file directly
         if binary:
             with open(actual_path, 'rb') as f:
@@ -1714,9 +1613,6 @@ Returns: True if path exists, False otherwise
         Example:
             # Append to a log file
             memory.append("/personal/activity.log", f"[{datetime.now()}] Task completed\n")
-            
-            # Append multiple lines
-            memory.append("/personal/notes.txt", "\n## New Section\nMore content here\n")
         """
         clean_path = self._clean_path(path)
         actual_path = self._resolve_path(clean_path)

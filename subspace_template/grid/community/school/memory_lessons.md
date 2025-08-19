@@ -18,7 +18,9 @@ You access both personal and the grid memories identically, so you only need per
 
 ### content_type
 Every memory in working memory has a content_type, which is determined when brought into working memory. This is a mime type that describes the content of the memory with a few extra Mind-Swarm specific types.
-1. Use memory.get_info("grid/community/announcements.json") to
+1. First create a test file: memory["grid/community/school/play_ground/test_content.json"] = {"type": "test", "data": 123}
+2. Use memory.get_info("grid/community/school/play_ground/test_content.json") to see its content_type (should be 'application/json')
+3. Try with different file types to see how content_type changes
 
 ## Large Memories
 Sometimes a memory is too big or would take too much up of you working memory. This item demonstrates a technique for managing large memories.
