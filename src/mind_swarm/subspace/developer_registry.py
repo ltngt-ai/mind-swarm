@@ -216,45 +216,32 @@ class DeveloperRegistry:
         Returns:
             List of messages with file paths
         """
-        dev = self.get_developer(developer_name)
-        if not dev:
-            return []
-        
-        cyber_name = dev["cyber_name"]
-        inbox_dir = self.subspace_root / "cybers" / cyber_name / "inbox"
+        # Check new location in shared/directory/developers/{name}/inbox
+        inbox_dir = self.subspace_root / "shared" / "directory" / "developers" / developer_name / "inbox"
         
         messages = []
         
-        # Get unread messages
+        # Get all messages from inbox
         if inbox_dir.exists():
-            for msg_file in sorted(inbox_dir.glob("*.msg")):
+            for msg_file in sorted(inbox_dir.glob("*.msg.json")):
                 try:
                     with open(msg_file, 'r') as f:
                         message = json.load(f)
                         message['_file_path'] = str(msg_file)
-                        message['_read'] = False
-                        messages.append(message)
+                        # Check if message is marked as read
+                        is_read = message.get('read', False)
+                        message['_read'] = is_read
+                        
+                        # Only add message if we should include it
+                        if not is_read or include_read:
+                            messages.append(message)
                 except Exception as e:
                     logger.error(f"Failed to read message {msg_file}: {e}")
-        
-        # Get read messages if requested
-        if include_read:
-            processed_dir = inbox_dir / "processed"
-            if processed_dir.exists():
-                for msg_file in sorted(processed_dir.glob("*.msg")):
-                    try:
-                        with open(msg_file, 'r') as f:
-                            message = json.load(f)
-                            message['_file_path'] = str(msg_file)
-                            message['_read'] = True
-                            messages.append(message)
-                    except Exception as e:
-                        logger.error(f"Failed to read message {msg_file}: {e}")
         
         return messages
     
     def mark_message_as_read(self, developer_name: str, message_path: str) -> bool:
-        """Mark a message as read by moving it to processed directory.
+        """Mark a message as read by updating the 'read' field.
         
         Args:
             developer_name: Developer username (without _dev suffix)
@@ -269,18 +256,15 @@ class DeveloperRegistry:
                 logger.error(f"Message file not found: {message_path}")
                 return False
             
-            # Get the processed directory
-            dev = self.get_developer(developer_name)
-            if not dev:
-                return False
-                
-            cyber_name = dev["cyber_name"]
-            processed_dir = self.subspace_root / "cybers" / cyber_name / "inbox" / "processed"
-            processed_dir.mkdir(exist_ok=True)
+            # Instead of moving the file, update the 'read' field in the message
+            with open(msg_path, 'r') as f:
+                message = json.load(f)
             
-            # Move the file
-            new_path = processed_dir / msg_path.name
-            msg_path.rename(new_path)
+            message['read'] = True
+            
+            # Write back the updated message
+            with open(msg_path, 'w') as f:
+                json.dump(message, f, indent=2)
             
             logger.info(f"Marked message as read: {msg_path.name}")
             return True

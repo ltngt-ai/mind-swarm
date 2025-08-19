@@ -370,6 +370,14 @@ class MindSwarmCLI:
         
         while self._running:
             try:
+                # Check for unread messages and show notification
+                try:
+                    messages = await self.client.check_mailbox(include_read=False)
+                    if messages:
+                        console.print(f"[yellow]📧 You have {len(messages)} unread message{'s' if len(messages) != 1 else ''} - type 'mailbox' to read[/yellow]")
+                except:
+                    pass  # Don't fail if mailbox check fails
+                
                 # Show prompt and get command
                 command = await asyncio.get_event_loop().run_in_executor(
                     None,

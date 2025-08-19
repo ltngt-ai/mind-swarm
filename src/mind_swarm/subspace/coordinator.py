@@ -95,6 +95,7 @@ class MessageRouter:
                     recipient_name = to_agent
                     if to_agent.endswith("@mind-swarm.local"):
                         # Extract name from email format (e.g., "Alice@mind-swarm.local" -> "Alice")
+                        # or "deano_dev@mind-swarm.local" -> "deano_dev"
                         recipient_name = to_agent[:-len("@mind-swarm.local")]
                         logger.debug(f"Extracted recipient name '{recipient_name}' from email format")
                     
@@ -182,19 +183,42 @@ class MessageRouter:
         return await aiofiles.os.path.exists(cyber_dir)
     
     async def _deliver_to_developer(self, to_dev: str, message: Dict[str, Any]):
-        """Log a message intended for a developer.
+        """Deliver a message to a developer's inbox in shared/directory.
         
-        Since developers interact through the CLI, not as cybers, we just log these.
+        Developer messages are stored in shared/directory/developers/{name}/inbox/
+        where the CLI can monitor and display them.
         
         Args:
             to_dev: Developer identifier (e.g., "deano_dev")
             message: Message content
         """
-        # Log the message for developer visibility
-        logger.info(f"📧 Message to developer {to_dev}:")
-        logger.info(f"  From: {message.get('from', 'unknown')}")
-        logger.info(f"  Subject: {message.get('subject', 'No subject')}")
-        logger.info(f"  Content: {message.get('content', message)}")
+        # Extract developer name (remove _dev suffix)
+        dev_name = to_dev.rstrip("_dev")
+        
+        # Create developer inbox in shared/directory
+        dev_inbox = self.subspace_root / "shared" / "directory" / "developers" / dev_name / "inbox"
+        try:
+            await aiofiles.os.makedirs(dev_inbox, exist_ok=True)
+        except OSError as e:
+            logger.error(f"Failed to create developer inbox for {dev_name}: {e}")
+            return
+        
+        # Generate unique filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:20]
+        msg_id = message.get("message_id", f"msg_{timestamp}")
+        msg_file = dev_inbox / f"{msg_id}.msg.json"
+        
+        # Add metadata for CLI display
+        message["delivered_at"] = datetime.now().isoformat()
+        message["read"] = False  # CLI will mark as read when displayed
+        
+        # Write message
+        try:
+            async with aiofiles.open(msg_file, 'w') as f:
+                await f.write(json.dumps(message, indent=2))
+            logger.info(f"📧 Delivered message to developer {dev_name}'s inbox")
+        except OSError as e:
+            logger.error(f"Failed to write message to developer inbox: {e}")
     
     async def _send_delivery_error(self, sender: str, original_message: Dict[str, Any], error_reason: str):
         """Send a delivery error message back to the sender."""
