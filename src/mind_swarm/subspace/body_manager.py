@@ -35,7 +35,7 @@ class BodyFile:
 class BodyManager:
     """Manages body files for an Cyber."""
     
-    def __init__(self, name: str, cyber_personal: Path, knowledge_handler=None, awareness_handler=None):
+    def __init__(self, name: str, cyber_personal: Path, knowledge_handler=None, awareness_handler=None, cbr_handler=None):
         """Initialize body manager for an Cyber.
         
         Args:
@@ -43,6 +43,7 @@ class BodyManager:
             cyber_personal: Cyber's home directory path
             knowledge_handler: Optional knowledge handler for knowledge body file
             awareness_handler: Optional awareness handler for awareness body file
+            cbr_handler: Optional CBR handler for CBR body file
         """
         self.name = name
         self.cyber_personal = cyber_personal
@@ -50,6 +51,7 @@ class BodyManager:
         self._watch_task: Optional[asyncio.Task] = None
         self.knowledge_handler = knowledge_handler
         self.awareness_handler = awareness_handler
+        self.cbr_handler = cbr_handler
         
     async def create_body_files(self):
         """Create the standard body files for an Cyber."""
@@ -66,6 +68,11 @@ class BodyManager:
         if self.awareness_handler:
             awareness = BodyFile("awareness", "")
             self.body_files["awareness"] = awareness
+        
+        # CBR - for case-based reasoning
+        if self.cbr_handler:
+            cbr = BodyFile("cbr_api", "")
+            self.body_files["cbr_api"] = cbr
         
         # Voice file removed - not implemented
         
@@ -250,6 +257,72 @@ class BodyManager:
                                 logger.debug(f"MONITOR: Knowledge file ready for next request from {self.name}")
                             processing[name] = False
                     
+                    # For CBR file, check for complete request with marker
+                    elif name == "cbr_api" and self.cbr_handler:
+                        # Check for request completion marker
+                        if "<<<END_CBR_REQUEST>>>" in content and not processing.get(name, False):
+                            try:
+                                # Extract the request (everything before the marker)
+                                request_text = content.split("<<<END_CBR_REQUEST>>>")[0].strip()
+                                
+                                # Skip if empty
+                                if not request_text:
+                                    continue
+                                
+                                # Parse the JSON request
+                                request = json.loads(request_text)
+                                
+                                if "request_id" in request and "operation" in request:
+                                    processing[name] = True
+                                    logger.info(f"BODY: CBR request from {self.name}: {request.get('operation')}")
+                                    
+                                    # Process the request
+                                    response = await self.cbr_handler.handle_request(self.name, request)
+                                    
+                                    # Write response with completion marker
+                                    response_text = json.dumps(response, indent=2)
+                                    final_response = f"{response_text}\n<<<CBR_COMPLETE>>>"
+                                    
+                                    async with aiofiles.open(file_path, 'w') as f:
+                                        await f.write(final_response)
+                                    
+                                    logger.info(f"BODY: CBR response written for {self.name}")
+                                    processing[name] = False
+                                else:
+                                    logger.warning(f"Invalid CBR request from {self.name}: missing required fields")
+                                    
+                            except json.JSONDecodeError as e:
+                                logger.error(f"Invalid JSON in CBR request from {self.name}: {e}")
+                                # Write error response with marker
+                                error_response = {
+                                    "request_id": "error",
+                                    "status": "error",
+                                    "error": f"Invalid JSON: {str(e)}"
+                                }
+                                error_text = json.dumps(error_response, indent=2)
+                                async with aiofiles.open(file_path, 'w') as f:
+                                    await f.write(f"{error_text}\n<<<CBR_COMPLETE>>>")
+                                processing[name] = False
+                                
+                            except Exception as e:
+                                logger.error(f"Error processing CBR request for {self.name}: {e}")
+                                # Write error response with marker
+                                error_response = {
+                                    "request_id": "error",
+                                    "status": "error",
+                                    "error": str(e)
+                                }
+                                error_text = json.dumps(error_response, indent=2)
+                                async with aiofiles.open(file_path, 'w') as f:
+                                    await f.write(f"{error_text}\n<<<CBR_COMPLETE>>>")
+                                processing[name] = False
+                        
+                        elif not content.strip() or "<<<CBR_COMPLETE>>>" in content:
+                            # File is empty or has completed response, we can process again  
+                            if processing.get(name, False):
+                                logger.debug(f"MONITOR: CBR file ready for next request from {self.name}")
+                            processing[name] = False
+                    
                     # For awareness file, check for complete request with marker
                     elif name == "awareness" and self.awareness_handler:
                         # Check for request completion marker
@@ -332,11 +405,12 @@ class BodyManager:
 class BodySystemManager:
     """Manages body files for all Cybers."""
     
-    def __init__(self, knowledge_handler=None, awareness_handler=None):
+    def __init__(self, knowledge_handler=None, awareness_handler=None, cbr_handler=None):
         """Initialize the body system manager."""
         self.body_managers: Dict[str, BodyManager] = {}
         self.knowledge_handler = knowledge_handler
         self.awareness_handler = awareness_handler
+        self.cbr_handler = cbr_handler
         
     async def create_agent_body(self, name: str, cyber_personal: Path) -> BodyManager:
         """Create body files for a new Cyber.
@@ -348,7 +422,7 @@ class BodySystemManager:
         Returns:
             BodyManager instance for the Cyber
         """
-        manager = BodyManager(name, cyber_personal, self.knowledge_handler, self.awareness_handler)
+        manager = BodyManager(name, cyber_personal, self.knowledge_handler, self.awareness_handler, self.cbr_handler)
         await manager.create_body_files()
         self.body_managers[name] = manager
         return manager

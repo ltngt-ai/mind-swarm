@@ -50,9 +50,10 @@ class ContentType(Enum):
     IMAGE_JPEG = "image/jpeg"
     IMAGE_GIF = "image/gif"
     
-    # Mind-Swarm specific types (only 2 currently defined)
+    # Mind-Swarm specific types
     MINDSWARM_MESSAGE = "application/x-mindswarm-message"
     MINDSWARM_KNOWLEDGE = "application/x-mindswarm-knowledge"
+    MINDSWARM_CBR_CASE = "application/x-mindswarm-cbr-case"
     
     # Unknown/default
     UNKNOWN = "application/octet-stream"

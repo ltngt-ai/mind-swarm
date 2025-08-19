@@ -107,23 +107,7 @@ class DecisionStage:
         
         # Load stage instructions
         self._load_stage_instructions()
-        
-        # Read observation buffer to get observation data
-        observation_buffer = self.cognitive_loop.get_current_pipeline("observation")
-        observation_file = self.cognitive_loop.personal.parent / observation_buffer.location
-        
-        try:
-            with open(observation_file, 'r') as f:
-                observation_data = json.load(f)
-                has_observation = bool(observation_data) and observation_data != {}
-        except:
-            observation_data = {}
-            has_observation = False
-        
-        if not has_observation:
-            logger.debug("No observation data in current pipeline")
-            return {"intention": None, "reasoning": "No observation to act upon"}
-        
+                       
         # Update dynamic context - DECIDE phase (brain LLM call)
         self.cognitive_loop._update_dynamic_context(stage="DECISION", phase="DECIDE")
         
@@ -138,35 +122,32 @@ class DecisionStage:
             current_task=current_task,
             selection_strategy="balanced",
             tag_filter=tag_filter,
-            exclude_content_types=[]  # No exclusions needed (observations already removed)
+            exclude_content_types=[]
         )
+        
+        # Retrieve similar CBR cases to help with decision making
+        cbr_cases = await self._retrieve_cbr_cases(decision_context)
         
         # Use brain to generate intention
         logger.info("🤔 Generating intention based on situation...")
-        intention_response = await self._generate_intention(decision_context)
+        intention_response = await self._generate_intention(decision_context, cbr_cases)
         
         # Extract intention from the response
         output_values = intention_response.get("output_values", {})
         intention = output_values.get("intention", "")
         reasoning = output_values.get("reasoning", "No explicit reasoning provided")
-        priority = output_values.get("priority", "normal")
         
         # Log the decision
         if intention:
             logger.info(f"🤔 Generated intention: {intention[:100]}...")
-            logger.info(f"   Priority: {priority}")
         else:
             logger.info("🤔 No action needed at this time")
         
         # Write to decision pipeline buffer
         decision_content = {
-            "timestamp": datetime.now().isoformat(),
-            "cycle_count": self.cognitive_loop.cycle_count,
             "intention": intention,
             "reasoning": reasoning,
-            "priority": priority,
-            "has_observation": has_observation,
-            "observation_context": observation_data.get("reasoning", "")
+            "cbr_cases_used": [case.get('case_id', '') for case in cbr_cases] if cbr_cases else []
         }
         
         decision_buffer = self.cognitive_loop.get_current_pipeline("decision")
@@ -180,50 +161,122 @@ class DecisionStage:
         
         logger.info(f"💭 Decision intention written to pipeline buffer")
             
-    async def _generate_intention(self, memory_context: str) -> Dict[str, Any]:
+    async def _retrieve_cbr_cases(self, context: str) -> list:
+        """Retrieve similar CBR cases to help with decision making.
+        
+        Args:
+            context: Current decision context
+            
+        Returns:
+            List of relevant CBR cases
+        """
+        try:
+            # Initialize CBR API
+            from ..python_modules.cbr import CBR
+            
+            # Create a temporary context for CBR
+            cbr_context = {
+                'cyber_id': self.cognitive_loop.cyber_id,
+                'personal_dir': str(self.cognitive_loop.personal)
+            }
+            
+            # Create memory mock for CBR
+            class MemoryMock:
+                def __init__(self, context):
+                    self._context = context
+            
+            cbr_api = CBR(MemoryMock(cbr_context))
+            
+            # Extract key information from context for better matching
+            # Focus on goals, tasks, and current situation
+            context_summary = context[:1000]  # Use first 1000 chars as summary
+            
+            # Retrieve similar cases
+            cases = cbr_api.retrieve_similar_cases(
+                context=context_summary,
+                limit=3,
+                min_score=0.6,
+                timeout=3.0
+            )
+            
+            if cases:
+                logger.info(f"🔍 Retrieved {len(cases)} similar CBR cases")
+                for case in cases:
+                    logger.debug(f"  - Case {case.get('case_id', 'unknown')}: score {case.get('weighted_score', 0):.2f}")
+                    # Log more details to debug
+                    logger.info(f"  CBR Case content - Problem: {case.get('problem_context', 'N/A')[:50]}...")
+                    logger.info(f"  CBR Case solution: {case.get('solution', 'N/A')[:50]}...")
+            
+            return cases
+            
+        except Exception as e:
+            logger.error(f"Failed to retrieve CBR cases: {e}")
+            return []
+    
+    async def _generate_intention(self, memory_context: str, cbr_cases: list) -> Dict[str, Any]:
         """Use brain to generate a plain text intention.
         
         Args:
             memory_context: Working memory context
+            cbr_cases: List of similar CBR cases
             
         Returns:
             Dict with intention and metadata
         """
+        # Format CBR cases for inclusion in prompt
+        cbr_context = ""
+        if cbr_cases:
+            cbr_context = "\n\n## Similar Past Solutions\n"
+            for i, case in enumerate(cbr_cases, 1):
+                score = case.get('metadata', {}).get('success_score', 0)
+                cbr_context += f"\n{i}. [Success: {score:.2f}]\n"
+                cbr_context += f"   Problem: {case.get('problem_context', 'N/A')}\n"
+                cbr_context += f"   Solution: {case.get('solution', 'N/A')}\n"
+                cbr_context += f"   Outcome: {case.get('outcome', 'N/A')}\n"
+            logger.info(f"📚 Added CBR context with {len(cbr_cases)} cases to decision prompt")
+            logger.debug(f"CBR context preview: {cbr_context[:200]}...")
+        else:
+            logger.debug("No CBR cases to add to decision prompt")
+        
+        # Combine memory context with CBR cases
+        full_context = memory_context + cbr_context
+        
+        # Debug: Log if CBR is actually in the context
+        if cbr_cases:
+            if "## Similar Past Solutions" in full_context:
+                logger.info("✅ CBR cases ARE in the full context being sent to brain")
+            else:
+                logger.warning("❌ CBR cases NOT found in full context - this is a bug!")
+        else:
+            logger.debug("No CBR cases available yet (database may be empty)")
+        
         thinking_request = {
             "signature": {
                 "instruction": """
 Review your working memory to understand the current situation and what needs to be done.
-You should see an orientation that explains what's happening.
 
-Instead of choosing specific actions, describe in plain language what you want to accomplish.
-Be specific about your goals but don't worry about implementation details.
+If similar past solutions are provided, consider whether they might help with the current situation.
+Learn from past successes but adapt to the current context.
 
+Decide what you want to do over 3 scales, goals, tasks and the next cycle.
+
+Describe in plain language what you want to accomplish.
+Be specific about your plan but don't worry about implementation details.
 Think of this as telling a skilled assistant what you want done, not how to do it.
-
-Examples of good intentions:
-- "Send a friendly greeting to Alice explaining that I'm a new cyber and would like to collaborate"
-- "Analyze the recent messages from Bob and create a summary of the key points"
-- "Update my memory with the insights from the conversation and mark the task as complete"
-- "Think deeply about the implications of the new information and how it affects our strategy"
-
-Examples of poor intentions (too implementation-focused):
-- "Execute send_message action with parameters to='Alice' and content='Hello'"
-- "Call the think action with depth='deep'"
 
 Always start your output with [[ ## reasoning ## ]]
 """,
                 "inputs": {
-                    "working_memory": "Your complete working memory including the recent orientation"
+                    "working_memory": "Your complete working memory including the recent orientation and any similar past solutions"
                 },
                 "outputs": {
                     "reasoning": "Why this intention makes sense given the situation",
                     "intention": "A clear description of what you want to accomplish (or empty string if nothing needed)",
-                    "priority": "Priority level: 'urgent', 'high', 'normal', or 'low'"
                 },
                 "display_field": "reasoning"
             },
             "input_values": {
-                "working_memory": memory_context
+                "working_memory": full_context
             },
             "request_id": f"decide_intention_{int(time.time()*1000)}",
             "timestamp": datetime.now().isoformat()

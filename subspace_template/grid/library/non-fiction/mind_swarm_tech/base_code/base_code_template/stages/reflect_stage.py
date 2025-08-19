@@ -6,6 +6,7 @@ understanding, goals, and priorities based on outcomes.
 This is the 4th stage in the cognitive architecture.
 """
 
+import json
 import logging
 from typing import TYPE_CHECKING
 from datetime import datetime
@@ -140,7 +141,6 @@ class ReflectStage:
                 "instruction": """
 Review the previous execution results in your memory. Reflect on what worked, what didn't, 
 and what you learned. Consider how this affects your goals and priorities.
-Your pipeline memory contains the last execution results.
 """,
                 "inputs": {
                     "working_memory": "Your current working memory including execution results"
@@ -148,7 +148,8 @@ Your pipeline memory contains the last execution results.
                 "outputs": {
                     "insights": "Key insights from the execution results",
                     "lessons_learned": "What you learned that will help in future",
-                    "knowledge_query": "Suggest a knowledge query that you think will help"
+                    "knowledge_query": "Suggest a NLP knowledge query that you think will help the next cycle",
+                    "solution_score": "Rate the success of your solution from 0.0 to 1.0 (0=failure, 0.5=partial, 1.0=complete success)"
                 },
                 "display_field": "insights"
             },
@@ -169,10 +170,26 @@ Your pipeline memory contains the last execution results.
         # Extract reflection content
         output_values = reflection_response.get("output_values", {})
         
+        # Extract solution score
+        solution_score_str = output_values.get("solution_score", "0.5")
+        try:
+            # Parse the score, handling various formats
+            if isinstance(solution_score_str, (int, float)):
+                solution_score = float(solution_score_str)
+            else:
+                # Extract number from string like "0.8" or "0.8/1.0"
+                import re
+                match = re.search(r'(\d*\.?\d+)', str(solution_score_str))
+                solution_score = float(match.group(1)) if match else 0.5
+            solution_score = max(0.0, min(1.0, solution_score))  # Clamp to [0, 1]
+        except:
+            solution_score = 0.5  # Default to partial success
+        
         reflection_content = {
             "insights": output_values.get("insights", ""),
             "lessons_learned": output_values.get("lessons_learned", ""),
-            "knowledge_query": output_values.get("knowledge_query", "")
+            "knowledge_query": output_values.get("knowledge_query", ""),
+            "solution_score": solution_score
         }
         
         # Save as a reflection_on_last_cycle memory block
@@ -203,6 +220,9 @@ Your pipeline memory contains the last execution results.
         self.cognitive_loop.memory_system.add_memory(reflection_memory)
         
         logger.info(f"💭 Created reflection for cycle {self.cognitive_loop.cycle_count}")
+        
+        # Store successful solutions as CBR cases
+        await self._store_cbr_case(solution_score, reflection_content, last_execution)
         
         # Log key insights if any
         if output_values.get("insights"):
@@ -264,3 +284,108 @@ Your pipeline memory contains the last execution results.
             
         # Clean up stage instructions before leaving
         self._cleanup_stage_instructions()
+    
+    async def _store_cbr_case(self, solution_score: float, reflection_content: dict, execution_data: dict):
+        """Store a CBR case if the solution was successful enough.
+        
+        Args:
+            solution_score: Success score from reflection (0-1)
+            reflection_content: The reflection data
+            execution_data: The execution pipeline data
+        """
+        # Only store cases with reasonable success (> 0.6)
+        if solution_score < 0.6:
+            logger.debug(f"Not storing CBR case - score too low: {solution_score:.2f}")
+            return
+        
+        try:
+            # Get the decision and observation data for context
+            decision_buffer = self.cognitive_loop.get_current_pipeline("decision")
+            decision_file = self.cognitive_loop.personal.parent / decision_buffer.location
+            observation_buffer = self.cognitive_loop.get_current_pipeline("observation")
+            observation_file = self.cognitive_loop.personal.parent / observation_buffer.location
+            
+            # Read pipeline data
+            with open(decision_file, 'r') as f:
+                decision_data = json.load(f)
+            with open(observation_file, 'r') as f:
+                observation_data = json.load(f)
+            
+            # Extract problem context from observation
+            problem_context = observation_data.get("reasoning", "")[:500]  # First 500 chars
+            if not problem_context:
+                problem_context = observation_data.get("observation", "No observation available")[:500]
+            
+            # Extract solution from decision and execution
+            solution = decision_data.get("intention", "")[:500]
+            if not solution:
+                solution = "No clear intention recorded"
+            
+            # Extract outcome from execution results
+            outcome = execution_data.get("results", "")
+            if isinstance(outcome, list):
+                outcome = str(outcome)  # Convert list to string
+            outcome = outcome[:500] if outcome else ""
+            if not outcome:
+                error = execution_data.get("error", "Unknown outcome")
+                outcome = str(error)[:500] if error else "Unknown outcome"
+            
+            # Determine tags based on content
+            tags = []
+            if "file" in solution.lower() or "read" in solution.lower() or "write" in solution.lower():
+                tags.append("file_operation")
+            if "message" in solution.lower() or "communicate" in solution.lower():
+                tags.append("communication")
+            if "analyze" in solution.lower() or "understand" in solution.lower():
+                tags.append("analysis")
+            if "create" in solution.lower() or "generate" in solution.lower():
+                tags.append("creation")
+            
+            # Initialize CBR API
+            from ..python_modules.cbr import CBR
+            
+            # Create a temporary context for CBR
+            cbr_context = {
+                'cyber_id': self.cognitive_loop.cyber_id,
+                'personal_dir': str(self.cognitive_loop.personal)
+            }
+            
+            # Create memory mock for CBR
+            class MemoryMock:
+                def __init__(self, context):
+                    self._context = context
+            
+            cbr_api = CBR(MemoryMock(cbr_context))
+            
+            # Store the case
+            case_id = cbr_api.store_case(
+                problem=problem_context,
+                solution=solution,
+                outcome=outcome + f"\nInsights: {reflection_content.get('insights', '')}",
+                success_score=solution_score,
+                tags=tags,
+                metadata={
+                    "cycle_count": self.cognitive_loop.cycle_count,
+                    "cbr_cases_used": decision_data.get("cbr_cases_used", [])
+                },
+                timeout=3.0
+            )
+            
+            if case_id:
+                logger.info(f"📚 Stored CBR case {case_id} with score {solution_score:.2f}")
+                
+                # Update scores of any CBR cases that were used
+                cases_used = decision_data.get("cbr_cases_used", [])
+                if cases_used and solution_score > 0.7:
+                    for used_case_id in cases_used:
+                        if used_case_id:
+                            cbr_api.update_case_score(
+                                case_id=used_case_id,
+                                reused=True,
+                                timeout=2.0
+                            )
+                            logger.debug(f"Updated reuse count for case {used_case_id}")
+            
+        except Exception as e:
+            logger.error(f"Failed to store CBR case: {e}")
+            # Don't fail the reflection stage if CBR storage fails

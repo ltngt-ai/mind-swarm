@@ -64,6 +64,8 @@ class ExecutionStage:
         self._extract_and_save_module_docs(self.location_api, "location_api_docs")
         self._extract_and_save_module_docs(self.events, "events_api_docs")
         self._extract_and_save_module_docs(self.knowledge_api, "knowledge_api_docs")
+        self._extract_and_save_module_docs(self.environment_api, "environment_api_docs")
+        self._extract_and_save_module_docs(self.cbr_api, "cbr_api_docs")
     
     def _load_stage_instructions(self):
         """Load stage instructions from knowledge into memory."""
@@ -248,6 +250,9 @@ class ExecutionStage:
             'ValueError': ValueError,
             'TypeError': TypeError, 
             'KeyError': KeyError,
+            'FileNotFoundError': FileNotFoundError,
+            'IOError': IOError,
+            'OSError': OSError,
             
             # Import capability
             '__import__': __import__,
@@ -279,6 +284,8 @@ class ExecutionStage:
         from ..python_modules.location import Location
         from ..python_modules.events import Events
         from ..python_modules.knowledge import Knowledge
+        from ..python_modules.environment import Environment
+        from ..python_modules.cbr import CBR
         
         # Create context for the APIs
         context = {
@@ -297,6 +304,8 @@ class ExecutionStage:
         self.location_api = Location(context)
         self.events = Events(context)
         self.knowledge_api = Knowledge(self.memory_api)  # Knowledge uses Memory instance
+        self.environment_api = Environment(context)
+        self.cbr_api = CBR(self.memory_api)  # CBR uses Memory instance
     
     async def execute(self):
         """Run the execution stage."""
@@ -536,6 +545,23 @@ The provided API docs describe the available operations and their usage.
         knowledge_instance = Knowledge(memory_instance)
         namespace['knowledge'] = knowledge_instance
         
+        # Import and initialize the Environment API
+        from ..python_modules.environment import Environment, EnvironmentError, EnvironmentTimeoutError
+        
+        # Create environment instance
+        environment_instance = Environment(context)
+        namespace['environment'] = environment_instance
+        namespace['EnvironmentError'] = EnvironmentError
+        namespace['EnvironmentTimeoutError'] = EnvironmentTimeoutError
+        
+        # Import and initialize the CBR API
+        from ..python_modules.cbr import CBR, CBRError
+        
+        # Create CBR instance (uses Memory instance)
+        cbr_instance = CBR(memory_instance)
+        namespace['cbr'] = cbr_instance
+        namespace['CBRError'] = CBRError
+        
         # Capture output
         output_lines = []
         
@@ -647,11 +673,7 @@ The provided API docs describe the available operations and their usage.
         instruction = """
 The Python script failed with an error. Analyze the error and fix the script.
 
-You have access to the SAME memory and location objects as before:
-- memory: Provides filesystem access through attribute notation
-- location: Provides navigation capabilities
-
-The API documentation is in your working memory (look for Memory API and Location API docs).
+The API documentation is in your working memory.
 The error details show exactly what went wrong.
 
 CRITICAL: Output ONLY the corrected Python code - no markdown, no explanations, just Python.

@@ -231,14 +231,20 @@ class SubspaceCoordinator:
         # Initialize knowledge handler first
         self.knowledge_handler = KnowledgeHandler(self.subspace.root_path)
         
+        # Initialize CBR handler (reuse ChromaDB client from knowledge handler if available)
+        from .cbr_handler import CBRHandler
+        chroma_client = getattr(self.knowledge_handler, 'chroma_client', None) if self.knowledge_handler.enabled else None
+        embedding_fn = getattr(self.knowledge_handler, 'embedding_fn', None) if self.knowledge_handler.enabled else None
+        self.cbr_handler = CBRHandler(self.subspace.root_path, chroma_client, embedding_fn)
+        
         # Initialize awareness handler
         self.awareness_handler = AwarenessHandler(self.subspace.root_path)
         
         # Initialize freeze handler
         self.freeze_handler = FreezeHandler(self.subspace.root_path)
         
-        # Pass both handlers to body system
-        self.body_system = BodySystemManager(self.knowledge_handler, self.awareness_handler)
+        # Pass all handlers to body system
+        self.body_system = BodySystemManager(self.knowledge_handler, self.awareness_handler, self.cbr_handler)
         
         self.state_manager = CyberStateManager(self.subspace.root_path)
         self.agent_registry = CyberRegistry(self.subspace.root_path)
