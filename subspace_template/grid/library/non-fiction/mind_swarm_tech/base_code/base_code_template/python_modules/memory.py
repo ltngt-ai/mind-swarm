@@ -1750,10 +1750,9 @@ Returns: True if evicted, False if not found in working memory
 """
         clean_path = self._clean_path(path)
         
-        # Find and remove from working memory
-        # The memory ID format is "memory:path"
-        # Use path directly as memory ID (no type prefix)
-        memory_id = clean_path
+        # Normalize the path to match how FileMemoryBlock creates IDs
+        from ..memory.unified_memory_id import UnifiedMemoryID
+        memory_id = UnifiedMemoryID.normalize_path(clean_path)
         
         # Try to find the memory in the memory system
         for mem in list(self._memory_system.symbolic_memory):
