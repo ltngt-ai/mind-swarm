@@ -5,6 +5,7 @@ This module handles the configuration of DSPy with various language model provid
 
 import os
 import logging
+import asyncio
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 
@@ -291,7 +292,6 @@ class MindSwarmDSPyLM(dspy.LM):
             if not allowed:
                 logger.info(f"Rate limit for {cyber_id}: {reason}")
                 # Parse wait time from the reason message if available
-                import asyncio
                 import re
                 
                 wait_match = re.search(r'Wait ~(\d+)s', reason)
