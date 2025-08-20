@@ -150,7 +150,7 @@ IMPORTANT: Create a single-line summary describing what was accomplished this cy
                     "working_memory": "Your current working memory including execution results"
                 },
                 "outputs": {
-                    "cycle_summary": "A single-line summary of what was accomplished this cycle (max 100 chars)",
+                    "cycle_summary": "A single-line summary of what was accomplished this cycle (keep concise, under 200 chars)",
                     "insights": "Key insights from the execution results",
                     "lessons_learned": "What you learned that will help in future",
                     "knowledge_query": "Suggest a NLP knowledge query that you think will help the next cycle",
@@ -486,12 +486,9 @@ Lessons Learned:
                 insights = reflection_outputs.get("insights", "")
                 if insights:
                     # Take first sentence/line as summary
-                    cycle_summary = insights.split('.')[0].strip()[:100]
+                    cycle_summary = insights.split('.')[0].strip()
                 else:
                     cycle_summary = "Observed and reflected"
-            
-            # Ensure summary is not too long
-            cycle_summary = cycle_summary[:100]
             
             # Get current and previous location from dynamic context
             dynamic_context_file = self.cognitive_loop.memory_dir / "dynamic_context.json"
