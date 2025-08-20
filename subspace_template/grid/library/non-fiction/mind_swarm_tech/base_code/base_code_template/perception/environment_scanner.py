@@ -177,6 +177,9 @@ class EnvironmentScanner:
         # Also scan personal directory structure (like knowing your home)
         memories.extend(self._scan_personal_location(cycle_count))
         
+        # Scan activity log (personal history)
+        memories.extend(self._scan_activity_log(cycle_count))
+        
         # Scan different areas - these return observations and FileMemoryBlocks
         inbox_results = self._scan_inbox(cycle_count)
         observations.extend(inbox_results)
@@ -837,6 +840,48 @@ class EnvironmentScanner:
             "cycle_count": cycle_count,
             "priority": priority
         }
+    
+    def _scan_activity_log(self, cycle_count: int = 0) -> List[MemoryBlock]:
+        """Scan the activity log and create a pinned memory for it.
+        
+        The activity log provides a concise history of the cyber's recent activities,
+        helping maintain continuity and context across cycles.
+        
+        Args:
+            cycle_count: Current cycle count
+            
+        Returns:
+            List containing FileMemoryBlock for activity.log if it exists
+        """
+        from ..memory.memory_blocks import FileMemoryBlock, Priority, ContentType
+        memories = []
+        
+        try:
+            activity_log_path = self.personal_path / "activity.log"
+            
+            # Only create memory if the file exists
+            if activity_log_path.exists():
+                # Create a HIGH priority, pinned memory for the activity log
+                activity_memory = FileMemoryBlock(
+                    location="personal/activity.log",
+                    priority=Priority.HIGH,  # High priority to ensure it's included
+                    confidence=1.0,
+                    pinned=True,  # Always visible in working memory
+                    metadata={
+                        "file_type": "activity_log",
+                        "description": "Recent activity history (last 10 cycles)",
+                    },
+                    cycle_count=cycle_count,
+                    no_cache=True,  # Always read fresh content
+                    content_type=ContentType.TEXT_PLAIN
+                )
+                memories.append(activity_memory)
+                logger.debug(f"Created pinned memory for activity.log")
+            
+        except Exception as e:
+            logger.error(f"Error scanning activity log: {e}")
+        
+        return memories
     
     def reset_tracking(self):
         """Reset all tracking state (for testing or fresh start)."""

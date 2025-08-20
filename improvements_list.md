@@ -13,3 +13,4 @@ Some are complex and need plan and discussion.
 8. Add a /personal/activity.log - single line description per cycle (reflect can generate) with a cycle count. Have last 10 entries shown automatically
 9. Current goals + tasks aren't defined very well, provide Cyber API for consistency. Starter cyber goal+task shouldn't be in code
 10. Add a projects folder to the grid. move cyber base code into a folder in here. Future plan is this is where Cybers work collaboratively on projects.
+11. Add per-location .local_chat.json that is added when Cyber's use a new communication API communication.local_chat(), current location.txt will show the latest 5 messages, adding local spatial quick chat/disccusions. 

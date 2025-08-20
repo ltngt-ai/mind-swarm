@@ -242,6 +242,9 @@ This score should represent how well the execution's results addressed the decis
         # Capture location-based memory if location changed
         await self._capture_location_memory(last_execution, output_values)
         
+        # Update activity log with this cycle's summary
+        await self._update_activity_log(last_execution, output_values)
+        
         # Log key insights if any
         if output_values.get("insights"):
             logger.info(f"  Insights: {output_values['insights'][:200]}")
@@ -579,3 +582,94 @@ Focus on the key action taken and its outcome. Be specific and concise.""",
         except Exception as e:
             logger.error(f"Error capturing location memory: {e}")
             # Don't fail the reflection stage if location memory fails
+    
+    async def _update_activity_log(self, last_execution: dict, reflection_outputs: dict):
+        """Update the activity log with a summary of this cycle.
+        
+        Args:
+            last_execution: The execution results from this cycle
+            reflection_outputs: The outputs from the reflection brain call
+        """
+        try:
+            # Get current location from dynamic context
+            dynamic_context_file = self.cognitive_loop.memory_dir / "dynamic_context.json"
+            current_location = "/personal"
+            if dynamic_context_file.exists():
+                with open(dynamic_context_file, 'r') as f:
+                    dynamic_context = json.load(f)
+                    current_location = dynamic_context.get("current_location", "/personal")
+            
+            # Create a brief summary of what happened this cycle
+            activity_summary = ""
+            
+            # Check if there was execution
+            if last_execution and last_execution.get("results"):
+                # Get the main action from execution
+                results = last_execution.get("results", [])
+                if results:
+                    first_action = results[0]
+                    action_type = first_action.get("action", "unknown")
+                    success = first_action.get("success", False)
+                    
+                    # Create a concise description
+                    if action_type == "python_script":
+                        activity_summary = f"Executed Python script"
+                    elif action_type == "send_message":
+                        activity_summary = f"Sent message"
+                    elif action_type == "read_file":
+                        activity_summary = f"Read file"
+                    elif action_type == "write_file":
+                        activity_summary = f"Wrote file"
+                    else:
+                        activity_summary = f"Performed {action_type}"
+                    
+                    # Add location context
+                    location_short = current_location.split('/')[-1] or "root"
+                    activity_summary += f" at {location_short}"
+                    
+                    # Add success/failure
+                    if not success:
+                        activity_summary += " (failed)"
+            else:
+                # No execution, just observing/thinking
+                activity_summary = f"Observed and reflected at {current_location.split('/')[-1] or 'root'}"
+            
+            # If we have insights, use them for better summary
+            insights = reflection_outputs.get("insights", "")
+            if insights and len(insights) > 20:
+                # Use first sentence of insights as summary
+                first_sentence = insights.split('.')[0].strip()
+                if len(first_sentence) < 100:
+                    activity_summary = first_sentence
+            
+            # Load existing activity log
+            activity_log_file = self.cognitive_loop.personal / "activity.log"
+            entries = []
+            
+            if activity_log_file.exists():
+                try:
+                    with open(activity_log_file, 'r') as f:
+                        for line in f:
+                            line = line.strip()
+                            if line:
+                                entries.append(line)
+                except:
+                    entries = []
+            
+            # Add new entry
+            new_entry = f"Cycle {self.cognitive_loop.cycle_count:04d}: {activity_summary}"
+            entries.append(new_entry)
+            
+            # Keep only last 10 entries
+            entries = entries[-10:]
+            
+            # Write updated log
+            with open(activity_log_file, 'w') as f:
+                for entry in entries:
+                    f.write(entry + "\n")
+            
+            logger.info(f"📝 Updated activity log: {activity_summary[:80]}")
+            
+        except Exception as e:
+            logger.error(f"Error updating activity log: {e}")
+            # Don't fail the reflection stage if activity logging fails
