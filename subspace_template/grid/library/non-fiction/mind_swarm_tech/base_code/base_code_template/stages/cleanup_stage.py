@@ -75,7 +75,8 @@ class CleanupStage:
             current_task="Identifying obsolete memories and observations for cleanup",
             selection_strategy="recent",
             tag_filter=TagFilter(blacklist=self.KNOWLEDGE_BLACKLIST),
-            exclude_content_types=[]
+            exclude_content_types=[],
+            exclude_locations=["personal/.internal"]  # Don't try to cleanup system files
         )
         
         logger.debug(f"Built cleanup context with {len(memory_context)} chars")

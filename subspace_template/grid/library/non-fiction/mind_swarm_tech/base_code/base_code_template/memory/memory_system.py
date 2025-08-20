@@ -173,7 +173,8 @@ class MemorySystem:
                      format_type: str = "json",
                      tag_filter: Optional['TagFilter'] = None,
                      exclude_content_types: Optional[List[ContentType]] = None,
-                     include_content_types: Optional[List[ContentType]] = None) -> str:
+                     include_content_types: Optional[List[ContentType]] = None,
+                     exclude_locations: Optional[List[str]] = None) -> str:
         """Build LLM context from current memories.
         
         Args:
@@ -184,6 +185,7 @@ class MemorySystem:
             tag_filter: Optional TagFilter to apply stage-specific filtering
             exclude_content_types: List of content types to exclude
             include_types: List of memory types to include (if set, only these types are included)
+            exclude_locations: List of location patterns to exclude (e.g., ["personal/.internal"])
             
         Returns:
             Formatted context string ready for LLM
@@ -207,6 +209,23 @@ class MemorySystem:
         elif exclude_content_types:
             memories_to_select = [m for m in memories_to_select if m.content_type not in exclude_content_types]
             logger.debug(f"Exclude filter: kept {len(memories_to_select)} memories, excluded types {exclude_content_types}")
+        
+        # Filter out memories from excluded locations
+        if exclude_locations:
+            before_count = len(memories_to_select)
+            filtered = []
+            for m in memories_to_select:
+                if hasattr(m, 'location'):
+                    location_str = str(m.location)
+                    # Check if any exclusion pattern matches
+                    if not any(pattern in location_str for pattern in exclude_locations):
+                        filtered.append(m)
+                else:
+                    # No location attribute, keep it
+                    filtered.append(m)
+            memories_to_select = filtered
+            if before_count != len(memories_to_select):
+                logger.debug(f"Filtered out {before_count - len(memories_to_select)} memories from excluded locations: {exclude_locations}")
         
         # Apply tag filter if provided (only filters knowledge)
         if tag_filter:

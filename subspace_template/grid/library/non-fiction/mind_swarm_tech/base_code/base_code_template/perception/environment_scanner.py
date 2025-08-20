@@ -857,13 +857,14 @@ class EnvironmentScanner:
         memories = []
         
         try:
-            activity_log_path = self.personal_path / "activity.log"
+            # Activity log is now in .internal since it's system-generated
+            activity_log_path = self.memory_path / "activity.log"
             
             # Only create memory if the file exists
             if activity_log_path.exists():
                 # Create a HIGH priority, pinned memory for the activity log
                 activity_memory = FileMemoryBlock(
-                    location="personal/activity.log",
+                    location="personal/.internal/memory/activity.log",
                     priority=Priority.HIGH,  # High priority to ensure it's included
                     confidence=1.0,
                     pinned=True,  # Always visible in working memory

@@ -502,7 +502,8 @@ Lessons Learned:
                     previous_location = dynamic_context.get("previous_location", "")
             
             # === Update Activity Log ===
-            activity_log_file = self.cognitive_loop.personal / "activity.log"
+            # Store in .internal since this is automated/system-generated
+            activity_log_file = self.cognitive_loop.memory_dir / "activity.log"
             entries = []
             
             # Load existing entries

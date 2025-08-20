@@ -151,8 +151,8 @@ else:
 
 ### Appending to Files
 ```python
-# Append to log without reading existing content
-memory.append("/personal/activity.log", f"[{time.time()}] Process started\n")
+# Append to a notes file without reading existing content
+memory.append("/personal/notes.txt", f"[{time.time()}] New observation\n")
 ```
 
 ### Processing Large Files Without Cognitive Overhead
@@ -1658,8 +1658,8 @@ Returns: True if path exists, False otherwise
             content: Content to append
             
         Example:
-            # Append to a log file
-            memory.append("/personal/activity.log", f"[{datetime.now()}] Task completed\n")
+            # Append to a notes file
+            memory.append("/personal/notes.txt", f"[{datetime.now()}] Task completed\n")
         """
         clean_path = self._clean_path(path)
         actual_path = self._resolve_path(clean_path)
