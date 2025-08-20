@@ -67,6 +67,7 @@ class ExecutionStage:
         self._extract_and_save_module_docs(self.environment_api, "environment_api_docs")
         self._extract_and_save_module_docs(self.cbr_api, "cbr_api_docs")
         self._extract_and_save_module_docs(self.communication_api, "communication_api_docs")
+        self._extract_and_save_module_docs(self.tasks_api, "tasks_api_docs")
     
     def _load_stage_instructions(self):
         """Load stage instructions from knowledge into memory."""
@@ -219,7 +220,13 @@ class ExecutionStage:
     
     # Old hardcoded documentation methods removed - now using generic _extract_and_save_module_docs
     def _setup_execution_environment(self):
-        """Set up the Python execution environment with new Memory API."""
+        """Set up the Python execution environment with APIs.
+        
+        IMPORTANT: When adding a new module:
+        1. Import and initialize it here in _setup_execution_environment()
+        2. Add documentation extraction in __init__ with _extract_and_save_module_docs()
+        3. Both steps are required for the API to work and be documented for cybers
+        """
         # Safe built-ins for script execution
         # Get builtins properly - it might be a dict or module depending on context
         import builtins
@@ -316,6 +323,10 @@ class ExecutionStage:
         self.environment_api = Environment(context)
         self.cbr_api = CBR(self.memory_api)  # CBR uses Memory instance
         self.communication_api = Communication(context)
+        
+        # Import and initialize Tasks API
+        from ..python_modules.tasks import Tasks
+        self.tasks_api = Tasks(context)
     
     async def execute(self):
         """Run the execution stage."""
@@ -647,6 +658,14 @@ The provided API docs describe the available operations and their usage.
         communication_instance = Communication(context)
         namespace['communication'] = communication_instance
         namespace['CommunicationError'] = CommunicationError
+        
+        # Import and initialize the Tasks API
+        from ..python_modules.tasks import Tasks, TasksError
+        
+        # Create tasks instance
+        tasks_instance = Tasks(context)
+        namespace['tasks'] = tasks_instance
+        namespace['TasksError'] = TasksError
         
         # Capture output
         output_lines = []

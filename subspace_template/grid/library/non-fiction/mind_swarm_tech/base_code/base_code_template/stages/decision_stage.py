@@ -114,18 +114,21 @@ class DecisionStage:
         # Create tag filter for decision stage with our blacklist
         tag_filter = TagFilter(blacklist=self.KNOWLEDGE_BLACKLIST)
         
-        # Read the suggested problem from observation buffer
+        # Read the full intelligence briefing from observation buffer
         observation_buffer = self.cognitive_loop.get_current_pipeline("observation")
         observation_file = self.cognitive_loop.personal.parent / observation_buffer.location
         
-        suggested_problem = None
+        observation_data = {}
         try:
             with open(observation_file, 'r') as f:
                 observation_data = json.load(f)
-                suggested_problem = observation_data.get("suggested_problem", "")
-                logger.debug(f"Using suggested problem from observation: {suggested_problem[:100]}...")
+                logger.debug(f"Read intelligence briefing from observation stage")
         except Exception as e:
             logger.debug(f"Could not read observation buffer: {e}")
+        
+        # Extract key information from the briefing
+        suggested_problem = observation_data.get("recommended_focus", "")
+        task_suggestions = observation_data.get("task_suggestions", "")
         
         # Build decision context - goals and tasks come from working memory
         current_task = "Deciding what to do based on current situation, goals and tasks"

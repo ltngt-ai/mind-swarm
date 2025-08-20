@@ -61,5 +61,29 @@ content: |
   - Clear results or error messages
   - Updated memories reflecting changes
   - Progress toward goals
+
+  ## Python Libraries available
+
+  ### Standard library:
+  - math
+  - statistics
+  - json
+  - re
+  - datetime
+  - itertools
+  - functools
+  - collections
+
+  ### Non-standard packages installed in the rootfs:
+  - pyyaml - YAML parsing
+  - python-dotenv - Environment variables
+  - aiofiles - Async file operations
+  - jsonschema - JSON validation
+  - python-magic - File type detection
+  - pandas - Data processing
+  - numpy - Numerical computing
+  - markdown - Markdown processing
+  - beautifulsoup4 - HTML/XML parsing
+  - python-dateutil - Date utilities
   
   Remember: Execution is where thought becomes action. Make your code reliable, clear, and effective.

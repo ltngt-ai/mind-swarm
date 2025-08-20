@@ -1,50 +1,33 @@
-"""Observation Stage - Understanding the situation through environmental scanning.
+"""Observation stage for the cognitive loop.
 
-This stage scans the environment for changes and creates understanding
-from observations about the current situation.
-
-The output of this stage is reasoning about what's happening and its relevance.
+This stage performs intelligence gathering and briefing:
+1. Scans for new observations (messages, files, changes)
+2. Reads actual content of important items
+3. Reviews current tasks and suggests updates
+4. Provides comprehensive briefing to Decision stage
 """
 
-import logging
-from typing import TYPE_CHECKING
-from datetime import datetime
 import json
+import logging
 import time
+from datetime import datetime
+from typing import Dict, Any, List, Optional
+from pathlib import Path
 
-if TYPE_CHECKING:
-    from ..cognitive_loop import CognitiveLoop
-
+from ..memory.memory_blocks import MemoryBlock
+from ..memory.memory_types import Priority, ContentType
 from ..memory.tag_filter import TagFilter
-from ..perception import EnvironmentScanner
 
 logger = logging.getLogger("Cyber.stages.observation")
 
 
 class ObservationStage:
-    """Handles the observation phase of cognition.
+    """Intelligence briefing stage that gathers information and suggests task updates."""
     
-    This stage is responsible for:
-    - Scanning the environment for changes
-    - Processing incoming messages  
-    - Creating contextual understanding from observations
-    """
+    # Knowledge tags to exclude from observation stage context
+    KNOWLEDGE_BLACKLIST = {"decision", "execution", "reflect", "cleanup"}
     
-    # Knowledge tags to exclude during observation stage
-    # We don't need action implementation details when observing
-    KNOWLEDGE_BLACKLIST = {
-        "action_guide", 
-        "action_implementation", 
-        "execution", 
-        "execution_only",  # Execution stage specific
-        "decision_only",  # Decision stage specific
-        "reflection_only",  # Reflection stage specific
-        "procedures", 
-        "tools",
-        "background"
-    }
-    
-    def __init__(self, cognitive_loop: 'CognitiveLoop'):
+    def __init__(self, cognitive_loop):
         """Initialize the observation stage.
         
         Args:
@@ -52,50 +35,38 @@ class ObservationStage:
         """
         self.cognitive_loop = cognitive_loop
         self.memory_system = cognitive_loop.memory_system
-        self.environment_scanner: EnvironmentScanner = cognitive_loop.environment_scanner
         self.brain_interface = cognitive_loop.brain_interface
-        self.memory_dir = cognitive_loop.memory_dir
-        self.file_manager = cognitive_loop.file_manager
-        self.knowledge_manager = cognitive_loop.knowledge_manager
+        self.environment_scanner = cognitive_loop.environment_scanner
+        self.personal = cognitive_loop.personal
+        
+        # Stage-specific memory ID for tracking if instructions are loaded
+        self.stage_knowledge_id = None
     
     def _load_stage_instructions(self):
-        """Load stage instructions from knowledge into memory."""
-        # Fetch from knowledge system
-        stage_data = self.knowledge_manager.get_stage_instructions('observation')
-        if stage_data:
-            logger.info(f"Got stage instructions, type: {type(stage_data)}, keys: {stage_data.keys() if isinstance(stage_data, dict) else 'not a dict'}")
-            from ..memory.memory_blocks import MemoryBlock
-            from ..memory.memory_types import Priority, ContentType
-            import yaml
-            
-            # stage_data has: content (YAML string), metadata (DB metadata), id, source
-            # Parse the YAML content to get the actual knowledge fields
-            try:
-                content = stage_data.get('content', stage_data) if isinstance(stage_data, dict) else stage_data
-                logger.info(f"Parsing content of type {type(content)}, first 100 chars: {str(content)[:100]}")
-                yaml_content = yaml.safe_load(content)
-                logger.info(f"Parsed YAML successfully, keys: {yaml_content.keys() if isinstance(yaml_content, dict) else 'not a dict'}")
-                # yaml_content now has: title, category, tags, content (the actual instructions)
-            except Exception as e:
-                logger.error(f"Failed to parse stage instructions YAML: {e}")
-                return
-            
-            # Create a memory block for stage instructions
-            # Use .internal path so cyber knows it's system-managed
-            # Pass the parsed YAML content as metadata for validation
+        """Load stage-specific instructions into working memory."""
+        stage_file = self.personal / ".internal" / "knowledge" / "observation_stage.md"
+        
+        if stage_file.exists():
+            # Create memory block for stage instructions
             stage_memory = MemoryBlock(
-                location="/personal/.internal/knowledge_observation_stage",
-                confidence=1.0,
-                priority=Priority.FOUNDATIONAL,
-                metadata=yaml_content,  # This has title, category, tags, content fields
-                pinned=True,  # Stage instructions should always be included
+                location=f"personal/.internal/knowledge/observation_stage.md",
+                priority=Priority.HIGH,
+                confidence=0.9,
+                pinned=False,
+                metadata={
+                    "knowledge_type": "stage_instructions",
+                    "stage": "observation",
+                    "description": "Instructions for observation stage"
+                },
                 cycle_count=self.cognitive_loop.cycle_count,
-                content_type=ContentType.MINDSWARM_KNOWLEDGE
+                tags=["observation", "stage_instructions"],
+                content_type=ContentType.MARKDOWN
             )
+            
+            # Try to add to memory
             try:
-                self.memory_system.add_memory(stage_memory)
-                self.stage_knowledge_id = stage_memory.id
-                logger.info(f"Successfully added stage memory with ID: {stage_memory.id}")
+                self.stage_knowledge_id = self.memory_system.add_memory(stage_memory)
+                logger.debug(f"Loaded observation stage instructions with id: {self.stage_knowledge_id}")
             except Exception as e:
                 logger.error(f"Failed to add stage memory: {e}")
                 self.stage_knowledge_id = None
@@ -111,22 +82,111 @@ class ObservationStage:
                 logger.debug("Removed observation stage instructions from memory")
             self.stage_knowledge_id = None
     
-    async def observe(self):
-        """OBSERVE - Understand the situation from observations.
+    def _read_message_content(self, message_path: str) -> Optional[Dict[str, Any]]:
+        """Read the full content of a message file.
         
-        This phase first scans for new observations, then analyzes all observations 
-        and produces orientation with reasoning and relevance.
+        Args:
+            message_path: Path to the message file
+            
+        Returns:
+            Message data dictionary or None if can't read
+        """
+        try:
+            message_file = Path(message_path)
+            if message_file.exists():
+                with open(message_file, 'r') as f:
+                    return json.load(f)
+        except Exception as e:
+            logger.debug(f"Could not read message {message_path}: {e}")
+        return None
+    
+    def _read_reflection(self) -> Optional[Dict[str, Any]]:
+        """Read the reflection from last cycle.
         
         Returns:
-            Orientation data including reasoning and relevance, or None
+            Reflection data or None
         """
-        logger.info("=== OBSERVATION STAGE ===")
-        logger.info("👁️ Observing and reasoning about the situation...")
+        reflection_file = self.personal / ".internal" / "memory" / "reflection_on_last_cycle.json"
+        try:
+            if reflection_file.exists():
+                with open(reflection_file, 'r') as f:
+                    return json.load(f)
+        except Exception as e:
+            logger.debug(f"Could not read reflection: {e}")
+        return None
+    
+    def _get_current_tasks(self) -> Dict[str, List[Dict[str, Any]]]:
+        """Get current task status.
+        
+        Returns:
+            Dictionary with 'active', 'blocked', and 'completed' task lists
+        """
+        tasks = {
+            "active": [],
+            "blocked": [],
+            "completed": []
+        }
+        
+        tasks_dir = self.personal / ".internal" / "tasks"
+        
+        # Read active tasks
+        active_dir = tasks_dir / "active"
+        if active_dir.exists():
+            for task_file in active_dir.glob("task_*.json"):
+                try:
+                    with open(task_file, 'r') as f:
+                        task_data = json.load(f)
+                        tasks["active"].append(task_data)
+                except Exception:
+                    pass
+        
+        # Read blocked tasks
+        blocked_dir = tasks_dir / "blocked"
+        if blocked_dir.exists():
+            for task_file in blocked_dir.glob("task_*.json"):
+                try:
+                    with open(task_file, 'r') as f:
+                        task_data = json.load(f)
+                        tasks["blocked"].append(task_data)
+                except Exception:
+                    pass
+        
+        # Read recent completed tasks (last 5)
+        completed_dir = tasks_dir / "completed"
+        if completed_dir.exists():
+            completed_files = sorted(completed_dir.glob("task_*.json"), 
+                                    key=lambda x: x.stat().st_mtime, 
+                                    reverse=True)[:5]
+            for task_file in completed_files:
+                try:
+                    with open(task_file, 'r') as f:
+                        task_data = json.load(f)
+                        tasks["completed"].append(task_data)
+                except Exception:
+                    pass
+        
+        return tasks
+    
+    async def observe(self):
+        """OBSERVE - Gather intelligence and provide comprehensive briefing.
+        
+        This is now an intelligence briefing stage that:
+        1. Scans for new observations
+        2. Reads actual content of messages and important files
+        3. Reviews reflection from last cycle
+        4. Analyzes current tasks
+        5. Provides detailed briefing with task suggestions
+        
+        Returns:
+            Briefing data for Decision stage
+        """
+        logger.info("=== OBSERVATION STAGE (Intelligence Briefing) ===")
+        logger.info("📊 Gathering intelligence and preparing briefing...")
         
         # Load stage instructions into memory if not already present
         self._load_stage_instructions()
         
-        # First, scan environment for new observations
+        # 1. Scan environment for new observations
         logger.info("📡 Scanning for new observations...")
         self.cognitive_loop._update_dynamic_context(stage="OBSERVATION", phase="SCAN")
         observations = self.environment_scanner.scan_environment(
@@ -134,124 +194,122 @@ class ObservationStage:
             cycle_count=self.cognitive_loop.cycle_count
         )
         
-        # Log observations summary
+        # 2. Read actual content of new messages
+        message_contents = []
         if observations:
             logger.info(f"📋 Found {len(observations)} new observations")
-            # Group by type for logging
-            obs_by_type = {}
             for obs in observations:
-                obs_type = obs.get('observation_type', 'unknown')
-                obs_by_type[obs_type] = obs_by_type.get(obs_type, 0) + 1
-            for obs_type, count in obs_by_type.items():
-                logger.debug(f"  - {obs_type}: {count}")
-        else:
-            logger.debug("No new observations found")
+                if obs.get('observation_type') == 'new_message' and 'path' in obs:
+                    msg_content = self._read_message_content(obs['path'])
+                    if msg_content:
+                        message_contents.append({
+                            "from": msg_content.get('from', 'unknown'),
+                            "subject": msg_content.get('subject', 'No subject'),
+                            "content": msg_content.get('content', ''),
+                            "timestamp": msg_content.get('timestamp', ''),
+                            "path": obs['path']
+                        })
         
-        # Update dynamic context before LLM call - OBSERVE phase
-        self.cognitive_loop._update_dynamic_context(stage="OBSERVATION", phase="OBSERVE")
+        # Tasks and reflection are already in working memory - no need to read them again
         
-        # Create tag filter for observation stage with our blacklist
+        # 5. Build comprehensive context for analysis
+        self.cognitive_loop._update_dynamic_context(stage="OBSERVATION", phase="ANALYZE")
+        
+        # Create tag filter for observation stage
         tag_filter = TagFilter(blacklist=self.KNOWLEDGE_BLACKLIST)
         
-        # Build working memory context for reasoning about the situation
+        # Build working memory context
         memory_context = self.memory_system.build_context(
             max_tokens=self.cognitive_loop.max_context_tokens // 2,
-            current_task="Understanding the current situation from observations",
+            current_task="Analyzing situation and preparing intelligence briefing",
             selection_strategy="balanced",
             tag_filter=tag_filter,
-            exclude_content_types=[]  # Include all relevant memory types
+            exclude_content_types=[]
         )
         
-        # Include observations in the context for brain analysis
-        observation_summary = ""
-        if observations:
-            observation_summary = "\n\n=== NEW OBSERVATIONS ===\n"
-            for obs in observations:
-                obs_type = obs.get('observation_type', 'unknown')
-                message = obs.get('message', '')
-                priority = obs.get('priority', 'MEDIUM')
-                observation_summary += f"[{priority}] {obs_type}: {message}\n"
-                # Include additional details if present
-                if 'content' in obs and obs['content']:
-                    # Truncate long content
-                    content = obs['content']
-                    if len(content) > 500:
-                        content = content[:497] + "..."
-                    observation_summary += f"  Details: {content}\n"
+        # 6. Prepare only NEW information not in working memory
+        new_information = ""
+        if message_contents:
+            new_information += "=== NEW MESSAGES ===\n"
+            for msg in message_contents:
+                new_information += f"From: {msg['from']}\n"
+                new_information += f"Subject: {msg['subject']}\n"
+                new_information += f"Content: {msg['content']}\n\n"
         
-        # Use brain to analyze the situation from all observations
-        logger.info("🧠 Analyzing situation from observations...")
-
+        if observations:
+            new_information += f"=== OBSERVATIONS ({len(observations)} total) ===\n"
+            for obs in observations[:5]:  # Limit to avoid token waste
+                new_information += f"- {obs.get('observation_type')}: {obs.get('message', '')[:100]}\n"
+        
+        # 7. Use brain to analyze and suggest task updates
+        logger.info("🧠 Analyzing intelligence and preparing briefing...")
+        
         thinking_request = {
             "signature": {
-                "instruction": """
-Review all observations to identify relevant changes.
-Consider how they relate to the situation, goals, tasks and reflections from last cycle.
-Based on your observations, suggest what problem should be addressed this cycle.
-Don't plan how to act on this information, just identify what needs attention.
-Always start your output with [[ ## reasoning ## ]]
-""",
+                "instruction": """You are preparing an intelligence briefing for the Decision stage.
+
+Your working memory already contains current tasks, recent reflections, and context.
+Focus on analyzing the new information provided and suggesting task updates.
+
+Based on your analysis, provide:
+1. A summary of what's happening
+2. Task suggestions (what tasks to create, complete, or update)
+3. What should be the focus for this cycle
+
+Format your task suggestions as specific actions:
+- "Create task: [summary]" for new tasks
+- "Complete task: [task_id]" for tasks that seem done based on reflection
+- "Update task: [task_id] - [what to update]" for task modifications
+
+Always start with [[ ## Briefing ## ]]""",
                 "inputs": {
-                    "working_memory": "Your working memory",
-                    "new_observations": "Recent observations from environment scan"
+                    "working_memory": "Current working memory including tasks and reflections",
+                    "new_information": "New messages and observations this cycle"
                 },
                 "outputs": {
-                    "reasoning": "Your short explaination of reasoning",
-                    "relevance": "How the observations relate to the current situation",
-                    "suggested_problem": "A clear statement of what problem or task should be addressed this cycle (1-2 sentences)",
+                    "situation_summary": "Brief summary of the current situation",
+                    "task_suggestions": "Specific task create/complete/update suggestions",
+                    "recommended_focus": "What should be the focus for this cycle"
                 },
-                "display_field": "reasoning"
+                "display_field": "situation_summary"
             },
             "input_values": {
                 "working_memory": memory_context,
-                "new_observations": observation_summary if observation_summary else "No new observations"
+                "new_information": new_information if new_information else "No new messages or observations this cycle"
             },
             "request_id": f"observe_{int(time.time()*1000)}",
             "timestamp": datetime.now().isoformat()
         }
         
         response = await self.brain_interface._use_brain(json.dumps(thinking_request))
-        orientation_response = json.loads(response)
+        analysis_response = json.loads(response)
         
-        # Extract the useful content from the response
-        output_values = orientation_response.get("output_values", {})
+        # Extract the analysis
+        output_values = analysis_response.get("output_values", {})
         
-        # Debug log to see what we got
-        logger.debug(f"Brain response output_values: {output_values}")
-        
-        # Create orientation data - handle template placeholders
-        reasoning = output_values.get("reasoning", "")
-        relevance = output_values.get("relevance", "")
-        suggested_problem = output_values.get("suggested_problem", "")
-        
-        # Check for template placeholders and replace with meaningful defaults
-        if reasoning == "{reasoning}" or not reasoning:
-            reasoning = "Analyzing current observations"
-        if relevance == "{relevance}" or not relevance:
-            relevance = "Observations being processed for context"
-        if suggested_problem == "{suggested_problem}" or not suggested_problem:
-            suggested_problem = "Continue exploring and understanding the environment"
-        
-        observartion_result_data = {
+        # 8. Create briefing for Decision stage (only analysis results, not raw data)
+        intelligence_briefing = {
             "cycle_count": self.cognitive_loop.cycle_count,
-            "reasoning": reasoning,
-            "relevance": relevance,
-            "suggested_problem": suggested_problem,
-            "observations": observations  # Include raw observations for reference
+            "situation_summary": output_values.get("situation_summary", "No significant changes"),
+            "task_suggestions": output_values.get("task_suggestions", "No task changes suggested"),
+            "recommended_focus": output_values.get("recommended_focus", "Continue current activities"),
+            "new_message_paths": [msg['path'] for msg in message_contents] if message_contents else [],
+            "observation_count": len(observations)
         }
         
-        # Write to observation pipeline buffer
+        # Write to observation pipeline buffer for Decision stage
         observation_buffer = self.cognitive_loop.get_current_pipeline("observation")
         buffer_file = self.cognitive_loop.personal.parent / observation_buffer.location
         
-        # Write the observation data to the buffer
         with open(buffer_file, 'w') as f:
-            json.dump(observartion_result_data, f, indent=2)
+            json.dump(intelligence_briefing, f, indent=2)
         
         # Touch the memory block so it knows when the file was updated
         self.cognitive_loop.memory_system.touch_memory(observation_buffer.id, self.cognitive_loop.cycle_count)
         
-        logger.info(f"💭 Observation written to pipeline buffer")
+        logger.info(f"📊 Intelligence briefing prepared and written to pipeline")
         
         # Clean up stage instructions before leaving
         self._cleanup_stage_instructions()
+        
+        return intelligence_briefing

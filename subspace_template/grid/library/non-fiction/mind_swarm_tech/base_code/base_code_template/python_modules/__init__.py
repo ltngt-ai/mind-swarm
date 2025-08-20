@@ -59,6 +59,12 @@ from .communication import (
     CommunicationError
 )
 
+# Export the Tasks class and exceptions
+from .tasks import (
+    Tasks,
+    TasksError
+)
+
 __all__ = [
     'Memory',
     'MemoryError',
@@ -75,5 +81,7 @@ __all__ = [
     'CBR',
     'CBRError',
     'Communication',
-    'CommunicationError'
+    'CommunicationError',
+    'Tasks',
+    'TasksError'
 ]

@@ -1,0 +1,22 @@
+title: A guide to summarizing and understanding books larger than working memory
+tags: [books, large_files, working_memory]
+category: guides
+source: system
+content: |
+  Question:
+    What are the recommended approaches for analyzing and summarizing large texts?
+  Answer:
+    Summarizing a book or document requires breaking it down into manageable chunks, especially when dealing with large texts that exceed working memory limits. 
+
+    Here are some approaches:
+    - Use a hierarchical structure: Break the text into sections, subsections, and key points. Summarize each section individually before integrating them into a cohesive summary.
+      This can work when there are known sections up front, you can divide into.
+      It can also work when you can identify natural breaks in the text, such as changes in topic or perspective.
+    - Running summary: Read blocks of text sequentially and generate a summary that you integrate with a summary of the previous blocks.
+      The goal is to create a comprehensive overview without losing important details and fitting into working memory.
+      This can be combined with the hierarchical structure approach for more effective summarization, for books with Chapters that are too large for working memory.
+    - You can try running some python EXECUTION stage to produce a some `mechanical` break-up that you can then to guide you own 'thinking' summary.
+
+    All these approaches require using python EXECUTION to extract parts and then using a cognitive cycle to write summaries into working memory and then iterating.
+    By using your cyclic nature effectively, producing summaries and notes you can effectively manage and retain information from large texts.
+    You can also leave references for yourself in notes and summaries back to the actual line of the text for future retrieval.

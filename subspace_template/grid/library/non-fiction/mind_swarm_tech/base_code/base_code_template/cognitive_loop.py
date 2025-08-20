@@ -358,44 +358,74 @@ class CognitiveLoop:
                 self.memory_system.add_memory(current_location_memory)
                 logger.info(f"Added current_location.txt to pinned memory with id: {current_location_memory.id}")
         
-        # Create/update personal_location.txt
-        personal_location_file = self.memory_dir / "personal_location.txt"
-        personal_location_id = "memory:personal/.internal/memory/personal_location.txt"
+        # Create/update personal.txt
+        personal_file = self.memory_dir / "personal.txt"
+        personal_id = "memory:personal/.internal/memory/personal.txt"
         
-        # Create the file if it doesn't exist
-        if not personal_location_file.exists():
-            # Create basic personal directory listing
-            personal_content = "| /personal (your home directory)\n"
-            # List actual directories if they exist
-            if self.personal.exists():
-                for item in sorted(self.personal.iterdir()):
-                    if item.is_dir() and not item.name.startswith('.'):
-                        personal_content += f"|---- 📁 {item.name}/\n"
-                for item in sorted(self.personal.iterdir()):
-                    if item.is_file() and not item.name.startswith('.'):
-                        personal_content += f"|---- 📄 {item.name}\n"
-            personal_location_file.write_text(personal_content)
-            logger.info("Created personal_location.txt with personal directory listing")
+        # Always regenerate to include current tasks
+        self._update_personal_file()
         
-        if personal_location_file.exists():
+        if personal_file.exists():
             # Check if already in memory
-            existing_memory = self.memory_system.get_memory(personal_location_id)
+            existing_memory = self.memory_system.get_memory(personal_id)
             if existing_memory:
                 # Update the cycle count to keep it fresh
-                self.memory_system.touch_memory(personal_location_id, self.cycle_count)
+                self.memory_system.touch_memory(personal_id, self.cycle_count)
             else:
-                personal_location_memory = MemoryBlock(
-                    location="personal/.internal/memory/personal_location.txt",
+                personal_memory = MemoryBlock(
+                    location="personal/.internal/memory/personal.txt",
                     priority=Priority.SYSTEM,  # System-controlled location tracking
                     confidence=1.0,
                     pinned=True,  # Always visible
-                    metadata={"file_type": "location", "description": "Map of my personal directory"},
+                    metadata={"file_type": "location", "description": "Personal directory overview and active tasks"},
                     cycle_count=self.cycle_count,
                     no_cache=True,  # Always read fresh
                     content_type=ContentType.TEXT_PLAIN  # Plain text location file
                 )
-                self.memory_system.add_memory(personal_location_memory)
-                logger.info(f"Added personal_location.txt to pinned memory with id: {personal_location_memory.id}")
+                self.memory_system.add_memory(personal_memory)
+                logger.info(f"Added personal.txt to pinned memory with id: {personal_memory.id}")
+    
+    def _update_personal_file(self):
+        """Update personal.txt with current directory structure and active tasks."""
+        personal_file = self.memory_dir / "personal.txt"
+        
+        # Start with directory listing
+        personal_content = "| /personal (your home directory)\n"
+        
+        # List actual directories if they exist
+        if self.personal.exists():
+            for item in sorted(self.personal.iterdir()):
+                if item.is_dir() and not item.name.startswith('.'):
+                    personal_content += f"|---- 📁 {item.name}/\n"
+            for item in sorted(self.personal.iterdir()):
+                if item.is_file() and not item.name.startswith('.'):
+                    personal_content += f"|---- 📄 {item.name}\n"
+        
+        # Add active tasks section - always show even if empty
+        personal_content += "\n\n📋 Active Tasks:\n"
+        tasks_dir = self.personal / ".internal" / "tasks" / "active"
+        if tasks_dir.exists():
+            task_files = list(tasks_dir.glob("task_*.json"))
+            if task_files:
+                for task_file in sorted(task_files):
+                    try:
+                        with open(task_file, 'r') as f:
+                            task_data = json.load(f)
+                            summary = task_data.get('summary', 'Untitled task')
+                            personal_content += f"  • {summary}\n"
+                    except Exception:
+                        # Skip corrupted task files
+                        pass
+                personal_content += "\n(Full details in /personal/.internal/tasks/)\n"
+            else:
+                personal_content += "  No active tasks.\n"
+                personal_content += "  (Use tasks.create_task() API to add new tasks)\n"
+        else:
+            personal_content += "  No active tasks.\n"
+            personal_content += "  (Use tasks.create_task() API to add new tasks)\n"
+        
+        # Write the updated content
+        personal_file.write_text(personal_content)
     
     def get_dynamic_context(self) -> Dict[str, Any]:
         """Get the current dynamic context from file.
@@ -523,6 +553,9 @@ class CognitiveLoop:
             # Clear pipeline buffers at start of new cycle
             if self.cycle_count > 0:  # Don't clear on first cycle
                 self._clear_pipeline_buffers()
+            
+            # Update personal.txt with current tasks
+            self._update_personal_file()
             
             # Update dynamic context at the start of each cycle
             self._update_dynamic_context(stage="STARTING", phase="INIT")

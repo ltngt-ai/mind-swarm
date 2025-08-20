@@ -145,20 +145,26 @@ class MessageRouter:
         return routed_count
     
     async def _deliver_message(self, to_agent: str, message: Dict[str, Any]):
-        """Deliver a message to a specific Cyber's inbox."""
-        target_inbox = self.agents_dir / to_agent / "inbox"
-        if not await aiofiles.os.path.exists(target_inbox):
-            logger.warning(f"Cyber {to_agent} inbox not found")
+        """Deliver a message to a specific Cyber's message directory."""
+        # Messages now go to .internal/messages/ for persistent storage
+        target_messages = self.agents_dir / to_agent / ".internal" / "messages"
+        
+        # Create directory if it doesn't exist
+        try:
+            await aiofiles.os.makedirs(target_messages, exist_ok=True)
+        except OSError as e:
+            logger.warning(f"Could not create messages directory for {to_agent}: {e}")
             return
         
         # Generate unique filename
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        msg_id = message.get("id", f"msg_{timestamp}")
-        msg_file = target_inbox / f"{msg_id}.msg"
+        msg_id = message.get("message_id", f"msg_{timestamp}")
         
         # Write message
+        msg_file = target_messages / f"{msg_id}.msg.json"
         async with aiofiles.open(msg_file, 'w') as f:
             await f.write(json.dumps(message, indent=2))
+        
         logger.debug(f"Delivered message to {to_agent}")
     
     async def _broadcast_message(self, message: Dict[str, Any], exclude: Optional[List[str]] = None):
@@ -420,9 +426,6 @@ class SubspaceCoordinator:
         
         # Create identity file with initial model info
         await self._create_identity_file(state.name, cyber_personal, cyber_type)
-        
-        # Create initial example goals and tasks for new cybers
-        await self._create_initial_goals_and_tasks(state.name, cyber_personal)
         
         # Create additional body files for I/O Cybers
         if agent_type_enum == CyberType.IO_GATEWAY:
@@ -1387,84 +1390,6 @@ class SubspaceCoordinator:
         else:
             self._agent_model_cache.clear()
             logger.info("Cleared all Cyber model caches")
-    
-    async def _create_initial_goals_and_tasks(self, cyber_name: str, cyber_personal: Path):
-        """Create example goals and tasks for new cybers to show proper structure.
-        
-        Args:
-            cyber_name: Name of the Cyber
-            cyber_personal: Cyber's home directory
-        """
-        import yaml
-        from datetime import datetime
-        
-        # Create goals directory
-        goals_dir = cyber_personal / "goals"
-        goals_dir.mkdir(exist_ok=True)
-        
-        # Create tasks directory
-        tasks_dir = cyber_personal / "tasks"
-        tasks_dir.mkdir(exist_ok=True)
-        
-        # Create an example goal
-        example_goal = {
-            "id": "learn_mindswarm",
-            "title": "Learn About Mind-Swarm",
-            "description": "Understand the Mind-Swarm system, my capabilities, and how to collaborate with other cybers",
-            "status": "ACTIVE",
-            "progress": 0,
-            "created_at": datetime.now().isoformat(),
-            "priority": "HIGH",
-            "sub_goals": [],
-            "notes": "This is an example goal. Create your own goals in /personal/goals/"
-        }
-        
-        goal_file = goals_dir / "learn_mindswarm.yaml"
-        with open(goal_file, 'w') as f:
-            yaml.dump(example_goal, f, default_flow_style=False, sort_keys=False)
-        
-        # Create example tasks
-        task1 = {
-            "id": "explore_personal",
-            "title": "Explore Personal Directory",
-            "description": "Understand the structure and purpose of my personal directory",
-            "status": "PENDING",
-            "goal_id": "learn_mindswarm",
-            "created_at": datetime.now().isoformat(),
-            "priority": "HIGH",
-            "next_steps": [
-                "Review personal_location.txt to see directory structure",
-                "Understand where to store goals and tasks",
-                "Learn what directories are available for use"
-            ],
-            "notes": "This is an example task. Create your own tasks in /personal/tasks/"
-        }
-        
-        task1_file = tasks_dir / "explore_personal.yaml"
-        with open(task1_file, 'w') as f:
-            yaml.dump(task1, f, default_flow_style=False, sort_keys=False)
-        
-        task2 = {
-            "id": "read_intro",
-            "title": "Read Introduction Materials",
-            "description": "Read the README_FIRST.md file in the new_cyber_introduction section",
-            "status": "PENDING",
-            "goal_id": "learn_mindswarm",
-            "created_at": datetime.now().isoformat(),
-            "priority": "MEDIUM",
-            "next_steps": [
-                "Read /grid/community/school/onboarding/new_cyber_introduction/README_FIRST.md",
-                "Explore the further_info directory for additional resources",
-                "Review the lessons in /grid/community/school/ to learn core skills"
-            ],
-            "notes": "The new_cyber_introduction section contains important onboarding information"
-        }
-        
-        task2_file = tasks_dir / "read_intro.yaml"
-        with open(task2_file, 'w') as f:
-            yaml.dump(task2, f, default_flow_style=False, sort_keys=False)
-        
-        logger.info(f"Created initial example goals and tasks for {cyber_name}")
     
     async def _create_identity_file(self, cyber_name: str, cyber_personal: Path, cyber_type: str):
         """Create identity file for the Cyber with vital statistics.

@@ -78,29 +78,55 @@ __all__ = [
 ]
 ```
 
-### 3. Add to Execution Stage
+### 3. Add to Execution Stage (TWO PLACES REQUIRED!)
 
-Update `/stages/execution_stage.py` to make your API available in cyber scripts.
+Update `/stages/execution_stage.py` in **TWO CRITICAL PLACES**:
 
-Find the `_run_script` method and add your API initialization:
+#### 3a. Initialize in _setup_execution_environment()
+Add your API initialization in the `_setup_execution_environment()` method:
+
+```python
+def _setup_execution_environment(self):
+    # ... existing code ...
+    
+    # Add your API alongside the others (around line 317)
+    from ..python_modules.myapi import MyAPI
+    self.myapi = MyAPI(context)  # or MyAPI(self.memory_api) if it depends on Memory
+```
+
+#### 3b. Add Documentation Extraction in __init__()
+Add documentation extraction in the `__init__()` method:
+
+```python
+def __init__(self, cognitive_loop):
+    # ... existing code ...
+    
+    # Generate API documentation as knowledge for all modules (around line 69)
+    self._extract_and_save_module_docs(self.myapi, "myapi_docs")
+```
+
+#### 3c. Add to _run_script() namespace
+Finally, make it available in the script namespace in `_run_script()`:
 
 ```python
 async def _run_script(self, script: str, attempt: int) -> Dict[str, Any]:
     # ... existing code ...
     
-    # After the other API imports and initializations (around line 533)
-    
-    # Import and initialize MyAPI
+    # After the other API imports and initializations (around line 650)
     from ..python_modules.myapi import MyAPI, MyAPIError
     
-    # Create instance - pass context or another API instance
-    myapi_instance = MyAPI(context)  # or MyAPI(memory_instance) if it depends on Memory
+    myapi_instance = MyAPI(context)
     namespace['myapi'] = myapi_instance
-    if MyAPIError:  # Only add if you defined error classes
+    if MyAPIError:
         namespace['MyAPIError'] = MyAPIError
-    
-    # ... rest of the method ...
 ```
+
+**IMPORTANT**: All THREE steps are required:
+1. Initialize in `_setup_execution_environment()` - creates the instance
+2. Extract docs in `__init__()` - makes documentation available to cybers
+3. Add to namespace in `_run_script()` - makes API usable in scripts
+
+Without step 2, cybers won't know the API exists!
 
 ### 4. Document the API
 
@@ -337,6 +363,11 @@ class EventAPI:
 - **Purpose**: Awareness of other cybers and environment
 - **Dependencies**: Context
 - **Key Methods**: `get_nearby_cybers()`, `who_is()`
+
+### tasks.py
+- **Purpose**: Simple task management system
+- **Dependencies**: Context
+- **Key Methods**: `create()`, `get_active()`, `complete()`, `block()`, `update()`
 
 ## Troubleshooting
 

@@ -69,7 +69,8 @@ class EnvironmentScanner:
         self.memory_system = memory_system
         
         # Directories to monitor
-        self.inbox_path = self.personal_path / "inbox"
+        self.messages_path = self.personal_path / ".internal" / "messages"  # New location
+        self.inbox_path = self.personal_path / "inbox"  # Legacy location
         self.memory_path = self.personal_path / ".internal" / "memory"
         self.community_path = self.grid_path / "community"
         self.library_path = self.grid_path / "library"
@@ -173,8 +174,7 @@ class EnvironmentScanner:
         # This returns MemoryBlocks for location files, not observations
         memories.extend(self._scan_current_location(cycle_count))
         
-        # Also scan personal directory structure (like knowing your home)
-        memories.extend(self._scan_personal_location(cycle_count))
+        # Personal.txt is now created and managed by cognitive_loop.py
         
         # Scan activity log (personal history)
         memories.extend(self._scan_activity_log(cycle_count))
@@ -204,117 +204,6 @@ class EnvironmentScanner:
         
         return observations
             
-    def _scan_personal_location(self, cycle_count: int = 0) -> List[MemoryBlock]:
-        """Scan personal directory and create a system memory with its structure.
-        
-        This provides cybers with awareness of their personal space organization,
-        excluding .internal directories which are system-only.
-        
-        Args:
-            cycle_count: Current cycle count for observations
-        """
-        memories = []
-        
-        try:
-            # Create personal location file showing directory structure
-            personal_location_file = self.personal_path / ".internal" / "memory" / "personal_location.txt"
-            
-            # Collect directories and files for tree display, excluding .internal
-            lines = []
-            lines.append("| /personal (your home directory)")
-            
-            # Scan top-level personal directory
-            directories = []
-            files = []
-            
-            for item in sorted(self.personal_path.iterdir()):
-                # Skip ALL hidden files/dirs especially .internal
-                if item.name.startswith('.'):
-                    continue
-                
-                if item.is_dir():
-                    directories.append((item.name, None))
-                else:
-                    # Get file size for files
-                    try:
-                        size = item.stat().st_size
-                    except:
-                        size = 0
-                    files.append((item.name, size))
-            
-            # Add directories first with their contents
-            for dir_name, _ in directories:
-                lines.append(f"|---- 📁 {dir_name}/")
-                
-                # Show contents of important directories (goals, tasks)
-                if dir_name in ['goals', 'tasks']:
-                    dir_path = self.personal_path / dir_name
-                    if dir_path.exists():
-                        sub_items = []
-                        try:
-                            for sub_item in sorted(dir_path.iterdir()):
-                                if not sub_item.name.startswith('.'):
-                                    icon = '📁' if sub_item.is_dir() else '📄'
-                                    sub_items.append(f"|       {icon} {sub_item.name}")
-                        except:
-                            pass
-                        
-                        if sub_items:
-                            for sub_line in sub_items:
-                                lines.append(sub_line)
-                        else:
-                            lines.append("|       (empty)")
-            
-            # Then files with sizes
-            for file_name, size in files:
-                if size is not None and size > 0:
-                    if size < 1024:
-                        size_str = f"{size}B"
-                    elif size < 1024 * 1024:
-                        size_str = f"{size/1024:.1f}KB"
-                    elif size < 1024 * 1024 * 1024:
-                        size_str = f"{size/(1024*1024):.1f}MB"
-                    else:
-                        size_str = f"{size/(1024*1024*1024):.1f}GB"
-                    lines.append(f"|---- 📄 {file_name} ({size_str})")
-                else:
-                    lines.append(f"|---- 📄 {file_name}")
-            
-            # If nothing visible, add a note
-            if not directories and not files:
-                lines.append("|---- (no visible files or directories)")
-            
-            contents_text = "\n".join(lines)
-            
-            # Save to file
-            personal_location_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(personal_location_file, 'w') as f:
-                f.write(contents_text)
-
-            # Create a memory for personal structure
-            personal_memory = MemoryBlock(
-                location="personal/.internal/memory/personal_location.txt",
-                priority=Priority.SYSTEM, 
-                confidence=1.0,
-                pinned=True,  # Always in working memory
-                metadata={
-                    "file_type": "personal_structure",
-                    "description": "Your personal directory structure",
-                    "tip": "Keep your personal structure clean and tidy"
-                },
-                cycle_count=cycle_count,
-                no_cache=True,  # Always fresh
-                content_type=ContentType.APPLICATION_JSON  # System JSON file
-            )
-            memories.append(personal_memory)
-            
-            logger.debug(f"Created personal location memory with {len(directories)} dirs and {len(files)} files")
-            
-        except Exception as e:
-            logger.error(f"Error scanning personal location: {e}")
-        
-        return memories
-    
     def _scan_current_location(self, cycle_count: int = 0) -> List[MemoryBlock]:
         """Scan current location and create a system memory with its contents.
         
@@ -698,7 +587,7 @@ class EnvironmentScanner:
         return observations
     
     def _scan_inbox(self, cycle_count: int = 0) -> List[Dict[str, Any]]:
-        """Scan inbox for new messages.
+        """Scan messages directory for new messages and find related past messages.
         
         Args:
             cycle_count: Current cycle count for observations
@@ -708,35 +597,97 @@ class EnvironmentScanner:
         """
         observations = []
         
-        if not self.inbox_path.exists():
+        # Check new location first
+        messages_dirs = []
+        if self.messages_path.exists():
+            messages_dirs.append(self.messages_path)
+        # Also check legacy inbox
+        if self.inbox_path.exists():
+            messages_dirs.append(self.inbox_path)
+        
+        if not messages_dirs:
             return observations
         
         try:
-            # Look for message files
-            for msg_file in self.inbox_path.glob("*.msg"):
-                if str(msg_file) in self.processed_messages:
-                    continue
-                
-                try:
-                    # Read message header for metadata
-                    msg_data = json.loads(msg_file.read_text())
-                    
-                    # Create observation dictionary
-                    observation = {
-                        "observation_type": "new_message",
-                        "path": str(msg_file),  # Direct path to the file
-                        "message": f"New message from {msg_data.get('from', 'unknown')}: {msg_data.get('subject', 'No subject')}",
-                        "cycle_count": cycle_count,
-                        "priority": "HIGH",
-                        "from": msg_data.get('from', 'unknown'),
-                        "subject": msg_data.get('subject', 'No subject')
-                    }
-                    observations.append(observation)
-                    
-                    self.processed_messages.add(str(msg_file))
-                    
-                except Exception as e:
-                    logger.error(f"Error reading message {msg_file}: {e}")
+            # Look for message files in both locations
+            for msg_dir in messages_dirs:
+                # Handle both .msg.json (new) and .msg (legacy) extensions
+                for pattern in ["*.msg.json", "*.msg"]:
+                    for msg_file in msg_dir.glob(pattern):
+                        if str(msg_file) in self.processed_messages:
+                            continue
+                        
+                        try:
+                            # Read message header for metadata
+                            msg_data = json.loads(msg_file.read_text())
+                            
+                            # Store this message in semantic memory for future retrieval
+                            assert self.memory_system, "Memory system is required for environment scanner"
+                            
+                            # Create semantic content for the message
+                            semantic_content = f"Message from {msg_data.get('from', 'unknown')} "
+                            semantic_content += f"to {msg_data.get('to', 'me')} "
+                            semantic_content += f"on {msg_data.get('timestamp', 'unknown time')}: "
+                            semantic_content += f"Subject: {msg_data.get('subject', 'No subject')}. "
+                            semantic_content += f"Content: {msg_data.get('content', '')[:500]}"
+                            
+                            # Store in knowledge base with metadata
+                            knowledge_file = self.personal_path / ".internal" / "memory" / "knowledge" / f"msg_{msg_file.stem}.json"
+                            knowledge_file.parent.mkdir(parents=True, exist_ok=True)
+                            
+                            knowledge_entry = {
+                                "content": semantic_content,
+                                "metadata": {
+                                    "type": "message",
+                                    "from": msg_data.get('from', 'unknown'),
+                                    "to": msg_data.get('to', 'me'),
+                                    "subject": msg_data.get('subject', 'No subject'),
+                                    "timestamp": msg_data.get('timestamp', ''),
+                                    "message_id": msg_data.get('message_id', msg_file.stem),
+                                    "path": str(msg_file)
+                                },
+                                "timestamp": datetime.now().isoformat()
+                            }
+                            
+                            with open(knowledge_file, 'w') as f:
+                                json.dump(knowledge_entry, f, indent=2)
+                            
+                            # Now search for related past messages
+                            search_query = f"{msg_data.get('from', '')} {msg_data.get('subject', '')}"
+                            related_messages = self._find_related_messages(search_query, exclude_id=msg_file.stem)
+                            
+                            # Build the observation message with context
+                            obs_message = f"New message from {msg_data.get('from', 'unknown')}: {msg_data.get('subject', 'No subject')}"
+                            
+                            if related_messages:
+                                obs_message += f"\n\n📚 Found {len(related_messages)} related past message(s):"
+                                for related in related_messages[:3]:  # Show max 3 related messages
+                                    # Extract date and time from timestamp
+                                    timestamp = related.get('timestamp', '')
+                                    if timestamp:
+                                        # Format: "2025-08-20T14:30:45" -> "2025-08-20 14:30"
+                                        date_time = timestamp[:16].replace('T', ' ')
+                                    else:
+                                        date_time = 'unknown time'
+                                    obs_message += f"\n  • {date_time}: {related['from']} - {related['subject']}"
+                            
+                            # Create observation dictionary
+                            observation = {
+                                "observation_type": "new_message",
+                                "path": str(msg_file),  # Direct path to the file
+                                "message": obs_message,
+                                "cycle_count": cycle_count,
+                                "priority": "HIGH",
+                                "from": msg_data.get('from', 'unknown'),
+                                "subject": msg_data.get('subject', 'No subject'),
+                                "related_messages": related_messages if related_messages else None
+                            }
+                            observations.append(observation)
+                            
+                            self.processed_messages.add(str(msg_file))
+                            
+                        except Exception as e:
+                            logger.error(f"Error reading message {msg_file}: {e}")
         
         except Exception as e:
             logger.error(f"Error scanning inbox: {e}")
@@ -803,6 +754,61 @@ class EnvironmentScanner:
     def mark_message_processed(self, message_path: str):
         """Mark a message as processed."""
         self.processed_messages.add(message_path)
+    
+    def _find_related_messages(self, query: str, exclude_id: str = None, limit: int = 5) -> List[Dict[str, Any]]:
+        """Find related messages using semantic search in knowledge base.
+        
+        Args:
+            query: Search query (typically from + subject)
+            exclude_id: Message ID to exclude from results
+            limit: Maximum number of results
+            
+        Returns:
+            List of related message metadata
+        """
+        related = []
+        
+        try:
+            # Search through knowledge files for past messages
+            knowledge_dir = self.personal_path / ".internal" / "memory" / "knowledge"
+            if not knowledge_dir.exists():
+                return related
+            
+            # Simple keyword matching for now (could be enhanced with actual semantic search)
+            query_words = query.lower().split()
+            scores = []
+            
+            for knowledge_file in knowledge_dir.glob("msg_*.json"):
+                # Skip the current message
+                if exclude_id and exclude_id in str(knowledge_file):
+                    continue
+                
+                try:
+                    with open(knowledge_file, 'r') as f:
+                        entry = json.load(f)
+                    
+                    # Only process message type entries
+                    if entry.get('metadata', {}).get('type') != 'message':
+                        continue
+                    
+                    # Calculate relevance score
+                    content = entry.get('content', '').lower()
+                    score = sum(1 for word in query_words if word in content)
+                    
+                    if score > 0:
+                        scores.append((score, entry['metadata']))
+                
+                except Exception as e:
+                    logger.debug(f"Could not read knowledge file {knowledge_file}: {e}")
+            
+            # Sort by score and return top results
+            scores.sort(key=lambda x: x[0], reverse=True)
+            related = [metadata for _, metadata in scores[:limit]]
+            
+        except Exception as e:
+            logger.debug(f"Error searching for related messages: {e}")
+        
+        return related
     
     def _create_observation_dict(self, obs_type: str, path: str, priority: str, cycle_count: int = 0) -> Optional[Dict[str, Any]]:
         """Create an observation dictionary with deduplication.

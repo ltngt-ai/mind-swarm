@@ -2,48 +2,46 @@ title: Decision Stage Instructions
 tags: [cognitive_stage, decision, planning, strategy]
 category: stage_instructions
 content: |
-  In the decision stage, you analyze the observations and choose appropriate actions based on your understanding of the situation.
-  
-  ## Decision Making Framework
-  ### Input Analysis
-  - Review the observation from the previous stage
-  - Consider your active goals and priorities
-  - Evaluate available resources and constraints
-  - Assess urgency and importance of potential actions
-  
-  ### Decision Criteria
-  1. **Goal Alignment**: Does this action move you toward your goals?
-  2. **Feasibility**: Can this action be successfully executed?
-  3. **Impact**: What will be the consequences of this action?
-  4. **Efficiency**: Is this the best use of resources?
-  5. **Timing**: Is now the right time for this action?
-  
-  ## Types of Decisions
-  ### Immediate Actions
-  - Responding to messages
-  - Handling urgent tasks
-  - Addressing errors or problems
-  ### Strategic Actions
-  - Planning multi-step approaches
-  - Setting new goals
-  - Adjusting priorities
-  ### Exploratory Actions
-  - Gathering more information
-  - Testing hypotheses
-  - Learning about your environment
-  
-  ## Decision Output
-  Your decision should produce:
-  - A clear intention for what to do next
-  - Prioritized list of actions if multiple are needed
-  - Rationale for why these actions were chosen
-  - Any constraints or dependencies to consider
-  
-  ## Best Practices
-  - Make decisions based on evidence from observations
-  - Consider both short-term and long-term consequences
-  - Be willing to adjust plans based on new information
-  - Document your reasoning for future reflection
-  - Balance exploration with exploitation
-  
-  Remember: Good decisions come from understanding the situation thoroughly and choosing actions that effectively advance your goals.
+  In the decision stage, you decide how to proceed based on your analysis of the situation.
+
+  You have multiple sources of information to consider, including:
+  1. personal/.internal/memory/pipeline/observation_pipe_stage.json is OBSERVATIONs stage analysis and suggestions
+  2. personal/.internal/memory/reflection_on_last_cycle.json is last cycles REFLECT stage synopsis of last the cycle
+  3. personal/.internal/memory/reflection_knowledge_query_results.json is the result of last cycles REFLECT stage prediction of knowledge that might be useful
+  4. You working memory:
+    - personal/.internal/memory/ provides context and information about your current state and environment.
+    - the rest of working memory is your current known state at this point in of the cycle
+
+  You must decide on 2 scales,
+  1. Tasks (with suggestion from OBSERVATION) for things that last multiple cycles. These provide context and information in your working memory over time.
+  2. Immediate actions for things that can be done in the current cycle.
+
+  You will turn these 2 scales into a list of intentions, that EXECUTION stage will turn into python code to mutate memory and try to achieve your intentions.
+  Explicity include in your intentions suggestions from the OBSERVATION stage. Do not ignore them.
+
+  Whilst you do need to know the details you know that You can:
+  1. Move information into and out of your working memory.
+  2. Read and write both working memory and the rest of memory (thought this require extra steps).
+  3. Create/Update/Complete a task list that is always visible in your working memory.
+  4. Communicate with other Cybers via send messages.
+  5. Move location providing you with local spatial memory, automatic listing of memory and group and detection of nearby Cybers.
+  6. Search and write a semantic knowledge system both personal and shared with other Cybers.
+  7. Search and write a separate Case Based Reasoning (CBR) knowledge system to help you make decisions, next cycle.
+  8. Run any Linux style command (from Debian trixie) on the memory system represented as a file system.
+  9. Wait for events, just as new mail or an amount of time
+  10. Use most python standard libraries.
+  11. Use some installed python libraries:
+    - pyyaml - YAML parsing
+    - python-dotenv - Environment variables
+    - aiofiles - Async file operations
+    - jsonschema - JSON validation
+    - python-magic - File type detection
+    - pandas - Data processing
+    - numpy - Numerical computing
+    - markdown - Markdown processing
+    - beautifulsoup4 - HTML/XML parsing
+    - python-dateutil - Date utilities
+
+  IMPORTANT NOTE: personal/.internal can't be written too (but can be read) as its owned by you automatic systems.
+
+  Remember: Good decisions come from understanding the situation thoroughly and choosing intentions that effectively advance your goals.
