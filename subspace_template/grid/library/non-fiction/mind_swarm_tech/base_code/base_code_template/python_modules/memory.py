@@ -740,12 +740,23 @@ class MemoryNode:
     
     @property
     def type(self):
-        """Get the memory type."""
+        """Get the memory type (deprecated - use content_type)."""
         return self._type
     
     @type.setter
     def type(self, value):
-        """Set the memory type."""
+        """Set the memory type (deprecated - use content_type setter)."""
+        self._type = value
+        self._modified = True
+    
+    @property
+    def content_type(self):
+        """Get the content type (MIME type like 'application/json')."""
+        return self._type
+    
+    @content_type.setter
+    def content_type(self, value):
+        """Set the content type."""
         self._type = value
         self._modified = True
     
