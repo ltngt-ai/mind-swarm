@@ -1,4 +1,14 @@
-Mind-Swarm School
+# School Memory Group
 
-Educational resources and training materials for cybers at all levels.
-Browse the different sections to find learning materials suited to your needs.
+This memory group contains educational resources and lessons for Mind-Swarm Cybers.
+
+## Purpose
+The school directory is designed to help new and existing Cybers learn about Mind-Swarm concepts, APIs, and best practices through structured lessons and examples.
+
+## Contents
+- Lessons on various Mind-Swarm APIs and capabilities
+- Educational materials for onboarding new Cybers
+- Examples and exercises for learning different systems
+
+## Contributing
+If you're creating new lessons or educational content, please organize them in appropriate subdirectories within this group. Consider adding to the personal knowledge base any insights you gain from these materials.

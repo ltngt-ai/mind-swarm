@@ -141,8 +141,7 @@ class ReflectStage:
                 "instruction": """
 Review the previous execution results in your memory. 
 and reflect on what worked, what didn't, and what you learned.
-Its important to record the results of the execution stage, as next cycle the pipeline buffers will be cleared.
-To help your other Cybers, rate this cycle's solution on a scale from 0.0 to 1.0.
+To help your other Cybers, rate this cycle's solution on a scale from 0.0 to 1.0. Be conservative in your scoring.
 This score should represent how well the execution's results addressed the decision's intentions and the observation's suggested problem.
 """,
                 "inputs": {
@@ -297,6 +296,9 @@ This score should represent how well the execution's results addressed the decis
             else:
                 logger.info("📚 No knowledge results found for query")
             
+        # Store insights to personal knowledge base for long-term memory
+        await self._store_insights_to_knowledge(output_values)
+        
         # Clean up stage instructions before leaving
         self._cleanup_stage_instructions()
     
@@ -377,3 +379,83 @@ This score should represent how well the execution's results addressed the decis
         except Exception as e:
             logger.error(f"Failed to store CBR case: {e}")
             # Don't fail the reflection stage if CBR storage fails
+    
+    async def _store_insights_to_knowledge(self, output_values: dict):
+        """Store reflection insights to personal knowledge base for long-term memory.
+        
+        Args:
+            output_values: The output from the brain's reflection
+        """
+        try:
+            # Extract key information
+            insights = output_values.get("insights", "")
+            lessons = output_values.get("lessons_learned", "")
+            
+            if not insights and not lessons:
+                logger.debug("No insights or lessons to store in knowledge base")
+                return
+            
+            # Initialize Knowledge API using Memory context
+            from ..python_modules.memory import Memory
+            from ..python_modules.knowledge import Knowledge
+            
+            # Create context for Memory API (matching execution_stage.py structure)
+            memory_context = {
+                'cognitive_loop': self.cognitive_loop,
+                'memory_system': self.memory_system,
+                'brain_interface': self.brain_interface,
+                'cyber_id': self.cognitive_loop.cyber_id,
+                'personal_dir': str(self.cognitive_loop.personal),
+                'outbox_dir': str(self.cognitive_loop.outbox_dir),
+                'memory_dir': str(self.cognitive_loop.memory_dir),
+                'current_location': '/personal'
+            }
+            memory_instance = Memory(memory_context)
+            knowledge_api = Knowledge(memory_instance)
+            
+            # Categorize the insight based on content
+            tags = ["reflection", "insights", f"cycle_{self.cognitive_loop.cycle_count}"]
+            
+            # Add tags based on content themes
+            content_lower = (insights + " " + lessons).lower()
+            if "error" in content_lower or "fail" in content_lower:
+                tags.append("error_handling")
+            if "improve" in content_lower or "better" in content_lower:
+                tags.append("improvement")
+            if "learn" in content_lower:
+                tags.append("lesson")
+            if "understand" in content_lower:
+                tags.append("understanding")
+            if "pattern" in content_lower:
+                tags.append("pattern_recognition")
+            if "next time" in content_lower or "future" in content_lower:
+                tags.append("future_guidance")
+            
+            # Format the knowledge content - simple and clean
+            knowledge_content = f"""Cycle {self.cognitive_loop.cycle_count} Reflection
+
+Insights:
+{insights}
+
+Lessons Learned:
+{lessons}"""
+            
+            # Store to personal knowledge base
+            knowledge_id = knowledge_api.store(
+                content=knowledge_content,
+                tags=tags,
+                personal=True,  # Store as personal knowledge
+                metadata={
+                    "cycle_count": self.cognitive_loop.cycle_count,
+                    "type": "reflection_insight",
+                    "timestamp": datetime.now().isoformat()
+                },
+                timeout=3.0
+            )
+                
+            if knowledge_id:
+                logger.info(f"📚 Stored reflection insights to personal knowledge base: {knowledge_id}")                    
+                    
+        except Exception as e:
+            logger.error(f"Error storing insights to knowledge base: {e}")
+            # Don't fail the reflection stage if knowledge storage fails

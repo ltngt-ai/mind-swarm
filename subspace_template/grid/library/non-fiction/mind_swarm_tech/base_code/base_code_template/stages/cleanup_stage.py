@@ -125,9 +125,12 @@ class CleanupStage:
                 "instruction": """
 Review your working memory to identify items that can be cleaned up.
 Each memory has a cycle_count showing when it was created.
+personal/.internal/* or FOUNDATIONAL or SYSTEM priority memories shouldn't be considered, they are not relevant for cleanup.
+
 Look for:
 1. Memories that no longer need to be in working memory
 2. Duplicate memories
+3. Memories that are outdated or no longer relevant
 """,
                 "inputs": {
                     "working_memory": "Your current working memory with all items including their cycle counts"

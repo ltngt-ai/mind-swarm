@@ -361,9 +361,8 @@ class SubspaceManager:
             self._copy_boot_rom(internal_dir, cyber_type)
             
             # Create organized directory structure
-            # Mail directories (directly under personal)
-            for subdir in ["inbox", "outbox", "mail_archive"]:
-                (sandbox.cyber_personal / subdir).mkdir(exist_ok=True)
+            # Only inbox is visible to cybers (outbox and mail_archive are in .internal)
+            (sandbox.cyber_personal / "inbox").mkdir(exist_ok=True)
             
             # Memory areas (now inside .internal)
             memory_dir = internal_dir / "memory"
@@ -391,8 +390,8 @@ class SubspaceManager:
         (internal_dir / "logs").mkdir(exist_ok=True)
         
         # Mail directories (directly under personal)
-        for subdir in ["inbox", "outbox", "mail_archive"]:
-            (sandbox.cyber_personal / subdir).mkdir(exist_ok=True)
+        # Only inbox is visible to cybers (outbox and mail_archive are in .internal)
+        (sandbox.cyber_personal / "inbox").mkdir(exist_ok=True)
         
         # Memory directory with subdirectories (now inside .internal)
         memory_dir = internal_dir / "memory"

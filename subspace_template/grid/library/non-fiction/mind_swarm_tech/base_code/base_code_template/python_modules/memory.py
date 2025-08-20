@@ -29,24 +29,71 @@ Methods that DON'T add to working memory (use for large file processing):
 ### Reading Memory (any access will load the memory into working memory)
 ```python
 # Bracket notation is the ONLY way to access memory
-info = memory["/grid/community/school/onboarding/new_cyber_introduction/intro.yaml"]
-notes = memory["/personal/notes/important"]
+# IMPORTANT: memory[path] returns a MemoryNode object, not the raw content!
+# Use .content to get the actual data (type depends on file type)
+
+# Reading text files (.txt, .md, .log, etc.)
+notes = memory["/personal/notes.txt"].content  # Returns a STRING
+
+# Reading JSON files (.json)
+data = memory["/personal/data.json"].content  # Returns a DICT or LIST (parsed JSON)
+if isinstance(data, dict):
+    print(data["key"])  # Access like normal dict
+
+# Reading YAML files (.yaml, .yml)  
+config = memory["/personal/config.yaml"].content  # Returns DICT/LIST/STRING (parsed YAML)
+
+# Reading other files
+raw_data = memory["/personal/data.csv"].content  # Returns a STRING (raw file contents)
+
 # Check if memory exists
 if memory.exists("/personal/data.json"):
-    data = memory["/personal/data.json"]
+    content = memory["/personal/data.json"].content  # Type depends on file!
 ```
+
 ### Writing Memory
 ```python
-# Create or update memory
+# Create or update memory - just assign the value directly
 memory["/personal/journal/today"] = "Today I learned about the memory API"
+
+# Write JSON data
+memory["/personal/data.json"] = {"name": "Alice", "tasks": [1, 2, 3]}
+
+# Write YAML data  
+memory["/personal/config.yaml"] = {"setting": "value", "debug": True}
+```
+
+### CRITICAL: Understanding MemoryNode vs Content
+```python
+# WRONG - This gives you a MemoryNode object, not the content!
+data = memory["/personal/data.json"]
+data.read()  # ERROR: 'MemoryNode' has no attribute 'read'
+data["key"]  # ERROR: 'MemoryNode' object is not subscriptable
+
+# CORRECT - Use .content to get the actual data
+data = memory["/personal/data.json"].content  # Returns parsed JSON (dict/list)
+if isinstance(data, dict):
+    data["new_key"] = "value"  # Works like normal dict
+
+# The MemoryNode has these properties:
+node = memory["/personal/data.json"]
+print(node.content)      # The actual data (type depends on file)
+print(node.content_type)  # MIME type like "application/json"  
+print(node.exists)        # True if file exists
+
+# Content type determines what .content returns:
+# - "application/json" → dict or list (parsed JSON)
+# - "application/x-yaml" → dict, list, or string (parsed YAML)
+# - "text/plain" → string (raw text)
+# - other → string (raw bytes as string)
 ```
 
 ### Type Checking - Know Your Data Types!
 ```python
 # Check content_type before using it, if you are unsure what a memory contains
-# Files like .yaml and .json are automatically parsed, but you should verify
-if memory["/personal/tasks.json"].content_type == "application/json":
-    tasks = memory["/personal/tasks.json"].content
+node = memory["/personal/tasks.json"]
+if node.content_type == "application/json":
+    tasks = node.content  # Get the actual dict/list
     # ... process the json here
 else:
     print("Tasks memory is not in JSON format")

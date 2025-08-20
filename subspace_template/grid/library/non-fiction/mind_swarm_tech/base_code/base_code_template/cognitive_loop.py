@@ -73,7 +73,8 @@ class CognitiveLoop:
         
         # Ensure directories exist
         self.file_manager.ensure_directory(self.inbox_dir)
-        self.file_manager.ensure_directory(self.outbox_dir)
+        # Don't create outbox - it should only be created when actually needed
+        # self.file_manager.ensure_directory(self.outbox_dir)
         self.file_manager.ensure_directory(self.memory_dir)
         
         # Initialize systems

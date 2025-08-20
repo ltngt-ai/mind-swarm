@@ -1447,16 +1447,17 @@ class SubspaceCoordinator:
         task2 = {
             "id": "read_intro",
             "title": "Read Introduction Materials",
-            "description": "Read the intro.yaml file in the new_cyber_introduction section",
+            "description": "Read the README_FIRST.md file in the new_cyber_introduction section",
             "status": "PENDING",
             "goal_id": "learn_mindswarm",
             "created_at": datetime.now().isoformat(),
             "priority": "MEDIUM",
             "next_steps": [
-                "Read intro.yaml to understand Mind-Swarm basics",
-                "Explore further_info directory for additional information"
+                "Read /grid/community/school/onboarding/new_cyber_introduction/README_FIRST.md",
+                "Explore the further_info directory for additional resources",
+                "Review the lessons in /grid/community/school/ to learn core skills"
             ],
-            "notes": "The new_cyber_introduction section contains important information for new cybers"
+            "notes": "The new_cyber_introduction section contains important onboarding information"
         }
         
         task2_file = tasks_dir / "read_intro.yaml"

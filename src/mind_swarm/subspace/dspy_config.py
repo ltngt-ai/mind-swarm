@@ -323,9 +323,39 @@ class MindSwarmDSPyLM(dspy.LM):
                         estimated_tokens=estimated_tokens
                     )
             
-            # Use our AI service to generate response
-            result = await ai_service.chat_completion(messages)
-            response_text = result["message"]["content"]
+            # Use our AI service to generate response with retry logic
+            max_retries = 3
+            retry_count = 0
+            last_error = None
+            
+            while retry_count < max_retries:
+                try:
+                    result = await ai_service.chat_completion(messages)
+                    response_text = result["message"]["content"]
+                    break  # Success, exit retry loop
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "rate limit" in error_str or "429" in error_str or "requests per minute" in error_str:
+                        retry_count += 1
+                        if retry_count < max_retries:
+                            # Exponential backoff: 2s, 4s, 8s
+                            wait_time = 2 ** retry_count
+                            logger.warning(f"Rate limit hit in DSPy acall, attempt {retry_count}/{max_retries}, waiting {wait_time}s")
+                            
+                            # Add jitter to avoid thundering herd
+                            import random
+                            jitter = random.uniform(0, 0.5)
+                            await asyncio.sleep(wait_time + jitter)
+                            continue
+                        else:
+                            last_error = e
+                    else:
+                        # Non-rate-limit error, don't retry
+                        raise
+            
+            if retry_count >= max_retries and last_error:
+                logger.error(f"Max retries ({max_retries}) exhausted for rate limit")
+                raise last_error
             
             logger.debug(f"DSPy LM response: {response_text}")
             

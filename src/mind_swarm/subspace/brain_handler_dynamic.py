@@ -317,13 +317,17 @@ class DynamicBrainHandler:
                     if "rate limit" in error_str.lower() or "429" in error_str:
                         retry_count += 1
                         if retry_count < max_retries:
-                            self.logger.warning(f"Rate limit hit for Cyber {cyber_id}, attempt {retry_count}/{max_retries}")
+                            # Exponential backoff: 2s, 4s, 8s
+                            wait_time = 2 ** retry_count
+                            self.logger.warning(f"Rate limit hit for Cyber {cyber_id}, attempt {retry_count}/{max_retries}, waiting {wait_time}s")
                             
                             # Try to switch to a different model
                             await self._switch_to_alternative_model(cyber_id)
                             
-                            # Brief delay before retry
-                            await asyncio.sleep(1.0)
+                            # Exponential backoff with jitter to avoid thundering herd
+                            import random
+                            jitter = random.uniform(0, 0.5)  # Add 0-0.5s random jitter
+                            await asyncio.sleep(wait_time + jitter)
                             continue
                     
                     # For other errors, don't retry

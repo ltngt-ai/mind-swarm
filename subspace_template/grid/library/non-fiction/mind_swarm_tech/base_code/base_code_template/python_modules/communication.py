@@ -75,7 +75,7 @@ class Communication:
         
         # Messages go to .internal/outbox (hidden from Cyber's view)
         self.outbox = self.personal / '.internal' / 'outbox'
-        self.outbox.mkdir(parents=True, exist_ok=True)
+        # Don't create outbox directory - it will be created only when needed
     
     def send_message(self, 
                     to: str,
@@ -132,6 +132,9 @@ class Communication:
         outbox_file = self.outbox / f"{message_id}.msg.json"
         
         try:
+            # Create outbox directory only when actually sending a message
+            self.outbox.mkdir(parents=True, exist_ok=True)
+            
             with open(outbox_file, 'w') as f:
                 json.dump(message, f, indent=2)
             

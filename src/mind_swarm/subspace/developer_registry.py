@@ -112,8 +112,9 @@ class DeveloperRegistry:
         inbox_dir = cyber_dir / "inbox"
         inbox_dir.mkdir(exist_ok=True)
         
-        outbox_dir = cyber_dir / "outbox"
-        outbox_dir.mkdir(exist_ok=True)
+        # Don't create outbox directory - it should only be created when needed
+        # outbox_dir = cyber_dir / "outbox"
+        # outbox_dir.mkdir(exist_ok=True)
         
         mail_archive_dir = cyber_dir / "mail_archive"
         mail_archive_dir.mkdir(exist_ok=True)

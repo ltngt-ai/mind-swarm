@@ -238,6 +238,7 @@ class ExecutionStage:
             
             # String operations
             'str': str, 'repr': repr, 'format': format,
+            'chr': chr, 'ord': ord, 'ascii': ascii,
             
             # Type checking
             'type': type, 'isinstance': isinstance, 'hasattr': hasattr,
