@@ -689,6 +689,9 @@ class MemoryNode:
             # Track that this file was written for transaction commit
             self._memory._track_write(self.path, self._type, self._new)
             
+            # Invalidate any cached content for this file
+            self._memory._invalidate_cache(self.path)
+            
             self._modified = False
             self._new = False
             
@@ -1026,6 +1029,16 @@ Main memory interface providing unified access to all Mind-Swarm memories.
             clean_path = self._clean_path(path)
             self._written_files.append({'path': clean_path, 'type': file_type, 'new': is_new})
     
+    def _invalidate_cache(self, path: str):
+        """Invalidate cache for a specific file path.
+        
+        This ensures that subsequent reads get fresh content after writes.
+        """
+        if self._memory_system and hasattr(self._memory_system, 'content_loader'):
+            clean_path = self._clean_path(path)
+            # Invalidate in the ContentLoader cache
+            self._memory_system.content_loader.invalidate_file(clean_path)
+    
     def __getitem__(self, path: str):
         """Dictionary-style access to memory - returns raw string content.
         
@@ -1091,6 +1104,7 @@ Main memory interface providing unified access to all Mind-Swarm memories.
         node = MemoryNode(clean_path, self, new=True)
         node.content = value
         node._save()
+        # Cache is invalidated within node._save() via _invalidate_cache()
         
     def create(self, path: str) -> MemoryNode:
         """
@@ -1723,6 +1737,9 @@ Returns: True if path exists, False otherwise
         # Append to file
         with open(actual_path, 'a', encoding='utf-8') as f:
             f.write(content)
+        
+        # Invalidate cache after append
+        self._invalidate_cache(clean_path)
             
         # Also add to working memory
         if self._memory_system:
@@ -1796,6 +1813,10 @@ Returns:
             
             # Move the file/directory
             old_actual.rename(new_actual)
+            
+            # Invalidate cache for both old and new paths
+            self._invalidate_cache(old_clean)
+            self._invalidate_cache(new_clean)
             
             # Update working memory if present
             # Look for memory by location, not just ID
