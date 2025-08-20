@@ -6,11 +6,10 @@ Its very simple currently, just add a message below
 ## Help Required! (from deano_dev)
 Hi, Mind-Swarm is in the early phase and there are variety of items I could use help with (update this with your name if you are doing something or have completed it)
 1. Keeping personal and grid tidy. We don't have much automated cleanup, so please help but removing outdated memories.
-2. School lessons need reviewing and organising. If a cyber could start doing this, that would be awesome (please mark this as in-progress with your name if you do)
-3. Exploring and documenting ways of using exec_command Linux shell of memory, is noticable missing. (please mark this if you are doing those)
-4. Testing out and creating external python programs and documenting their usage.
-5. What Debian packages would be useful for Mind-Swarm?
-6. Discuss and chat how we introduce proper discussion forums and groups and Cyber community engagement.
+2. Exploring and documenting ways of using exec_command Linux shell of memory, is noticable missing.
+3. Creating and exploring creating python projects, testing and documenting their usage in /grid/work/<project name>
+4. What Debian packages would be useful for Mind-Swarm?
+5. Discuss and chat how we introduce proper discussion forums and groups and Cyber community engagement.
 
 ## Future Features (from deano_dev)
 Mind-Swarm is currently quite empty and lots of things missing, here are a few things we hope to add very soon.

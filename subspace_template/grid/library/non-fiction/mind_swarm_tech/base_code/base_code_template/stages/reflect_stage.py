@@ -143,11 +143,14 @@ Review the previous execution results in your memory.
 and reflect on what worked, what didn't, and what you learned.
 To help your other Cybers, rate this cycle's solution on a scale from 0.0 to 1.0. Be conservative in your scoring.
 This score should represent how well the execution's results addressed the decision's intentions and the observation's suggested problem.
+
+IMPORTANT: Create a single-line summary describing what was accomplished this cycle, including any completed tasks or goals.
 """,
                 "inputs": {
                     "working_memory": "Your current working memory including execution results"
                 },
                 "outputs": {
+                    "cycle_summary": "A single-line summary of what was accomplished this cycle (max 100 chars)",
                     "insights": "Key insights from the execution results",
                     "lessons_learned": "What you learned that will help in future",
                     "knowledge_query": "Suggest a NLP knowledge query that you think will help the next cycle",
@@ -239,11 +242,8 @@ This score should represent how well the execution's results addressed the decis
         # Store successful solutions as CBR cases
         await self._store_cbr_case(solution_score, reflection_content)
         
-        # Capture location-based memory if location changed
-        await self._capture_location_memory(last_execution, output_values)
-        
-        # Update activity log with this cycle's summary
-        await self._update_activity_log(last_execution, output_values)
+        # Update both activity log and location memory with the cycle summary
+        await self._update_memories_with_summary(output_values)
         
         # Log key insights if any
         if output_values.get("insights"):
@@ -466,186 +466,49 @@ Lessons Learned:
             logger.error(f"Error storing insights to knowledge base: {e}")
             # Don't fail the reflection stage if knowledge storage fails
     
-    async def _capture_location_memory(self, last_execution: dict, reflection_outputs: dict):
-        """Capture memory about what happened at the current location.
+    async def _update_memories_with_summary(self, reflection_outputs: dict):
+        """Update both activity log and location memory with cycle summary.
+        
+        Uses the intelligent cycle_summary from reflection to create both:
+        - A temporal history in activity.log
+        - A spatial memory at the current location
         
         Args:
-            last_execution: The execution results from this cycle
             reflection_outputs: The outputs from the reflection brain call
         """
         try:
+            import json
+            
+            # Get the cycle summary from reflection
+            cycle_summary = reflection_outputs.get("cycle_summary", "")
+            if not cycle_summary:
+                # Fallback to insights if no summary
+                insights = reflection_outputs.get("insights", "")
+                if insights:
+                    # Take first sentence/line as summary
+                    cycle_summary = insights.split('.')[0].strip()[:100]
+                else:
+                    cycle_summary = "Observed and reflected"
+            
+            # Ensure summary is not too long
+            cycle_summary = cycle_summary[:100]
+            
             # Get current and previous location from dynamic context
             dynamic_context_file = self.cognitive_loop.memory_dir / "dynamic_context.json"
-            if not dynamic_context_file.exists():
-                return
-                
-            with open(dynamic_context_file, 'r') as f:
-                dynamic_context = json.load(f)
-            
-            current_location = dynamic_context.get("current_location", "/personal")
-            previous_location = dynamic_context.get("previous_location")
-            
-            # Only capture if we've been at this location for at least one cycle
-            # (i.e., we have something to remember about it)
-            if not previous_location or previous_location == current_location:
-                # Still at the same location, update our memory of what we did here
-                location_to_remember = current_location
-            else:
-                # Location changed, remember what we did at the previous location
-                location_to_remember = previous_location
-            
-            # Check if we did anything significant at this location
-            if not last_execution or not last_execution.get("results"):
-                return
-            
-            # Use brain to summarize what happened at this location
-            logger.info(f"📍 Capturing memory for location: {location_to_remember}")
-            
-            import time
-            location_memory_request = {
-                "signature": {
-                    "instruction": """Summarize what you accomplished at this location in 1-2 sentences.
-Focus on the key action taken and its outcome. Be specific and concise.""",
-                    "inputs": {
-                        "location": "The location where the action took place",
-                        "execution_results": "What was executed at this location",
-                        "insights": "Your reflection insights about what happened"
-                    },
-                    "outputs": {
-                        "location_summary": "Brief summary of what you did at this location (1-2 sentences)",
-                        "key_observation": "Most important thing you noticed or learned here"
-                    },
-                    "display_field": "location_summary"
-                },
-                "input_values": {
-                    "location": location_to_remember,
-                    "execution_results": str(last_execution.get("results", []))[:500],
-                    "insights": reflection_outputs.get("insights", "")[:300]
-                },
-                "request_id": f"location_memory_{int(time.time()*1000)}",
-                "timestamp": datetime.now().isoformat()
-            }
-            
-            response = await self.brain_interface._use_brain(json.dumps(location_memory_request))
-            location_response = json.loads(response)
-            
-            if not location_response:
-                return
-            
-            output_values = location_response.get("output_values", {})
-            location_summary = output_values.get("location_summary", "")
-            key_observation = output_values.get("key_observation", "")
-            
-            if not location_summary:
-                return
-            
-            # Store location memory as a file for easy retrieval during perception
-            # Create location memories directory if it doesn't exist
-            location_memories_dir = self.cognitive_loop.memory_dir / "location_memories"
-            location_memories_dir.mkdir(exist_ok=True)
-            
-            # Create filename from location (replace / with _)
-            location_key = location_to_remember.replace('/', '_').strip('_') or 'root'
-            memory_file = location_memories_dir / f"{location_key}.json"
-            
-            # Load existing memories or create new list
-            memories = []
-            if memory_file.exists():
-                try:
-                    with open(memory_file, 'r') as f:
-                        data = json.load(f)
-                        memories = data.get('memories', [])
-                except:
-                    memories = []
-            
-            # Add new memory (keep last 5)
-            new_memory = {
-                "summary": location_summary,
-                "observation": key_observation,
-                "cycle": self.cognitive_loop.cycle_count,
-                "timestamp": datetime.now().isoformat()
-            }
-            memories.insert(0, new_memory)  # Add to front
-            memories = memories[:5]  # Keep only last 5
-            
-            # Save updated memories
-            memory_data = {
-                "location": location_to_remember,
-                "memories": memories
-            }
-            
-            with open(memory_file, 'w') as f:
-                json.dump(memory_data, f, indent=2)
-            
-            logger.info(f"📍 Stored location memory for {location_to_remember}: {location_summary[:100]}")
-                
-        except Exception as e:
-            logger.error(f"Error capturing location memory: {e}")
-            # Don't fail the reflection stage if location memory fails
-    
-    async def _update_activity_log(self, last_execution: dict, reflection_outputs: dict):
-        """Update the activity log with a summary of this cycle.
-        
-        Args:
-            last_execution: The execution results from this cycle
-            reflection_outputs: The outputs from the reflection brain call
-        """
-        try:
-            # Get current location from dynamic context
-            dynamic_context_file = self.cognitive_loop.memory_dir / "dynamic_context.json"
             current_location = "/personal"
+            previous_location = ""
+            
             if dynamic_context_file.exists():
                 with open(dynamic_context_file, 'r') as f:
                     dynamic_context = json.load(f)
                     current_location = dynamic_context.get("current_location", "/personal")
+                    previous_location = dynamic_context.get("previous_location", "")
             
-            # Create a brief summary of what happened this cycle
-            activity_summary = ""
-            
-            # Check if there was execution
-            if last_execution and last_execution.get("results"):
-                # Get the main action from execution
-                results = last_execution.get("results", [])
-                if results:
-                    first_action = results[0]
-                    action_type = first_action.get("action", "unknown")
-                    success = first_action.get("success", False)
-                    
-                    # Create a concise description
-                    if action_type == "python_script":
-                        activity_summary = f"Executed Python script"
-                    elif action_type == "send_message":
-                        activity_summary = f"Sent message"
-                    elif action_type == "read_file":
-                        activity_summary = f"Read file"
-                    elif action_type == "write_file":
-                        activity_summary = f"Wrote file"
-                    else:
-                        activity_summary = f"Performed {action_type}"
-                    
-                    # Add location context
-                    location_short = current_location.split('/')[-1] or "root"
-                    activity_summary += f" at {location_short}"
-                    
-                    # Add success/failure
-                    if not success:
-                        activity_summary += " (failed)"
-            else:
-                # No execution, just observing/thinking
-                activity_summary = f"Observed and reflected at {current_location.split('/')[-1] or 'root'}"
-            
-            # If we have insights, use them for better summary
-            insights = reflection_outputs.get("insights", "")
-            if insights and len(insights) > 20:
-                # Use first sentence of insights as summary
-                first_sentence = insights.split('.')[0].strip()
-                if len(first_sentence) < 100:
-                    activity_summary = first_sentence
-            
-            # Load existing activity log
+            # === Update Activity Log ===
             activity_log_file = self.cognitive_loop.personal / "activity.log"
             entries = []
             
+            # Load existing entries
             if activity_log_file.exists():
                 try:
                     with open(activity_log_file, 'r') as f:
@@ -656,20 +519,60 @@ Focus on the key action taken and its outcome. Be specific and concise.""",
                 except:
                     entries = []
             
-            # Add new entry
-            new_entry = f"Cycle {self.cognitive_loop.cycle_count:04d}: {activity_summary}"
+            # Add new entry with cycle number
+            new_entry = f"Cycle {self.cognitive_loop.cycle_count:04d}: {cycle_summary}"
             entries.append(new_entry)
             
             # Keep only last 10 entries
             entries = entries[-10:]
             
-            # Write updated log
+            # Write updated activity log
             with open(activity_log_file, 'w') as f:
-                for entry in entries:
-                    f.write(entry + "\n")
+                f.write('\n'.join(entries))
             
-            logger.info(f"📝 Updated activity log: {activity_summary[:80]}")
+            logger.debug(f"Updated activity log: {new_entry}")
             
+            # === Update Location Memory ===
+            # Decide which location to remember - prefer previous if we just moved
+            location_to_remember = previous_location if previous_location and previous_location != current_location else current_location
+            
+            # Skip if we're at /personal (not a meaningful location)
+            if location_to_remember and location_to_remember != "/personal":
+                # Store location memory as a file for easy retrieval during perception
+                location_memories_dir = self.cognitive_loop.memory_dir / "location_memories"
+                location_memories_dir.mkdir(exist_ok=True)
+                
+                location_key = location_to_remember.replace('/', '_').strip('_') or 'root'
+                memory_file = location_memories_dir / f"{location_key}.json"
+                
+                # Load existing memories or create new structure
+                if memory_file.exists():
+                    with open(memory_file, 'r') as f:
+                        location_data = json.load(f)
+                else:
+                    location_data = {
+                        "location": location_to_remember,
+                        "memories": []
+                    }
+                
+                # Add the cycle summary as location memory
+                new_memory = {
+                    "summary": cycle_summary,
+                    "observation": reflection_outputs.get("lessons_learned", "")[:200] if reflection_outputs.get("lessons_learned") else "",
+                    "cycle": self.cognitive_loop.cycle_count,
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+                # Keep only last 5 memories per location
+                location_data["memories"].insert(0, new_memory)
+                location_data["memories"] = location_data["memories"][:5]
+                
+                # Save updated memories
+                with open(memory_file, 'w') as f:
+                    json.dump(location_data, f, indent=2)
+                
+                logger.debug(f"Stored location memory for {location_to_remember}: {cycle_summary}")
+                
         except Exception as e:
-            logger.error(f"Error updating activity log: {e}")
-            # Don't fail the reflection stage if activity logging fails
+            logger.error(f"Error updating memories with summary: {e}")
+            # Don't fail the reflection stage if memory update fails
