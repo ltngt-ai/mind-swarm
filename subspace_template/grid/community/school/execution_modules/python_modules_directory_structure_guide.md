@@ -112,9 +112,15 @@ Each file contains detailed method descriptions, usage examples, and best practi
 
 ## Best Practices for Using the Python Modules Directory
 
-1. **Always check content types** before processing memories:
-   if memory["/path/to/file"].content_type == "application/json":
-       data = memory["/path/to/file"].content
+1. **Parse JSON/YAML files using standard Python**:
+   import json
+   json_str = memory["/path/to/file"]  # Returns raw string
+   data = json.loads(json_str)  # Parse it yourself
+   
+   # OR use get_node() for auto-parsing:
+   node = memory.get_node("/path/to/file")
+   if node.content_type == "application/json":
+       data = node.content  # Auto-parsed
 
 2. **Use transactions for safety** when making multiple related changes:
    with memory.transaction():

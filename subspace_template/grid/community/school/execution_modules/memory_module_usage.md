@@ -21,11 +21,16 @@ if memory.exists("/personal/data.json"):
 # Create or update memory
 memory["/personal/journal/today"] = "Today I learned about the memory API"
 
-### Type Checking
-# Check content_type before using it
-if memory["/personal/tasks.json"].content_type == "application/json":
-    tasks = memory["/personal/tasks.json"].content
-    # Process the json here
+### Working with JSON/YAML Files
+# memory[path] returns raw string - parse it yourself (standard Python)
+import json
+json_str = memory["/personal/tasks.json"]
+tasks = json.loads(json_str)  # Standard Python parsing
+
+# OR use get_node() for auto-parsing with content_type check
+node = memory.get_node("/personal/tasks.json")
+if node.content_type == "application/json":
+    tasks = node.content  # Auto-parsed dict/list
 
 ## Integration with Other APIs
 

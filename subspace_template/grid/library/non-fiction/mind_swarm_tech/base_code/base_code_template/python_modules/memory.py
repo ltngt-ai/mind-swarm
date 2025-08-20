@@ -67,14 +67,14 @@ memory["/personal/config.yaml"] = {"setting": "value", "debug": True}
 
 ### CRITICAL: Understanding MemoryNode vs Content
 ```python
-# The NEW way - memory[path] returns raw string (what Python devs expect!)
+# memory[path] returns raw string (what Python devs expect!)
 json_str = memory["/personal/data.json"]  # Returns raw JSON string
 import json
 data = json.loads(json_str)  # Parse it yourself (standard Python)
 data["key"] = "value"  # Works!
 memory["/personal/data.json"] = json.dumps(data)  # Save back
 
-# The convenience way - use get_node() for auto-parsing
+# Alternative: use get_node() for auto-parsing
 node = memory.get_node("/personal/data.json")
 data = node.content  # Auto-parsed dict/list (convenience)
 print(node.content_type)  # "application/json"
@@ -89,30 +89,33 @@ print(node.exists)  # True if file exists
 
 ### Type Checking - Know Your Data Types!
 ```python
-# Check content_type before using it, if you are unsure what a memory contains
-node = memory["/personal/tasks.json"]
+# Check content_type before using auto-parsing
+node = memory.get_node("/personal/tasks.json")
 if node.content_type == "application/json":
-    tasks = node.content  # Get the actual dict/list
+    tasks = node.content  # Auto-parsed dict/list
     # ... process the json here
 else:
-    print("Tasks memory is not in JSON format")
+    # Not JSON, just get raw content
+    raw_content = memory["/personal/tasks.json"]
+    print(f"Tasks file is not JSON: {raw_content[:100]}")
 ```
 
 ### Transactions for Safety
 ```python
 # Multiple operations succeed or fail together
+import json
 try:
     with memory.transaction():
-        # Read existing data
-        data = memory["/personal/config.json"]
+        # Read and parse JSON data
+        config_str = memory["/personal/config.json"]
+        config = json.loads(config_str)
         
-        # Modify JSON data directly (if it's JSON)
-        if memory["/personal/tasks.json"].content_type == "application/json" and isinstance(data.content, dict):
-            data.content["updated"] = "2024-01-01"
-            # Changes are saved automatically
+        # Modify the data
+        config["updated"] = "2024-01-01"
         
-        # Save backup
-        memory["/personal/backup/config"] = data.content
+        # Save modified data and backup
+        memory["/personal/config.json"] = json.dumps(config)
+        memory["/personal/backup/config.json"] = json.dumps(config)
         
         # Send confirmation message via outbox
         import time
@@ -145,7 +148,7 @@ if info['lines'] > 1000:
     middle = memory.read_lines("/personal/large_dataset.csv", start_line=5000, end_line=5500)    
 else:
     # Small enough to read entirely
-    full_content = memory["/personal/large_dataset.csv"].content
+    full_content = memory["/personal/large_dataset.csv"]  # Returns raw string
 ```
 
 ### Appending to Files
