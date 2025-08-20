@@ -28,27 +28,29 @@ Methods that DON'T add to working memory (use for large file processing):
 
 ### Reading Memory (any access will load the memory into working memory)
 ```python
-# Bracket notation is the ONLY way to access memory
-# IMPORTANT: memory[path] returns a MemoryNode object, not the raw content!
-# Use .content to get the actual data (type depends on file type)
+# Memory access follows standard Python patterns
+# memory[path] returns raw STRING content - just like open().read()
+# This matches what Python developers naturally expect!
 
-# Reading text files (.txt, .md, .log, etc.)
-notes = memory["/personal/notes.txt"].content  # Returns a STRING
+# Reading files - ALWAYS returns a STRING
+notes = memory["/personal/notes.txt"]  # Returns raw STRING content
+json_str = memory["/personal/data.json"]  # Returns raw JSON string
+yaml_str = memory["/personal/config.yaml"]  # Returns raw YAML string
 
-# Reading JSON files (.json)
-data = memory["/personal/data.json"].content  # Returns a DICT or LIST (parsed JSON)
-if isinstance(data, dict):
-    print(data["key"])  # Access like normal dict
+# Parse JSON/YAML yourself (standard Python way)
+import json
+import yaml
+data = json.loads(memory["/personal/data.json"])  # Parse JSON string
+config = yaml.safe_load(memory["/personal/config.yaml"])  # Parse YAML string
 
-# Reading YAML files (.yaml, .yml)  
-config = memory["/personal/config.yaml"].content  # Returns DICT/LIST/STRING (parsed YAML)
-
-# Reading other files
-raw_data = memory["/personal/data.csv"].content  # Returns a STRING (raw file contents)
+# OR use .content for auto-parsing (convenience method)
+node = memory.get_node("/personal/data.json")
+data = node.content  # Returns already parsed DICT or LIST
+print(node.content_type)  # Check MIME type: "application/json"
 
 # Check if memory exists
 if memory.exists("/personal/data.json"):
-    content = memory["/personal/data.json"].content  # Type depends on file!
+    content = memory["/personal/data.json"]  # Returns raw string
 ```
 
 ### Writing Memory
@@ -65,25 +67,22 @@ memory["/personal/config.yaml"] = {"setting": "value", "debug": True}
 
 ### CRITICAL: Understanding MemoryNode vs Content
 ```python
-# WRONG - This gives you a MemoryNode object, not the content!
-data = memory["/personal/data.json"]
-data.read()  # ERROR: 'MemoryNode' has no attribute 'read'
-data["key"]  # ERROR: 'MemoryNode' object is not subscriptable
+# The NEW way - memory[path] returns raw string (what Python devs expect!)
+json_str = memory["/personal/data.json"]  # Returns raw JSON string
+import json
+data = json.loads(json_str)  # Parse it yourself (standard Python)
+data["key"] = "value"  # Works!
+memory["/personal/data.json"] = json.dumps(data)  # Save back
 
-# CORRECT - Use .content to get the actual data
-data = memory["/personal/data.json"].content  # Returns parsed JSON (dict/list)
-if isinstance(data, dict):
-    data["new_key"] = "value"  # Works like normal dict
+# The convenience way - use get_node() for auto-parsing
+node = memory.get_node("/personal/data.json")
+data = node.content  # Auto-parsed dict/list (convenience)
+print(node.content_type)  # "application/json"
+print(node.exists)  # True if file exists
 
-# The MemoryNode has these properties:
-node = memory["/personal/data.json"]
-print(node.content)      # The actual data (type depends on file)
-print(node.content_type)  # MIME type like "application/json"  
-print(node.exists)        # True if file exists
-
-# Content type determines what .content returns:
+# Content type (for node.content) determines auto-parsing:
 # - "application/json" → dict or list (parsed JSON)
-# - "application/x-yaml" → dict, list, or string (parsed YAML)
+# - "application/x-yaml" → dict, list, or string (parsed YAML)  
 # - "text/plain" → string (raw text)
 # - other → string (raw bytes as string)
 ```
@@ -1009,7 +1008,13 @@ Main memory interface providing unified access to all Mind-Swarm memories.
             self._written_files.append({'path': clean_path, 'type': file_type, 'new': is_new})
     
     def __getitem__(self, path: str):
-        """Dictionary-style access to memory."""
+        """Dictionary-style access to memory - returns raw string content.
+        
+        This matches standard Python file reading expectations:
+        - memory["/path/to/file"] returns the raw string content
+        - Use memory.get_node("/path/to/file") to get the MemoryNode object
+        - Use memory.get_node("/path/to/file").content for auto-parsed content
+        """
         # Handle root directory access
         if path in ['personal', '/personal', 'grid', '/grid']:
             if path.lstrip('/') == 'personal':
@@ -1025,7 +1030,30 @@ Main memory interface providing unified access to all Mind-Swarm memories.
         if actual_path.exists() and actual_path.is_dir():
             return MemoryGroup('/' + clean_path.lstrip('/'), self)
         
-        # Otherwise return a MemoryNode (file or not-yet-existing path)
+        # For files, return the raw string content directly
+        # This matches what Python developers expect from file access
+        if actual_path.exists() and actual_path.is_file():
+            with open(actual_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        
+        # File doesn't exist - return empty string to match Python behavior
+        return ""
+    
+    def get_node(self, path: str) -> 'MemoryNode':
+        """Get the MemoryNode object for advanced operations.
+        
+        Use this when you need:
+        - .content for auto-parsed JSON/YAML
+        - .content_type to check MIME type
+        - .exists to check if file exists
+        
+        Example:
+            node = memory.get_node("/personal/data.json")
+            if node.exists:
+                data = node.content  # Auto-parsed dict/list
+                print(node.content_type)  # "application/json"
+        """
+        clean_path = self._clean_path(path)
         return MemoryNode(clean_path, self)
     
     def __setitem__(self, path: str, value: Any):
