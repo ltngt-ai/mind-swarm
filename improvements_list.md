@@ -1,0 +1,15 @@
+# List of things to do to improve based on previous runs
+Mark items as DONE or IN_PROGRESS with developer (deano or Claude)
+Some are complex and need plan and discussion.
+
+## List of current improvement ideas
+1. Remove I/O Cybers - not used currently and not sure if will be. remove cleanup code
+2. Redo Cyber identity.json - replace with type and capabilaties, and use a md file more prescriptive. "I am a Cyber called Alice"
+3. Improvement educational material (IN_PROGRESS - deano)
+4. Add location based memory - Cybers remember the last thing they did at a location, providing 'visual memory'. Shown when they at that location (DONE - Claude)
+5. Examine current memory and knowledge complexity and see if confusing
+6. Refactor memory types, we only have 1 now, let tidy up to what it actuall used now.
+7. Remove vestigical local llm support
+8. Add a /personal/activity.log - single line description per cycle (reflect can generate) with a cycle count. Have last 10 entries shown automatically
+9. Current goals + tasks aren't defined very well, provide Cyber API for consistency. Starter cyber goal+task shouldn't be in code
+10. Add a projects folder to the grid. move cyber base code into a folder in here. Future plan is this is where Cybers work collaboratively on projects.

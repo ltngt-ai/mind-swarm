@@ -126,7 +126,8 @@ Raises: LocationError -  If the location is invalid or change fails
             dynamic_context = self._read_dynamic_context()
             old_location = dynamic_context.get("current_location", "unknown")
             
-            # Update location
+            # Update location and track previous
+            dynamic_context["previous_location"] = old_location
             dynamic_context["current_location"] = new_location
             
             # Write back

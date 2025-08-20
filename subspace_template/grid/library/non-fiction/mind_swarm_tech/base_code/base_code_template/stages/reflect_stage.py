@@ -239,6 +239,9 @@ This score should represent how well the execution's results addressed the decis
         # Store successful solutions as CBR cases
         await self._store_cbr_case(solution_score, reflection_content)
         
+        # Capture location-based memory if location changed
+        await self._capture_location_memory(last_execution, output_values)
+        
         # Log key insights if any
         if output_values.get("insights"):
             logger.info(f"  Insights: {output_values['insights'][:200]}")
@@ -459,3 +462,120 @@ Lessons Learned:
         except Exception as e:
             logger.error(f"Error storing insights to knowledge base: {e}")
             # Don't fail the reflection stage if knowledge storage fails
+    
+    async def _capture_location_memory(self, last_execution: dict, reflection_outputs: dict):
+        """Capture memory about what happened at the current location.
+        
+        Args:
+            last_execution: The execution results from this cycle
+            reflection_outputs: The outputs from the reflection brain call
+        """
+        try:
+            # Get current and previous location from dynamic context
+            dynamic_context_file = self.cognitive_loop.memory_dir / "dynamic_context.json"
+            if not dynamic_context_file.exists():
+                return
+                
+            with open(dynamic_context_file, 'r') as f:
+                dynamic_context = json.load(f)
+            
+            current_location = dynamic_context.get("current_location", "/personal")
+            previous_location = dynamic_context.get("previous_location")
+            
+            # Only capture if we've been at this location for at least one cycle
+            # (i.e., we have something to remember about it)
+            if not previous_location or previous_location == current_location:
+                # Still at the same location, update our memory of what we did here
+                location_to_remember = current_location
+            else:
+                # Location changed, remember what we did at the previous location
+                location_to_remember = previous_location
+            
+            # Check if we did anything significant at this location
+            if not last_execution or not last_execution.get("results"):
+                return
+            
+            # Use brain to summarize what happened at this location
+            logger.info(f"📍 Capturing memory for location: {location_to_remember}")
+            
+            import time
+            location_memory_request = {
+                "signature": {
+                    "instruction": """Summarize what you accomplished at this location in 1-2 sentences.
+Focus on the key action taken and its outcome. Be specific and concise.""",
+                    "inputs": {
+                        "location": "The location where the action took place",
+                        "execution_results": "What was executed at this location",
+                        "insights": "Your reflection insights about what happened"
+                    },
+                    "outputs": {
+                        "location_summary": "Brief summary of what you did at this location (1-2 sentences)",
+                        "key_observation": "Most important thing you noticed or learned here"
+                    },
+                    "display_field": "location_summary"
+                },
+                "input_values": {
+                    "location": location_to_remember,
+                    "execution_results": str(last_execution.get("results", []))[:500],
+                    "insights": reflection_outputs.get("insights", "")[:300]
+                },
+                "request_id": f"location_memory_{int(time.time()*1000)}",
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            response = await self.brain_interface._use_brain(json.dumps(location_memory_request))
+            location_response = json.loads(response)
+            
+            if not location_response:
+                return
+            
+            output_values = location_response.get("output_values", {})
+            location_summary = output_values.get("location_summary", "")
+            key_observation = output_values.get("key_observation", "")
+            
+            if not location_summary:
+                return
+            
+            # Store location memory as a file for easy retrieval during perception
+            # Create location memories directory if it doesn't exist
+            location_memories_dir = self.cognitive_loop.memory_dir / "location_memories"
+            location_memories_dir.mkdir(exist_ok=True)
+            
+            # Create filename from location (replace / with _)
+            location_key = location_to_remember.replace('/', '_').strip('_') or 'root'
+            memory_file = location_memories_dir / f"{location_key}.json"
+            
+            # Load existing memories or create new list
+            memories = []
+            if memory_file.exists():
+                try:
+                    with open(memory_file, 'r') as f:
+                        data = json.load(f)
+                        memories = data.get('memories', [])
+                except:
+                    memories = []
+            
+            # Add new memory (keep last 5)
+            new_memory = {
+                "summary": location_summary,
+                "observation": key_observation,
+                "cycle": self.cognitive_loop.cycle_count,
+                "timestamp": datetime.now().isoformat()
+            }
+            memories.insert(0, new_memory)  # Add to front
+            memories = memories[:5]  # Keep only last 5
+            
+            # Save updated memories
+            memory_data = {
+                "location": location_to_remember,
+                "memories": memories
+            }
+            
+            with open(memory_file, 'w') as f:
+                json.dump(memory_data, f, indent=2)
+            
+            logger.info(f"📍 Stored location memory for {location_to_remember}: {location_summary[:100]}")
+                
+        except Exception as e:
+            logger.error(f"Error capturing location memory: {e}")
+            # Don't fail the reflection stage if location memory fails

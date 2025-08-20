@@ -462,6 +462,16 @@ class EnvironmentScanner:
             lines = []
             lines.append(f"| {current_location} (📁=memory group, 📄=memory)")
             
+            # Retrieve location memories from personal knowledge base
+            location_memories = self._retrieve_location_memories(current_location)
+            logger.info(f"Location memories for {current_location}: {len(location_memories)} found")
+            if location_memories:
+                lines.append("|")
+                lines.append("| 🧠 My memories of this place:")
+                for memory in location_memories[:3]:  # Show last 3 memories
+                    lines.append(f"|   • {memory}")
+                lines.append("|")
+            
             # Add description if found
             if description_text:
                 lines.append("|")
@@ -542,6 +552,52 @@ class EnvironmentScanner:
             logger.error(f"Error scanning current location: {e}")
         
         return memories
+    
+    def _retrieve_location_memories(self, location: str) -> List[str]:
+        """Retrieve past memories about a specific location from file storage.
+        
+        Args:
+            location: The location to retrieve memories for
+            
+        Returns:
+            List of memory summaries (most recent first)
+        """
+        try:
+            import json
+            
+            # Look for location memory file
+            location_memories_dir = self.memory_path / "location_memories"
+            if not location_memories_dir.exists():
+                return []
+            
+            # Create filename from location
+            location_key = location.replace('/', '_').strip('_') or 'root'
+            memory_file = location_memories_dir / f"{location_key}.json"
+            
+            if not memory_file.exists():
+                logger.debug(f"No memories found for location: {location}")
+                return []
+            
+            # Load memories
+            with open(memory_file, 'r') as f:
+                data = json.load(f)
+                memories_list = data.get('memories', [])
+            
+            # Extract just the summaries
+            summaries = []
+            for memory in memories_list[:3]:  # Show last 3 memories
+                summary = memory.get('summary', '')
+                if summary:
+                    summaries.append(summary)
+            
+            if summaries:
+                logger.info(f"Retrieved {len(summaries)} location memories for {location}")
+            
+            return summaries
+            
+        except Exception as e:
+            logger.debug(f"Error retrieving location memories: {e}")
+            return []
     
     def _scan_announcements(self, cycle_count: int = 0) -> List[Dict[str, Any]]:
         """Scan community announcements for important updates.
