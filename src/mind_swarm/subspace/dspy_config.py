@@ -324,7 +324,7 @@ class MindSwarmDSPyLM(dspy.LM):
                     )
             
             # Use our AI service to generate response with retry logic
-            max_retries = 3
+            max_retries = 5  # Increased from 3
             retry_count = 0
             last_error = None
             
@@ -338,8 +338,10 @@ class MindSwarmDSPyLM(dspy.LM):
                     if "rate limit" in error_str or "429" in error_str or "requests per minute" in error_str:
                         retry_count += 1
                         if retry_count < max_retries:
-                            # Exponential backoff: 2s, 4s, 8s
-                            wait_time = 2 ** retry_count
+                            # Exponential backoff starting at 5s: 5s, 10s, 20s, 40s, 80s
+                            wait_time = 5 * (2 ** (retry_count - 1))
+                            # Cap at 60 seconds
+                            wait_time = min(wait_time, 60)
                             logger.warning(f"Rate limit hit in DSPy acall, attempt {retry_count}/{max_retries}, waiting {wait_time}s")
                             
                             # Add jitter to avoid thundering herd
