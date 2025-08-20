@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .base_code_template.actions import Action, ActionResult, ActionStatus
-from .base_code_template.memory import ObservationMemoryBlock, Priority
+from .base_code_template.memory import Priority
 
 
 class MakeNetworkRequestAction(Action):

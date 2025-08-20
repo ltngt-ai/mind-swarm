@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This is the runtime code for Mind-Swarm Cybers - autonomous AI entities that think and act within their sandboxed environment. Each Cyber runs this code as an independent process with its own cognitive loop, memory system, and action capabilities.
 
 Cyber's 'memory' is actually always disk based, the 'working memory' is just a symbolic view of the actual filesystem.
-Never create a FileMemoryBlock that isn't backed by a real file on the disk.
+Never create a MemoryBlock that isn't backed by a real file on the disk.
 
 ## Core Architecture
 
@@ -38,14 +38,13 @@ Single facade coordinating all memory operations:
 - **ContextBuilder** - Assembles context for AI thinking
 - **ContentLoader** - Loads and caches filesystem content
 
-### Memory Blocks (`memory/memory_blocks.py`)
-Structured memory representations:
-- **FileMemoryBlock** - References to file content
-- **ObservationMemoryBlock** - Observations about environment
-- **GoalMemoryBlock** - Goals and objectives
-- **ActionMemoryBlock** - Actions taken
-- **ConceptMemoryBlock** - Abstract concepts
-- **InstructionMemoryBlock** - Step-by-step procedures
+### Memory Block (`memory/memory_blocks.py`)
+Unified memory system with a single MemoryBlock class:
+- **MemoryBlock** - References to file content
+  - All memory is disk-based - working memory is just a symbolic view
+  - Every memory block must reference an actual file on disk
+  - Used for all content: observations, goals, actions, knowledge, etc.
+  - No class hierarchy - just one simple dataclass
 
 Each block has:
 - Unique ID using UnifiedMemoryID system
@@ -72,7 +71,7 @@ Phases:
 
 Key features:
 - Scans inbox, file changes, memory updates
-- Creates ObservationMemoryBlocks
+- Creates observations (stored as files, referenced by MemoryBlocks)
 - Filters knowledge with KNOWLEDGE_BLACKLIST
 - Produces orientation/understanding
 
@@ -273,11 +272,11 @@ base_code_template/
 3. Add to base_actions if universally needed
 4. Document in action guides
 
-### Modifying Memory Types
-1. Add new block type in `memory_blocks.py`
-2. Update `MemoryType` enum
-3. Add selector logic if needed
-4. Update context builder
+### Working with Memory
+1. All memory is file-based - use MemoryBlock
+2. Create files for any new memory content
+3. Reference files through MemoryBlock
+4. Memory system handles selection and context building
 
 ### Enhancing Cognitive Stages
 1. Modify stage in `stages/` directory

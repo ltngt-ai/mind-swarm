@@ -14,8 +14,9 @@ from typing import Dict, Any, Optional, List, Union
 
 from ..memory import (
     WorkingMemoryManager, MemorySelector, ContextBuilder,
-    ContentType, FileMemoryBlock, Priority
+    ContentType, Priority
 )
+from ..memory.memory_blocks import MemoryBlock
 # Import Protocol for type checking
 from typing import Protocol
 

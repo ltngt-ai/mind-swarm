@@ -72,7 +72,7 @@ class ExecutionStage:
         """Load stage instructions from knowledge into memory."""
         stage_data = self.knowledge_manager.get_stage_instructions('execution')
         if stage_data:
-            from ..memory.memory_blocks import FileMemoryBlock
+            from ..memory.memory_blocks import MemoryBlock
             from ..memory.memory_types import Priority, ContentType
             
             import yaml
@@ -87,7 +87,7 @@ class ExecutionStage:
                 return
             
             # Pass the parsed YAML content as metadata for validation
-            stage_memory = FileMemoryBlock(
+            stage_memory = MemoryBlock(
                 location="/personal/.internal/knowledge_execution_stage",
                 confidence=1.0,
                 priority=Priority.FOUNDATIONAL,
@@ -188,8 +188,8 @@ class ExecutionStage:
             file_content = api_docs_path.read_text()
             api_data = yaml.safe_load(file_content)
             
-            # Create FileMemoryBlock exactly like ROM loader does
-            from ..memory import FileMemoryBlock
+            # Create MemoryBlock exactly like ROM loader does
+            from ..memory import MemoryBlock
             
             metadata = api_data.get("metadata", {})
             content = api_data.get("content", "")
@@ -200,7 +200,7 @@ class ExecutionStage:
             metadata["content"] = content
             metadata["is_api_docs"] = True
             
-            api_memory = FileMemoryBlock(
+            api_memory = MemoryBlock(
                 location=str(api_docs_path),  # Use the actual file path
                 confidence=1.0,
                 priority=Priority.FOUNDATIONAL,  # High priority so it's always included
@@ -768,7 +768,7 @@ The provided API docs describe the available operations and their usage.
             exclude_content_types=[]
         )
         
-        # API documentation is already in working memory as pinned FileMemoryBlocks
+        # API documentation is already in working memory as pinned MemoryBlocks
         # No need to extract it again - it will be included in working_memory_context
         
         # Build full error context

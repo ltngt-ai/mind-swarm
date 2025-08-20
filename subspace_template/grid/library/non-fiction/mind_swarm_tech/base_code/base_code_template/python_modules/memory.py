@@ -1249,12 +1249,12 @@ Returns: True if path exists, False otherwise
                         print(f"✓ Finalized deletion of {change['path']}")
             
             # Add accessed and written files to working memory
-            from ..memory.memory_blocks import FileMemoryBlock
+            from ..memory.memory_blocks import MemoryBlock
             from ..memory.memory_types import Priority
             
             # Add accessed files
             for file_info in self._accessed_files:
-                memory_block = FileMemoryBlock(
+                memory_block = MemoryBlock(
                     location=file_info['path'],
                     priority=Priority.MEDIUM,
                     confidence=1.0,
@@ -1267,7 +1267,7 @@ Returns: True if path exists, False otherwise
             
             # Add written files
             for file_info in self._written_files:
-                memory_block = FileMemoryBlock(
+                memory_block = MemoryBlock(
                     location=file_info['path'],
                     priority=Priority.MEDIUM,
                     confidence=1.0,
@@ -1459,9 +1459,9 @@ Returns: True if path exists, False otherwise
                 elif operation == 'evict':
                     # Re-add to working memory
                     if change.get('was_in_memory'):
-                        from ..memory.memory_blocks import FileMemoryBlock
+                        from ..memory.memory_blocks import MemoryBlock
                         from ..memory.memory_types import Priority
-                        memory_block = FileMemoryBlock(
+                        memory_block = MemoryBlock(
                             location=path,
                             priority=Priority.MEDIUM,
                             confidence=1.0,
@@ -1597,10 +1597,10 @@ Returns: True if path exists, False otherwise
         
         # Also add to working memory with line range info
         if self._memory_system:
-            from ..memory.memory_blocks import FileMemoryBlock
+            from ..memory.memory_blocks import MemoryBlock
             from ..memory.memory_types import Priority
             
-            memory_block = FileMemoryBlock(
+            memory_block = MemoryBlock(
                 location=clean_path,
                 start_line=start_line,
                 end_line=end_line,
@@ -1743,10 +1743,10 @@ Returns: True if path exists, False otherwise
             
         # Also add to working memory
         if self._memory_system:
-            from ..memory.memory_blocks import FileMemoryBlock
+            from ..memory.memory_blocks import MemoryBlock
             from ..memory.memory_types import Priority
             
-            memory_block = FileMemoryBlock(
+            memory_block = MemoryBlock(
                 location=clean_path,
                 priority=Priority.MEDIUM,
                 confidence=1.0,
@@ -1767,7 +1767,7 @@ Returns: True if evicted, False if not found in working memory
 """
         clean_path = self._clean_path(path)
         
-        # Normalize the path to match how FileMemoryBlock creates IDs
+        # Normalize the path to match how MemoryBlock creates IDs
         from ..memory.unified_memory_id import UnifiedMemoryID
         memory_id = UnifiedMemoryID.normalize_path(clean_path)
         
@@ -1822,16 +1822,16 @@ Returns:
             # Look for memory by location, not just ID
             memory_found = False
             for mem in list(self._memory_system.symbolic_memory):
-                # Check if this is a FileMemoryBlock with matching location
+                # Check if this is a MemoryBlock with matching location
                 if hasattr(mem, 'location') and mem.location == old_clean:
                     memory_found = True
                     # Remove old reference
                     self._memory_system.remove_memory(mem.id)
                     
                     # Create new memory block preserving properties
-                    from ..memory.memory_blocks import FileMemoryBlock
+                    from ..memory.memory_blocks import MemoryBlock
                     from ..memory.memory_types import Priority
-                    new_block = FileMemoryBlock(
+                    new_block = MemoryBlock(
                         location=new_clean,
                         priority=mem.priority if hasattr(mem, 'priority') else Priority.MEDIUM,
                         confidence=mem.confidence if hasattr(mem, 'confidence') else 1.0,

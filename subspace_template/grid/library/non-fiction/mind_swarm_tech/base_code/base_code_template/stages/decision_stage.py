@@ -59,7 +59,7 @@ class DecisionStage:
         """Load stage instructions from knowledge into memory."""
         stage_data = self.knowledge_manager.get_stage_instructions('decision')
         if stage_data:
-            from ..memory.memory_blocks import FileMemoryBlock
+            from ..memory.memory_blocks import MemoryBlock
             from ..memory.memory_types import Priority, ContentType
             import yaml
             
@@ -73,7 +73,7 @@ class DecisionStage:
                 return
             
             # Pass the parsed YAML content as metadata for validation
-            stage_memory = FileMemoryBlock(
+            stage_memory = MemoryBlock(
                 location="/personal/.internal/knowledge_decision_stage",
                 confidence=1.0,
                 priority=Priority.FOUNDATIONAL,

@@ -13,8 +13,7 @@ import logging
 
 from ..memory.memory_types import Priority, ContentType
 from ..memory.memory_blocks import (
-    MemoryBlock,
-    FileMemoryBlock
+    MemoryBlock
 )
 
 logger = logging.getLogger("Cyber.perception")
@@ -171,7 +170,7 @@ class EnvironmentScanner:
         scan_start = datetime.now()
         
         # Always scan current location first (like looking around the room)
-        # This returns FileMemoryBlocks for location files, not observations
+        # This returns MemoryBlocks for location files, not observations
         memories.extend(self._scan_current_location(cycle_count))
         
         # Also scan personal directory structure (like knowing your home)
@@ -180,7 +179,7 @@ class EnvironmentScanner:
         # Scan activity log (personal history)
         memories.extend(self._scan_activity_log(cycle_count))
         
-        # Scan different areas - these return observations and FileMemoryBlocks
+        # Scan different areas - these return observations and MemoryBlocks
         inbox_results = self._scan_inbox(cycle_count)
         observations.extend(inbox_results)
         
@@ -191,12 +190,12 @@ class EnvironmentScanner:
         
         # Log summary of what was found
         if observations or memories:
-            file_count = len([m for m in memories if isinstance(m, FileMemoryBlock)])
+            file_count = len([m for m in memories if isinstance(m, MemoryBlock)])
             logger.debug(f"Scan details: {len(observations)} observations, {file_count} file memories")
         
         logger.debug(f"Environment scan found {len(observations)} observations and {len(memories)} memories")
         
-        # Add FileMemoryBlocks to the memory system (location files, etc)
+        # Add MemoryBlocks to the memory system (location files, etc)
         if self.memory_system and memories:
             for memory in memories:
                 self.memory_system.add_memory(memory)
@@ -293,7 +292,7 @@ class EnvironmentScanner:
                 f.write(contents_text)
 
             # Create a memory for personal structure
-            personal_memory = FileMemoryBlock(
+            personal_memory = MemoryBlock(
                 location="personal/.internal/memory/personal_location.txt",
                 priority=Priority.SYSTEM, 
                 confidence=1.0,
@@ -396,7 +395,7 @@ class EnvironmentScanner:
             
             if not needs_rescan:
                 # No changes and file exists, return the existing location memory
-                location_memory = FileMemoryBlock(
+                location_memory = MemoryBlock(
                     location=str(location_contents_file),
                     confidence=1.0,
                     priority=Priority.FOUNDATIONAL,
@@ -529,7 +528,7 @@ class EnvironmentScanner:
                 f.write(contents_text)
             
             # Create a SYSTEM priority memory for location contents
-            location_memory = FileMemoryBlock(
+            location_memory = MemoryBlock(
                 location="personal/.internal/memory/current_location.txt",
                 priority=Priority.SYSTEM,  # System-controlled, like looking around
                 confidence=1.0,
@@ -851,9 +850,9 @@ class EnvironmentScanner:
             cycle_count: Current cycle count
             
         Returns:
-            List containing FileMemoryBlock for activity.log if it exists
+            List containing MemoryBlock for activity.log if it exists
         """
-        from ..memory.memory_blocks import FileMemoryBlock, Priority, ContentType
+        from ..memory.memory_blocks import MemoryBlock, Priority, ContentType
         memories = []
         
         try:
@@ -863,7 +862,7 @@ class EnvironmentScanner:
             # Only create memory if the file exists
             if activity_log_path.exists():
                 # Create a HIGH priority, pinned memory for the activity log
-                activity_memory = FileMemoryBlock(
+                activity_memory = MemoryBlock(
                     location="personal/.internal/memory/activity.log",
                     priority=Priority.HIGH,  # High priority to ensure it's included
                     confidence=1.0,

@@ -10,8 +10,7 @@ from pathlib import Path
 import logging
 
 from .memory_blocks import (
-    MemoryBlock, Priority,
-    FileMemoryBlock
+    MemoryBlock, Priority
 )
 from .memory_types import ContentType
 
@@ -207,7 +206,7 @@ class WorkingMemoryManager:
         """Extract type-specific fields from a memory block."""
         fields = {}
         
-        if isinstance(memory, FileMemoryBlock):
+        if isinstance(memory, MemoryBlock):
             fields.update({
                 "location": memory.location,
                 "start_line": memory.start_line,
@@ -215,7 +214,7 @@ class WorkingMemoryManager:
                 "digest": memory.digest
             })
         # ObservationMemoryBlock removed - observations are now ephemeral
-        # Removed MessageMemoryBlock handling - messages are now FileMemoryBlock
+        # Removed MessageMemoryBlock handling - messages are now MemoryBlock
         # Add other types as needed
         
         return fields
@@ -264,8 +263,8 @@ class WorkingMemoryManager:
                         logger.debug(f"Skipping obsolete ObservationMemoryBlock: {mem_data.get('id')}")
                         continue
                     else:
-                        # Everything else is FileMemoryBlock
-                        memory = FileMemoryBlock(
+                        # Everything else is MemoryBlock
+                        memory = MemoryBlock(
                             location=mem_data.get('location', 'unknown'),
                             start_line=mem_data.get('start_line'),
                             end_line=mem_data.get('end_line'),

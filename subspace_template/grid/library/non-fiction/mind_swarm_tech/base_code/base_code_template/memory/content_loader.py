@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 import logging
 
 from .memory_blocks import (
-    MemoryBlock, FileMemoryBlock
+    MemoryBlock
 )
 from .memory_types import ContentType
 
@@ -95,7 +95,7 @@ class ContentLoader:
         Returns:
             The loaded content as a string
         """
-        if isinstance(memory, FileMemoryBlock):
+        if isinstance(memory, MemoryBlock):
             # Check if it's a knowledge memory block
             if hasattr(memory, 'content_type') and memory.content_type == ContentType.MINDSWARM_KNOWLEDGE:
                 return self.load_knowledge_content(memory)
@@ -106,7 +106,7 @@ class ContentLoader:
             # For other types, return a string representation
             return self._default_content(memory)
     
-    def load_file_content(self, memory: FileMemoryBlock) -> str:
+    def load_file_content(self, memory: MemoryBlock) -> str:
         """Load file content with caching."""
         # Handle virtual files (like boot ROM)
         if memory.metadata.get("virtual", False):
@@ -181,9 +181,9 @@ class ContentLoader:
             logger.error(f"Error loading file {memory.location}: {e}")
             return f"[Error loading file: {memory.location} - {str(e)}]"
     
-    # Removed load_message_content - messages are just FileMemoryBlock now
+    # Removed load_message_content - messages are just MemoryBlock now
     
-    def load_knowledge_content(self, memory: FileMemoryBlock) -> str:
+    def load_knowledge_content(self, memory: MemoryBlock) -> str:
         """Load knowledge content from metadata or file."""
         # Check if content is in metadata (for ROM and in-memory knowledge)
         if memory.metadata and memory.metadata.get("content"):

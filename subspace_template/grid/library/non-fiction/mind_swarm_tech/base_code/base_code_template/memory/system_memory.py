@@ -9,7 +9,7 @@ from typing import Dict, Any, Optional
 import json
 import logging
 
-from .memory_blocks import FileMemoryBlock
+from .memory_blocks import MemoryBlock
 from .memory_types import ContentType, Priority
 
 logger = logging.getLogger("Cyber.memory.system")
@@ -18,7 +18,7 @@ logger = logging.getLogger("Cyber.memory.system")
 def create_system_memory(location: str, 
                         data: Dict[str, Any],
                         pinned: bool = True,
-                        cycle_count: Optional[int] = None) -> FileMemoryBlock:
+                        cycle_count: Optional[int] = None) -> MemoryBlock:
     """Create a system memory block for a JSON data bag.
     
     System memories are simple JSON files without formal structure.
@@ -31,7 +31,7 @@ def create_system_memory(location: str,
         cycle_count: Optional cycle count when created
         
     Returns:
-        FileMemoryBlock configured as a system memory
+        MemoryBlock configured as a system memory
         
     Example:
         # Create identity memory
@@ -45,7 +45,7 @@ def create_system_memory(location: str,
             identity_data
         )
     """
-    return FileMemoryBlock(
+    return MemoryBlock(
         location=location,
         content_type=ContentType.APPLICATION_JSON,
         priority=Priority.SYSTEM,

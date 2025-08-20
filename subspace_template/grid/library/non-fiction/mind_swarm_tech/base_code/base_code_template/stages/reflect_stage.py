@@ -55,7 +55,7 @@ class ReflectStage:
         """Load stage instructions from knowledge into memory."""
         stage_data = self.knowledge_manager.get_stage_instructions('reflection')
         if stage_data:
-            from ..memory.memory_blocks import FileMemoryBlock
+            from ..memory.memory_blocks import MemoryBlock
             from ..memory.memory_types import Priority, ContentType
             import yaml
             
@@ -69,7 +69,7 @@ class ReflectStage:
                 return
             
             # Pass the parsed YAML content as metadata for validation
-            stage_memory = FileMemoryBlock(
+            stage_memory = MemoryBlock(
                 location="/personal/.internal/knowledge_reflection_stage",
                 confidence=1.0,
                 priority=Priority.FOUNDATIONAL,
@@ -217,8 +217,8 @@ IMPORTANT: Create a single-line summary describing what was accomplished this cy
             json.dump(reflection_content, f, indent=2)
         
         # Add or update the reflection memory block
-        from ..memory import FileMemoryBlock, Priority
-        reflection_memory = FileMemoryBlock(
+        from ..memory import MemoryBlock, Priority
+        reflection_memory = MemoryBlock(
             location="personal/.internal/memory/reflection_on_last_cycle.json",
             priority=Priority.HIGH,
             pinned=False,  # Not pinned, can be cleaned up if needed
@@ -261,7 +261,7 @@ IMPORTANT: Create a single-line summary describing what was accomplished this cy
             
             if results:
                 # Create a memory block for the knowledge query results
-                from ..memory import FileMemoryBlock, Priority
+                from ..memory import MemoryBlock, Priority
                 
                 # Save the results to a file
                 knowledge_results_file = self.cognitive_loop.memory_dir / "reflection_knowledge_query_results.json"
@@ -276,7 +276,7 @@ IMPORTANT: Create a single-line summary describing what was accomplished this cy
                     json.dump(knowledge_data, f, indent=2)
                 
                 # Add to working memory - use regular JSON content type, not KNOWLEDGE
-                knowledge_memory = FileMemoryBlock(
+                knowledge_memory = MemoryBlock(
                     location="personal/.internal/memory/reflection_knowledge_query_results.json",
                     priority=Priority.HIGH,
                     pinned=False,

@@ -11,8 +11,7 @@ import logging
 
 from .memory_types import ContentType, Priority
 from .memory_blocks import (
-    MemoryBlock,
-    FileMemoryBlock
+    MemoryBlock
 )
 from .content_loader import ContentLoader
 
@@ -64,8 +63,8 @@ class ContextBuilder:
                 # Add content type for clarity
                 entry["content_type"] = memory.content_type.value if hasattr(memory.content_type, 'value') else str(memory.content_type)
                 
-                # Add line range if specified (for FileMemoryBlock)
-                if isinstance(memory, FileMemoryBlock):
+                # Add line range if specified (for MemoryBlock)
+                if isinstance(memory, MemoryBlock):
                     if memory.start_line is not None:
                         entry["lines"] = f"{memory.start_line}-{memory.end_line or 'end'}"
                     if memory.digest:
@@ -161,11 +160,11 @@ class ContextBuilder:
                 content = self.content_loader.load_content(memory)
                 
                 # Add memory-specific formatting
-                if isinstance(memory, FileMemoryBlock):
+                if isinstance(memory, MemoryBlock):
                     lines.append(f"\n--- File: {memory.location} ---")
                     if memory.start_line:
                         lines.append(f"Lines {memory.start_line}-{memory.end_line or 'end'}")
-                elif isinstance(memory, FileMemoryBlock) and memory.metadata.get('file_type') == 'message':
+                elif isinstance(memory, MemoryBlock) and memory.metadata.get('file_type') == 'message':
                     status = "UNREAD" if not memory.metadata.get('read', False) else "READ"
                     from_agent = memory.metadata.get('from_agent', 'unknown')
                     subject = memory.metadata.get('subject', 'No subject')
@@ -207,7 +206,7 @@ class ContextBuilder:
         
         # Tasks are now tracked through active_tasks.json file
         # Look for active_tasks.json in file memories
-        task_files = [m for m in memories if isinstance(m, FileMemoryBlock) 
+        task_files = [m for m in memories if isinstance(m, MemoryBlock) 
                       and 'active_tasks.json' in m.location]
         if task_files:
             lines.append("I'm currently working on tasks from active_tasks.json")
@@ -216,8 +215,8 @@ class ContextBuilder:
         # Observations removed - they're now ephemeral and passed directly in pipeline
             lines.append("")
         
-        # Messages (now FileMemoryBlock with message metadata)
-        msg_memories = [m for m in memories if isinstance(m, FileMemoryBlock) and m.metadata.get('file_type') == 'message']
+        # Messages (now MemoryBlock with message metadata)
+        msg_memories = [m for m in memories if isinstance(m, MemoryBlock) and m.metadata.get('file_type') == 'message']
         unread = [m for m in msg_memories if not m.metadata.get('read', False)]
         if unread:
             lines.append(f"I have {len(unread)} unread messages:")
@@ -251,17 +250,17 @@ class ContextBuilder:
         }
         
         # Add type-specific metadata
-        if isinstance(memory, FileMemoryBlock):
+        if isinstance(memory, MemoryBlock):
             metadata["source"] = memory.location
             if memory.start_line is not None:
                 metadata["lines"] = f"{memory.start_line}-{memory.end_line or 'end'}"
-            # Check if FileMemoryBlock is a message
+            # Check if MemoryBlock is a message
             if memory.metadata.get('file_type') == 'message':
                 metadata["from"] = memory.metadata.get('from_agent', 'unknown')
                 metadata["to"] = memory.metadata.get('to_agent', 'me')
                 metadata["read"] = memory.metadata.get('read', False)
             
-        elif isinstance(memory, FileMemoryBlock) and memory.content_type == ContentType.MINDSWARM_KNOWLEDGE:
+        elif isinstance(memory, MemoryBlock) and memory.content_type == ContentType.MINDSWARM_KNOWLEDGE:
             # Knowledge memories are just file blocks with knowledge type
             metadata["relevance"] = memory.confidence
             

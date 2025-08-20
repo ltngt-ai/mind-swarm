@@ -14,8 +14,7 @@ import re
 
 from .memory_types import Priority, ContentType
 from .memory_blocks import (
-    MemoryBlock,
-    FileMemoryBlock
+    MemoryBlock
 )
 from .context_builder import ContextBuilder
 
@@ -94,7 +93,7 @@ class RelevanceScorer:
     
     def _score_by_type(self, memory: MemoryBlock) -> float:
         """Score based on memory type and content."""
-        if isinstance(memory, FileMemoryBlock):
+        if isinstance(memory, MemoryBlock):
             # Boost if file was recently accessed
             if memory.location in self.recent_files:
                 return 0.9
@@ -109,7 +108,7 @@ class RelevanceScorer:
             
         # ObservationMemoryBlock removed - observations are now ephemeral
             
-        elif isinstance(memory, FileMemoryBlock) and memory.content_type == ContentType.MINDSWARM_KNOWLEDGE:
+        elif isinstance(memory, MemoryBlock) and memory.content_type == ContentType.MINDSWARM_KNOWLEDGE:
             # Knowledge memories use confidence as relevance
             return memory.confidence
             
@@ -381,5 +380,5 @@ class MemorySelector:
     def update_access_patterns(self, selected_memories: List[MemoryBlock]):
         """Update scorer with access patterns from selected memories."""
         for memory in selected_memories:
-            if isinstance(memory, FileMemoryBlock):
+            if isinstance(memory, MemoryBlock):
                 self.relevance_scorer.add_recent_file(memory.location)

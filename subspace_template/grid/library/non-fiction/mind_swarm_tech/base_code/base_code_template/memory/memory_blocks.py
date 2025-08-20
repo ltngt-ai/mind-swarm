@@ -1,45 +1,22 @@
-"""Memory block definitions for the Cyber memory system.
+"""Memory block definition for the Cyber memory system.
 
-Provides the core data structures for symbolic memory representation.
+Provides the core data structure for symbolic memory representation.
 Each block represents a reference to content in the filesystem.
 """
 
-from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, List
+from dataclasses import dataclass
+from typing import Optional, Dict, Any
 from datetime import datetime
 from .memory_types import Priority, ContentType
-from .unified_memory_id import UnifiedMemoryID
-
-
-class MemoryBlock:
-    """Base class for all memory blocks - not a dataclass to avoid inheritance issues."""
-    
-    def __init__(self, 
-                 confidence: float = 1.0,
-                 priority: Priority = Priority.MEDIUM,
-                 timestamp: Optional[datetime] = None,
-                 expiry: Optional[datetime] = None,
-                 metadata: Optional[Dict[str, Any]] = None,
-                 pinned: bool = False,
-                 cycle_count: Optional[int] = None,
-                 content_type: Optional[ContentType] = None):
-        """Initialize base memory block."""
-        self.confidence = confidence
-        self.priority = priority
-        self.timestamp = timestamp or datetime.now()
-        self.expiry = expiry
-        self.metadata = metadata or {}
-        self.pinned = pinned  # When True, memory is never removed by memory management
-        self.cycle_count = cycle_count  # Track which cycle this memory was created in
-        self.content_type = content_type or ContentType.UNKNOWN  # Content type of the memory
-        
-        # This must be set by subclasses
-        self.id: str  # Now just a path, no type prefix
 
 
 @dataclass
-class FileMemoryBlock(MemoryBlock):
-    """Reference to file content."""
+class MemoryBlock:
+    """Reference to file content in the filesystem.
+    
+    All memory in the system is file-based. Working memory is just a 
+    symbolic view of disk-based memory, NOT in-memory storage.
+    """
     location: str
     start_line: Optional[int] = None
     end_line: Optional[int] = None
@@ -49,30 +26,27 @@ class FileMemoryBlock(MemoryBlock):
     timestamp: Optional[datetime] = None
     expiry: Optional[datetime] = None
     metadata: Optional[Dict[str, Any]] = None
-    pinned: bool = False
-    cycle_count: Optional[int] = None
+    pinned: bool = False  # When True, memory is never removed by memory management
+    cycle_count: Optional[int] = None  # Track which cycle this memory was created in
     content_type: Optional[ContentType] = None  # Explicit content type
     no_cache: bool = False  # If True, content should not be cached (e.g., memory-mapped files)
     
 
     def __post_init__(self):
-        """Initialize base class and set type."""
+        """Initialize and validate the memory block."""
+        # Set timestamp if not provided
+        if self.timestamp is None:
+            self.timestamp = datetime.now()
+        
+        # Initialize metadata if not provided
+        if self.metadata is None:
+            self.metadata = {}
+        
         # Detect content type from file extension if not provided
         if self.content_type is None:
             self.content_type = ContentType.from_file_extension(self.location)
         
-        super().__init__(
-            confidence=self.confidence,
-            priority=self.priority,
-            timestamp=self.timestamp,
-            expiry=self.expiry,
-            metadata=self.metadata,
-            pinned=self.pinned,
-            cycle_count=self.cycle_count,
-            content_type=self.content_type
-        )
-        
-        # CRITICAL: FileMemoryBlock MUST reference an actual file on disk
+        # CRITICAL: MemoryBlock MUST reference an actual file on disk
         # Working memory is a symbolic view of disk-based memory, NOT in-memory storage
         from pathlib import Path
         
@@ -91,21 +65,21 @@ class FileMemoryBlock(MemoryBlock):
                     # We can't check from here, but log for debugging
                     import logging
                     logger = logging.getLogger("Cyber.memory")
-                    logger.debug(f"FileMemoryBlock created for cyber-relative path: {self.location}")
+                    logger.debug(f"MemoryBlock created for cyber-relative path: {self.location}")
                 elif self.location.startswith('grid/'):
                     # Grid-relative path
                     import logging
                     logger = logging.getLogger("Cyber.memory")
-                    logger.debug(f"FileMemoryBlock created for grid-relative path: {self.location}")
+                    logger.debug(f"MemoryBlock created for grid-relative path: {self.location}")
                 else:
                     # This shouldn't happen - all paths should be properly namespaced
                     import logging
                     logger = logging.getLogger("Cyber.memory")
-                    logger.warning(f"FileMemoryBlock created with unnamespaced path: {self.location}")
+                    logger.warning(f"MemoryBlock created with unnamespaced path: {self.location}")
             except Exception as e:
                 import logging
                 logger = logging.getLogger("Cyber.memory")
-                logger.debug(f"Path validation for FileMemoryBlock: {e}")
+                logger.debug(f"Path validation for MemoryBlock: {e}")
         
         # Use path as ID - clean it up to be consistent
         path_str = str(self.location)
@@ -133,7 +107,3 @@ class FileMemoryBlock(MemoryBlock):
         # Set the ID to just the path - no suffixes
         # Line ranges and digests are already stored as properties
         self.id = path_str
-
-
-# ObservationMemoryBlock has been removed - observations are now passed directly as dictionaries
-# to the observation stage and don't persist as memory blocks

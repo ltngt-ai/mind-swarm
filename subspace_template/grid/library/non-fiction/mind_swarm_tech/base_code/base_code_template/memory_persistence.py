@@ -11,9 +11,9 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 
 from .memory import (
-    WorkingMemoryManager, Priority, ContentType,
-    FileMemoryBlock
+    WorkingMemoryManager, Priority, ContentType
 )
+from .memory.memory_blocks import MemoryBlock
 
 logger = logging.getLogger("Cyber.memory_persistence")
 
@@ -146,8 +146,8 @@ class MemoryPersistence:
                     logger.debug(f"Skipping obsolete ObservationMemoryBlock from persistence: {mem_data.get('id')}")
                     continue
                 else:
-                    # Default to FileMemoryBlock for everything else
-                    memory = FileMemoryBlock(
+                    # Default to MemoryBlock for everything else
+                    memory = MemoryBlock(
                         location=mem_data.get('location', 'unknown'),
                         start_line=mem_data.get('start_line'),
                         end_line=mem_data.get('end_line'),

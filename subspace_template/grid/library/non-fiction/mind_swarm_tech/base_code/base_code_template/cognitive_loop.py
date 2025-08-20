@@ -17,9 +17,9 @@ from datetime import datetime
 # Import supporting modules
 from .memory import (
     MemorySystem,
-    FileMemoryBlock,
     Priority, ContentType
 )
+from .memory.memory_blocks import MemoryBlock
 from .perception import EnvironmentScanner
 from .knowledge.simplified_knowledge import SimplifiedKnowledgeManager
 from .state import CyberStateManager, ExecutionStateTracker
@@ -108,9 +108,9 @@ class CognitiveLoop:
                 with open(buffer_file, 'w') as f:
                     json.dump({}, f)
             
-            # Create FileMemoryBlock for this buffer
+            # Create MemoryBlock for this buffer
             # Use sandbox path directly
-            buffer_memory = FileMemoryBlock(
+            buffer_memory = MemoryBlock(
                 location=f"personal/.internal/memory/pipeline/{stage}_pipe_stage.json",
                 priority=Priority.SYSTEM,  # System-controlled memory
                 pinned=True,  # Pipeline buffers should never be removed
@@ -145,7 +145,7 @@ class CognitiveLoop:
             
             # Update the memory block's cycle_count
             self.memory_system.remove_memory(buffer_memory.id)
-            updated_buffer = FileMemoryBlock(
+            updated_buffer = MemoryBlock(
                 location=buffer_memory.location,
                 priority=Priority.SYSTEM,  # System-controlled memory
                 pinned=True,
@@ -161,7 +161,7 @@ class CognitiveLoop:
             self.memory_system.add_memory(updated_buffer)
             self.pipeline_buffers[stage] = updated_buffer
     
-    def get_current_pipeline(self, stage: str) -> FileMemoryBlock:
+    def get_current_pipeline(self, stage: str) -> MemoryBlock:
         """Get the current buffer for a stage."""
         return self.pipeline_buffers[stage]
     
@@ -177,7 +177,7 @@ class CognitiveLoop:
         # Knowledge system
         self.knowledge_manager = SimplifiedKnowledgeManager()
         
-        # Pipeline using FileMemoryBlocks
+        # Pipeline using MemoryBlocks
         # Each stage has a single buffer that gets cleared each cycle
         self._initialize_pipeline_buffers()
         
@@ -218,7 +218,7 @@ class CognitiveLoop:
             # Create a pinned memory for the boot ROM
             # Include all metadata fields for knowledge validation
             metadata = boot_rom.copy()  # Include all fields from boot ROM
-            boot_memory = FileMemoryBlock(
+            boot_memory = MemoryBlock(
                 location="/personal/.internal/boot_rom.yaml",
                 confidence=1.0,
                 priority=Priority.FOUNDATIONAL,
@@ -260,7 +260,7 @@ class CognitiveLoop:
         identity_file = self.personal / ".internal" / "identity.json"
         if identity_file.exists():
             # Use the sandbox path directly - cyber sees /personal/.internal/identity.json
-            identity_memory = FileMemoryBlock(
+            identity_memory = MemoryBlock(
                 location="personal/.internal/identity.json",
                 priority=Priority.SYSTEM,  # System-controlled identity
                 confidence=1.0,
@@ -294,7 +294,7 @@ class CognitiveLoop:
         # Add to memory as pinned so Cyber always sees current context
         # Use the sandbox path directly - cyber sees /personal/.internal/memory/dynamic_context.json
         self.dynamic_context_location = "personal/.internal/memory/dynamic_context.json"
-        context_memory = FileMemoryBlock(
+        context_memory = MemoryBlock(
             location=self.dynamic_context_location,
             priority=Priority.SYSTEM,  # System-controlled runtime context
             confidence=1.0,
@@ -345,7 +345,7 @@ class CognitiveLoop:
                 # Update the cycle count to keep it fresh
                 self.memory_system.touch_memory(current_location_id, self.cycle_count)
             else:
-                current_location_memory = FileMemoryBlock(
+                current_location_memory = MemoryBlock(
                     location="personal/.internal/memory/current_location.txt",
                     priority=Priority.SYSTEM,  # System-controlled location tracking
                     confidence=1.0,
@@ -384,7 +384,7 @@ class CognitiveLoop:
                 # Update the cycle count to keep it fresh
                 self.memory_system.touch_memory(personal_location_id, self.cycle_count)
             else:
-                personal_location_memory = FileMemoryBlock(
+                personal_location_memory = MemoryBlock(
                     location="personal/.internal/memory/personal_location.txt",
                     priority=Priority.SYSTEM,  # System-controlled location tracking
                     confidence=1.0,
@@ -479,7 +479,7 @@ class CognitiveLoop:
                 for m in self.memory_system.symbolic_memory
             )
             if not already_in_memory:
-                reflection_memory = FileMemoryBlock(
+                reflection_memory = MemoryBlock(
                     location="personal/.internal/memory/reflection_on_last_cycle.json",
                     priority=Priority.MEDIUM,  # Medium priority, not as critical as goals
                     confidence=1.0,

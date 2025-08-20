@@ -64,7 +64,7 @@ class ObservationStage:
         stage_data = self.knowledge_manager.get_stage_instructions('observation')
         if stage_data:
             logger.info(f"Got stage instructions, type: {type(stage_data)}, keys: {stage_data.keys() if isinstance(stage_data, dict) else 'not a dict'}")
-            from ..memory.memory_blocks import FileMemoryBlock
+            from ..memory.memory_blocks import MemoryBlock
             from ..memory.memory_types import Priority, ContentType
             import yaml
             
@@ -83,7 +83,7 @@ class ObservationStage:
             # Create a memory block for stage instructions
             # Use .internal path so cyber knows it's system-managed
             # Pass the parsed YAML content as metadata for validation
-            stage_memory = FileMemoryBlock(
+            stage_memory = MemoryBlock(
                 location="/personal/.internal/knowledge_observation_stage",
                 confidence=1.0,
                 priority=Priority.FOUNDATIONAL,
