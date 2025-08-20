@@ -261,7 +261,7 @@ class AgentProcessManager:
         env = {
             "CYBER_NAME": name,
             "CYBER_TYPE": cyber_type,
-            "PYTHONPATH": str(Path(__file__).parent.parent.parent),
+            # PYTHONPATH is set by sandbox.py to /personal/.internal
         }
         
         # Clean up any leftover shutdown file from previous runs

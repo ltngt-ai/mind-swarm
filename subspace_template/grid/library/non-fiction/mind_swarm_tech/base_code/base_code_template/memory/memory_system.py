@@ -82,18 +82,6 @@ class MemorySystem:
             except ValueError as e:
                 logger.error(f"Knowledge validation failed: {e}")
                 raise
-        elif memory.content_type == ContentType.MINDSWARM_MESSAGE:
-            # Message content needs validation (from user-created messages)
-            try:
-                # For messages, validate the message structure
-                if hasattr(memory, 'metadata') and 'message_data' in memory.metadata:
-                    self._schema_validator.validate_before_write(
-                        memory.metadata['message_data'], 
-                        "application/message"
-                    )
-            except ValueError as e:
-                logger.error(f"Message validation failed: {e}")
-                raise
         # All other content types (observations, goals, actions, etc.) are system-generated
         # and don't need validation
                     

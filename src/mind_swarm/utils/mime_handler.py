@@ -23,7 +23,7 @@ except ImportError:
 CUSTOM_MIME_TYPES = {
     # Mind-Swarm specific types
     'application/x-mindswarm-knowledge': ['.knowledge.yaml', '.knowledge.yml'],
-    'application/x-mindswarm-message': ['.msg.json', '.msg.yaml'],
+    # Removed x-mindswarm-message type - messages are just JSON/YAML
     'application/x-mindswarm-memory': ['.memory.json'],
     'application/x-mindswarm-action': ['.action.yaml'],
     'application/x-mindswarm-config': ['.config.yaml', '.config.json'],
@@ -139,9 +139,7 @@ class MimeHandler:
         if '/knowledge/' in path_str or '/initial_knowledge/' in path_str:
             if file_path.suffix in ['.yaml', '.yml']:
                 return 'application/x-mindswarm-knowledge'
-        elif '/inbox/' in path_str or '/outbox/' in path_str:
-            if file_path.suffix in ['.json', '.yaml', '.yml']:
-                return 'application/x-mindswarm-message'
+        # Removed special handling for inbox/outbox - let standard JSON/YAML types apply
         elif '/memory/' in path_str:
             if file_path.suffix == '.json':
                 return 'application/x-mindswarm-memory'
@@ -184,9 +182,7 @@ class MimeHandler:
                     # Check for knowledge markers
                     if any(key in data for key in ['title', 'tags', 'category', 'content', 'description']):
                         return 'application/x-mindswarm-knowledge'
-                    # Check for message markers
-                    elif any(key in data for key in ['to', 'from', 'subject', 'body']):
-                        return 'application/x-mindswarm-message'
+                    # Removed message type detection - use standard YAML
                     # Check for action markers
                     elif any(key in data for key in ['action', 'execute', 'command']):
                         return 'application/x-mindswarm-action'
@@ -202,11 +198,8 @@ class MimeHandler:
             try:
                 data = json.loads(content)
                 if isinstance(data, dict):
-                    # Check for message markers
-                    if any(key in data for key in ['to', 'from', 'subject']):
-                        return 'application/x-mindswarm-message'
                     # Check for memory markers
-                    elif any(key in data for key in ['memories', 'observations', 'memory_type']):
+                    if any(key in data for key in ['memories', 'observations', 'memory_type']):
                         return 'application/x-mindswarm-memory'
             except:
                 pass

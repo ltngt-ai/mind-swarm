@@ -110,8 +110,15 @@ class CyberMind:
             idle_cycles = 0
             
             while self.running and not self.stop_requested:
-                # Run one cognitive cycle
-                was_active = await self.cognitive_loop.run_cycle()
+                # Run one cognitive cycle with error recovery
+                try:
+                    was_active = await self.cognitive_loop.run_cycle()
+                except Exception as cycle_error:
+                    logger.error(f"Error in cognitive cycle {self.cognitive_loop.cycle_count}: {cycle_error}", exc_info=True)
+                    was_active = False
+                    # Continue to next cycle after error
+                    await asyncio.sleep(2)  # Brief pause after error
+                    continue
                 
                 # Check if stop was requested
                 if self.stop_requested:
@@ -137,6 +144,12 @@ class CyberMind:
         except Exception as e:
             logger.error(f"Error in main loop: {e}", exc_info=True)
             self.state = "ERROR"
+            # Don't crash - try to save state and continue if possible
+            try:
+                await self.cognitive_loop.save_memory()
+                logger.info("Saved memory state after error")
+            except Exception as save_error:
+                logger.error(f"Could not save memory after error: {save_error}")
             
         finally:
             # Clean shutdown

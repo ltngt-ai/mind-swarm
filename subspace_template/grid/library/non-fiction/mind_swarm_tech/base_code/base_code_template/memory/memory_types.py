@@ -51,7 +51,7 @@ class ContentType(Enum):
     IMAGE_GIF = "image/gif"
     
     # Mind-Swarm specific types
-    MINDSWARM_MESSAGE = "application/x-mindswarm-message"
+    # MINDSWARM_MESSAGE removed - messages are just JSON/YAML
     MINDSWARM_KNOWLEDGE = "application/x-mindswarm-knowledge"
     MINDSWARM_CBR_CASE = "application/x-mindswarm-cbr-case"
     

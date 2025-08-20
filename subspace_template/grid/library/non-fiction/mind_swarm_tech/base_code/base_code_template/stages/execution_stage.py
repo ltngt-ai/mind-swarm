@@ -221,7 +221,13 @@ class ExecutionStage:
     def _setup_execution_environment(self):
         """Set up the Python execution environment with new Memory API."""
         # Safe built-ins for script execution
+        # Get builtins properly - it might be a dict or module depending on context
+        import builtins
         self.safe_builtins = {
+            # Python internals needed for class definitions
+            '__build_class__': builtins.__build_class__,
+            '__import__': builtins.__import__,
+            
             # Math and numbers
             'abs': abs, 'round': round, 'min': min, 'max': max,
             'sum': sum, 'pow': pow, 'divmod': divmod,
