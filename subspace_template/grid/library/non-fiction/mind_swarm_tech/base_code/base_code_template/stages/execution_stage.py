@@ -321,25 +321,59 @@ class ExecutionStage:
         """Run the execution stage."""
         logger.info("=== EXECUTION STAGE V3 ===")
         
-        # Load stage instructions
-        self._load_stage_instructions()
+        try:
+            # Load stage instructions
+            self._load_stage_instructions()
+            
+            # The decision is already in working memory - just generate and execute
+            # The brain will see the decision buffer content in working memory context
+            
+            # Phase 1: Generate Python script from working memory context
+            script = await self.generate_script()
+            
+            if not script:
+                logger.info("⚡ No script generated - likely no intention to execute")
+                self._cleanup_stage_instructions()
+                return
+            
+            # Phase 2: Execute the generated script
+            await self.execute_script(script)
+            
+        except Exception as e:
+            # Catch ANY exception to prevent cyber crash
+            logger.error(f"Execution stage failed with unexpected error: {type(e).__name__}: {str(e)}", exc_info=True)
+            
+            # Write a failure to the execution buffer so the cyber knows something went wrong
+            try:
+                execution_content = {
+                    "timestamp": datetime.now().isoformat(),
+                    "cycle_count": self.cognitive_loop.cycle_count,
+                    "script": "Failed to execute",
+                    "results": [{
+                        "status": "failed",
+                        "error": f"Execution stage crashed: {str(e)}",
+                        "error_type": type(e).__name__
+                    }],
+                    "success": False,
+                    "attempts": 0
+                }
+                
+                execution_buffer = self.cognitive_loop.get_current_pipeline("execution")
+                buffer_file = self.cognitive_loop.personal.parent / execution_buffer.location
+                
+                with open(buffer_file, 'w') as f:
+                    json.dump(execution_content, f, indent=2)
+                    
+                self.cognitive_loop.memory_system.touch_memory(execution_buffer.id, self.cognitive_loop.cycle_count)
+            except Exception as buffer_error:
+                logger.error(f"Failed to write error to execution buffer: {buffer_error}")
         
-        # The decision is already in working memory - just generate and execute
-        # The brain will see the decision buffer content in working memory context
-        
-        # Phase 1: Generate Python script from working memory context
-        script = await self.generate_script()
-        
-        if not script:
-            logger.info("⚡ No script generated - likely no intention to execute")
-            self._cleanup_stage_instructions()
-            return
-        
-        # Phase 2: Execute the generated script
-        await self.execute_script(script)
-        
-        # Clean up stage instructions
-        self._cleanup_stage_instructions()
+        finally:
+            # Always clean up stage instructions
+            try:
+                self._cleanup_stage_instructions()
+            except Exception as cleanup_error:
+                logger.error(f"Failed to cleanup stage instructions: {cleanup_error}")
         
     
     async def generate_script(self) -> Optional[str]:
@@ -433,68 +467,102 @@ The provided API docs describe the available operations and their usage.
     
     async def execute_script(self, script: str) -> List[Dict[str, Any]]:
         """Execute the generated Python script with new memory API."""
-        logger.info(f"⚡ Executing Python script ({len(script)} characters)...")
+        try:
+            logger.info(f"⚡ Executing Python script ({len(script)} characters)...")
+        except Exception:
+            # Even logging the script length failed
+            logger.info("⚡ Executing Python script...")
         
         # Update phase
-        self.cognitive_loop._update_dynamic_context(stage="EXECUTION", phase="EXECUTE")
+        try:
+            self.cognitive_loop._update_dynamic_context(stage="EXECUTION", phase="EXECUTE")
+        except Exception as e:
+            logger.warning(f"Failed to update dynamic context: {e}")
         
         max_attempts = 3
         current_script = script
         attempt = 0
         final_results = []
         
-        while attempt < max_attempts and not final_results:
-            attempt += 1
-            logger.info(f"⚡ Execution attempt {attempt}/{max_attempts}")
-            
-            result = await self._run_script(current_script, attempt)
-            
-            if result["status"] == "completed":
-                final_results = [result]
-                break
-            
-            # If we have more attempts left, try to fix the error
-            if attempt < max_attempts:
-                logger.info(f"⚠️ Script error: {result['error_type']}, attempting fix...")
-                fixed_script = await self._fix_script_error(current_script, result)
+        try:
+            while attempt < max_attempts and not final_results:
+                attempt += 1
+                logger.info(f"⚡ Execution attempt {attempt}/{max_attempts}")
                 
-                if fixed_script and fixed_script != current_script:
-                    current_script = fixed_script
-                    logger.info("📝 Generated fixed script, retrying...")
+                try:
+                    result = await self._run_script(current_script, attempt)
+                except Exception as run_error:
+                    logger.error(f"Script execution crashed: {run_error}", exc_info=True)
+                    result = {
+                        "status": "failed",
+                        "error": f"Script execution crashed: {str(run_error)}",
+                        "error_type": "CrashError",
+                        "attempt": attempt
+                    }
+                
+                if result["status"] == "completed":
+                    final_results = [result]
+                    break
+                
+                # If we have more attempts left, try to fix the error
+                if attempt < max_attempts:
+                    try:
+                        logger.info(f"⚠️ Script error: {result.get('error_type', 'Unknown')}, attempting fix...")
+                        fixed_script = await self._fix_script_error(current_script, result)
+                        
+                        if fixed_script and fixed_script != current_script:
+                            current_script = fixed_script
+                            logger.info("📝 Generated fixed script, retrying...")
+                        else:
+                            logger.warning(f"❌ Could not fix {result.get('error_type', 'Unknown')} error, attempt {attempt}/{max_attempts}")
+                    except Exception as fix_error:
+                        logger.error(f"Failed to fix script error: {fix_error}")
+                        # Continue with next attempt anyway
                 else:
-                    logger.warning(f"❌ Could not fix {result['error_type']} error, attempt {attempt}/{max_attempts}")
-            else:
-                # No more attempts left
-                final_results = [result]
+                    # No more attempts left
+                    final_results = [result]
+            
+            if not final_results:
+                final_results = [{
+                    "status": "failed",
+                    "error": "Max retries exceeded without success",
+                    "attempts": attempt
+                }]
         
-        if not final_results:
+        except Exception as loop_error:
+            logger.error(f"Execution loop crashed: {loop_error}", exc_info=True)
             final_results = [{
                 "status": "failed",
-                "error": "Max retries exceeded without success",
+                "error": f"Execution loop crashed: {str(loop_error)}",
+                "error_type": "LoopCrashError",
                 "attempts": attempt
             }]
         
-        # Write to execution pipeline buffer
-        # Note: We don't need separate script_execution memory files anymore
-        # The pipeline buffer contains all the execution information
-        execution_content = {
-            "timestamp": datetime.now().isoformat(),
-            "cycle_count": self.cognitive_loop.cycle_count,
-            "script": current_script,
-            "results": final_results,
-            "success": final_results[0]["status"] == "completed" if final_results else False,
-            "attempts": attempt
-        }
+        # Try to write to execution pipeline buffer
+        try:
+            # Note: We don't need separate script_execution memory files anymore
+            # The pipeline buffer contains all the execution information
+            execution_content = {
+                "timestamp": datetime.now().isoformat(),
+                "cycle_count": self.cognitive_loop.cycle_count,
+                "script": current_script if 'current_script' in locals() else script,
+                "results": final_results,
+                "success": final_results[0]["status"] == "completed" if final_results else False,
+                "attempts": attempt
+            }
+            
+            execution_buffer = self.cognitive_loop.get_current_pipeline("execution")
+            buffer_file = self.cognitive_loop.personal.parent / execution_buffer.location
+            
+            with open(buffer_file, 'w') as f:
+                json.dump(execution_content, f, indent=2)
+            
+            self.cognitive_loop.memory_system.touch_memory(execution_buffer.id, self.cognitive_loop.cycle_count)
+            
+            logger.info(f"⚡ Execution complete after {attempt} attempt(s)")
         
-        execution_buffer = self.cognitive_loop.get_current_pipeline("execution")
-        buffer_file = self.cognitive_loop.personal.parent / execution_buffer.location
-        
-        with open(buffer_file, 'w') as f:
-            json.dump(execution_content, f, indent=2)
-        
-        self.cognitive_loop.memory_system.touch_memory(execution_buffer.id, self.cognitive_loop.cycle_count)
-        
-        logger.info(f"⚡ Execution complete after {attempt} attempt(s)")
+        except Exception as buffer_error:
+            logger.error(f"Failed to write execution results to buffer: {buffer_error}")
         
         return final_results
     
@@ -622,30 +690,57 @@ The provided API docs describe the available operations and their usage.
             }
             
         except Exception as e:
-            tb = traceback.format_exc()
-            error_msg = f"Execution error: {type(e).__name__}: {str(e)}"
+            # Safely handle ALL exceptions, even nested ones
+            try:
+                tb = traceback.format_exc()
+            except Exception as tb_error:
+                # Even traceback formatting failed - create a minimal error report
+                logger.error(f"Failed to format traceback: {tb_error}")
+                tb = f"Error formatting traceback: {tb_error}\nOriginal error: {type(e).__name__}: {str(e)}"
             
-            # Try to extract line number from traceback
+            try:
+                error_msg = f"Execution error: {type(e).__name__}: {str(e)}"
+            except Exception:
+                # Even getting the error message failed
+                error_msg = "Execution error: Unknown error (failed to get details)"
+            
+            # Safely try to extract line number from traceback
             line_num = None
-            tb_lines = tb.split('\n')
-            for line in tb_lines:
-                if '<cyber_script>' in line and 'line' in line:
-                    # Extract line number from traceback
-                    import re
-                    match = re.search(r'line (\d+)', line)
-                    if match:
-                        line_num = int(match.group(1))
-                        break
+            try:
+                tb_lines = tb.split('\n')
+                for line in tb_lines:
+                    if '<cyber_script>' in line and 'line' in line:
+                        # Extract line number from traceback
+                        import re
+                        match = re.search(r'line (\d+)', line)
+                        if match:
+                            line_num = int(match.group(1))
+                            break
+                
+                if line_num:
+                    error_msg += f" at line {line_num}"
+            except Exception as parse_error:
+                logger.warning(f"Could not parse line number from traceback: {parse_error}")
             
-            if line_num:
-                error_msg += f" at line {line_num}"
+            # Safely log the error
+            try:
+                logger.error(f"Attempt {attempt}: {error_msg}\n{tb}")
+            except Exception:
+                logger.error(f"Attempt {attempt}: Error logging failed")
             
-            logger.error(f"Attempt {attempt}: {error_msg}\n{tb}")
+            # Safely determine error type
+            try:
+                error_type = type(e).__name__
+                if 'Memory' in error_type:
+                    error_type = 'MemoryError'
+            except Exception:
+                error_type = 'UnknownError'
             
-            # Check if it's a memory-specific error
-            error_type = type(e).__name__
-            if 'Memory' in error_type:
-                error_type = 'MemoryError'
+            # Safely get partial output
+            try:
+                partial_output = output_lines[:20] if output_lines else []
+            except Exception:
+                partial_output = []
             
             return {
                 "status": "failed",
@@ -653,7 +748,7 @@ The provided API docs describe the available operations and their usage.
                 "error_type": error_type,
                 "line": line_num,
                 "traceback": tb,
-                "partial_output": output_lines,
+                "partial_output": partial_output,
                 "attempt": attempt
             }
     
