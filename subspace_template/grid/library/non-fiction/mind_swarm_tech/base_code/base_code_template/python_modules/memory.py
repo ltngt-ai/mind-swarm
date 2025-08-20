@@ -624,7 +624,7 @@ class MemoryNode:
             return
             
         try:
-            actual_path = self._memory._resolve_path(self.path)
+            actual_path = self._memory._resolve_path(self.path, for_write=True)
             
             # Create parent directories if needed
             actual_path.parent.mkdir(parents=True, exist_ok=True)
@@ -891,7 +891,7 @@ Main memory interface providing unified access to all Mind-Swarm memories.
             return path.split(':', 1)[1]
         return path
     
-    def _resolve_path(self, path: str) -> Path:
+    def _resolve_path(self, path: str, for_write: bool = False) -> Path:
         """Resolve a memory path to actual filesystem path.
         
         Valid path formats:
@@ -901,17 +901,22 @@ Main memory interface providing unified access to all Mind-Swarm memories.
         - 'grid/...' - Relative grid path
         
         Restricted paths:
-        - Paths containing '.internal' are forbidden (system use only)
+        - Writing to .internal is forbidden (system use only)
+        - Reading from .internal is allowed
+        
+        Args:
+            path: The path to resolve
+            for_write: True if this path will be written to, False for reading
         """
         original_path = path
         
         # First clean the path to remove any type prefix
         path = self._clean_path(path)
         
-        # Security check: reject access to .internal directories
-        if '.internal' in path:
+        # Security check: block WRITES to .internal, but allow reads
+        if '.internal' in path and for_write:
             raise MemoryError(
-                f"Access denied: Cannot read or write to system directories (.internal). "
+                f"Access denied: Cannot write to system directories (.internal). "
                 f"Path: '{original_path}'. "
                 f"The .internal directory is reserved for system use only."
             )
@@ -1078,6 +1083,8 @@ Main memory interface providing unified access to all Mind-Swarm memories.
             )
         # Clean the path to allow both prefixed and non-prefixed formats
         clean_path = self._clean_path(path)
+        # Check write permission for .internal
+        self._resolve_path(clean_path, for_write=True)  # This will raise error if .internal
         node = MemoryNode(clean_path, self, new=True)
         node.content = value
         node._save()
@@ -1672,7 +1679,7 @@ Returns: True if path exists, False otherwise
             memory.write_raw("/personal/data.bin", b'\\x41\\x42\\x43', binary=True)
         """
         clean_path = self._clean_path(path)
-        actual_path = self._resolve_path(clean_path)
+        actual_path = self._resolve_path(clean_path, for_write=True)
         
         # Track the write for rollback purposes
         self._track_change(clean_path, 'write', {'content': content if not binary else '<binary>'})
@@ -1701,7 +1708,7 @@ Returns: True if path exists, False otherwise
             memory.append("/personal/notes.txt", f"[{datetime.now()}] Task completed\n")
         """
         clean_path = self._clean_path(path)
-        actual_path = self._resolve_path(clean_path)
+        actual_path = self._resolve_path(clean_path, for_write=True)
         
         # Track the append operation
         self._track_change(clean_path, 'append', {'content': content})
@@ -1770,8 +1777,8 @@ Returns:
             old_clean = self._clean_path(old_path)
             new_clean = self._clean_path(new_path)
             
-            old_actual = self._resolve_path(old_clean)
-            new_actual = self._resolve_path(new_clean)
+            old_actual = self._resolve_path(old_clean)  # Reading old location
+            new_actual = self._resolve_path(new_clean, for_write=True)  # Writing to new location
             
             if not old_actual.exists():
                 print(f"⚠️ Source {old_path} does not exist")
