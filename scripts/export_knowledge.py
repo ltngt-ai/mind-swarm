@@ -287,18 +287,28 @@ This directory contains an export of all knowledge from the ChromaDB database.
 
 async def main():
     """Main entry point."""
+    import os
     parser = argparse.ArgumentParser(description="Export knowledge from ChromaDB")
+    
+    # Use SUBSPACE_ROOT env var if set, otherwise use /home/mind/subspace
+    default_subspace = Path(os.environ.get("SUBSPACE_ROOT", "/home/mind/subspace"))
+    
     parser.add_argument(
         "--subspace-root",
         type=Path,
-        default=Path.home() / "projects" / "subspace",
-        help="Path to subspace root directory (default: ~/projects/subspace)"
+        default=default_subspace,
+        help=f"Path to subspace root directory (default: {default_subspace})"
     )
+    # Default export dir - use /tmp if current dir isn't writable
+    default_export = Path.cwd() / "knowledge_exports"
+    if not os.access(Path.cwd(), os.W_OK):
+        default_export = Path("/tmp") / "knowledge_exports"
+    
     parser.add_argument(
         "--export-dir",
         type=Path,
-        default=Path.cwd() / "knowledge_exports",
-        help="Directory to export knowledge to (default: ./knowledge_exports)"
+        default=default_export,
+        help=f"Directory to export knowledge to (default: {default_export})"
     )
     parser.add_argument(
         "--query",

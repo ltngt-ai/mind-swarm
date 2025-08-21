@@ -403,7 +403,17 @@ class KnowledgeHandler:
                 # Fall back to persistent client (embedded mode)
                 logger.info("ChromaDB server not available, using embedded mode")
                 knowledge_db_path = self.subspace_root / "knowledge_db"
-                knowledge_db_path.mkdir(exist_ok=True)
+                knowledge_db_path.mkdir(exist_ok=True, mode=0o775)  # Group writable
+                
+                # Try to fix permissions if we can (will only work if we own it)
+                try:
+                    import stat
+                    current_mode = knowledge_db_path.stat().st_mode
+                    if not (current_mode & stat.S_IWGRP):  # If not group writable
+                        knowledge_db_path.chmod(0o775)  # Make group writable
+                except:
+                    pass  # Ignore permission errors
+                
                 self.chroma_client = chromadb.PersistentClient(
                     path=str(knowledge_db_path)
                 )
