@@ -147,7 +147,7 @@ class MindSwarmServer:
                 local_url = None
                 try:
                     from mind_swarm.ai.model_pool import model_pool
-                    for model in model_pool.list_models(include_paid=True):
+                    for model, promotion in model_pool.list_models(include_paid=True):
                         if model.provider == "openai" and model.api_settings and "host" in model.api_settings:
                             # This is a local OpenAI-compatible server
                             url = model.api_settings["host"]
@@ -227,7 +227,7 @@ class MindSwarmServer:
                     import asyncio
                     
                     # Check if using local models (OpenAI with custom host)
-                    for model in model_pool.list_models(include_paid=True):
+                    for model, promotion in model_pool.list_models(include_paid=True):
                         if model.provider == "openai" and model.api_settings and "host" in model.api_settings:
                             # This is a local OpenAI-compatible server
                             url = model.api_settings["host"]

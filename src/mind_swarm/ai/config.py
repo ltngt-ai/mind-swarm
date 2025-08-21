@@ -49,7 +49,7 @@ class AIExecutionConfig(BaseAIParams):
         """Validate configuration after initialization."""
         super().__post_init__()
         
-        if self.provider != "ollama" and not self.api_key.strip():
+        if not self.api_key.strip():
             raise ValueError(f"api_key cannot be empty for provider {self.provider}")
         
         if self.provider_settings is None:
@@ -57,19 +57,6 @@ class AIExecutionConfig(BaseAIParams):
     
     def __repr__(self) -> str:
         return f"AIExecutionConfig(provider='{self.provider}', model_id='{self.model_id}', ...)"
-
-
-@dataclass 
-class LocalModelConfig(AIExecutionConfig):
-    """Configuration for local models like Ollama."""
-    
-    api_key: str = "not-needed"  # Local models don't need API keys
-    host: str = "http://localhost:11434"  # Ollama default host
-    
-    def __post_init__(self) -> None:
-        """Set provider to ollama and validate."""
-        self.provider = "ollama"
-        super().__post_init__()
 
 
 @dataclass

@@ -29,7 +29,7 @@ def check(
             urls_to_check = []
             
             # Check all models in pool for local providers (OpenAI with custom host)
-            for model in model_pool.list_models(include_paid=True):
+            for model, promotion in model_pool.list_models(include_paid=True):
                 if model.provider == "openai" and model.api_settings and "host" in model.api_settings:
                     # This is a local OpenAI-compatible server
                     model_url = model.api_settings["host"]
