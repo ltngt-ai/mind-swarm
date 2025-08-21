@@ -383,6 +383,31 @@ class EnvironmentScanner:
                     lines.append(f"|   {type_emoji} {cyber['name']} ({cyber_status})")
                 lines.append("|")
             
+            # Check for local chat messages at this location
+            local_chat_file = actual_path / ".local_chat.json"
+            if local_chat_file.exists() and local_chat_file.is_file():
+                try:
+                    with open(local_chat_file, 'r') as f:
+                        chat_data = json.load(f)
+                        chats = chat_data.get("chats", [])
+                        
+                        # Get the last 5 messages
+                        recent_chats = chats[-5:] if len(chats) > 5 else chats
+                        
+                        if recent_chats:
+                            lines.append("|")
+                            lines.append("| 💬 Recent local chat:")
+                            for chat in recent_chats:
+                                from_cyber = chat.get('from', 'unknown')
+                                message = chat.get('message', '')
+                                # Truncate long messages
+                                if len(message) > 60:
+                                    message = message[:57] + "..."
+                                lines.append(f"|   {from_cyber}: {message}")
+                            lines.append("|")
+                except Exception as e:
+                    logger.debug(f"Could not read local chat: {e}")
+            
             # Add directories first
             for name, icon, _ in directories:
                 lines.append(f"|---- {icon} {name}")
