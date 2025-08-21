@@ -86,7 +86,7 @@ class StatusResponse(BaseModel):
 class MindSwarmServer:
     """Main server for Mind-Swarm system."""
     
-    def __init__(self, host: str = "127.0.0.1", port: int = 8888):
+    def __init__(self, host: str = "0.0.0.0", port: int = 8888):
         """Initialize the server.
         
         Args:
@@ -100,10 +100,11 @@ class MindSwarmServer:
         self.start_time = datetime.now()
         self.clients: List[WebSocket] = []
         
-        # Configure CORS
+        # Configure CORS - allow all origins for network access
+        # In production, you may want to restrict this to specific IPs or domains
         self.app.add_middleware(
             CORSMiddleware,
-            allow_origins=["http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "http://localhost:5176"],  # Vite dev servers
+            allow_origins=["*"],  # Allow all origins for network access
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],

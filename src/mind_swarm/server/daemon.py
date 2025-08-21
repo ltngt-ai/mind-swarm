@@ -40,7 +40,7 @@ from mind_swarm.core.config import settings
 class ServerDaemon:
     """Server daemon manager."""
     
-    def __init__(self, host: str = "127.0.0.1", port: int = 8888):
+    def __init__(self, host: str = "0.0.0.0", port: int = 8888):
         self.server = MindSwarmServer(host, port)
         self._shutdown_event = asyncio.Event()
         self._shutting_down = False
@@ -174,7 +174,7 @@ class ServerDaemon:
 def main():
     """Main entry point for server daemon."""
     parser = argparse.ArgumentParser(description="Mind-Swarm Server Daemon")
-    parser.add_argument("--host", default="127.0.0.1", help="Server host address")
+    parser.add_argument("--host", default="0.0.0.0", help="Server host address (0.0.0.0 for network access)")
     parser.add_argument("--port", type=int, default=8888, help="Server port")
     # Default log file in project root
     project_root = Path(__file__).parent.parent.parent.parent
