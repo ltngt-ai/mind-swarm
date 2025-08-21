@@ -38,39 +38,41 @@ class ObservationStage:
         self.brain_interface = cognitive_loop.brain_interface
         self.environment_scanner = cognitive_loop.environment_scanner
         self.personal = cognitive_loop.personal
+        self.knowledge_manager = cognitive_loop.knowledge_manager
         
         # Stage-specific memory ID for tracking if instructions are loaded
         self.stage_knowledge_id = None
     
     def _load_stage_instructions(self):
-        """Load stage-specific instructions into working memory."""
-        stage_file = self.personal / ".internal" / "knowledge" / "observation_stage.md"
-        
-        if stage_file.exists():
-            # Create memory block for stage instructions
-            stage_memory = MemoryBlock(
-                location=f"personal/.internal/knowledge/observation_stage.md",
-                priority=Priority.HIGH,
-                confidence=0.9,
-                pinned=False,
-                metadata={
-                    "knowledge_type": "stage_instructions",
-                    "stage": "observation",
-                    "description": "Instructions for observation stage"
-                },
-                cycle_count=self.cognitive_loop.cycle_count,
-                tags=["observation", "stage_instructions"],
-                content_type=ContentType.MARKDOWN
-            )
+        """Load stage instructions from knowledge into memory."""
+        stage_data = self.knowledge_manager.get_stage_instructions('observation')
+        if stage_data:
+            from ..memory.memory_blocks import MemoryBlock
+            from ..memory.memory_types import Priority, ContentType
+            import yaml
             
-            # Try to add to memory
+            # stage_data has: content (YAML string), metadata (DB metadata), id, source
+            # Parse the YAML content to get the actual knowledge fields
             try:
-                self.stage_knowledge_id = self.memory_system.add_memory(stage_memory)
-                logger.debug(f"Loaded observation stage instructions with id: {self.stage_knowledge_id}")
+                yaml_content = yaml.safe_load(stage_data['content'])
+                # yaml_content now has: title, category, tags, content (the actual instructions)
             except Exception as e:
-                logger.error(f"Failed to add stage memory: {e}")
-                self.stage_knowledge_id = None
+                logger.error(f"Failed to parse stage instructions YAML: {e}")
                 return
+            
+            # Pass the parsed YAML content as metadata for validation
+            stage_memory = MemoryBlock(
+                location="/personal/.internal/knowledge_observation_stage",
+                confidence=1.0,
+                priority=Priority.FOUNDATIONAL,
+                metadata=yaml_content,  # This has title, category, tags, content fields
+                pinned=False,
+                cycle_count=self.cognitive_loop.cycle_count,
+                content_type=ContentType.MINDSWARM_KNOWLEDGE
+            )
+            self.memory_system.add_memory(stage_memory)
+            self.stage_knowledge_id = stage_memory.id
+            logger.debug("Loaded observation stage instructions into memory")
         else:
             logger.warning("No stage instructions found for observation stage")
             self.stage_knowledge_id = None

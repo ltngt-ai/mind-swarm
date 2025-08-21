@@ -414,9 +414,9 @@ class KnowledgeHandler:
             try:
                 self.embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
                     model_name="BAAI/bge-large-en-v1.5",
-                    device="cpu"  # Use CPU for development
+                    device="cuda"  # Use GPU for embeddings
                 )
-                logger.info("Using BGE-large embedding model for better semantic search")
+                logger.info("Using BGE-large embedding model with GPU acceleration for semantic search")
             except Exception as e:
                 logger.warning(f"Failed to load BGE model, using default: {e}")
                 self.embedding_fn = None  # Will use ChromaDB default
