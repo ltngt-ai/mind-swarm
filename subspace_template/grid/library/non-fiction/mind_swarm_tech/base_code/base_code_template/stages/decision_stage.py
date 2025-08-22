@@ -301,6 +301,26 @@ Always start your output with [[ ## reasoning ## ]]
         response = await self.brain_interface._use_brain(json.dumps(thinking_request))
         result = json.loads(response)
         
+        # Write to decision pipeline buffer
+        logger.info(f"💭 Decision intention written to pipeline buffer")
+        
+        # Record stage data for cycle history
+        try:
+            # Get current working memory snapshot
+            working_memory_snapshot = self.memory_system.create_snapshot()
+            
+            # Record the stage completion
+            self.cognitive_loop.cycle_recorder.record_stage(
+                stage_name="decision",
+                working_memory=working_memory_snapshot,
+                llm_input=thinking_request,
+                llm_output=result,
+                stage_output=result.get("output_values", {}),
+                token_usage=result.get("token_usage", {})
+            )
+        except Exception as e:
+            logger.debug(f"Failed to record decision stage: {e}")
+        
         # Clean up stage instructions before leaving
         self._cleanup_stage_instructions()
         

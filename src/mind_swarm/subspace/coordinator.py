@@ -20,6 +20,7 @@ from mind_swarm.subspace.io_handlers import NetworkBodyHandler, UserIOBodyHandle
 from mind_swarm.subspace.knowledge_handler import KnowledgeHandler
 from mind_swarm.subspace.awareness_handler import AwarenessHandler
 from mind_swarm.subspace.freeze_handler import FreezeHandler
+# from mind_swarm.subspace.cycle_hooks import get_cycle_monitor  # Removed - stages handle their own recording
 from mind_swarm.schemas.cyber_types import CyberType
 from mind_swarm.ai.providers.factory import create_ai_service
 from mind_swarm.utils.logging import logger
@@ -266,6 +267,8 @@ class SubspaceCoordinator:
         # Initialize freeze handler
         self.freeze_handler = FreezeHandler(self.subspace.root_path)
         
+        # Cycle monitoring removed - stages now handle their own recording directly
+        
         # Pass all handlers to body system
         self.body_system = BodySystemManager(self.knowledge_handler, self.awareness_handler, self.cbr_handler)
         
@@ -434,6 +437,9 @@ class SubspaceCoordinator:
         # Start monitoring body files
         await self.body_system.start_agent_monitoring(state.name, self._handle_ai_request)
         
+        # Start cycle monitoring (disabled - stages now record their own data)
+        # await self.cycle_monitor.monitor_cyber(state.name)
+        
         # Start server component for I/O Cybers
         if agent_type_enum == CyberType.IO_GATEWAY and type_config.server_component.enabled:
             await self._start_io_agent_server_component(state.name, type_config)
@@ -443,6 +449,9 @@ class SubspaceCoordinator:
     async def terminate_agent(self, name: str):
         """Terminate an Cyber (only in development/emergency)."""
         logger.warning(f"Terminating Cyber {name} - this should be rare!")
+        
+        # Stop cycle monitoring (disabled - stages now record their own data)
+        # await self.cycle_monitor.stop_monitoring(name)
         
         # Get Cyber uptime before termination
         cyber_states = await self.spawner.get_cyber_states()
@@ -1000,6 +1009,9 @@ class SubspaceCoordinator:
                     
                     # Start monitoring body files
                     await self.body_system.start_agent_monitoring(cyber_name, self._handle_ai_request)
+                    
+                    # Start cycle monitoring (disabled - stages now record their own data)
+                    # await self.cycle_monitor.monitor_cyber(cyber_name)
                     
                     # Start I/O monitoring if it's an I/O Cyber
                     if cyber_type == "io_gateway":

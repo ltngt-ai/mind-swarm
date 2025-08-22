@@ -571,6 +571,23 @@ The provided API docs describe the available operations and their usage.
             self.cognitive_loop.memory_system.touch_memory(execution_buffer.id, self.cognitive_loop.cycle_count)
             
             logger.info(f"⚡ Execution complete after {attempt} attempt(s)")
+            
+            # Record stage data for cycle history
+            try:
+                # Get current working memory snapshot
+                working_memory_snapshot = self.memory_system.create_snapshot()
+                
+                # Record the stage completion
+                self.cognitive_loop.cycle_recorder.record_stage(
+                    stage_name="execution",
+                    working_memory=working_memory_snapshot,
+                    llm_input=None,  # Could capture script generation request if needed
+                    llm_output=None,  # Could capture script generation response if needed
+                    stage_output=execution_content,
+                    token_usage={}  # Could track if brain was used for fixes
+                )
+            except Exception as e:
+                logger.debug(f"Failed to record execution stage: {e}")
         
         except Exception as buffer_error:
             logger.error(f"Failed to write execution results to buffer: {buffer_error}")

@@ -311,6 +311,23 @@ Always start with [[ ## Briefing ## ]]""",
         
         logger.info(f"📊 Intelligence briefing prepared and written to pipeline")
         
+        # Record stage data for cycle history
+        try:
+            # Get current working memory snapshot
+            working_memory_snapshot = self.memory_system.create_snapshot()
+            
+            # Record the stage completion
+            self.cognitive_loop.cycle_recorder.record_stage(
+                stage_name="observation",
+                working_memory=working_memory_snapshot,
+                llm_input=thinking_request,
+                llm_output=analysis_response,
+                stage_output=intelligence_briefing,
+                token_usage=analysis_response.get("token_usage", {})
+            )
+        except Exception as e:
+            logger.debug(f"Failed to record observation stage: {e}")
+        
         # Clean up stage instructions before leaving
         self._cleanup_stage_instructions()
         

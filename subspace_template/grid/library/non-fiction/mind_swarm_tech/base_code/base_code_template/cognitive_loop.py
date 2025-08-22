@@ -26,6 +26,7 @@ from .state import CyberStateManager, ExecutionStateTracker
 from .utils import CognitiveUtils, FileManager
 from .brain import BrainInterface
 from .stages import ObservationStage, ReflectStage, DecisionStage, ExecutionStage, CleanupStage
+from .cycle_recorder_client import get_cycle_recorder
 
 logger = logging.getLogger("Cyber.cognitive")
 
@@ -86,6 +87,9 @@ class CognitiveLoop:
         self.execution_stage = ExecutionStage(self)  # This is now V2
         self.reflect_stage = ReflectStage(self)
         self.cleanup_stage = CleanupStage(self)
+        
+        # Initialize cycle recorder
+        self.cycle_recorder = get_cycle_recorder(cyber_id, personal)
     
     def _initialize_pipeline_buffers(self):
         """Initialize pipeline memory blocks for each stage."""
@@ -550,6 +554,9 @@ class CognitiveLoop:
             # Increment cycle count
             self.cycle_count = self.state_manager.increment_cycle_count()
             
+            # Set cycle in recorder
+            self.cycle_recorder.set_cycle(self.cycle_count)
+            
             # Clear pipeline buffers at start of new cycle
             if self.cycle_count > 0:  # Don't clear on first cycle
                 self._clear_pipeline_buffers()
@@ -586,6 +593,12 @@ class CognitiveLoop:
             self.execution_tracker.end_execution("completed", {
                 "stages_completed": ["observation", "decision", "execution", "reflect", "cleanup"],
             })
+            
+            # Mark cycle as complete in recorder
+            try:
+                self.cycle_recorder.complete_cycle("completed")
+            except Exception as e:
+                logger.debug(f"Failed to complete cycle recording: {e}")
             
             return True
             

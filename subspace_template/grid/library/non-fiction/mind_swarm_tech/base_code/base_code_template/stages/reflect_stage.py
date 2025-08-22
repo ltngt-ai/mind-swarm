@@ -586,3 +586,24 @@ Lessons Learned:
         except Exception as e:
             logger.error(f"Error updating memories with summary: {e}")
             # Don't fail the reflection stage if memory update fails
+        
+        # Record stage data for cycle history
+        try:
+            # Get current working memory snapshot
+            working_memory_snapshot = self.memory_system.create_snapshot()
+            
+            # Record the stage completion
+            self.cognitive_loop.cycle_recorder.record_stage(
+                stage_name="reflection",
+                working_memory=working_memory_snapshot,
+                llm_input=thinking_request if 'thinking_request' in locals() else None,
+                llm_output=reflection_response if 'reflection_response' in locals() else None,
+                stage_output=reflection_outputs if 'reflection_outputs' in locals() else {},
+                token_usage=reflection_response.get("token_usage", {}) if 'reflection_response' in locals() else {}
+            )
+            
+            # Also record the reflection data specifically
+            if 'reflection_outputs' in locals():
+                self.cognitive_loop.cycle_recorder.record_reflection(reflection_outputs)
+        except Exception as e:
+            logger.debug(f"Failed to record reflection stage: {e}")

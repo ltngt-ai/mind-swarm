@@ -14,6 +14,8 @@ from pydantic import BaseModel
 from mind_swarm.subspace.coordinator import SubspaceCoordinator
 from mind_swarm.utils.logging import logger
 from mind_swarm.server.monitoring_events import set_server_reference, get_event_emitter
+from mind_swarm.server.ws_state_manager import get_ws_state_manager
+from mind_swarm.subspace.cycle_recorder import get_cycle_recorder
 
 
 # API Models
@@ -998,20 +1000,135 @@ class MindSwarmServer:
                 if websocket in log_clients:
                     log_clients.remove(websocket)
         
+        # Cycle-based endpoints
+        @self.app.get("/cybers/{cyber_name}/cycles")
+        async def get_cyber_cycles(cyber_name: str, limit: int = 100):
+            """Get list of available cycles for a cyber.
+            
+            Args:
+                cyber_name: Name of the cyber
+                limit: Maximum number of cycles to return
+            """
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            
+            try:
+                recorder = get_cycle_recorder(self.coordinator.subspace.root_path)
+                cycles = await recorder.list_cycles(cyber_name, limit)
+                return {"cyber": cyber_name, "cycles": cycles}
+            except Exception as e:
+                logger.error(f"Failed to get cycles for {cyber_name}: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.get("/cybers/{cyber_name}/cycles/current")
+        async def get_current_cycle(cyber_name: str):
+            """Get the current cycle data for a cyber."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            
+            try:
+                recorder = get_cycle_recorder(self.coordinator.subspace.root_path)
+                cycle_data = await recorder.get_current_cycle(cyber_name)
+                if not cycle_data:
+                    raise HTTPException(status_code=404, detail=f"No current cycle for {cyber_name}")
+                return cycle_data
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Failed to get current cycle for {cyber_name}: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.get("/cybers/{cyber_name}/cycles/{cycle_number}")
+        async def get_cycle_data(cyber_name: str, cycle_number: int):
+            """Get data for a specific cycle."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            
+            try:
+                recorder = get_cycle_recorder(self.coordinator.subspace.root_path)
+                cycle_data = await recorder.get_cycle_data(cyber_name, cycle_number)
+                if not cycle_data:
+                    raise HTTPException(status_code=404, detail=f"Cycle {cycle_number} not found for {cyber_name}")
+                return cycle_data
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Failed to get cycle {cycle_number} for {cyber_name}: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.get("/cybers/{cyber_name}/cycles/{cycle_number}/{stage}")
+        async def get_stage_data(cyber_name: str, cycle_number: int, stage: str):
+            """Get data for a specific stage in a cycle."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            
+            try:
+                recorder = get_cycle_recorder(self.coordinator.subspace.root_path)
+                stage_data = await recorder.get_stage_data(cyber_name, cycle_number, stage)
+                if not stage_data:
+                    raise HTTPException(status_code=404, detail=f"Stage {stage} not found in cycle {cycle_number} for {cyber_name}")
+                return stage_data
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Failed to get stage {stage} for {cyber_name} cycle {cycle_number}: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.get("/cybers/{cyber_name}/cycles/range")
+        async def get_cycle_range(cyber_name: str, from_cycle: int, to_cycle: int):
+            """Get data for a range of cycles."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            
+            try:
+                recorder = get_cycle_recorder(self.coordinator.subspace.root_path)
+                cycles = await recorder.get_cycle_range(cyber_name, from_cycle, to_cycle)
+                return {"cyber": cyber_name, "from": from_cycle, "to": to_cycle, "cycles": cycles}
+            except Exception as e:
+                logger.error(f"Failed to get cycle range for {cyber_name}: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.get("/logs/tail")
+        async def get_log_tail(lines: int = 100, cyber: Optional[str] = None):
+            """Get recent log lines.
+            
+            Args:
+                lines: Number of lines to return
+                cyber: Optional cyber name to filter logs
+            """
+            try:
+                log_file = Path("mind-swarm.log")
+                if not log_file.exists():
+                    return {"logs": []}
+                
+                # Read last N lines efficiently
+                import subprocess
+                if cyber:
+                    # Filter for specific cyber
+                    cmd = f"grep '{cyber}' {log_file} | tail -n {lines}"
+                    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                else:
+                    cmd = f"tail -n {lines} {log_file}"
+                    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                
+                log_lines = result.stdout.strip().split('\n') if result.stdout else []
+                return {"logs": log_lines}
+            except Exception as e:
+                logger.error(f"Failed to get log tail: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         @self.app.websocket("/ws")
         async def websocket_endpoint(websocket: WebSocket):
-            """WebSocket endpoint for real-time updates."""
+            """WebSocket endpoint for real-time updates with state management."""
             await websocket.accept()
             self.clients.append(websocket)
             
+            # Register with state manager
+            ws_manager = get_ws_state_manager()
+            client_id = await ws_manager.register_client(websocket)
+            
             try:
-                # Send a simple connection confirmation instead of full status
-                await websocket.send_json({
-                    "type": "connected",
-                    "timestamp": datetime.now().isoformat()
-                })
-                
-                # Keep connection alive
+                # Keep connection alive and handle messages
                 while True:
                     try:
                         # Wait for client messages with timeout
@@ -1019,27 +1136,44 @@ class MindSwarmServer:
                             websocket.receive_text(),
                             timeout=300.0  # 5 minute timeout
                         )
-                        # Handle ping messages
-                        if data == "ping":
-                            await websocket.send_text("pong")
-                        else:
-                            # Echo other messages
-                            await websocket.send_text(f"Echo: {data}")
+                        
+                        # Parse and handle client message
+                        try:
+                            message = json.loads(data)
+                            await ws_manager.handle_client_message(client_id, message)
+                        except json.JSONDecodeError:
+                            # Handle simple text messages
+                            if data == "ping":
+                                await websocket.send_text("pong")
+                            else:
+                                await websocket.send_text(f"Echo: {data}")
+                                
                     except asyncio.TimeoutError:
                         # Send periodic ping to keep connection alive
                         try:
-                            await websocket.send_text("ping")
+                            await websocket.send_json({
+                                "type": "ping",
+                                "timestamp": datetime.now().isoformat()
+                            })
                         except:
                             break  # Connection is dead
                     
             except WebSocketDisconnect:
+                await ws_manager.unregister_client(client_id)
                 self.clients.remove(websocket)
             except Exception as e:
                 logger.error(f"WebSocket error: {e}")
-                self.clients.remove(websocket)
+                await ws_manager.unregister_client(client_id)
+                if websocket in self.clients:
+                    self.clients.remove(websocket)
     
     async def _broadcast_event(self, event: Dict[str, Any]):
         """Broadcast an event to all connected WebSocket clients."""
+        # Use WebSocket state manager for broadcasting
+        ws_manager = get_ws_state_manager()
+        await ws_manager.broadcast_event(event)
+        
+        # Also send to legacy clients (for backward compatibility)
         disconnected = []
         for client in self.clients:
             try:
