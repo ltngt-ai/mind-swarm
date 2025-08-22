@@ -14,16 +14,21 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Get SUBSPACE_ROOT from environment or use default
-SUBSPACE_ROOT="${SUBSPACE_ROOT:-/home/mind/subspace}"
+# Get SUBSPACE_ROOT from environment or use default relative to script location
+if [ -z "$SUBSPACE_ROOT" ]; then
+    # Default to ../subspace relative to the mind-swarm directory
+    SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+    SUBSPACE_ROOT="$(dirname "$SCRIPT_DIR")/subspace"
+fi
 
 echo -e "${YELLOW}Mind-Swarm Subspace Cleanup Script${NC}"
 echo "======================================="
 echo ""
 
-# Check if running with sudo
-if [ "$EUID" -ne 0 ]; then 
-    echo -e "${RED}This script must be run with sudo${NC}"
+# Check if we have write permissions to the subspace directory
+if [ ! -w "$SUBSPACE_ROOT" ]; then 
+    echo -e "${RED}No write permission for: $SUBSPACE_ROOT${NC}"
+    echo "You may need to run this script with sudo"
     echo "Usage: sudo ./clean_subspace.sh"
     exit 1
 fi
@@ -87,10 +92,17 @@ echo ""
 echo "Remaining items in subspace:"
 ls -la "$SUBSPACE_ROOT" | grep -v '^total'
 
-# Fix ownership if needed (ensure mind user owns everything)
-echo ""
-echo "Fixing ownership..."
-chown -R mind:mind "$SUBSPACE_ROOT"
+# Fix ownership if needed (ensure current user owns everything)
+# Only attempt if running as root/sudo
+if [ "$EUID" -eq 0 ]; then
+    echo ""
+    echo "Fixing ownership..."
+    # Get the actual user who ran sudo (or current user if not sudo)
+    ACTUAL_USER="${SUDO_USER:-$USER}"
+    if [ -n "$ACTUAL_USER" ]; then
+        chown -R "$ACTUAL_USER:$ACTUAL_USER" "$SUBSPACE_ROOT"
+    fi
+fi
 
 echo ""
 echo -e "${GREEN}✓ Subspace cleanup complete${NC}"

@@ -12,8 +12,12 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Get SUBSPACE_ROOT from environment or use default
-SUBSPACE_ROOT="${SUBSPACE_ROOT:-/home/mind/subspace}"
+# Get SUBSPACE_ROOT from environment or use default relative to script location
+if [ -z "$SUBSPACE_ROOT" ]; then
+    # Default to ../subspace relative to the mind-swarm directory
+    SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+    SUBSPACE_ROOT="$(dirname "$SCRIPT_DIR")/subspace"
+fi
 
 echo -e "${YELLOW}Mind-Swarm Subspace Cleanup - DRY RUN${NC}"
 echo "========================================="
@@ -83,4 +87,5 @@ fi
 echo ""
 echo "----------------------------------------"
 echo "To actually perform the cleanup, run:"
-echo -e "${YELLOW}sudo /opt/mind-swarm/clean_subspace.sh${NC}"
+echo -e "${YELLOW}./clean_subspace.sh${NC}"
+echo "(You may need to use sudo if you don't have write permissions)"

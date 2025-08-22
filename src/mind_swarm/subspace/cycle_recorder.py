@@ -58,18 +58,20 @@ class StageData:
 class CycleRecorder:
     """Records and manages per-cyber, cycle-based activity data."""
     
-    def __init__(self, subspace_root: Path, max_cycles_per_cyber: int = 100):
+    def __init__(self, subspace_root: Path, max_cycles_per_cyber: int = 100, event_emitter=None):
         """Initialize the cycle recorder.
         
         Args:
             subspace_root: Root path to subspace directory
             max_cycles_per_cyber: Maximum cycles to keep per cyber (older deleted)
+            event_emitter: Optional MonitoringEventEmitter for WebSocket events
         """
         self.subspace_root = Path(subspace_root)
         self.max_cycles = max_cycles_per_cyber
         self.active_cycles: Dict[str, CycleMetadata] = {}
         self.active_stages: Dict[str, StageData] = {}
         self.cycle_locks: Dict[str, Lock] = {}
+        self.event_emitter = event_emitter
         self.logger = logger
         
     def _get_cyber_cycles_dir(self, cyber_name: str) -> Path:
@@ -126,6 +128,10 @@ class CycleRecorder:
             
             # Cleanup old cycles if needed
             await self._cleanup_old_cycles(cyber_name)
+            
+            # Emit WebSocket event for cycle start
+            if self.event_emitter:
+                await self.event_emitter.emit_cycle_started(cyber_name, cycle_number)
             
             self.logger.debug(f"Started recording cycle {cycle_number} for {cyber_name}")
             
@@ -646,11 +652,12 @@ class CycleRecorder:
 _cycle_recorder: Optional[CycleRecorder] = None
 
 
-def get_cycle_recorder(subspace_root: Optional[Path] = None) -> CycleRecorder:
+def get_cycle_recorder(subspace_root: Optional[Path] = None, event_emitter=None) -> CycleRecorder:
     """Get the global cycle recorder instance.
     
     Args:
         subspace_root: Root path to subspace (required on first call)
+        event_emitter: Optional MonitoringEventEmitter for WebSocket events
         
     Returns:
         The global CycleRecorder instance
@@ -659,5 +666,5 @@ def get_cycle_recorder(subspace_root: Optional[Path] = None) -> CycleRecorder:
     if _cycle_recorder is None:
         if subspace_root is None:
             raise ValueError("subspace_root required for first initialization")
-        _cycle_recorder = CycleRecorder(subspace_root)
+        _cycle_recorder = CycleRecorder(subspace_root, event_emitter=event_emitter)
     return _cycle_recorder

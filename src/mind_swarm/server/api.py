@@ -128,6 +128,13 @@ class MindSwarmServer:
             # Set server reference for monitoring events
             set_server_reference(self)
             
+            # Initialize and start cycle monitor
+            from mind_swarm.subspace.cycle_monitor import get_cycle_monitor
+            import os
+            subspace_root = Path(os.environ.get("SUBSPACE_ROOT", "../subspace"))
+            self.cycle_monitor = get_cycle_monitor(subspace_root, event_emitter=get_event_emitter())
+            asyncio.create_task(self.cycle_monitor.start())
+            
             # Start the coordinator initialization in background
             # This prevents blocking the HTTP server startup
             asyncio.create_task(_initialize_coordinator())
@@ -180,6 +187,11 @@ class MindSwarmServer:
         async def shutdown():
             """Clean shutdown."""
             logger.info("FastAPI shutdown event triggered")
+            
+            # Stop cycle monitor
+            if hasattr(self, 'cycle_monitor'):
+                await self.cycle_monitor.stop()
+            
             # The actual shutdown is handled by the daemon's shutdown method
             # We just need to close websocket connections here
             for client in self.clients:
@@ -1000,122 +1012,7 @@ class MindSwarmServer:
                 if websocket in log_clients:
                     log_clients.remove(websocket)
         
-        # Cycle-based endpoints
-        @self.app.get("/cybers/{cyber_name}/cycles")
-        async def get_cyber_cycles(cyber_name: str, limit: int = 100):
-            """Get list of available cycles for a cyber.
-            
-            Args:
-                cyber_name: Name of the cyber
-                limit: Maximum number of cycles to return
-            """
-            if not self.coordinator:
-                raise HTTPException(status_code=503, detail="Server not initialized")
-            
-            try:
-                recorder = get_cycle_recorder(self.coordinator.subspace.root_path)
-                cycles = await recorder.list_cycles(cyber_name, limit)
-                return {"cyber": cyber_name, "cycles": cycles}
-            except Exception as e:
-                logger.error(f"Failed to get cycles for {cyber_name}: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
-        
-        @self.app.get("/cybers/{cyber_name}/cycles/current")
-        async def get_current_cycle(cyber_name: str):
-            """Get the current cycle data for a cyber."""
-            if not self.coordinator:
-                raise HTTPException(status_code=503, detail="Server not initialized")
-            
-            try:
-                recorder = get_cycle_recorder(self.coordinator.subspace.root_path)
-                cycle_data = await recorder.get_current_cycle(cyber_name)
-                if not cycle_data:
-                    raise HTTPException(status_code=404, detail=f"No current cycle for {cyber_name}")
-                return cycle_data
-            except HTTPException:
-                raise
-            except Exception as e:
-                logger.error(f"Failed to get current cycle for {cyber_name}: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
-        
-        @self.app.get("/cybers/{cyber_name}/cycles/{cycle_number}")
-        async def get_cycle_data(cyber_name: str, cycle_number: int):
-            """Get data for a specific cycle."""
-            if not self.coordinator:
-                raise HTTPException(status_code=503, detail="Server not initialized")
-            
-            try:
-                recorder = get_cycle_recorder(self.coordinator.subspace.root_path)
-                cycle_data = await recorder.get_cycle_data(cyber_name, cycle_number)
-                if not cycle_data:
-                    raise HTTPException(status_code=404, detail=f"Cycle {cycle_number} not found for {cyber_name}")
-                return cycle_data
-            except HTTPException:
-                raise
-            except Exception as e:
-                logger.error(f"Failed to get cycle {cycle_number} for {cyber_name}: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
-        
-        @self.app.get("/cybers/{cyber_name}/cycles/{cycle_number}/{stage}")
-        async def get_stage_data(cyber_name: str, cycle_number: int, stage: str):
-            """Get data for a specific stage in a cycle."""
-            if not self.coordinator:
-                raise HTTPException(status_code=503, detail="Server not initialized")
-            
-            try:
-                recorder = get_cycle_recorder(self.coordinator.subspace.root_path)
-                stage_data = await recorder.get_stage_data(cyber_name, cycle_number, stage)
-                if not stage_data:
-                    raise HTTPException(status_code=404, detail=f"Stage {stage} not found in cycle {cycle_number} for {cyber_name}")
-                return stage_data
-            except HTTPException:
-                raise
-            except Exception as e:
-                logger.error(f"Failed to get stage {stage} for {cyber_name} cycle {cycle_number}: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
-        
-        @self.app.get("/cybers/{cyber_name}/cycles/range")
-        async def get_cycle_range(cyber_name: str, from_cycle: int, to_cycle: int):
-            """Get data for a range of cycles."""
-            if not self.coordinator:
-                raise HTTPException(status_code=503, detail="Server not initialized")
-            
-            try:
-                recorder = get_cycle_recorder(self.coordinator.subspace.root_path)
-                cycles = await recorder.get_cycle_range(cyber_name, from_cycle, to_cycle)
-                return {"cyber": cyber_name, "from": from_cycle, "to": to_cycle, "cycles": cycles}
-            except Exception as e:
-                logger.error(f"Failed to get cycle range for {cyber_name}: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
-        
-        @self.app.get("/logs/tail")
-        async def get_log_tail(lines: int = 100, cyber: Optional[str] = None):
-            """Get recent log lines.
-            
-            Args:
-                lines: Number of lines to return
-                cyber: Optional cyber name to filter logs
-            """
-            try:
-                log_file = Path("mind-swarm.log")
-                if not log_file.exists():
-                    return {"logs": []}
-                
-                # Read last N lines efficiently
-                import subprocess
-                if cyber:
-                    # Filter for specific cyber
-                    cmd = f"grep '{cyber}' {log_file} | tail -n {lines}"
-                    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-                else:
-                    cmd = f"tail -n {lines} {log_file}"
-                    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-                
-                log_lines = result.stdout.strip().split('\n') if result.stdout else []
-                return {"logs": log_lines}
-            except Exception as e:
-                logger.error(f"Failed to get log tail: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+        # Cycle query endpoints removed - now handled via WebSocket
         
         @self.app.websocket("/ws")
         async def websocket_endpoint(websocket: WebSocket):

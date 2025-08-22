@@ -422,14 +422,23 @@ class KnowledgeHandler:
             # Create embedding function using BGE model for better semantic search
             # BGE (BAAI General Embedding) models are excellent for semantic similarity
             try:
+                # Try GPU first
                 self.embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
                     model_name="BAAI/bge-large-en-v1.5",
                     device="cuda"  # Use GPU for embeddings
                 )
                 logger.info("Using BGE-large embedding model with GPU acceleration for semantic search")
-            except Exception as e:
-                logger.warning(f"Failed to load BGE model, using default: {e}")
-                self.embedding_fn = None  # Will use ChromaDB default
+            except Exception as gpu_error:
+                # Fall back to CPU if GPU not available
+                try:
+                    self.embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
+                        model_name="BAAI/bge-large-en-v1.5",
+                        device="cpu"  # Use CPU for embeddings
+                    )
+                    logger.info("Using BGE-large embedding model with CPU (no GPU available)")
+                except Exception as cpu_error:
+                    logger.warning(f"Failed to load BGE model on CPU, using default embeddings: {cpu_error}")
+                    self.embedding_fn = None  # Will use ChromaDB default
             
             # Initialize shared collection
             self.shared_collection = self.chroma_client.get_or_create_collection(

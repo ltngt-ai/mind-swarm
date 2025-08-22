@@ -4,7 +4,7 @@
 			"path": "."
 		},
 		{
-			"path": "../../home/mind/subspace"
+			"path": "../subspace"
 		}
 	],
 	"settings": {

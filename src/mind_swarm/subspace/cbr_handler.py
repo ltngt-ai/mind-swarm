@@ -581,14 +581,23 @@ class CBRHandler:
         self.embedding_fn = embedding_fn
         if not self.embedding_fn:
             try:
+                # Try GPU first
                 self.embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
                     model_name="BAAI/bge-large-en-v1.5",
                     device="cuda"  # Use GPU for embeddings
                 )
                 logger.info("CBR using BGE-large embedding model with GPU acceleration")
-            except:
-                logger.info("CBR using default embeddings")
-                self.embedding_fn = None
+            except Exception as gpu_error:
+                # Fall back to CPU if GPU not available
+                try:
+                    self.embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
+                        model_name="BAAI/bge-large-en-v1.5",
+                        device="cpu"  # Use CPU for embeddings
+                    )
+                    logger.info("CBR using BGE-large embedding model with CPU (no GPU available)")
+                except Exception as cpu_error:
+                    logger.warning(f"CBR failed to load BGE model on CPU, using default embeddings: {cpu_error}")
+                    self.embedding_fn = None
     
     def get_handler(self, cyber_id: str) -> Optional[CyberCBRHandler]:
         """Get or create a CBR handler for a specific cyber."""

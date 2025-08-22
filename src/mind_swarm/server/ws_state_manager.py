@@ -13,6 +13,9 @@ from fastapi import WebSocket
 import hashlib
 
 from mind_swarm.utils.logging import logger
+from mind_swarm.subspace.cycle_recorder import get_cycle_recorder
+from mind_swarm.server.monitoring_events import get_event_emitter
+from pathlib import Path
 
 
 @dataclass
@@ -367,6 +370,149 @@ class WebSocketStateManager:
             # Respond to ping
             await self.send_to_client(client_id, {
                 "type": "pong",
+                "timestamp": datetime.now().isoformat()
+            })
+            
+        elif msg_type == "get_current_reflection":
+            # Get current reflection for a cyber
+            await self._handle_get_current_reflection(client_id, message)
+            
+        elif msg_type == "get_cycle_data":
+            # Get data for a specific cycle
+            await self._handle_get_cycle_data(client_id, message)
+            
+        elif msg_type == "get_cycles":
+            # List cycles for a cyber
+            await self._handle_get_cycles(client_id, message)
+    
+    async def _handle_get_current_reflection(self, client_id: str, message: Dict[str, Any]) -> None:
+        """Handle request for current reflection of a cyber."""
+        cyber_name = message.get("cyber")
+        if not cyber_name:
+            await self.send_to_client(client_id, {
+                "type": "error",
+                "data": {"error": "cyber name required"},
+                "request_id": message.get("request_id"),
+                "timestamp": datetime.now().isoformat()
+            })
+            return
+        
+        try:
+            # Get subspace root from environment or default
+            import os
+            subspace_root = Path(os.environ.get("SUBSPACE_ROOT", "../subspace"))
+            recorder = get_cycle_recorder(subspace_root, event_emitter=get_event_emitter())
+            
+            # Get current cycle data
+            cycle_data = await recorder.get_current_cycle(cyber_name)
+            
+            # Extract reflection if available
+            reflection = None
+            if cycle_data and "reflection_from_last_cycle" in cycle_data:
+                reflection = cycle_data["reflection_from_last_cycle"]
+            elif cycle_data and "reflection" in cycle_data:
+                # Try the reflection stage output
+                reflection_stage = cycle_data.get("reflection", {})
+                reflection = reflection_stage.get("stage_output", {})
+            
+            await self.send_to_client(client_id, {
+                "type": "current_reflection",
+                "data": {
+                    "cyber": cyber_name,
+                    "reflection": reflection,
+                    "cycle_number": cycle_data.get("metadata", {}).get("cycle_number") if cycle_data else None
+                },
+                "request_id": message.get("request_id"),
+                "timestamp": datetime.now().isoformat()
+            })
+            
+        except Exception as e:
+            logger.error(f"Failed to get current reflection for {cyber_name}: {e}")
+            await self.send_to_client(client_id, {
+                "type": "error",
+                "data": {"error": str(e)},
+                "request_id": message.get("request_id"),
+                "timestamp": datetime.now().isoformat()
+            })
+    
+    async def _handle_get_cycle_data(self, client_id: str, message: Dict[str, Any]) -> None:
+        """Handle request for specific cycle data."""
+        cyber_name = message.get("cyber")
+        cycle_number = message.get("cycle_number")
+        
+        if not cyber_name or cycle_number is None:
+            await self.send_to_client(client_id, {
+                "type": "error",
+                "data": {"error": "cyber name and cycle_number required"},
+                "request_id": message.get("request_id"),
+                "timestamp": datetime.now().isoformat()
+            })
+            return
+        
+        try:
+            import os
+            subspace_root = Path(os.environ.get("SUBSPACE_ROOT", "../subspace"))
+            recorder = get_cycle_recorder(subspace_root, event_emitter=get_event_emitter())
+            
+            cycle_data = await recorder.get_cycle_data(cyber_name, cycle_number)
+            
+            await self.send_to_client(client_id, {
+                "type": "cycle_data",
+                "data": {
+                    "cyber": cyber_name,
+                    "cycle_number": cycle_number,
+                    "data": cycle_data
+                },
+                "request_id": message.get("request_id"),
+                "timestamp": datetime.now().isoformat()
+            })
+            
+        except Exception as e:
+            logger.error(f"Failed to get cycle data for {cyber_name}: {e}")
+            await self.send_to_client(client_id, {
+                "type": "error",
+                "data": {"error": str(e)},
+                "request_id": message.get("request_id"),
+                "timestamp": datetime.now().isoformat()
+            })
+    
+    async def _handle_get_cycles(self, client_id: str, message: Dict[str, Any]) -> None:
+        """Handle request for list of cycles."""
+        cyber_name = message.get("cyber")
+        limit = message.get("limit", 100)
+        
+        if not cyber_name:
+            await self.send_to_client(client_id, {
+                "type": "error",
+                "data": {"error": "cyber name required"},
+                "request_id": message.get("request_id"),
+                "timestamp": datetime.now().isoformat()
+            })
+            return
+        
+        try:
+            import os
+            subspace_root = Path(os.environ.get("SUBSPACE_ROOT", "../subspace"))
+            recorder = get_cycle_recorder(subspace_root, event_emitter=get_event_emitter())
+            
+            cycles = await recorder.list_cycles(cyber_name, limit)
+            
+            await self.send_to_client(client_id, {
+                "type": "cycles_list",
+                "data": {
+                    "cyber": cyber_name,
+                    "cycles": cycles
+                },
+                "request_id": message.get("request_id"),
+                "timestamp": datetime.now().isoformat()
+            })
+            
+        except Exception as e:
+            logger.error(f"Failed to list cycles for {cyber_name}: {e}")
+            await self.send_to_client(client_id, {
+                "type": "error",
+                "data": {"error": str(e)},
+                "request_id": message.get("request_id"),
                 "timestamp": datetime.now().isoformat()
             })
 
