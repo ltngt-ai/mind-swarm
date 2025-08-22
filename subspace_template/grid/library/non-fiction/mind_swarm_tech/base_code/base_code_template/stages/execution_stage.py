@@ -450,6 +450,9 @@ class ExecutionStage:
             if script:
                 script = self._clean_script(script)
                 logger.info(f"📋 Generated {len(script.split(chr(10)))} lines of Python code")
+                # Log a preview of the generated script
+                formatted_preview = self._format_script_for_logging(script, max_lines=8)
+                logger.debug(f"📋 Generated script:\n{formatted_preview}")
                 return script
         
         return None
@@ -507,12 +510,31 @@ The provided API docs describe the available operations and their usage.
             
         return cleaned
     
+    def _format_script_for_logging(self, script: str, max_lines: int = 10) -> str:
+        """Format a script nicely for logging with proper indentation."""
+        try:
+            lines = script.split('\n')
+            if len(lines) <= max_lines:
+                # Show the entire script if it's short
+                formatted = '\n'.join(f"    {line}" for line in lines)
+            else:
+                # Show first max_lines with truncation indicator
+                preview_lines = lines[:max_lines]
+                formatted = '\n'.join(f"    {line}" for line in preview_lines)
+                formatted += f"\n    ... ({len(lines) - max_lines} more lines)"
+            return formatted
+        except Exception:
+            return "    <unable to format script>"
+    
     async def execute_script(self, script: str) -> List[Dict[str, Any]]:
         """Execute the generated Python script with new memory API."""
         try:
-            logger.info(f"⚡ Executing Python script ({len(script)} characters)...")
+            logger.info(f"⚡ Executing Python script ({len(script)} characters, {len(script.split(chr(10)))} lines)")
+            # Log formatted script preview
+            formatted_script = self._format_script_for_logging(script)
+            logger.info(f"📝 Script preview:\n{formatted_script}")
         except Exception:
-            # Even logging the script length failed
+            # Even logging the script failed
             logger.info("⚡ Executing Python script...")
         
         # Update phase
@@ -554,9 +576,9 @@ The provided API docs describe the available operations and their usage.
                         
                         if fixed_script and fixed_script != current_script:
                             current_script = fixed_script
-                            # Log first few lines of the fixed script for debugging
-                            script_preview = '\n'.join(fixed_script.split('\n')[:5])
-                            logger.info(f"📝 Generated fixed script, retrying... First 5 lines:\n{script_preview}")
+                            # Log formatted fixed script for debugging
+                            formatted_fixed = self._format_script_for_logging(fixed_script, max_lines=8)
+                            logger.info(f"📝 Generated fixed script, retrying...\n{formatted_fixed}")
                         else:
                             logger.warning(f"❌ Could not fix {result.get('error_type', 'Unknown')} error, attempt {attempt}/{max_attempts}")
                     except Exception as fix_error:

@@ -667,6 +667,141 @@ class SubspaceCoordinator:
         
         return all_agents
     
+    async def resurrect_cyber(self, name: str) -> bool:
+        """Attempt to resurrect a crashed cyber.
+        
+        Args:
+            name: Name of the cyber to resurrect
+            
+        Returns:
+            True if resurrection successful, False otherwise
+        """
+        logger.info(f"🔄 Attempting to resurrect cyber {name}")
+        
+        # Check if cyber directory exists
+        cyber_dir = self.subspace.agents_dir / name
+        if not await aiofiles.os.path.exists(cyber_dir):
+            logger.error(f"Cannot resurrect {name}: cyber directory not found")
+            return False
+        
+        # Check if cyber is actually dead
+        states = await self.spawner.get_cyber_states()
+        if name in states and states[name].get('status') == 'running':
+            logger.info(f"Cyber {name} is already running")
+            return True
+        
+        # Clean up any stale shutdown file
+        shutdown_file = cyber_dir / ".internal" / "shutdown"
+        if await aiofiles.os.path.exists(shutdown_file):
+            try:
+                await aiofiles.os.remove(shutdown_file)
+                logger.info(f"Removed stale shutdown file for {name}")
+            except Exception as e:
+                logger.error(f"Failed to remove shutdown file: {e}")
+        
+        # Get cyber configuration from registry
+        cyber_info = await self.agent_registry.get_cyber(name)
+        if not cyber_info:
+            logger.error(f"Cannot resurrect {name}: not found in registry")
+            return False
+        
+        # Attempt to start the cyber
+        try:
+            logger.info(f"Starting cyber {name} with type {cyber_info.get('cyber_type', 'general')}")
+            
+            # Use the spawner to start the cyber
+            process = await self.spawner.start_cyber(
+                name=name,
+                cyber_type=CyberType(cyber_info.get('cyber_type', 'general')),
+                premium=cyber_info.get('premium', False)
+            )
+            
+            if process:
+                logger.info(f"✅ Successfully resurrected cyber {name}")
+                
+                # Update activation count in state manager
+                await self.state_manager.record_activation(name)
+                
+                # Emit resurrection event
+                if hasattr(self, 'event_emitter') and self.event_emitter:
+                    await self.event_emitter.emit_cyber_resurrected(name)
+                
+                return True
+            else:
+                logger.error(f"Failed to start process for {name}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Failed to resurrect cyber {name}: {e}", exc_info=True)
+            return False
+    
+    async def check_and_resurrect_cybers(self) -> int:
+        """Check all registered cybers and resurrect any that have crashed.
+        
+        Returns:
+            Number of cybers resurrected
+        """
+        resurrected_count = 0
+        
+        try:
+            # Get all registered cybers
+            all_cybers = await self.agent_registry.list_cybers()
+            
+            # Get current running states
+            running_states = await self.spawner.get_cyber_states()
+            running_names = set(running_states.keys())
+            
+            # Check each registered cyber
+            for cyber_info in all_cybers:
+                name = cyber_info['name']
+                
+                # Skip if already running
+                if name in running_names:
+                    continue
+                
+                # Check if cyber directory exists (hasn't been deleted)
+                cyber_dir = self.subspace.agents_dir / name
+                if not await aiofiles.os.path.exists(cyber_dir):
+                    logger.debug(f"Skipping {name}: directory doesn't exist")
+                    continue
+                
+                # Check heartbeat to see if it's really dead
+                heartbeat_file = cyber_dir / ".internal" / "heartbeat.json"
+                if await aiofiles.os.path.exists(heartbeat_file):
+                    try:
+                        async with aiofiles.open(heartbeat_file, 'r') as f:
+                            content = await f.read()
+                            import json
+                            heartbeat = json.loads(content)
+                            
+                        # Check if heartbeat is stale (older than 60 seconds)
+                        from datetime import datetime
+                        last_heartbeat = datetime.fromisoformat(heartbeat.get('timestamp', '2000-01-01'))
+                        age = (datetime.now() - last_heartbeat).total_seconds()
+                        
+                        if age > 60:  # Heartbeat is stale
+                            logger.warning(f"Cyber {name} has stale heartbeat ({age:.0f}s old), attempting resurrection")
+                            if await self.resurrect_cyber(name):
+                                resurrected_count += 1
+                    except Exception as e:
+                        logger.debug(f"Could not check heartbeat for {name}: {e}")
+                        # Try to resurrect anyway
+                        if await self.resurrect_cyber(name):
+                            resurrected_count += 1
+                else:
+                    # No heartbeat file, cyber is definitely not running
+                    logger.info(f"Cyber {name} has no heartbeat, attempting resurrection")
+                    if await self.resurrect_cyber(name):
+                        resurrected_count += 1
+            
+            if resurrected_count > 0:
+                logger.info(f"🔄 Resurrected {resurrected_count} cyber(s)")
+                
+        except Exception as e:
+            logger.error(f"Error during resurrection check: {e}", exc_info=True)
+        
+        return resurrected_count
+    
     async def _load_default_knowledge(self):
         """Load default knowledge documents into ChromaDB if not already loaded."""
         if not self.knowledge_handler or not self.knowledge_handler.enabled:
@@ -1060,6 +1195,8 @@ class SubspaceCoordinator:
         
         refresh_counter = 0
         REFRESH_INTERVAL = 20  # Refresh registry every 10 seconds (20 * 0.5s)
+        resurrection_counter = 0
+        RESURRECTION_INTERVAL = 60  # Check for dead cybers every 30 seconds (60 * 0.5s)
         
         while self._running:
             try:
@@ -1071,6 +1208,12 @@ class SubspaceCoordinator:
                 if refresh_counter >= REFRESH_INTERVAL:
                     self.agent_registry.refresh_registry()
                     refresh_counter = 0
+                
+                # Periodically check for and resurrect dead cybers
+                resurrection_counter += 1
+                if resurrection_counter >= RESURRECTION_INTERVAL:
+                    await self.check_and_resurrect_cybers()
+                    resurrection_counter = 0
                 
                 # Small delay to prevent busy waiting
                 await asyncio.sleep(0.5)
