@@ -406,6 +406,7 @@ class WebSocketStateManager:
             # Try to get reflection from memory first (most current)
             reflection_file = Path(os.environ.get("SUBSPACE_ROOT", "../subspace")) / "cybers" / cyber_name / ".internal" / "memory" / "reflection_on_last_cycle.json"
             reflection = None
+            cycle_data = None
             
             if reflection_file.exists():
                 try:
@@ -432,6 +433,10 @@ class WebSocketStateManager:
                     reflection = reflection_stage.get("stage_output", {})
                     if isinstance(reflection, dict):
                         reflection = reflection.get("insights", reflection)
+            
+            # Get cycle number if we don't have cycle_data yet
+            if not cycle_data:
+                cycle_data = await recorder.get_current_cycle(cyber_name)
             
             await self.send_to_client(client_id, {
                 "type": "current_reflection",
