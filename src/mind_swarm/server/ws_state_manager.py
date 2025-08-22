@@ -403,17 +403,35 @@ class WebSocketStateManager:
             subspace_root = Path(os.environ.get("SUBSPACE_ROOT", "../subspace"))
             recorder = get_cycle_recorder(subspace_root, event_emitter=get_event_emitter())
             
-            # Get current cycle data
-            cycle_data = await recorder.get_current_cycle(cyber_name)
-            
-            # Extract reflection if available
+            # Try to get reflection from memory first (most current)
+            reflection_file = Path(os.environ.get("SUBSPACE_ROOT", "../subspace")) / "cybers" / cyber_name / ".internal" / "memory" / "reflection_on_last_cycle.json"
             reflection = None
-            if cycle_data and "reflection_from_last_cycle" in cycle_data:
-                reflection = cycle_data["reflection_from_last_cycle"]
-            elif cycle_data and "reflection" in cycle_data:
-                # Try the reflection stage output
-                reflection_stage = cycle_data.get("reflection", {})
-                reflection = reflection_stage.get("stage_output", {})
+            
+            if reflection_file.exists():
+                try:
+                    import json
+                    with open(reflection_file, 'r') as f:
+                        reflection_data = json.load(f)
+                        # Extract insights which is the main reflection text
+                        if isinstance(reflection_data, dict):
+                            reflection = reflection_data.get("insights", reflection_data)
+                        else:
+                            reflection = reflection_data
+                except:
+                    pass
+            
+            # Fallback to cycle data if no memory file
+            if not reflection:
+                cycle_data = await recorder.get_current_cycle(cyber_name)
+                if cycle_data and "reflection_from_last_cycle" in cycle_data:
+                    reflection = cycle_data["reflection_from_last_cycle"]
+                    if isinstance(reflection, dict):
+                        reflection = reflection.get("insights", reflection)
+                elif cycle_data and "reflection" in cycle_data:
+                    reflection_stage = cycle_data.get("reflection", {})
+                    reflection = reflection_stage.get("stage_output", {})
+                    if isinstance(reflection, dict):
+                        reflection = reflection.get("insights", reflection)
             
             await self.send_to_client(client_id, {
                 "type": "current_reflection",
