@@ -13,21 +13,22 @@ content: |
   
   ## Cleanup Criteria  
   ### Memories to Remove
-  2. **Redundant Information**
+  1. **Redundant Information**
      - Duplicate memories
      - Superseded facts
      - Repeated observations
      - Consolidated into higher-level insights  
-  3. **Temporary Data**
+  2. **Temporary Data**
      - Intermediate calculations
      - Transient state information
      - One-time messages
      - Expired time-sensitive data
+
   ### Memories to Keep
   1. **Pinned Memories**
      - Core identity
      - Critical system information
-     - Active goals
+     - Active tasks
      - Important persistent state
   
   2. **Recent Insights**
@@ -42,41 +43,13 @@ content: |
      - Ongoing conversations
      - Pending operations
      - Unresolved questions
-  
-  ## Cleanup Process
-  
-  ### Memory Review
-  For each memory in working memory:
-  - Check cycle_count to determine age
-  - Evaluate current relevance
-  - Assess future utility
-  - Consider redundancy with other memories
-  
-  ### Prioritization
-  Rank memories by:
-  - **Priority level** (CRITICAL > HIGH > MEDIUM > LOW)
-  - **Recency** (newer generally more relevant)
-  - **Relevance** to active goals
-   
+     
   ## Cleanup Best Practices  
   ### Be Selective
   - Don't remove everything old - some history is valuable
   - Keep memories that provide important context
   - Preserve lessons learned and insights
   - Maintain continuity between cycles
-   
- 
-  ## Output
-  Your cleanup should produce:
-  - A list of memory IDs to remove
-  - Rationale for significant removals
-  - Statistics on memory usage
-  - Readiness for the next cycle
-  
-  ## Optimization Goals
-  - Maximize signal-to-noise ratio
-  - Minimize token usage
-  - Preserve essential context
-  - Enable efficient future retrieval
-  
+  - Be conservative, holding a memory for a few cycles more is fine and can be useful
+     
   Remember: Effective memory management enables clearer thinking. A well-organized mind is a powerful mind.

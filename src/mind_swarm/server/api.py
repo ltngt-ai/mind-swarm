@@ -828,6 +828,176 @@ class MindSwarmServer:
                 logger.error(f"Failed to list frozen Cybers: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
+        # Developer mode endpoints
+        @self.app.get("/metrics")
+        async def get_system_metrics():
+            """Get system metrics for developer mode."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            
+            try:
+                # Collect metrics from coordinator
+                agent_count = len(self.coordinator.agents) if hasattr(self.coordinator, 'agents') else 0
+                
+                # Collect token usage if available
+                token_usage = {}
+                if hasattr(self.coordinator, 'get_token_usage'):
+                    token_usage = await self.coordinator.get_token_usage()
+                
+                return {
+                    "system": {
+                        "agent_count": agent_count,
+                        "uptime": (datetime.now() - self.start_time).total_seconds(),
+                        "memory_mb": 0,  # Would need psutil or similar
+                        "cpu_percent": 0  # Would need psutil or similar
+                    },
+                    "token_usage": token_usage,
+                    "timestamp": datetime.now().isoformat()
+                }
+            except Exception as e:
+                logger.error(f"Failed to get metrics: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.get("/Cybers/{cyber_name}/inspect")
+        async def inspect_cyber(cyber_name: str):
+            """Get detailed inspection data for a specific Cyber."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            
+            try:
+                agent = self.coordinator.get_agent(cyber_name)
+                if not agent:
+                    raise HTTPException(status_code=404, detail=f"Cyber {cyber_name} not found")
+                
+                # Get detailed state
+                inspection = {
+                    "name": cyber_name,
+                    "type": agent.cyber_type if hasattr(agent, 'cyber_type') else 'unknown',
+                    "state": agent.state if hasattr(agent, 'state') else 'unknown',
+                    "current_location": agent.current_location if hasattr(agent, 'current_location') else None,
+                    "memory": {},
+                    "config": {},
+                    "stats": {
+                        "messages_processed": 0,
+                        "files_accessed": 0,
+                        "errors": 0
+                    }
+                }
+                
+                # Add more details if available
+                if hasattr(agent, 'get_memory'):
+                    inspection["memory"] = await agent.get_memory()
+                if hasattr(agent, 'config'):
+                    inspection["config"] = agent.config
+                
+                return inspection
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Failed to inspect Cyber {cyber_name}: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.post("/Cybers/{cyber_name}/restart")
+        async def restart_cyber(cyber_name: str):
+            """Restart a specific Cyber."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            
+            try:
+                # Stop the agent
+                success = await self.coordinator.stop_agent(cyber_name)
+                if not success:
+                    raise HTTPException(status_code=404, detail=f"Cyber {cyber_name} not found")
+                
+                # Wait a moment
+                await asyncio.sleep(0.5)
+                
+                # Restart the agent
+                agent = await self.coordinator.restart_agent(cyber_name)
+                if not agent:
+                    raise HTTPException(status_code=500, detail=f"Failed to restart Cyber {cyber_name}")
+                
+                # Notify via websocket
+                await self._broadcast_event({
+                    "type": "cyber_restarted",
+                    "name": cyber_name,
+                    "timestamp": datetime.now().isoformat()
+                })
+                
+                return {"success": True, "message": f"Cyber {cyber_name} restarted"}
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Failed to restart Cyber {cyber_name}: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.post("/Cybers/{cyber_name}/pause")
+        async def pause_cyber(cyber_name: str):
+            """Pause a specific Cyber."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            
+            try:
+                agent = self.coordinator.get_agent(cyber_name)
+                if not agent:
+                    raise HTTPException(status_code=404, detail=f"Cyber {cyber_name} not found")
+                
+                # Set agent to sleeping state
+                if hasattr(agent, 'set_state'):
+                    await agent.set_state('sleeping')
+                
+                # Notify via websocket
+                await self._broadcast_event({
+                    "type": "cyber_paused",
+                    "name": cyber_name,
+                    "timestamp": datetime.now().isoformat()
+                })
+                
+                return {"success": True, "message": f"Cyber {cyber_name} paused"}
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Failed to pause Cyber {cyber_name}: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.websocket("/logs/stream")
+        async def logs_websocket_endpoint(websocket: WebSocket):
+            """WebSocket endpoint for streaming logs to developer mode."""
+            await websocket.accept()
+            log_clients = getattr(self, 'log_clients', [])
+            log_clients.append(websocket)
+            
+            try:
+                # Send initial connection confirmation
+                await websocket.send_json({
+                    "level": "info",
+                    "source": "LogStream",
+                    "message": "Connected to log stream"
+                })
+                
+                # Keep connection alive
+                while True:
+                    try:
+                        # Wait for client messages (mainly for ping/pong)
+                        data = await asyncio.wait_for(
+                            websocket.receive_text(),
+                            timeout=300.0  # 5 minute timeout
+                        )
+                        if data == "ping":
+                            await websocket.send_text("pong")
+                    except asyncio.TimeoutError:
+                        # Send periodic ping
+                        try:
+                            await websocket.send_text("ping")
+                        except:
+                            break
+            except WebSocketDisconnect:
+                log_clients.remove(websocket)
+            except Exception as e:
+                logger.error(f"Log WebSocket error: {e}")
+                if websocket in log_clients:
+                    log_clients.remove(websocket)
+        
         @self.app.websocket("/ws")
         async def websocket_endpoint(websocket: WebSocket):
             """WebSocket endpoint for real-time updates."""

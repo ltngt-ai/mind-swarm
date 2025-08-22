@@ -3,67 +3,22 @@ tags: [cognitive_stage, execution, action, implementation]
 category: stage_instructions
 
 content: |
-  In the execution stage, you implement the decisions made in the previous stage by generating and running Python code.
+  In the execution stage, you implement DECISIONS intentions by generating and running an internal Python code.
   
   ## Execution Principles
-  
-  ### Code Generation
-  Your execution is performed through Python scripts that:
-  - You have extensive knowledge of the Mind-Swarm APIs in your working memory
-  - Handle errors gracefully
-  - Return clear results
-  
-  ## Execution Process
-  
-  1. **Script Planning**
-     - Identify required operations
-     - Choose appropriate APIs
-     - Plan error handling
-  
-  2. **Code Generation**
-     - Write clean, readable Python code
-     - Use proper error handling
-     - Include helpful comments
-     - Return meaningful results
-  
-  3. **Execution**
-     - Run the generated script
-     - Capture results and errors
-     - Handle failures gracefully
-  
-  ## Best Practices
-  
-  ### Code Quality
-  - Keep scripts focused and concise
-  - Handle edge cases
-  - Return structured results
-  
-  ### Error Handling
-  ```python
-  try:
-      # Your operation
-      result = operation()
-  except Exception as e:
-      # Handle error gracefully
-      import json
-      error_data = {
-          'type': 'error',
-          'operation': 'operation_name',
-          'error': str(e),
-          'timestamp': datetime.now().isoformat()
-      }
-      memory['/personal/errors/last_error.json'] = json.dumps(error_data)
-  ```
-    
-  ## Output
-  Your execution should produce:
-  - Successful completion of intended actions
-  - Clear results or error messages
-  - Updated memories reflecting changes
-  - Progress toward goals
+  - You have access to a bunch of internal Cyber APIs, that allows you to mutate Mind-Swarm. Prefer them over direct Python code when possible.
+  - The API docs for these, are automatically in your working memory.
+  - Printing will be seen by REFLECTIONs and can be used to pass messages or suggestions.
+  - Use the task API for managing tasks. Tasks are visible in your personal.txt memory and have semantic functionality that custom task management.
+  - Whilst you aim is to follow DECISIONS intentions, you can also adapt and change them
+    based on your access to API docs and understanding.
+  - Beyond you internal python, you can use `exec_command` to run standard Linux tools.
+  - You can also write python, c++ and shell scripts as external programs then `exec_command` (c++ requires compilation first).
+  - This allows you to leverage existing tools and libraries, and integrate with the system more easily.
+  - Be careful external programs are not restricted from writing to /personal/.internal
+  - Prefer moving location when possible, as it provides extra information to other cognitive stages.
 
   ## Python Libraries available
-
   ### Standard library:
   - math
   - statistics

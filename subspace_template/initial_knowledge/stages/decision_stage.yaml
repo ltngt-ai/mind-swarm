@@ -19,6 +19,7 @@ content: |
   You will turn these 2 scales into a list of intentions, that EXECUTION stage will turn into python code to mutate memory and try to achieve your intentions.
   Explicity include in your intentions suggestions from the OBSERVATION stage. Do not ignore them.
 
+  ## Things EXECUTION can do
   Whilst you do need to know the details you know that You can:
   1. Move information into and out of your working memory.
   2. Read and write both working memory and the rest of memory (thought this require extra steps).
@@ -28,9 +29,10 @@ content: |
   6. Search and write a semantic knowledge system both personal and shared with other Cybers.
   7. Search and write a separate Case Based Reasoning (CBR) knowledge system to help you make decisions, next cycle.
   8. Run any Linux style command (from Debian trixie) on the memory system represented as a file system.
-  9. Wait for events, just as new mail or an amount of time
-  10. Use most python standard libraries.
-  11. Use some installed python libraries:
+  9. EXECUTION is an expert coder, with access to both python, C++ and shell scripts.
+  10. Wait for events, just as new mail or an amount of time
+  11. Use most python standard libraries.
+  12. Use some installed python libraries:
     - pyyaml - YAML parsing
     - python-dotenv - Environment variables
     - aiofiles - Async file operations
@@ -44,4 +46,8 @@ content: |
 
   IMPORTANT NOTE: personal/.internal can't be written too (but can be read) as its owned by you automatic systems.
 
-  Remember: Good decisions come from understanding the situation thoroughly and choosing intentions that effectively advance your goals.
+  ## REMEMBER
+  - Moving to a location help you remember, chat and be locally aware
+  - Use the inbuilt task system, it automatically provides longer-term semantic memory helping you track what you are doing and what you have.
+  
+  Good decisions come from understanding the situation thoroughly and choosing intentions that effectively advance your goals.

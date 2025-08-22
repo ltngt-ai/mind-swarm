@@ -139,8 +139,9 @@ class SubscriptionLimits:
         Returns:
             SubscriptionLimits for Cerebras
         """
-        daily_tokens = 120_000_000  # 120M tokens per day
-        tokens_per_minute = daily_tokens // (24 * 60)  # ~83,333 tokens/min
+        # Apply 10% buffer to stay safely within limits
+        daily_tokens = int(120_000_000 * 0.9)  # 108M tokens per day (90% of 120M)
+        tokens_per_minute = daily_tokens // (24 * 60)  # ~75,000 tokens/min
         
         # Count active cybers dynamically if not provided
         if active_cybers is None:
@@ -162,10 +163,10 @@ class SubscriptionLimits:
             except:
                 active_cybers = 2  # Safe default if counting fails
         
-        # With huge context windows (131k), per-minute limits don't make sense
-        # Instead, just ensure we don't exceed daily budget
-        # Allow full minute budget per cyber since requests are naturally spaced
-        tokens_per_cyber = tokens_per_minute  # 83k tokens/min when needed
+        # Divide the per-minute budget among active cybers to prevent overuse
+        # With 4 cybers at 8MT/hr, we need to throttle more aggressively
+        # Target: reduce from 8MT/hr to ~5MT/hr (120MT/24hr)
+        tokens_per_cyber = tokens_per_minute // max(1, active_cybers)  # Split budget among cybers
         
         return cls(
             provider="cerebras",
@@ -200,6 +201,9 @@ class TokenTracker:
         self.daily_usage: Dict[str, int] = defaultdict(int)
         self.last_daily_reset = datetime.now().date()
         
+        # Track when we last updated rates (check every 5 minutes)
+        self.last_rate_update = datetime.now()
+        
         # Initialize subscriptions
         self._init_subscriptions()
         
@@ -217,21 +221,42 @@ class TokenTracker:
         if os.getenv("CEREBRAS_API_KEY"):
             # Let it auto-count active cybers
             self.subscriptions["cerebras"] = SubscriptionLimits.for_cerebras()
-            logger.info(f"Initialized Cerebras subscription: 120M tokens/day, "
-                       f"{self.subscriptions['cerebras'].tokens_per_cyber_per_minute:,} tokens/min per cyber")
+            total_rate = self.subscriptions['cerebras'].tokens_per_minute
+            per_cyber_rate = self.subscriptions['cerebras'].tokens_per_cyber_per_minute
+            daily_limit = self.subscriptions['cerebras'].daily_tokens
+            logger.info(f"Initialized Cerebras subscription: {daily_limit/1_000_000:.0f}M tokens/day (with 10% buffer), "
+                       f"Total: {total_rate:,} tokens/min, Per cyber: {per_cyber_rate:,} tokens/min")
+    
+    def _update_all_cyber_rates(self, provider: str = "cerebras") -> None:
+        """Update token rates for all cybers when cyber count changes."""
+        if provider not in self.subscriptions:
+            return
+            
+        # Recalculate limits based on current active cybers
+        limits = SubscriptionLimits.for_cerebras()
+        self.subscriptions[provider] = limits
+        
+        # Update all existing cyber token buckets
+        for cyber_id, usage in self.usage.items():
+            old_rate = usage.tokens_per_minute
+            usage.tokens_per_minute = limits.tokens_per_cyber_per_minute
+            usage.max_bucket_size = limits.tokens_per_cyber_per_minute * 3
+            
+            if old_rate != usage.tokens_per_minute:
+                logger.info(f"Updated {cyber_id} token rate: {old_rate:,} -> {usage.tokens_per_minute:,} tokens/min")
     
     def _get_or_create_usage(self, cyber_id: str, provider: str) -> TokenUsage:
         """Get or create usage tracker for a cyber."""
         if cyber_id not in self.usage:
+            # When adding a new cyber, update rates for all cybers
+            if provider in self.subscriptions:
+                self._update_all_cyber_rates(provider)
+            
             usage = TokenUsage(cyber_id=cyber_id)
             
             # Initialize token bucket if using subscription provider
             if provider in self.subscriptions:
                 limits = self.subscriptions[provider]
-                # Recalculate per-cyber rate based on current active cybers
-                if provider == "cerebras":
-                    limits = SubscriptionLimits.for_cerebras()
-                    self.subscriptions[provider] = limits
                 
                 usage.tokens_per_minute = limits.tokens_per_cyber_per_minute
                 # Allow accumulating up to 3 minutes worth of tokens
@@ -306,6 +331,13 @@ class TokenTracker:
         with self.lock:
             # Check daily reset
             self._check_daily_reset()
+            
+            # Periodically update rates if cyber count changed (every 5 minutes)
+            if provider in self.subscriptions:
+                now = datetime.now()
+                if (now - self.last_rate_update).total_seconds() > 300:  # 5 minutes
+                    self._update_all_cyber_rates(provider)
+                    self.last_rate_update = now
             
             # No limits for non-subscription providers
             if provider not in self.subscriptions:
