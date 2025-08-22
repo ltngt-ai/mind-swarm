@@ -329,7 +329,19 @@ IMPORTANT: Create a single-line summary describing what was accomplished this cy
                 decision_data = json.load(f)
             with open(observation_file, 'r') as f:
                 observation_data = json.load(f)
-            problem_context = observation_data.get("suggested_problem", "")
+            # Get the problem context from observation data
+            # Use situation summary as the problem context since that describes what we were dealing with
+            problem_context = observation_data.get("situation_summary", "")
+            if not problem_context:
+                # Fallback to recommended focus if no situation summary
+                problem_context = observation_data.get("recommended_focus", "")
+            if not problem_context:
+                # Final fallback - describe based on task suggestions
+                task_suggestions = observation_data.get("task_suggestions", "")
+                if task_suggestions:
+                    problem_context = f"Task management: {task_suggestions[:200]}"
+                else:
+                    problem_context = "General cognitive cycle processing"
 
             # Extract solution (the intention/action taken)
             solution = decision_data.get("intention", "")[:500]

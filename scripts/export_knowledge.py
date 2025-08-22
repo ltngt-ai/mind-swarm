@@ -45,9 +45,13 @@ class KnowledgeExporter:
         )
         logger.info("Knowledge handler initialized")
         
-    async def export_all_knowledge(self, include_personal: bool = True) -> Dict[str, Any]:
-        """Export all knowledge from ChromaDB.
+    async def export_all_knowledge(self, include_personal: bool = True, include_cbr: bool = True) -> Dict[str, Any]:
+        """Export all knowledge and CBR cases from ChromaDB.
         
+        Args:
+            include_personal: Include personal collections
+            include_cbr: Include CBR cases
+            
         Returns:
             Dictionary with export statistics
         """
@@ -67,8 +71,12 @@ class KnowledgeExporter:
         all_knowledge = export_subdir / "all"
         shared_knowledge = export_subdir / "shared"
         personal_knowledge = export_subdir / "personal"
+        cbr_cases = export_subdir / "cbr_cases"
+        cbr_shared = cbr_cases / "shared"
+        cbr_personal = cbr_cases / "personal"
         
-        for dir in [by_category, by_tags, by_cyber, all_knowledge, shared_knowledge, personal_knowledge]:
+        for dir in [by_category, by_tags, by_cyber, all_knowledge, shared_knowledge, personal_knowledge, 
+                    cbr_cases, cbr_shared, cbr_personal]:
             dir.mkdir(exist_ok=True)
         
         # Get all knowledge with full content (including personal collections if requested)
@@ -184,6 +192,101 @@ class KnowledgeExporter:
             if i % 10 == 0:
                 logger.info(f"Exported {i}/{len(all_docs)} documents...")
         
+        # Export CBR cases if requested
+        cbr_stats = {"total_cbr": 0, "shared_cbr": 0, "personal_cbr": {}}
+        if include_cbr:
+            logger.info("Exporting CBR cases...")
+            
+            # Export shared CBR cases
+            try:
+                shared_cbr_collection = self.knowledge_handler.chroma_client.get_collection("cbr_shared")
+                shared_cases = shared_cbr_collection.get()
+                
+                if shared_cases and shared_cases.get('documents'):
+                    cbr_stats["shared_cbr"] = len(shared_cases['documents'])
+                    for i, (doc_id, doc, metadata) in enumerate(zip(
+                        shared_cases.get('ids', []),
+                        shared_cases.get('documents', []),
+                        shared_cases.get('metadatas', [])
+                    )):
+                        safe_id = doc_id.replace('/', '_').replace('\\', '_') + '.yaml'
+                        
+                        # Parse the CBR case
+                        try:
+                            case_data = json.loads(doc) if doc else {}
+                        except:
+                            case_data = {"content": doc}
+                        
+                        case_data['_export_metadata'] = {
+                            "id": doc_id,
+                            "collection": "cbr_shared",
+                            "exported_at": datetime.now().isoformat(),
+                            "chromadb_metadata": metadata
+                        }
+                        
+                        # Save to shared CBR directory
+                        shared_path = cbr_shared / safe_id
+                        with open(shared_path, 'w') as f:
+                            yaml.dump(case_data, f, default_flow_style=False, sort_keys=False, width=80)
+                    
+                    logger.info(f"Exported {cbr_stats['shared_cbr']} shared CBR cases")
+            except Exception as e:
+                logger.warning(f"No shared CBR collection found: {e}")
+            
+            # Export personal CBR cases
+            if include_personal:
+                try:
+                    # List all collections to find personal CBR ones
+                    all_collections = self.knowledge_handler.chroma_client.list_collections()
+                    for collection in all_collections:
+                        if collection.name.startswith("cbr_personal_"):
+                            cyber_name = collection.name.replace("cbr_personal_", "")
+                            
+                            try:
+                                personal_cases = collection.get()
+                                if personal_cases and personal_cases.get('documents'):
+                                    count = len(personal_cases['documents'])
+                                    cbr_stats["personal_cbr"][cyber_name] = count
+                                    cbr_stats["total_cbr"] += count
+                                    
+                                    # Create cyber-specific directory
+                                    cyber_cbr_dir = cbr_personal / cyber_name
+                                    cyber_cbr_dir.mkdir(exist_ok=True)
+                                    
+                                    for doc_id, doc, metadata in zip(
+                                        personal_cases.get('ids', []),
+                                        personal_cases.get('documents', []),
+                                        personal_cases.get('metadatas', [])
+                                    ):
+                                        safe_id = doc_id.replace('/', '_').replace('\\', '_') + '.yaml'
+                                        
+                                        # Parse the CBR case
+                                        try:
+                                            case_data = json.loads(doc) if doc else {}
+                                        except:
+                                            case_data = {"content": doc}
+                                        
+                                        case_data['_export_metadata'] = {
+                                            "id": doc_id,
+                                            "collection": collection.name,
+                                            "cyber": cyber_name,
+                                            "exported_at": datetime.now().isoformat(),
+                                            "chromadb_metadata": metadata
+                                        }
+                                        
+                                        # Save to personal CBR directory
+                                        personal_path = cyber_cbr_dir / safe_id
+                                        with open(personal_path, 'w') as f:
+                                            yaml.dump(case_data, f, default_flow_style=False, sort_keys=False, width=80)
+                                    
+                                    logger.info(f"Exported {count} CBR cases for {cyber_name}")
+                            except Exception as e:
+                                logger.warning(f"Error exporting CBR for {cyber_name}: {e}")
+                except Exception as e:
+                    logger.warning(f"Error listing CBR collections: {e}")
+            
+            cbr_stats["total_cbr"] += cbr_stats["shared_cbr"]
+        
         # Write export summary
         summary_path = export_subdir / "export_summary.yaml"
         summary = {
@@ -192,6 +295,11 @@ class KnowledgeExporter:
             "categories": stats["by_category"],
             "tags": stats["by_tags"],
             "cybers": stats["by_cyber"],
+            "cbr_cases": {
+                "total": cbr_stats["total_cbr"],
+                "shared": cbr_stats["shared_cbr"],
+                "personal": cbr_stats["personal_cbr"]
+            },
             "export_directory": str(export_subdir)
         }
         with open(summary_path, 'w') as f:
@@ -202,13 +310,18 @@ class KnowledgeExporter:
         with open(readme_path, 'w') as f:
             f.write(f"""# Knowledge Export - {timestamp}
 
-This directory contains an export of all knowledge from the ChromaDB database.
+This directory contains an export of all knowledge and CBR cases from the ChromaDB database.
 
 ## Statistics
 - **Total Documents**: {stats['total_exported']}
 - **Categories**: {len(stats['by_category'])}
 - **Unique Tags**: {len(stats['by_tags'])}
 - **Contributing Cybers**: {len(stats['by_cyber'])}
+
+## CBR Statistics
+- **Total CBR Cases**: {cbr_stats['total_cbr']}
+- **Shared CBR Cases**: {cbr_stats['shared_cbr']}
+- **Personal CBR Collections**: {len(cbr_stats['personal_cbr'])}
 
 ## Directory Structure
 - `all/` - All knowledge documents in one place
@@ -217,6 +330,9 @@ This directory contains an export of all knowledge from the ChromaDB database.
 - `by_category/` - Documents organized by category
 - `by_tags/` - Documents organized by tags (documents may appear in multiple tag directories)
 - `by_cyber/` - Documents organized by the cyber who created/updated them
+- `cbr_cases/` - Case-Based Reasoning cases
+  - `shared/` - Shared CBR cases accessible to all cybers
+  - `personal/` - Personal CBR cases organized by cyber
 - `export_summary.yaml` - Detailed export statistics
 
 ## Usage
@@ -232,7 +348,8 @@ This directory contains an export of all knowledge from the ChromaDB database.
 - Original ChromaDB metadata is preserved in the export for reference
 """)
         
-        logger.info(f"Export complete! {stats['total_exported']} documents exported to {export_subdir}")
+        logger.info(f"Export complete! {stats['total_exported']} documents and {cbr_stats['total_cbr']} CBR cases exported to {export_subdir}")
+        stats['cbr_stats'] = cbr_stats
         return stats
         
     async def export_by_query(self, query: str, n_results: int = 100) -> Dict[str, Any]:
@@ -326,6 +443,11 @@ async def main():
         action="store_true",
         help="Exclude personal cyber collections from export"
     )
+    parser.add_argument(
+        "--no-cbr",
+        action="store_true",
+        help="Exclude CBR cases from export"
+    )
     
     args = parser.parse_args()
     
@@ -342,7 +464,10 @@ async def main():
         if args.query:
             stats = await exporter.export_by_query(args.query, args.max_results)
         else:
-            stats = await exporter.export_all_knowledge(include_personal=not args.no_personal)
+            stats = await exporter.export_all_knowledge(
+                include_personal=not args.no_personal,
+                include_cbr=not args.no_cbr
+            )
         
         # Print summary
         print("\n" + "="*60)
@@ -361,6 +486,16 @@ async def main():
             print(f"\nTop tags: {len(stats['by_tags'])}")
             for tag, count in sorted(stats['by_tags'].items(), key=lambda x: x[1], reverse=True)[:10]:
                 print(f"  - {tag}: {count} documents")
+        
+        if 'cbr_stats' in stats:
+            cbr = stats['cbr_stats']
+            print(f"\nCBR Cases:")
+            print(f"  Total: {cbr['total_cbr']}")
+            print(f"  Shared: {cbr['shared_cbr']}")
+            if cbr['personal_cbr']:
+                print(f"  Personal collections: {len(cbr['personal_cbr'])}")
+                for cyber, count in cbr['personal_cbr'].items():
+                    print(f"    - {cyber}: {count} cases")
                 
     except Exception as e:
         logger.error(f"Export failed: {e}", exc_info=True)
