@@ -387,6 +387,7 @@ class WebSocketStateManager:
     
     async def _handle_get_current_reflection(self, client_id: str, message: Dict[str, Any]) -> None:
         """Handle request for current reflection of a cyber."""
+        logger.info(f"Received reflection request from {client_id} for cyber: {message.get('cyber')}")
         cyber_name = message.get("cyber")
         if not cyber_name:
             await self.send_to_client(client_id, {
