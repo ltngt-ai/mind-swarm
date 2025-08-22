@@ -213,6 +213,14 @@ class BodyManager:
                                     # Process the request
                                     response = await self.knowledge_handler.process_request(self.name, request)
                                     
+                                    # Handle None response (shouldn't happen with fixed handlers, but be safe)
+                                    if response is None:
+                                        response = {
+                                            "request_id": request.get('request_id', 'error'),
+                                            "status": "error",
+                                            "error": "Knowledge system not available"
+                                        }
+                                    
                                     # Write response with completion marker
                                     response_text = json.dumps(response, indent=2)
                                     final_response = f"{response_text}\n<<<KNOWLEDGE_COMPLETE>>>"
@@ -278,6 +286,14 @@ class BodyManager:
                                     
                                     # Process the request
                                     response = await self.cbr_handler.handle_request(self.name, request)
+                                    
+                                    # Handle None response (shouldn't happen with fixed handlers, but be safe)
+                                    if response is None:
+                                        response = {
+                                            "request_id": request.get('request_id', 'error'),
+                                            "status": "error",
+                                            "error": "CBR system not available"
+                                        }
                                     
                                     # Write response with completion marker
                                     response_text = json.dumps(response, indent=2)

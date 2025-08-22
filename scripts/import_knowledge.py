@@ -192,11 +192,15 @@ class KnowledgeImporter:
 async def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(description="Import knowledge into ChromaDB")
+    import os
+    # Use SUBSPACE_ROOT env var if set, otherwise use /home/mind/subspace
+    default_subspace = Path(os.environ.get("SUBSPACE_ROOT", "/home/mind/subspace"))
+    
     parser.add_argument(
         "--subspace-root",
         type=Path,
-        default=Path.home() / "projects" / "subspace",
-        help="Path to subspace root directory (default: ~/projects/subspace)"
+        default=default_subspace,
+        help=f"Path to subspace root directory (default: {default_subspace})"
     )
     
     # Import source - mutually exclusive group

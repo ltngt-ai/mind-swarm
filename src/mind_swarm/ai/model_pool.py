@@ -100,10 +100,30 @@ class ModelPool:
         Args:
             storage_path: Path to store model pool state
         """
-        self.storage_path = storage_path or Path.home() / ".mind-swarm" / "model_pool.json"
+        import os
+        
+        # Determine storage path with fallback logic:
+        # 1. Explicit path if provided
+        # 2. SUBSPACE_ROOT if set (for server mode)
+        # 3. /var/lib/mind-swarm for system-wide installation
+        # 4. User home as last resort
+        if storage_path:
+            self.storage_path = storage_path
+        elif os.getenv('SUBSPACE_ROOT'):
+            # Server mode - use subspace root
+            self.storage_path = Path(os.getenv('SUBSPACE_ROOT')) / ".mind-swarm" / "model_pool.json"
+        elif Path('/var/lib/mind-swarm').exists() and os.access('/var/lib/mind-swarm', os.W_OK):
+            # System installation with write access
+            self.storage_path = Path('/var/lib/mind-swarm') / "model_pool.json"
+        else:
+            # Fall back to user home
+            self.storage_path = Path.home() / ".mind-swarm" / "model_pool.json"
         self.models: Dict[str, ModelConfig] = {}
         self.promotions: Dict[str, Promotion] = {}  # Active promotions
         self.runtime_models: Dict[str, ModelConfig] = {}  # Models added at runtime
+        
+        # Log the storage path being used
+        logger.info(f"Model pool using storage path: {self.storage_path}")
         
         # Initialize with default models from YAML
         self._load_yaml_models()

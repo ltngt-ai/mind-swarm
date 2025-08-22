@@ -44,6 +44,8 @@ dependencies = [
     "requests",  # For OpenRouter HTTP calls
     "litellm",  # For DSPy LLM integrations
     "python-magic",  # Content-based file type detection
+    "chromadb",  # Vector database for knowledge and CBR
+    "sentence-transformers",  # For BGE embeddings with GPU support
 ]
 
 [project.optional-dependencies]

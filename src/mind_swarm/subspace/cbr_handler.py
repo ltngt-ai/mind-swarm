@@ -583,9 +583,9 @@ class CBRHandler:
             try:
                 self.embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
                     model_name="BAAI/bge-large-en-v1.5",
-                    device="cpu"
+                    device="cuda"  # Use GPU for embeddings
                 )
-                logger.info("CBR using BGE embedding model")
+                logger.info("CBR using BGE-large embedding model with GPU acceleration")
             except:
                 logger.info("CBR using default embeddings")
                 self.embedding_fn = None
@@ -626,11 +626,19 @@ class CBRHandler:
     async def handle_request(self, cyber_id: str, request: Dict) -> Optional[Dict]:
         """Handle a CBR request from a cyber."""
         if not self.enabled:
-            return None
+            return {
+                "request_id": request.get('request_id'),
+                "status": "error",
+                "error": "CBR system not available - ChromaDB not installed or configured"
+            }
         
         handler = self.get_handler(cyber_id)
         if not handler:
-            return None
+            return {
+                "request_id": request.get('request_id'),
+                "status": "error",
+                "error": "Failed to initialize CBR handler"
+            }
         
         operation = request.get('operation')
         

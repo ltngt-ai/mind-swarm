@@ -403,7 +403,17 @@ class KnowledgeHandler:
                 # Fall back to persistent client (embedded mode)
                 logger.info("ChromaDB server not available, using embedded mode")
                 knowledge_db_path = self.subspace_root / "knowledge_db"
-                knowledge_db_path.mkdir(exist_ok=True)
+                knowledge_db_path.mkdir(exist_ok=True, mode=0o775)  # Group writable
+                
+                # Try to fix permissions if we can (will only work if we own it)
+                try:
+                    import stat
+                    current_mode = knowledge_db_path.stat().st_mode
+                    if not (current_mode & stat.S_IWGRP):  # If not group writable
+                        knowledge_db_path.chmod(0o775)  # Make group writable
+                except:
+                    pass  # Ignore permission errors
+                
                 self.chroma_client = chromadb.PersistentClient(
                     path=str(knowledge_db_path)
                 )
@@ -414,9 +424,9 @@ class KnowledgeHandler:
             try:
                 self.embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
                     model_name="BAAI/bge-large-en-v1.5",
-                    device="cpu"  # Use CPU for development
+                    device="cuda"  # Use GPU for embeddings
                 )
-                logger.info("Using BGE-large embedding model for better semantic search")
+                logger.info("Using BGE-large embedding model with GPU acceleration for semantic search")
             except Exception as e:
                 logger.warning(f"Failed to load BGE model, using default: {e}")
                 self.embedding_fn = None  # Will use ChromaDB default
