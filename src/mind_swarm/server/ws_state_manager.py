@@ -373,6 +373,10 @@ class WebSocketStateManager:
                 "timestamp": datetime.now().isoformat()
             })
             
+        elif msg_type == "get_current_cycle":
+            # Fast endpoint - just get current cycle number
+            await self._handle_get_current_cycle(client_id, message)
+            
         elif msg_type == "get_current_reflection":
             # Get current reflection for a cyber
             await self._handle_get_current_reflection(client_id, message)
@@ -384,6 +388,50 @@ class WebSocketStateManager:
         elif msg_type == "get_cycles":
             # List cycles for a cyber
             await self._handle_get_cycles(client_id, message)
+    
+    async def _handle_get_current_cycle(self, client_id: str, message: Dict[str, Any]) -> None:
+        """Fast handler to get just the current cycle number."""
+        cyber_name = message.get("cyber")
+        if not cyber_name:
+            await self.send_to_client(client_id, {
+                "type": "error",
+                "data": {"error": "cyber name required"},
+                "request_id": message.get("request_id"),
+                "timestamp": datetime.now().isoformat()
+            })
+            return
+        
+        try:
+            # Direct read of current.json - should be instant
+            import os
+            import json
+            subspace_root = Path(os.environ.get("SUBSPACE_ROOT", "../subspace"))
+            current_file = subspace_root / "cybers" / cyber_name / ".internal" / "cycles" / "current.json"
+            
+            cycle_number = None
+            if current_file.exists():
+                with open(current_file, 'r') as f:
+                    data = json.load(f)
+                    cycle_number = data.get("cycle_number")
+            
+            await self.send_to_client(client_id, {
+                "type": "current_cycle",
+                "data": {
+                    "cyber": cyber_name,
+                    "cycle_number": cycle_number
+                },
+                "request_id": message.get("request_id"),
+                "timestamp": datetime.now().isoformat()
+            })
+            
+        except Exception as e:
+            logger.error(f"Failed to get current cycle for {cyber_name}: {e}")
+            await self.send_to_client(client_id, {
+                "type": "error",
+                "data": {"error": str(e)},
+                "request_id": message.get("request_id"),
+                "timestamp": datetime.now().isoformat()
+            })
     
     async def _handle_get_current_reflection(self, client_id: str, message: Dict[str, Any]) -> None:
         """Handle request for current reflection of a cyber."""
