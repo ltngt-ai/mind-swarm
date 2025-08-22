@@ -528,6 +528,14 @@ class WebSocketStateManager:
             
             cycle_data = await recorder.get_cycle_data(cyber_name, cycle_number)
             
+            # Debug logging for problematic cycles
+            if cycle_number in [72, 73]:
+                logger.info(f"Cycle {cycle_number} data keys: {list(cycle_data.keys()) if cycle_data else 'None'}")
+                if cycle_data:
+                    for key, value in cycle_data.items():
+                        size = len(str(value)) if value else 0
+                        logger.info(f"  {key}: {size} chars")
+            
             await self.send_to_client(client_id, {
                 "type": "cycle_data",
                 "data": {

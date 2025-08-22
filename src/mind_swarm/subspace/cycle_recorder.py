@@ -409,11 +409,25 @@ class CycleRecorder:
             result = {}
             
             # Load all JSON files in the cycle directory
-            for json_file in cycle_dir.glob("*.json"):
-                async with aiofiles.open(json_file, 'r') as f:
-                    data = json.loads(await f.read())
-                    result[json_file.stem] = data
+            json_files = list(cycle_dir.glob("*.json"))
+            self.logger.debug(f"Found {len(json_files)} JSON files in cycle {cycle_number} for {cyber_name}")
             
+            for json_file in json_files:
+                try:
+                    async with aiofiles.open(json_file, 'r') as f:
+                        content = await f.read()
+                        if content.strip():  # Only parse non-empty files
+                            data = json.loads(content)
+                            result[json_file.stem] = data
+                            self.logger.debug(f"Loaded {json_file.stem} ({len(content)} bytes)")
+                        else:
+                            self.logger.warning(f"Skipping empty file: {json_file.stem}")
+                except json.JSONDecodeError as e:
+                    self.logger.error(f"Failed to parse {json_file}: {e}")
+                except Exception as e:
+                    self.logger.error(f"Failed to read {json_file}: {e}")
+            
+            self.logger.debug(f"Returning {len(result)} stages for cycle {cycle_number}")
             return result
             
         except Exception as e:

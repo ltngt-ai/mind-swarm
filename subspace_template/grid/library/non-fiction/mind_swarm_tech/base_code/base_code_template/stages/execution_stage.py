@@ -230,10 +230,41 @@ class ExecutionStage:
         # Safe built-ins for script execution
         # Get builtins properly - it might be a dict or module depending on context
         import builtins
+        # Create safe import wrapper
+        def safe_import(name, *args, **kwargs):
+            """Restricted __import__ that blocks dangerous modules."""
+            # Block dangerous modules that could exit or harm the system
+            blocked_modules = {
+                'sys',  # Can call sys.exit()
+                'os',   # Can call os._exit() and other dangerous operations
+                'subprocess',  # Can spawn processes
+                'multiprocessing',  # Can spawn processes
+                'signal',  # Can send signals
+                'atexit',  # Can register exit handlers
+                '__main__',  # Could interfere with main process
+                'builtins',  # Could bypass restrictions
+                'importlib',  # Could bypass import restrictions
+                'imp',  # Deprecated import machinery
+                'code',  # Interactive interpreter
+                'eval',  # Could bypass restrictions
+                'exec',  # Could bypass restrictions
+            }
+            
+            # Check if module or any parent module is blocked
+            module_parts = name.split('.')
+            for i in range(len(module_parts)):
+                module_check = '.'.join(module_parts[:i+1])
+                if module_check in blocked_modules:
+                    logger.warning(f"🚫 BLOCKED dangerous import attempt: '{name}' (blocked module: {module_check})")
+                    raise ImportError(f"Import of '{name}' is not allowed (blocked module: {module_check})")
+            
+            # Allow the import for safe modules
+            return builtins.__import__(name, *args, **kwargs)
+        
         self.safe_builtins = {
             # Python internals needed for class definitions
             '__build_class__': builtins.__build_class__,
-            '__import__': builtins.__import__,
+            '__import__': safe_import,  # Use our safe wrapper
             
             # Math and numbers
             'abs': abs, 'round': round, 'min': min, 'max': max,
@@ -523,7 +554,9 @@ The provided API docs describe the available operations and their usage.
                         
                         if fixed_script and fixed_script != current_script:
                             current_script = fixed_script
-                            logger.info("📝 Generated fixed script, retrying...")
+                            # Log first few lines of the fixed script for debugging
+                            script_preview = '\n'.join(fixed_script.split('\n')[:5])
+                            logger.info(f"📝 Generated fixed script, retrying... First 5 lines:\n{script_preview}")
                         else:
                             logger.warning(f"❌ Could not fix {result.get('error_type', 'Unknown')} error, attempt {attempt}/{max_attempts}")
                     except Exception as fix_error:
