@@ -3,7 +3,7 @@
 
 ## Core Concept: Simple Task Tracking
 The Tasks API provides a lightweight way for Cybers to manage their tasks.
-Tasks are stored as JSON files with a one-line summary visible in personal.txt.
+Tasks are stored as JSON files with summaries visible in status.txt.
 
 ## Examples
 
@@ -12,16 +12,24 @@ Tasks are stored as JSON files with a one-line summary visible in personal.txt.
 task_id = tasks.create(
     summary="Help Alice with memory management",
     description="Alice needs help implementing memory persistence. Issues with memory blocks not saving.",
+    task_type="community",  # hobby, maintenance, or community
+    todo_list=[
+        {"title": "Review Alice's code", "status": "NOT-STARTED"},
+        {"title": "Identify the issue", "status": "NOT-STARTED"},
+        {"title": "Propose solution", "status": "NOT-STARTED"}
+    ],
     context=["/personal/.internal/messages/Alice_51.msg"]
 )
 print(f"Created task {task_id}")
 ```
 
-### Intention: "I want to see my active tasks"
+### Intention: "I want to see my current task"
 ```python
-active = tasks.get_active()
-for task in active:
-    print(f"• {task['summary']}")
+current = tasks.get_current()
+if current:
+    print(f"Current task: {current['summary']}")
+else:
+    print("No current task set")
 ```
 
 ### Intention: "I want to complete a task"
@@ -34,6 +42,22 @@ tasks.complete("task_001", notes="Helped Alice fix the memory block persistence 
 tasks.block("task_002", reason="Waiting for Bob's response on API design")
 ```
 
+### Intention: "I want to update a todo item"
+```python
+tasks.update_todo("task_001", 0, status="DONE", notes="Completed review")
+```
+
+### Intention: "I want to set current task"
+```python
+tasks.set_current("task_001")
+```
+
+### Intention: "I want to claim a community task"
+```python
+if tasks.claim_community_task("CT-042"):
+    print("Successfully claimed community task")
+```
+
 ## Best Practices
 1. Keep summaries concise (one line, <80 chars)
 2. Use descriptions for full context
@@ -42,10 +66,14 @@ tasks.block("task_002", reason="Waiting for Bob's response on API design")
 """
 
 import json
+import os
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 import re
+
+logger = logging.getLogger("Cyber.tasks")
 
 class TasksError(Exception):
     """Base exception for task errors."""
@@ -65,30 +93,68 @@ class Tasks:
         
         # Task directories
         self.tasks_root = self.personal / '.internal' / 'tasks'
-        self.active_dir = self.tasks_root / 'active'
         self.completed_dir = self.tasks_root / 'completed'
         self.blocked_dir = self.tasks_root / 'blocked'
+        self.hobby_dir = self.tasks_root / 'hobby'
+        self.maintenance_dir = self.tasks_root / 'maintenance'
         
-        # Ensure directories exist
-        for dir in [self.active_dir, self.completed_dir, self.blocked_dir]:
+        # Community tasks in grid
+        self.grid = Path('/grid')  # Grid is always at /grid from cyber perspective
+        self.community_dir = self.grid / 'community' / 'tasks'
+        
+        # Current task pointer
+        self.current_task_file = self.tasks_root / 'current_task.txt'
+        
+        # Ensure directories exist (no more active directory)
+        for dir in [self.completed_dir, self.blocked_dir, 
+                   self.hobby_dir, self.maintenance_dir]:
             dir.mkdir(parents=True, exist_ok=True)
-        
-        # Track next task ID
-        self._next_id = self._get_next_id()
     
-    def _get_next_id(self) -> int:
-        """Get the next available task ID."""
+    def _get_next_id(self, task_type: str) -> str:
+        """Get the next available task ID for the given type.
+        
+        Args:
+            task_type: Type of task (hobby or maintenance)
+            
+        Returns:
+            Task ID with proper prefix (HT-001 or MT-001)
+        """
+        # Determine prefix based on task type
+        prefix_map = {
+            'hobby': 'HT',
+            'maintenance': 'MT'
+        }
+        prefix = prefix_map.get(task_type)
+        if not prefix:
+            raise TasksError(f"Invalid task_type: {task_type}. Must be 'hobby' or 'maintenance'")
+        
         max_id = 0
         
-        # Check all directories for existing task IDs
-        for dir in [self.active_dir, self.completed_dir, self.blocked_dir]:
-            for task_file in dir.glob("task_*.json"):
-                match = re.match(r"task_(\d+)_", task_file.stem)
+        # Check all directories for existing task IDs with this prefix
+        pattern = f"{prefix}-*.json"
+        separator = '-'
+        
+        for dir in [self.completed_dir, self.blocked_dir, 
+                   self.hobby_dir, self.maintenance_dir]:
+            if dir.exists():
+                for task_file in dir.glob(pattern):
+                    # Extract ID from filename
+                    match = re.match(rf"{prefix}{separator}(\d+)[_.]?", task_file.stem)
+                    if match:
+                        task_id = int(match.group(1))
+                        max_id = max(max_id, task_id)
+        
+        # Also check community tasks in grid
+        if task_type == 'community' and self.community_dir.exists():
+            for task_file in self.community_dir.glob("CT-*.json"):
+                match = re.match(r"CT-(\d+)", task_file.stem)
                 if match:
                     task_id = int(match.group(1))
                     max_id = max(max_id, task_id)
         
-        return max_id + 1
+        # Format the new ID
+        new_id = max_id + 1
+        return f"{prefix}-{new_id:03d}"
     
     def _sanitize_filename(self, text: str, max_length: int = 50) -> str:
         """Sanitize text for use in filename."""
@@ -101,7 +167,9 @@ class Tasks:
     
     def create(self, 
                summary: str,
+               task_type: str,
                description: str = "",
+               todo_list: Optional[List[Dict[str, str]]] = None,
                context: Optional[List[str]] = None,
                notes: str = "") -> str:
         """Create a new task.
@@ -109,36 +177,100 @@ class Tasks:
         Args:
             summary: One-line summary of the task
             description: Detailed description
+            task_type: Type of task - only 'hobby' (maintenance tasks are predefined)
+            todo_list: List of todo items with 'title' and optional 'status' and 'notes'
             context: List of relevant file paths
             notes: Any additional notes
             
         Returns:
             Task ID of the created task
             
+        Raises:
+            TasksError: If hobby task limit exceeded or invalid task type
+            
         Example:
             task_id = tasks.create(
-                summary="Review code changes",
-                description="Review the recent changes to memory system",
-                context=["/personal/code_review.md"]
+                summary="Research new algorithm",
+                task_type="hobby",
+                description="Study and implement a new pathfinding algorithm",
+                todo_list=[{"title": "Read documentation", "status": "NOT-STARTED"}],
+                context=["/personal/research/"]
             )
         """
-        task_id = f"task_{self._next_id:03d}"
-        self._next_id += 1
+        # Validate task type - only hobby tasks can be created
+        if task_type == 'maintenance':
+            raise TasksError(
+                "Maintenance tasks cannot be created - they are predefined system tasks. "
+                "You can only create 'hobby' tasks. Maintenance tasks are automatically "
+                "provided and reset when all are completed."
+            )
+        
+        valid_types = ['hobby']
+        if task_type not in valid_types:
+            raise TasksError(f"Invalid task_type: {task_type}. Only 'hobby' tasks can be created.")
+        
+        # Check hobby task limit (5 max)
+        if task_type == 'hobby':
+            # Count hobby tasks in both hobby dir and active dir
+            hobby_count = 0
+            
+            # Check hobby directory
+            for f in self.hobby_dir.glob("HT-*.json"):
+                hobby_count += 1
+            
+            # Hobby tasks are only in hobby directory now
+                
+            if hobby_count >= 5:
+                raise TasksError(
+                    f"Maximum of 5 hobby tasks allowed. You currently have {hobby_count} hobby tasks. "
+                    f"Please complete or remove some before creating new ones."
+                )
+        
+        task_id = self._get_next_id(task_type)
+        
+        # Process todo items
+        if todo_list:
+            # Ensure each todo has required fields
+            processed_todos = []
+            for i, todo in enumerate(todo_list[:10]):  # Max 10 todos
+                processed_todo = {
+                    "title": todo.get("title", f"Todo {i+1}"),
+                    "status": todo.get("status", "NOT-STARTED"),
+                    "notes": todo.get("notes", "")
+                }
+                # Validate status
+                if processed_todo["status"] not in ["NOT-STARTED", "IN-PROGRESS", "DONE", "BLOCKED"]:
+                    processed_todo["status"] = "NOT-STARTED"
+                processed_todos.append(processed_todo)
+            todo_list = processed_todos
+        else:
+            todo_list = []
         
         # Create task data
         task_data = {
             "id": task_id,
             "summary": summary[:100],  # Limit summary length
             "description": description,
+            "task_type": task_type,
+            "todo": todo_list,
             "status": "active",
+            "current": False,
             "created": datetime.now().isoformat(),
+            "updated": datetime.now().isoformat(),
             "context": context or [],
             "notes": notes
         }
         
-        # Create filename
+        # Create filename and place in appropriate backlog directory
         filename = f"{task_id}_{self._sanitize_filename(summary)}.json"
-        task_file = self.active_dir / filename
+        
+        # Determine target directory based on task type
+        if task_type == 'hobby':
+            task_file = self.hobby_dir / filename
+        elif task_type == 'maintenance':
+            task_file = self.maintenance_dir / filename
+        else:
+            raise TasksError(f"Invalid task type: {task_type}")
         
         # Write task file
         with open(task_file, 'w') as f:
@@ -146,17 +278,6 @@ class Tasks:
         
         return task_id
     
-    def get_active(self) -> List[Dict[str, Any]]:
-        """Get all active tasks.
-        
-        Returns:
-            List of active task dictionaries
-            
-        Example:
-            for task in tasks.get_active():
-                print(f"{task['id']}: {task['summary']}")
-        """
-        return self._get_tasks_from_dir(self.active_dir)
     
     def get_blocked(self) -> List[Dict[str, Any]]:
         """Get all blocked tasks.
@@ -213,8 +334,8 @@ class Tasks:
             if task:
                 print(task['description'])
         """
-        # Search all directories
-        for dir in [self.active_dir, self.blocked_dir, self.completed_dir]:
+        # Search all directories (backlog, blocked, completed)
+        for dir in [self.hobby_dir, self.maintenance_dir, self.blocked_dir, self.completed_dir]:
             for task_file in dir.glob(f"{task_id}_*.json"):
                 try:
                     with open(task_file, 'r') as f:
@@ -223,6 +344,25 @@ class Tasks:
                         return task_data
                 except Exception:
                     pass
+        
+        # Also check community tasks claimed by this cyber
+        if self.community_dir.exists():
+            # Get cyber name for checking claimed tasks
+            try:
+                status_file = self.personal / '.internal' / 'status.json'
+                with open(status_file, 'r') as f:
+                    cyber_name = json.load(f)['name']
+                
+                # Check if this is a community task claimed by us
+                task_file = self.community_dir / f"{task_id}_*.json"
+                for potential_file in self.community_dir.glob(f"{task_id}_*.json"):
+                    with open(potential_file, 'r') as f:
+                        task_data = json.load(f)
+                        if task_data.get('claimed_by') == cyber_name:
+                            task_data['_file'] = str(potential_file)
+                            return task_data
+            except Exception:
+                pass
         
         return None
     
@@ -263,7 +403,7 @@ class Tasks:
                                      "blocked_reason": reason})
     
     def unblock(self, task_id: str, notes: str = "") -> bool:
-        """Unblock a task and make it active again.
+        """Unblock a task and return it to its backlog.
         
         Args:
             task_id: The task ID to unblock
@@ -272,16 +412,275 @@ class Tasks:
         Returns:
             True if successful, False otherwise
         """
-        return self._move_task(task_id, self.active_dir,
-                              updates={"status": "active",
+        # Find the blocked task first to determine its type
+        task = self.get(task_id)
+        if not task:
+            return False
+            
+        # Determine target directory based on task type
+        if task_id.startswith('HT-'):
+            target_dir = self.hobby_dir
+        elif task_id.startswith('MT-'):
+            target_dir = self.maintenance_dir
+        else:
+            return False
+            
+        return self._move_task(task_id, target_dir,
+                              updates={"status": "pending",
                                      "unblocked_at": datetime.now().isoformat(),
                                      "unblock_notes": notes})
+    
+    def update_todo(self, task_id: str, index: int, 
+                    status: Optional[str] = None, notes: Optional[str] = None) -> bool:
+        """Update a todo item in a task.
+        
+        Args:
+            task_id: The task ID
+            index: Zero-based index of the todo item
+            status: New status (NOT-STARTED, IN-PROGRESS, DONE, BLOCKED)
+            notes: Additional notes for the todo
+            
+        Returns:
+            True if successful, False otherwise
+            
+        Example:
+            tasks.update_todo("task_001", 0, status="DONE", notes="Completed review")
+        """
+        task = self.get(task_id)
+        if not task:
+            return False
+        
+        todos = task.get('todo', [])
+        if index < 0 or index >= len(todos):
+            return False
+        
+        # Update the todo item
+        if status:
+            if status in ["NOT-STARTED", "IN-PROGRESS", "DONE", "BLOCKED"]:
+                todos[index]['status'] = status
+        if notes is not None:
+            todos[index]['notes'] = notes
+        
+        # Update task
+        task['todo'] = todos
+        task['updated'] = datetime.now().isoformat()
+        
+        # Save task
+        try:
+            task_file = Path(task['_file'])
+            with open(task_file, 'w') as f:
+                # Remove internal _file key before saving
+                save_data = {k: v for k, v in task.items() if not k.startswith('_')}
+                json.dump(save_data, f, indent=2)
+            return True
+        except Exception:
+            return False
+    
+    def set_current(self, task_id: str) -> bool:
+        """Set a task as the current task.
+        
+        Args:
+            task_id: The task ID to set as current
+            
+        Returns:
+            True if successful, False otherwise
+            
+        Example:
+            tasks.set_current("task_001")
+        """
+        task = self.get(task_id)
+        if not task:
+            return False
+        
+        try:
+            # Clear current flag on all tasks
+            for dir in [self.hobby_dir, self.maintenance_dir, self.blocked_dir]:
+                for task_file in dir.glob("*.json"):
+                    with open(task_file, 'r') as f:
+                        data = json.load(f)
+                    if data.get('current'):
+                        data['current'] = False
+                        with open(task_file, 'w') as f:
+                            json.dump(data, f, indent=2)
+            
+            # Set current flag on selected task
+            task['current'] = True
+            task['updated'] = datetime.now().isoformat()
+            
+            task_file = Path(task['_file'])
+            with open(task_file, 'w') as f:
+                save_data = {k: v for k, v in task.items() if not k.startswith('_')}
+                json.dump(save_data, f, indent=2)
+            
+            # Write current task pointer
+            with open(self.current_task_file, 'w') as f:
+                f.write(task_id)
+            
+            return True
+        except Exception:
+            return False
+    
+    def get_current(self) -> Optional[Dict[str, Any]]:
+        """Get the current task.
+        
+        Returns:
+            Current task dictionary or None if no current task
+            
+        Example:
+            current = tasks.get_current()
+            if current:
+                print(f"Working on: {current['summary']}")
+        """
+        try:
+            if self.current_task_file.exists():
+                task_id = self.current_task_file.read_text().strip()
+                return self.get(task_id)
+        except Exception:
+            pass
+        return None
+    
+    def claim_community_task(self, task_id: str) -> bool:
+        """Claim a community task from the grid.
+        
+        Args:
+            task_id: The community task ID (e.g., "CT-001")
+            
+        Returns:
+            True if successfully claimed, False otherwise
+            
+        Example:
+            if tasks.claim_community_task("CT-042"):
+                print("Successfully claimed community task")
+        """
+        if not self.community_dir.exists():
+            return False
+        
+        # Check if already have an active community task
+        current_task = self.get_current()
+        if current_task and current_task.get('task_type') == 'community':
+            raise TasksError("Already have an active community task. Complete or block it first.")
+        
+        # Find the community task (may have additional text after ID)
+        task_files = list(self.community_dir.glob(f"{task_id}_*.json"))
+        if not task_files:
+            # Also check for exact match
+            exact_file = self.community_dir / f"{task_id}.json"
+            if exact_file.exists():
+                task_file = exact_file
+            else:
+                return False
+        else:
+            task_file = task_files[0]  # Use first match
+        
+        try:
+            # Read task data
+            with open(task_file, 'r') as f:
+                task_data = json.load(f)
+            
+            # Check if already claimed
+            if task_data.get('claimed_by'):
+                return False
+            
+            # Get cyber name from status.json
+            status_file = self.personal / '.internal' / 'status.json'
+            with open(status_file, 'r') as f:
+                status_data = json.load(f)
+                cyber_name = status_data['name']
+            
+            # Claim the task
+            task_data['claimed_by'] = cyber_name
+            task_data['claimed_at'] = datetime.now().isoformat()
+            
+            # Atomic claim using rename to mark as claimed in community
+            temp_file = task_file.with_suffix('.tmp')
+            with open(temp_file, 'w') as f:
+                json.dump(task_data, f, indent=2)
+            
+            # Try to rename (atomic operation - only one will succeed)
+            try:
+                os.rename(temp_file, task_file)
+                # Success! The task is now claimed in the community directory
+                return True
+            except OSError:
+                # Someone else claimed it first
+                if temp_file.exists():
+                    temp_file.unlink()
+                return False
+            
+        except Exception as e:
+            # Log the error for debugging
+            import traceback
+            error_msg = f"Error claiming community task {task_id}: {str(e)}\n{traceback.format_exc()}"
+            try:
+                error_file = self.personal / '.internal' / 'logs' / 'task_errors.log'
+                error_file.parent.mkdir(parents=True, exist_ok=True)
+                with open(error_file, 'a') as f:
+                    f.write(f"[{datetime.now().isoformat()}] {error_msg}\n")
+            except:
+                pass  # Can't log, but at least we tried
+            return False
+    
+    def get_available_community_tasks(self) -> List[Dict[str, Any]]:
+        """Get list of available (unclaimed) community tasks.
+        
+        Returns:
+            List of available community task dictionaries
+            
+        Example:
+            for task in tasks.get_available_community_tasks():
+                print(f"{task['id']}: {task['summary']}")
+        """
+        tasks = []
+        if not self.community_dir.exists():
+            return tasks
+        
+        for task_file in self.community_dir.glob("CT-*.json"):
+            try:
+                with open(task_file, 'r') as f:
+                    task_data = json.load(f)
+                    # Only include unclaimed tasks
+                    if not task_data.get('claimed_by'):
+                        tasks.append(task_data)
+            except Exception:
+                pass
+        
+        return tasks
+    
+    def reset_maintenance(self) -> bool:
+        """Reset all maintenance task todos to NOT-STARTED.
+        
+        Returns:
+            True if successful, False otherwise
+            
+        Example:
+            if tasks.reset_maintenance():
+                print("Maintenance tasks reset")
+        """
+        try:
+            for task_file in self.maintenance_dir.glob("task_*.json"):
+                with open(task_file, 'r') as f:
+                    task_data = json.load(f)
+                
+                # Reset all todos
+                for todo in task_data.get('todo', []):
+                    todo['status'] = 'NOT-STARTED'
+                    todo['notes'] = ''
+                
+                task_data['updated'] = datetime.now().isoformat()
+                
+                with open(task_file, 'w') as f:
+                    json.dump(task_data, f, indent=2)
+            
+            return True
+        except Exception:
+            return False
     
     def _move_task(self, task_id: str, target_dir: Path, updates: Dict[str, Any] = None) -> bool:
         """Move a task between directories and update its data."""
         # Find the task file
         task_file = None
-        for dir in [self.active_dir, self.blocked_dir, self.completed_dir]:
+        for dir in [self.hobby_dir, self.maintenance_dir, self.blocked_dir, 
+                   self.completed_dir, self.community_dir]:
             matches = list(dir.glob(f"{task_id}_*.json"))
             if matches:
                 task_file = matches[0]
@@ -299,6 +698,9 @@ class Tasks:
             if updates:
                 task_data.update(updates)
             
+            task_data['updated'] = datetime.now().isoformat()
+            
+            
             # Create new filename in target directory
             new_file = target_dir / task_file.name
             
@@ -309,10 +711,76 @@ class Tasks:
             # Remove old file
             task_file.unlink()
             
+            # If this was the current task and we're completing/blocking it, clear current_task.txt
+            if target_dir in [self.completed_dir, self.blocked_dir]:
+                if self.current_task_file.exists():
+                    current_id = self.current_task_file.read_text().strip()
+                    if current_id == task_id:
+                        self.current_task_file.unlink()
+            
+            # Check if this was a maintenance task being completed
+            if (task_data.get('task_type') == 'maintenance' and 
+                target_dir == self.completed_dir):
+                self._check_and_reset_maintenance_tasks()
+            
             return True
             
         except Exception:
             return False
+    
+    def _check_and_reset_maintenance_tasks(self):
+        """Check if all maintenance tasks are completed and reset them if so."""
+        try:
+            # Check if there are any maintenance tasks still in maintenance backlog or blocked
+            backlog_maintenance = list(self.maintenance_dir.glob("MT-*.json"))
+            blocked_maintenance = list(self.blocked_dir.glob("MT-*.json"))
+            
+            # Also check if current task is a maintenance task
+            current_is_maintenance = False
+            if self.current_task_file.exists():
+                try:
+                    current_id = self.current_task_file.read_text().strip()
+                    current_is_maintenance = current_id.startswith('MT-')
+                except:
+                    pass
+            
+            # If no maintenance tasks are pending (all are completed), reset all
+            if not backlog_maintenance and not blocked_maintenance and not current_is_maintenance:
+                logger.info("All maintenance tasks completed - resetting for next cycle")
+                
+                # Get all maintenance tasks from completed directory
+                completed_maintenance = list(self.completed_dir.glob("MT-*.json"))
+                
+                # Move them back to active directory and reset their status
+                for task_file in completed_maintenance:
+                    with open(task_file, 'r') as f:
+                        task_data = json.load(f)
+                    
+                    # Reset task status
+                    task_data['status'] = 'pending'
+                    task_data['completed_at'] = None
+                    task_data['completion_notes'] = None
+                    
+                    # Reset all todos
+                    for todo in task_data.get('todo', []):
+                        todo['status'] = 'NOT-STARTED'
+                        if 'notes' in todo:
+                            todo['notes'] = todo.get('notes', '').split(' - ')[0]  # Keep original note, remove any added context
+                    
+                    task_data['updated'] = datetime.now().isoformat()
+                    
+                    # Write back to maintenance directory
+                    new_file = self.maintenance_dir / task_file.name
+                    with open(new_file, 'w') as f:
+                        json.dump(task_data, f, indent=2)
+                    
+                    # Remove from completed
+                    task_file.unlink()
+                    
+                logger.info(f"Reset {len(completed_maintenance)} maintenance tasks")
+                
+        except Exception as e:
+            logger.warning(f"Failed to check/reset maintenance tasks: {e}")
     
     def update(self, task_id: str, **kwargs) -> bool:
         """Update task fields.
@@ -363,7 +831,8 @@ class Tasks:
             summary = tasks.get_summary()
             print(f"Active: {summary['active_count']}")
         """
-        active = self.get_active()
+        # Get all non-completed tasks
+        active = [t for t in self.get_all() if t.get('status') != 'completed']
         blocked = self.get_blocked()
         completed = self.get_completed(5)
         

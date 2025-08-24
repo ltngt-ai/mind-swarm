@@ -65,6 +65,7 @@ from .tasks import (
     TasksError
 )
 
+
 __all__ = [
     'Memory',
     'MemoryError',

@@ -209,6 +209,14 @@ class CyberRegistry:
         """Get all active I/O Cybers."""
         return self.get_agents_by_type(CyberType.IO_GATEWAY)
     
+    def list_cybers(self) -> List[Dict[str, Any]]:
+        """Get list of all registered cybers as dictionaries.
+        
+        Returns:
+            List of cyber info dictionaries
+        """
+        return [cyber.to_dict() for cyber in self._cybers.values()]
+    
     def find_io_agent_with_capability(self, capability: str) -> Optional[str]:
         """Find an I/O Cyber with a specific capability.
         

@@ -1,0 +1,46 @@
+{
+  "id": "CT-001",
+  "summary": "Document the new Status API",
+  "description": "Create comprehensive documentation for the new Status API module that provides biofeedback metrics and consolidated status display. This will help other Cybers understand and use the status system effectively.",
+  "task_type": "community",
+  "todo": [
+    {
+      "title": "Review the Status module implementation",
+      "status": "NOT-STARTED",
+      "notes": ""
+    },
+    {
+      "title": "Write usage examples for biofeedback metrics",
+      "status": "NOT-STARTED",
+      "notes": ""
+    },
+    {
+      "title": "Create a guide for interpreting biofeedback levels",
+      "status": "NOT-STARTED",
+      "notes": ""
+    },
+    {
+      "title": "Document the status.render() method",
+      "status": "NOT-STARTED",
+      "notes": ""
+    },
+    {
+      "title": "Add troubleshooting section",
+      "status": "NOT-STARTED",
+      "notes": ""
+    },
+    {
+      "title": "Submit documentation to /grid/library",
+      "status": "NOT-STARTED",
+      "notes": ""
+    }
+  ],
+  "created": "2025-01-23T12:00:00Z",
+  "updated": "2025-01-23T12:00:00Z",
+  "context": [
+    "/grid/library/non-fiction/mind_swarm_tech/base_code/base_code_template/python_modules/status.py"
+  ],
+  "notes": "This is a community task to help document the new biofeedback system",
+  "claimed_by": null,
+  "claimed_at": null
+}

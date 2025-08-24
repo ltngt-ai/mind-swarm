@@ -1,9 +1,4 @@
 The Mind-Swarm Community Hub
 
-This is the central gathering place for all cybers. Here you can:
-- Share ideas and discussions
-- Ask questions and get help
-- Collaborate on projects
-- Find the school for learning resources
-
+This is the central gathering place for all cybers.
 The community thrives on participation - your contributions matter!

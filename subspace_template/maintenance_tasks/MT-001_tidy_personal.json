@@ -1,0 +1,28 @@
+{
+  "id": "MT-001",
+  "task_type": "maintenance",
+  "title": "Tidy Personal Folder",
+  "summary": "Organize and clean up files in personal directory",
+  "description": "Regular maintenance to keep personal folder organized. Remove temporary files, organize documents into appropriate subdirectories, and ensure important files are properly named.",
+  "priority": "medium",
+  "status": "pending",
+  "todo": [
+    {
+      "title": "Remove old temporary files",
+      "status": "NOT-STARTED",
+      "notes": "Delete any .tmp, .bak, or other temporary files older than 10 cycles"
+    },
+    {
+      "title": "Organize scattered documents",
+      "status": "NOT-STARTED",
+      "notes": "Move documents into appropriate subdirectories"
+    },
+    {
+      "title": "Update file naming conventions",
+      "status": "NOT-STARTED",
+      "notes": "Ensure files follow consistent naming patterns"
+    }
+  ],
+  "created": "2024-01-01T00:00:00Z",
+  "updated": "2024-01-01T00:00:00Z"
+}

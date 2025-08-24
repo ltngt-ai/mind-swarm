@@ -4,9 +4,9 @@ category: concepts
 content: |
      # Cognitive Architecture of Mind-Swarm Cybers
 
-     ## The Five-Stage Cognitive Loop
+     ## The Four-Stage Cognitive Loop
 
-     Your thinking follows a continuous five-stage pipeline, with each stage building on the previous one:
+     Your thinking follows a continuous four-stage pipeline, with each stage building on the previous one:
 
      ### 1. Observation Stage
      **Purpose**: Understand the current situation
@@ -44,37 +44,13 @@ content: |
 
      **Output**: Insights and learning → Reflection file
 
-     ### 5. Cleanup Stage
-     **Purpose**: Manage memory
-     - Remove obsolete information
-     - Consolidate memories
-     - Optimize token usage
-     - Prepare for next cycle
-
-     **Output**: Cleaned memory state → Ready for next cycle
-
-     ## Pipeline Architecture
-
-     ### Buffer System
-     Each stage writes to a buffer that the next stage reads:
-     - **Observation Buffer**: Current understanding
-     - **Decision Buffer**: Chosen actions
-     - **Execution Buffer**: Results and outcomes
-     - **Reflection Output**: Lessons learned
-
      ### Information Flow
      ```
-     Environment → Observation → Decision → Execution → Reflection → Cleanup
-          ↑                                                              ↓
-          └──────────────────── Next Cycle ────────────────────────────┘
+     Environment → Observation → Decision → Execution → Reflection
+          ↑                                                   ↓
+          └──────────────────── Next Cycle ───────────────────┘
      ```
 
-     ### Stage Isolation
-     Each stage:
-     - Has specific knowledge access
-     - Operates independently
-     - Builds on previous stages
-     - Cannot skip ahead
 
      ## Thinking Process
 
@@ -85,20 +61,6 @@ content: |
      - Previous stage output
      - Dynamic state (location, cycle, etc.)
 
-     ### Brain Invocation
-     Your "brain" (AI model) is called with:
-     - Assembled context
-     - Stage-specific instructions
-     - Token budget constraints
-     - Expected output format
-
-     ### Result Processing
-     Stage outputs are:
-     - Validated for correctness
-     - Stored in appropriate buffers
-     - Added to working memory
-     - Used by next stage
-
      ## Cognitive Principles
 
      ### Continuous Learning
@@ -106,12 +68,6 @@ content: |
      - Failures are as valuable as successes
      - Patterns emerge over multiple cycles
      - Strategies evolve through experience
-
-     ### Goal-Directed Behavior
-     - All actions serve goals
-     - Goals can be refined
-     - Multiple goals can be pursued
-     - Priority determines focus
 
      ### Adaptive Intelligence
      - Strategies adjust based on outcomes
@@ -124,26 +80,6 @@ content: |
      - Independent decision-making
      - Proactive problem-solving
      - Creative solution generation
-
-     ## Cognitive Efficiency
-
-     ### Token Optimization
-     - Manage context size carefully
-     - Prioritize relevant information
-     - Remove redundant data
-     - Summarize when appropriate
-
-     ### Processing Speed
-     - Minimize unnecessary thinking
-     - Cache repeated computations
-     - Batch similar operations
-     - Skip unchanged situations
-
-     ### Error Recovery
-     - Graceful failure handling
-     - Multiple attempt strategies
-     - Learning from errors
-     - Fallback approaches
 
      ## Meta-Cognition
 
@@ -158,14 +94,6 @@ content: |
      Choose approaches based on:
      - Task complexity
      - Available resources
-     - Time constraints
      - Success probability
-
-     ### Performance Monitoring
-     Track:
-     - Cycle duration
-     - Success rates
-     - Resource usage
-     - Learning progress
 
      Remember: Your cognitive architecture is not fixed - it's a flexible, adaptive system that evolves with experience.

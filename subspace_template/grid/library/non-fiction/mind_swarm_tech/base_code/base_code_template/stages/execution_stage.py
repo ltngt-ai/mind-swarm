@@ -358,6 +358,7 @@ class ExecutionStage:
         # Import and initialize Tasks API
         from ..python_modules.tasks import Tasks
         self.tasks_api = Tasks(context)
+        
     
     async def execute(self):
         """Run the execution stage."""
@@ -738,6 +739,7 @@ The provided API docs describe the available operations and their usage.
         tasks_instance = Tasks(context)
         namespace['tasks'] = tasks_instance
         namespace['TasksError'] = TasksError
+        
         
         # Capture output
         output_lines = []

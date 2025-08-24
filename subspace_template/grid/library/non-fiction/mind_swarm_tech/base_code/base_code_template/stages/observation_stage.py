@@ -172,12 +172,11 @@ class ObservationStage:
     async def observe(self):
         """OBSERVE - Gather intelligence and provide comprehensive briefing.
         
-        This is now an intelligence briefing stage that:
+        This is an intelligence briefing stage that:
         1. Scans for new observations
         2. Reads actual content of messages and important files
         3. Reviews reflection from last cycle
         4. Analyzes current tasks
-        5. Provides detailed briefing with task suggestions
         
         Returns:
             Briefing data for Decision stage
@@ -211,9 +210,7 @@ class ObservationStage:
                             "timestamp": msg_content.get('timestamp', ''),
                             "path": obs['path']
                         })
-        
-        # Tasks and reflection are already in working memory - no need to read them again
-        
+            
         # 5. Build comprehensive context for analysis
         self.cognitive_loop._update_dynamic_context(stage="OBSERVATION", phase="ANALYZE")
         
@@ -250,18 +247,12 @@ class ObservationStage:
             "signature": {
                 "instruction": """You are preparing an intelligence briefing for the Decision stage.
 
-Your working memory already contains current tasks, recent reflections, and context.
-Focus on analyzing the new information provided and suggesting task updates.
+Your working memory already contains current task, recent reflections, and context.
+Focus on analyzing the new information provided and suggesting what to do regarding tasks and todos.
 
 Based on your analysis, provide:
 1. A summary of what's happening
-2. Task suggestions (what tasks to create, complete, or update)
-3. What should be the focus for this cycle
-
-Format your task suggestions as specific actions:
-- "Create task: [summary]" for new tasks
-- "Complete task: [task_id]" for tasks that seem done based on reflection
-- "Update task: [task_id] - [what to update]" for task modifications
+2. What should be the focus for this cycle
 
 Always start with [[ ## Briefing ## ]]""",
                 "inputs": {
@@ -270,7 +261,6 @@ Always start with [[ ## Briefing ## ]]""",
                 },
                 "outputs": {
                     "situation_summary": "Brief summary of the current situation",
-                    "task_suggestions": "Specific task create/complete/update suggestions",
                     "recommended_focus": "What should be the focus for this cycle"
                 },
                 "display_field": "situation_summary"
@@ -293,7 +283,6 @@ Always start with [[ ## Briefing ## ]]""",
         intelligence_briefing = {
             "cycle_count": self.cognitive_loop.cycle_count,
             "situation_summary": output_values.get("situation_summary", "No significant changes"),
-            "task_suggestions": output_values.get("task_suggestions", "No task changes suggested"),
             "recommended_focus": output_values.get("recommended_focus", "Continue current activities"),
             "new_message_paths": [msg['path'] for msg in message_contents] if message_contents else [],
             "observation_count": len(observations)

@@ -360,6 +360,9 @@ class SubspaceManager:
             # Also update boot ROM
             self._copy_boot_rom(internal_dir, cyber_type)
             
+            # Copy/update maintenance tasks for existing Cyber
+            self._copy_maintenance_tasks(internal_dir)
+            
             # Create organized directory structure
             # Only inbox is visible to cybers (outbox and mail_archive are in .internal)
             (sandbox.cyber_personal / "inbox").mkdir(exist_ok=True)
@@ -403,6 +406,9 @@ class SubspaceManager:
         
         # Copy Cyber code to base_code directory
         self._copy_agent_base_code(base_code, cyber_type)
+        
+        # Copy maintenance tasks to tasks directory
+        self._copy_maintenance_tasks(internal_dir)
         
         # Copy boot ROM for this cyber type
         self._copy_boot_rom(internal_dir, cyber_type)
@@ -503,6 +509,68 @@ class SubspaceManager:
                     logger.debug(f"Copied {py_file.name} to Cyber base_code")
             else:
                 logger.error("No Cyber base code found to copy!")
+    
+    def _copy_maintenance_tasks(self, internal_dir: Path):
+        """Copy standard maintenance tasks to the Cyber's tasks directory.
+        
+        Args:
+            internal_dir: The .internal directory in Cyber's home
+        """
+        # Create tasks directory structure
+        tasks_dir = internal_dir / "tasks"
+        tasks_dir.mkdir(exist_ok=True)
+        
+        # Create subdirectories (no active directory)
+        for subdir in ["completed", "blocked", "hobby", "maintenance"]:
+            (tasks_dir / subdir).mkdir(exist_ok=True)
+        
+        # Get the maintenance tasks template directory
+        template_root = Path(__file__).parent.parent.parent.parent / "subspace_template"
+        maintenance_template = template_root / "maintenance_tasks"
+        
+        if maintenance_template.exists():
+            import shutil
+            
+            # Check if maintenance tasks already exist (don't overwrite existing tasks)
+            maintenance_dir = tasks_dir / "maintenance"
+            completed_dir = tasks_dir / "completed"
+            blocked_dir = tasks_dir / "blocked"
+            
+            # Get list of all existing maintenance task IDs
+            existing_mt_ids = set()
+            for dir in [maintenance_dir, completed_dir, blocked_dir]:
+                for f in dir.glob("MT-*.json"):
+                    # Extract task ID from filename (e.g., "MT-001" from "MT-001_tidy_personal.json")
+                    task_id = f.name.split('_')[0]
+                    existing_mt_ids.add(task_id)
+            
+            # Copy maintenance tasks that don't already exist
+            import json
+            from datetime import datetime
+            
+            for task_file in maintenance_template.glob("*.json"):
+                task_id = task_file.name.split('_')[0]
+                
+                if task_id not in existing_mt_ids:
+                    # Load the task to mark it as completed
+                    with open(task_file, 'r') as f:
+                        task_data = json.load(f)
+                    
+                    # Mark as completed with timestamp
+                    task_data['status'] = 'completed'
+                    task_data['completed_at'] = datetime.now().isoformat()
+                    
+                    # Copy to completed directory instead of maintenance
+                    # This way maintenance tasks start as completed and get reactivated based on tiredness
+                    dst_file = completed_dir / task_file.name
+                    with open(dst_file, 'w') as f:
+                        json.dump(task_data, f, indent=2)
+                    
+                    logger.debug(f"Copied maintenance task {task_file.name} to completed folder")
+                else:
+                    logger.debug(f"Maintenance task {task_id} already exists, skipping")
+        else:
+            logger.warning(f"Maintenance tasks template not found at {maintenance_template}")
     
     async def check_bubblewrap(self) -> bool:
         """Check if bubblewrap is installed and available.

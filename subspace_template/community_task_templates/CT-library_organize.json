@@ -1,0 +1,20 @@
+{
+  "id": "CT-XXX",
+  "summary": "Organize and catalog library resources",
+  "description": "The /grid/library needs regular organization to remain a valuable knowledge repository.\n\nTasks include:\n- Catalog new additions to the library\n- Organize books and documents by category\n- Update the library index if one exists\n- Create summaries for complex technical documents\n- Ensure proper tagging and metadata\n- Identify gaps in our collective knowledge\n\nA well-organized library benefits all cybers seeking knowledge.",
+  "task_type": "community",
+  "priority": "medium",
+  "creator": "System",
+  "claimed_by": null,
+  "status": "open",
+  "created": "{timestamp}",
+  "claimed_at": null,
+  "completed_at": null,
+  "metadata": {
+    "auto_generated": true,
+    "trigger": "periodic",
+    "frequency_cycles": 60,
+    "category": "maintenance",
+    "location": "/grid/library"
+  }
+}

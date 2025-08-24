@@ -273,7 +273,7 @@ class SubspaceCoordinator:
         self.body_system = BodySystemManager(self.knowledge_handler, self.awareness_handler, self.cbr_handler)
         
         self.state_manager = CyberStateManager(self.subspace.root_path)
-        self.agent_registry = CyberRegistry(self.subspace.root_path)
+        self.cyber_registry = CyberRegistry(self.subspace.root_path)
         self.developer_registry = DeveloperRegistry(self.subspace.root_path)
         
         self._running = False
@@ -372,7 +372,7 @@ class SubspaceCoordinator:
             agent_type_enum = CyberType.GENERAL
         
         # Get type configuration
-        type_config = self.agent_registry.get_cyber_type_config(agent_type_enum)
+        type_config = self.cyber_registry.get_cyber_type_config(agent_type_enum)
         
         # All Cybers are AI-powered
         cyber_config = config or {}
@@ -405,7 +405,7 @@ class SubspaceCoordinator:
         if type_config.server_component and type_config.server_component.capabilities:
             capabilities = type_config.server_component.capabilities
         
-        self.agent_registry.register_agent(
+        self.cyber_registry.register_agent(
             name=state.name,
             cyber_type=agent_type_enum,
             capabilities=capabilities,
@@ -444,6 +444,9 @@ class SubspaceCoordinator:
         if agent_type_enum == CyberType.IO_GATEWAY and type_config.server_component.enabled:
             await self._start_io_agent_server_component(state.name, type_config)
         
+        # Generate community tasks for new cyber (if not the first cyber)
+        await self._generate_community_tasks_for_new_cyber(state.name)
+        
         return state.name
     
     async def terminate_agent(self, name: str):
@@ -460,7 +463,7 @@ class SubspaceCoordinator:
             await self.state_manager.update_uptime(name, uptime)
         
         # Remove from Cyber registry - they're gone :(
-        self.agent_registry.unregister_agent(name)
+        self.cyber_registry.unregister_agent(name)
         
         # Delete Cyber state - this is final, Cybers don't come back from death
         await self.state_manager.delete_agent(name)
@@ -700,27 +703,27 @@ class SubspaceCoordinator:
                 logger.error(f"Failed to remove shutdown file: {e}")
         
         # Get cyber configuration from registry
-        cyber_info = await self.agent_registry.get_cyber(name)
+        cyber_info = self.cyber_registry.get_agent(name)
         if not cyber_info:
             logger.error(f"Cannot resurrect {name}: not found in registry")
             return False
         
         # Attempt to start the cyber
         try:
-            logger.info(f"Starting cyber {name} with type {cyber_info.get('cyber_type', 'general')}")
+            logger.info(f"Starting cyber {name} with type {cyber_info.cyber_type.value}")
             
             # Use the spawner to start the cyber
-            process = await self.spawner.start_cyber(
+            process = await self.spawner.start_agent(
                 name=name,
-                cyber_type=CyberType(cyber_info.get('cyber_type', 'general')),
-                premium=cyber_info.get('premium', False)
+                cyber_type=cyber_info.cyber_type,
+                premium=cyber_info.metadata.get('premium', False)
             )
             
             if process:
                 logger.info(f"✅ Successfully resurrected cyber {name}")
                 
                 # Update activation count in state manager
-                await self.state_manager.record_activation(name)
+                await self.state_manager.increment_activation(name)
                 
                 # Emit resurrection event
                 if hasattr(self, 'event_emitter') and self.event_emitter:
@@ -745,7 +748,7 @@ class SubspaceCoordinator:
         
         try:
             # Get all registered cybers
-            all_cybers = await self.agent_registry.list_cybers()
+            all_cybers = self.cyber_registry.list_cybers()
             
             # Get current running states
             running_states = await self.spawner.get_cyber_states()
@@ -1124,9 +1127,9 @@ class SubspaceCoordinator:
                     cyber_type = config.get("type", "general")
                     
                     # Register Cyber if not already registered
-                    if not self.agent_registry.get_agent(cyber_name):
+                    if not self.cyber_registry.get_agent(cyber_name):
                         agent_type_enum = CyberType.IO_GATEWAY if cyber_type == "io_gateway" else CyberType.GENERAL
-                        self.agent_registry.register_agent(cyber_name, agent_type_enum)
+                        self.cyber_registry.register_agent(cyber_name, agent_type_enum)
                     
                     # Start the Cyber process
                     await self.spawner.start_agent(
@@ -1197,6 +1200,8 @@ class SubspaceCoordinator:
         REFRESH_INTERVAL = 20  # Refresh registry every 10 seconds (20 * 0.5s)
         resurrection_counter = 0
         RESURRECTION_INTERVAL = 60  # Check for dead cybers every 30 seconds (60 * 0.5s)
+        community_task_counter = 0
+        COMMUNITY_TASK_INTERVAL = 100  # Check for community tasks every 50 seconds (100 * 0.5s)
         
         while self._running:
             try:
@@ -1206,7 +1211,7 @@ class SubspaceCoordinator:
                 # Periodically refresh the cyber registry to update greeting.md content
                 refresh_counter += 1
                 if refresh_counter >= REFRESH_INTERVAL:
-                    self.agent_registry.refresh_registry()
+                    self.cyber_registry.refresh_registry()
                     refresh_counter = 0
                 
                 # Periodically check for and resurrect dead cybers
@@ -1214,6 +1219,12 @@ class SubspaceCoordinator:
                 if resurrection_counter >= RESURRECTION_INTERVAL:
                     await self.check_and_resurrect_cybers()
                     resurrection_counter = 0
+                
+                # Periodically check for community tasks to generate
+                community_task_counter += 1
+                if community_task_counter >= COMMUNITY_TASK_INTERVAL:
+                    await self._check_and_generate_periodic_community_tasks()
+                    community_task_counter = 0
                 
                 # Small delay to prevent busy waiting
                 await asyncio.sleep(0.5)
@@ -1591,6 +1602,141 @@ class SubspaceCoordinator:
         
         logger.info(f"Created identity file for {cyber_name}: model={model_id}, context={max_context_length}")
     
+    async def _generate_community_tasks_for_new_cyber(self, new_cyber_name: str):
+        """Generate community tasks when a new cyber joins.
+        
+        Args:
+            new_cyber_name: Name of the newly created cyber
+        """
+        try:
+            # Check if this is the first cyber (no community tasks needed)
+            all_cybers = list(self.cyber_registry.get_all_agents())
+            if len(all_cybers) <= 1:
+                logger.debug(f"First cyber {new_cyber_name} created, no welcome task needed")
+                return
+            
+            # Generate a welcome/mentoring task for the new cyber
+            await self._create_community_task_from_template("CT-welcome_new_cyber", cyber_name=new_cyber_name)
+            logger.info(f"Created welcome community task for new cyber {new_cyber_name}")
+            
+        except Exception as e:
+            logger.error(f"Failed to generate community tasks for new cyber: {e}")
+    
+    async def _check_and_generate_periodic_community_tasks(self):
+        """Check if periodic community tasks should be generated.
+        
+        This is called periodically to create maintenance and discussion tasks.
+        """
+        try:
+            from datetime import datetime
+            import json
+            
+            # Track last generation time for each task type
+            state_file = self.subspace.root_path / ".mind-swarm" / "community_task_state.json"
+            state_file.parent.mkdir(exist_ok=True)
+            
+            if state_file.exists():
+                with open(state_file, 'r') as f:
+                    state = json.load(f)
+            else:
+                state = {}
+            
+            current_time = datetime.now()
+            
+            # Define task generation intervals (in minutes)
+            task_intervals = {
+                "CT-school_tidy": 30,      # Every 30 minutes
+                "CT-library_organize": 45,  # Every 45 minutes  
+                "CT-book_discussion": 20    # Every 20 minutes
+            }
+            
+            # Check each periodic template
+            for template_name, interval_minutes in task_intervals.items():
+                last_generated = state.get(template_name)
+                
+                if last_generated:
+                    last_time = datetime.fromisoformat(last_generated)
+                    minutes_passed = (current_time - last_time).total_seconds() / 60
+                    
+                    if minutes_passed >= interval_minutes:
+                        await self._create_community_task_from_template(template_name)
+                        state[template_name] = current_time.isoformat()
+                        logger.info(f"Generated periodic community task: {template_name}")
+                else:
+                    # First time - generate immediately
+                    await self._create_community_task_from_template(template_name)
+                    state[template_name] = current_time.isoformat()
+                    logger.info(f"Generated initial community task: {template_name}")
+            
+            # Save state
+            with open(state_file, 'w') as f:
+                json.dump(state, f, indent=2)
+                
+        except Exception as e:
+            logger.error(f"Failed to check periodic community tasks: {e}")
+    
+    async def _create_community_task_from_template(self, template_name: str, **kwargs):
+        """Create a community task from a template.
+        
+        Args:
+            template_name: Name of the template file (without .json)
+            **kwargs: Variables to substitute in the template
+        """
+        try:
+            # Load template
+            template_path = Path(__file__).parent.parent.parent.parent / "subspace_template" / "community_task_templates" / f"{template_name}.json"
+            if not template_path.exists():
+                logger.error(f"Community task template not found: {template_name}")
+                return
+            
+            import json
+            from datetime import datetime
+            
+            with open(template_path, 'r') as f:
+                template_content = f.read()
+            
+            # Find next available CT number
+            community_tasks_dir = self.subspace.grid_dir / "community" / "tasks"
+            community_tasks_dir.mkdir(parents=True, exist_ok=True)
+            
+            next_id = 1
+            for task_file in community_tasks_dir.glob("CT-*.json"):
+                try:
+                    task_id = task_file.stem.split('_')[0]
+                    num = int(task_id.split('-')[1])
+                    next_id = max(next_id, num + 1)
+                except Exception:
+                    pass
+            
+            task_id = f"CT-{next_id:03d}"
+            
+            # Substitute variables
+            task_content = template_content.replace("{timestamp}", datetime.now().isoformat())
+            task_content = task_content.replace("CT-XXX", task_id)
+            
+            # Replace any custom kwargs
+            for key, value in kwargs.items():
+                task_content = task_content.replace(f"{{{key}}}", str(value))
+            
+            # Parse and save
+            task_data = json.loads(task_content)
+            task_data['id'] = task_id
+            
+            # Generate filename
+            summary_slug = task_data['summary'][:50].lower()
+            summary_slug = ''.join(c if c.isalnum() or c == ' ' else '' for c in summary_slug)
+            summary_slug = '_'.join(summary_slug.split())
+            
+            task_file = community_tasks_dir / f"{task_id}_{summary_slug}.json"
+            
+            with open(task_file, 'w') as f:
+                json.dump(task_data, f, indent=2)
+            
+            logger.info(f"Created community task {task_id}: {task_data['summary']}")
+            
+        except Exception as e:
+            logger.error(f"Failed to create community task from template {template_name}: {e}")
+    
     async def _create_io_agent_body_files(self, cyber_name: str, cyber_personal: Path):
         """Create additional body files for I/O Cybers.
         
@@ -1751,7 +1897,7 @@ class SubspaceCoordinator:
         cyber_name = self.developer_registry.register_developer(name, full_name, email)
         
         # Update Cyber registry to include developer
-        await self.agent_registry.update_registry()
+        await self.cyber_registry.update_registry()
         
         logger.info(f"Registered developer {name} as {cyber_name}")
         return cyber_name

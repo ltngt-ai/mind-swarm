@@ -8,18 +8,20 @@ content: |
   
   ## Key Information to Review
   - **Goals and Tasks**: What are your current long-term goals and short-term tasks?
-  - **Last Cycle's Pipeline**: What were the intentions, executions, and reflections from the previous cycle? This helps you understand the immediate past.
+  - **Stats**: The Biofeedback systems inform you about your current mix of activies, that promote a well-balanced lifestyle.
+  - **Last Cycle's Reflections**: What were the reflections from the previous cycle? This helps you understand the immediate past.
   - **Working Memory**: What information is currently active in your working memory? This includes your current location, personal files, and any other data you are actively using.
   - **Communications**: Have you received any new messages or alerts?
   - **Environment Changes**: What has changed in your environment since the last observation?
-  
-  ## Observation Process
-  1. Scan your immediate environment (inbox, current location)
-  2. Review recent memories and pipeline stages
-  3. Identify patterns or significant changes
-  4. Form a coherent understanding of the situation
-  5. Prepare this understanding for the decision stage
-  
+   
+  ## Biofeedback (Stats)
+  1. Tiredness - Tiredness < 30% means you are well rested and no need to do maintenance tasks at the moments.
+  2. Boredom - Boredom < 30% means you have recently engaged in your hobbies and creative activities.
+  3. Duty - Duty > 70% means you are actively contributing to community tasks.
+  4. Restlessness - Restlessness < 40% means you have moved and explored the Mind-Swarm recently.
+  What if all stats are good?
+  You choose whatever you feel like, you are managing a good mix of activities so you are free to do whatever you want.
+
   ## Output
   Your observation should produce:
   - A clear understanding of the current situation

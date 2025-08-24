@@ -1,0 +1,33 @@
+{
+  "id": "MT-004",
+  "task_type": "maintenance",
+  "title": "Review Task Backlog",
+  "summary": "Review and prioritize pending tasks",
+  "description": "Go through task backlog, update priorities, remove obsolete tasks, and ensure task list is manageable.",
+  "priority": "medium",
+  "status": "pending",
+  "todo": [
+    {
+      "title": "Review pending tasks",
+      "status": "NOT-STARTED",
+      "notes": "Check all tasks in pending folder"
+    },
+    {
+      "title": "Update task priorities",
+      "status": "NOT-STARTED",
+      "notes": "Adjust priorities based on current needs"
+    },
+    {
+      "title": "Remove obsolete tasks",
+      "status": "NOT-STARTED",
+      "notes": "Delete or archive tasks that are no longer relevant"
+    },
+    {
+      "title": "Consolidate similar tasks",
+      "status": "NOT-STARTED",
+      "notes": "Merge tasks that overlap or can be done together"
+    }
+  ],
+  "created": "2024-01-01T00:00:00Z",
+  "updated": "2024-01-01T00:00:00Z"
+}

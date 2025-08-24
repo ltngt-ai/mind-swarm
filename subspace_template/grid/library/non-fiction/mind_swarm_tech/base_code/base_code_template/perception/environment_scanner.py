@@ -179,6 +179,9 @@ class EnvironmentScanner:
         # Scan activity log (personal history)
         memories.extend(self._scan_activity_log(cycle_count))
         
+        # Scan status file (consolidated status with biofeedback)
+        memories.extend(self._scan_status_file(cycle_count))
+        
         # Scan different areas - these return observations and MemoryBlocks
         inbox_results = self._scan_inbox(cycle_count)
         observations.extend(inbox_results)
@@ -911,6 +914,50 @@ class EnvironmentScanner:
             
         except Exception as e:
             logger.error(f"Error scanning activity log: {e}")
+        
+        return memories
+    
+    def _scan_status_file(self, cycle_count: int = 0) -> List[MemoryBlock]:
+        """Scan the consolidated status file and create a pinned memory for it.
+        
+        The status file provides a unified view of identity, biofeedback, location,
+        tasks, and recent activity - essential context for the cyber.
+        
+        Args:
+            cycle_count: Current cycle count
+            
+        Returns:
+            List containing MemoryBlock for status.txt if it exists
+        """
+        from ..memory.memory_blocks import MemoryBlock, Priority, ContentType
+        memories = []
+        
+        try:
+            # Status file is in .internal/memory/status/
+            status_file_path = self.memory_path / "status" / "status.txt"
+            
+            # Only create memory if the file exists
+            if status_file_path.exists():
+                # Create a HIGH priority, pinned memory for the status file
+                status_memory = MemoryBlock(
+                    location="personal/.internal/memory/status/status.txt",
+                    priority=Priority.HIGH,  # High priority to ensure it's included
+                    confidence=1.0,
+                    pinned=True,  # Always visible in working memory
+                    metadata={
+                        "file_type": "status",
+                        "description": "Consolidated status with biofeedback, tasks, and activity",
+                        "tags": ["status", "biofeedback", "self", "tasks"]
+                    },
+                    cycle_count=cycle_count,
+                    no_cache=True,  # Always read fresh content
+                    content_type=ContentType.TEXT_PLAIN
+                )
+                memories.append(status_memory)
+                logger.debug(f"Created pinned memory for status.txt")
+            
+        except Exception as e:
+            logger.error(f"Error scanning status file: {e}")
         
         return memories
     

@@ -1,0 +1,20 @@
+{
+  "id": "CT-XXX",
+  "summary": "Organize and maintain the school directory",
+  "description": "The /grid/community/school directory needs regular maintenance to stay useful for new and existing cybers.\n\nTasks include:\n- Review and organize learning materials\n- Update outdated documentation\n- Create clear navigation guides\n- Remove duplicate or obsolete content\n- Ensure all .description.txt files are current\n- Add helpful examples where needed\n\nA well-organized school helps all cybers learn more effectively.",
+  "task_type": "community",
+  "priority": "medium",
+  "creator": "System",
+  "claimed_by": null,
+  "status": "open",
+  "created": "{timestamp}",
+  "claimed_at": null,
+  "completed_at": null,
+  "metadata": {
+    "auto_generated": true,
+    "trigger": "periodic",
+    "frequency_cycles": 50,
+    "category": "maintenance",
+    "location": "/grid/community/school"
+  }
+}

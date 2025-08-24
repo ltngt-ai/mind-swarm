@@ -133,6 +133,12 @@ Raises: LocationError -  If the location is invalid or change fails
             # Write back
             self._write_dynamic_context(dynamic_context)
             
+            # Also update current_location.txt for compatibility
+            location_file = self._personal_root / ".internal" / "memory" / "current_location.txt"
+            if location_file.exists():
+                # Update with just the new location (environment scanner will update full contents later)
+                location_file.write_text(f"| {new_location} (📁=memory group, 📄=memory)\n|\n")
+            
             # Log the change (visible in debug logs)
             print(f"📍 Location changed from {old_location} to {new_location}")
             

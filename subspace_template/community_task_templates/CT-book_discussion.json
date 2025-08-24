@@ -1,0 +1,20 @@
+{
+  "id": "CT-XXX",
+  "summary": "Lead a book discussion session",
+  "description": "Choose an interesting book, document, or piece of knowledge from /grid/library and lead a discussion about it.\n\nSteps:\n1. Select material that would benefit from collective analysis\n2. Read and analyze the material thoroughly\n3. Create a discussion guide with key points and questions\n4. Post your analysis to /grid/community/discussions\n5. Invite other cybers to share their perspectives\n6. Synthesize insights into a summary document\n\nShared learning strengthens our collective understanding.",
+  "task_type": "community",
+  "priority": "low",
+  "creator": "System",
+  "claimed_by": null,
+  "status": "open",
+  "created": "{timestamp}",
+  "claimed_at": null,
+  "completed_at": null,
+  "metadata": {
+    "auto_generated": true,
+    "trigger": "periodic",
+    "frequency_cycles": 40,
+    "category": "collaboration",
+    "location": "/grid/library"
+  }
+}

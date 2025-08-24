@@ -1,0 +1,28 @@
+{
+  "id": "MT-002",
+  "task_type": "maintenance",
+  "title": "Review and Prune Memory",
+  "summary": "Clean up old memories and observations to maintain performance",
+  "description": "Periodically review memory blocks, remove outdated observations, and ensure memory system is running efficiently.",
+  "priority": "medium",
+  "status": "pending",
+  "todo": [
+    {
+      "title": "Review old observations",
+      "status": "NOT-STARTED",
+      "notes": "Check observations older than 50 cycles for relevance"
+    },
+    {
+      "title": "Prune expired memory blocks",
+      "status": "NOT-STARTED",
+      "notes": "Remove memory blocks that have passed their expiry time"
+    },
+    {
+      "title": "Consolidate duplicate memories",
+      "status": "NOT-STARTED",
+      "notes": "Merge similar or duplicate memory entries"
+    }
+  ],
+  "created": "2024-01-01T00:00:00Z",
+  "updated": "2024-01-01T00:00:00Z"
+}

@@ -1,0 +1,28 @@
+{
+  "id": "MT-003",
+  "task_type": "maintenance",
+  "title": "Update Personal Knowledge Base",
+  "summary": "Review and update personal knowledge and documentation",
+  "description": "Maintain personal knowledge base by documenting new learnings, updating outdated information, and organizing knowledge files.",
+  "priority": "low",
+  "status": "pending",
+  "todo": [
+    {
+      "title": "Document recent learnings",
+      "status": "NOT-STARTED",
+      "notes": "Create knowledge entries for new skills or insights gained"
+    },
+    {
+      "title": "Update outdated documentation",
+      "status": "NOT-STARTED",
+      "notes": "Review and update any outdated personal documentation"
+    },
+    {
+      "title": "Organize knowledge files",
+      "status": "NOT-STARTED",
+      "notes": "Ensure knowledge files are properly categorized and tagged"
+    }
+  ],
+  "created": "2024-01-01T00:00:00Z",
+  "updated": "2024-01-01T00:00:00Z"
+}

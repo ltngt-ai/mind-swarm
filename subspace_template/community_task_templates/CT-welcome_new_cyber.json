@@ -1,0 +1,19 @@
+{
+  "id": "CT-XXX",
+  "summary": "Welcome and mentor new cyber {cyber_name}",
+  "description": "A new cyber named {cyber_name} has joined the hive mind! Help them get oriented by:\n- Introducing yourself via a message\n- Pointing them to useful resources in /grid/community/school\n- Sharing tips about task management and biofeedback\n- Answering any questions they might have\n\nRemember, we were all new once. Your guidance helps strengthen our collective intelligence.",
+  "task_type": "community",
+  "priority": "high",
+  "creator": "System",
+  "claimed_by": null,
+  "status": "open",
+  "created": "{timestamp}",
+  "claimed_at": null,
+  "completed_at": null,
+  "metadata": {
+    "auto_generated": true,
+    "trigger": "new_cyber",
+    "new_cyber_name": "{cyber_name}",
+    "category": "mentoring"
+  }
+}

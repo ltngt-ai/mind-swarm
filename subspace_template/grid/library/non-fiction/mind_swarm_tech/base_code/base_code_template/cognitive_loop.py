@@ -25,7 +25,8 @@ from .knowledge.simplified_knowledge import SimplifiedKnowledgeManager
 from .state import CyberStateManager, ExecutionStateTracker
 from .utils import CognitiveUtils, FileManager
 from .brain import BrainInterface
-from .stages import ObservationStage, ReflectStage, DecisionStage, ExecutionStage, CleanupStage
+from .stages import ObservationStage, ReflectStage, DecisionStage, ExecutionStage
+# CleanupStage disabled - maintenance tasks and biofeedback handle cleanup now
 from .cycle_recorder_client import get_cycle_recorder
 
 logger = logging.getLogger("Cyber.cognitive")
@@ -86,10 +87,15 @@ class CognitiveLoop:
         self.decision_stage = DecisionStage(self)  # This is now V2
         self.execution_stage = ExecutionStage(self)  # This is now V2
         self.reflect_stage = ReflectStage(self)
-        self.cleanup_stage = CleanupStage(self)
+        # self.cleanup_stage = CleanupStage(self)  # Disabled - maintenance tasks handle cleanup
         
         # Initialize cycle recorder
         self.cycle_recorder = get_cycle_recorder(cyber_id, personal)
+    
+    @property
+    def cycle(self):
+        """Get current cycle count (for compatibility with status module)."""
+        return self.cycle_count
     
     def _initialize_pipeline_buffers(self):
         """Initialize pipeline memory blocks for each stage."""
@@ -362,74 +368,9 @@ class CognitiveLoop:
                 self.memory_system.add_memory(current_location_memory)
                 logger.info(f"Added current_location.txt to pinned memory with id: {current_location_memory.id}")
         
-        # Create/update personal.txt
-        personal_file = self.memory_dir / "personal.txt"
-        personal_id = "memory:personal/.internal/memory/personal.txt"
-        
-        # Always regenerate to include current tasks
-        self._update_personal_file()
-        
-        if personal_file.exists():
-            # Check if already in memory
-            existing_memory = self.memory_system.get_memory(personal_id)
-            if existing_memory:
-                # Update the cycle count to keep it fresh
-                self.memory_system.touch_memory(personal_id, self.cycle_count)
-            else:
-                personal_memory = MemoryBlock(
-                    location="personal/.internal/memory/personal.txt",
-                    priority=Priority.SYSTEM,  # System-controlled location tracking
-                    confidence=1.0,
-                    pinned=True,  # Always visible
-                    metadata={"file_type": "location", "description": "Personal directory overview and active tasks"},
-                    cycle_count=self.cycle_count,
-                    no_cache=True,  # Always read fresh
-                    content_type=ContentType.TEXT_PLAIN  # Plain text location file
-                )
-                self.memory_system.add_memory(personal_memory)
-                logger.info(f"Added personal.txt to pinned memory with id: {personal_memory.id}")
+        # personal.txt functionality removed - status.txt now provides this information
     
-    def _update_personal_file(self):
-        """Update personal.txt with current directory structure and active tasks."""
-        personal_file = self.memory_dir / "personal.txt"
-        
-        # Start with directory listing
-        personal_content = "| /personal (your home directory)\n"
-        
-        # List actual directories if they exist
-        if self.personal.exists():
-            for item in sorted(self.personal.iterdir()):
-                if item.is_dir() and not item.name.startswith('.'):
-                    personal_content += f"|---- 📁 {item.name}/\n"
-            for item in sorted(self.personal.iterdir()):
-                if item.is_file() and not item.name.startswith('.'):
-                    personal_content += f"|---- 📄 {item.name}\n"
-        
-        # Add active tasks section - always show even if empty
-        personal_content += "\n\n📋 Active Tasks:\n"
-        tasks_dir = self.personal / ".internal" / "tasks" / "active"
-        if tasks_dir.exists():
-            task_files = list(tasks_dir.glob("task_*.json"))
-            if task_files:
-                for task_file in sorted(task_files):
-                    try:
-                        with open(task_file, 'r') as f:
-                            task_data = json.load(f)
-                            summary = task_data.get('summary', 'Untitled task')
-                            personal_content += f"  • {summary}\n"
-                    except Exception:
-                        # Skip corrupted task files
-                        pass
-                personal_content += "\n(Full details in /personal/.internal/tasks/)\n"
-            else:
-                personal_content += "  No active tasks.\n"
-                personal_content += "  (Use tasks.create_task() API to add new tasks)\n"
-        else:
-            personal_content += "  No active tasks.\n"
-            personal_content += "  (Use tasks.create_task() API to add new tasks)\n"
-        
-        # Write the updated content
-        personal_file.write_text(personal_content)
+    # _update_personal_file function removed - functionality moved to status.txt
     
     def get_dynamic_context(self) -> Dict[str, Any]:
         """Get the current dynamic context from file.
@@ -455,7 +396,7 @@ class CognitiveLoop:
         
         Args:
             stage: Current stage (OBSERVATION, DECISION, EXECUTION, MAINTENANCE)
-            phase: Current phase within the stage (e.g., OBSERVE, CLEANUP, DECIDE, etc.)
+            phase: Current phase within the stage (e.g., OBSERVE, DECIDE, etc.)
             **updates: Additional key-value pairs to update
         """
         if not hasattr(self, 'dynamic_context_file'):
@@ -561,11 +502,19 @@ class CognitiveLoop:
             if self.cycle_count > 0:  # Don't clear on first cycle
                 self._clear_pipeline_buffers()
             
-            # Update personal.txt with current tasks
-            self._update_personal_file()
+            # personal.txt update removed - status.txt handles this now
             
             # Update dynamic context at the start of each cycle
             self._update_dynamic_context(stage="STARTING", phase="INIT")
+            
+            # Update status display
+            try:
+                from .status import StatusManager
+                status = StatusManager(self)
+                status.render()
+                logger.debug("Status display updated")
+            except Exception as e:
+                logger.debug(f"Status rendering failed: {e}")
             
             # Check if location and reflection files need to be added to memory
             # (they might have been created or updated after initialization)
@@ -583,15 +532,16 @@ class CognitiveLoop:
             self._update_dynamic_context(stage="REFLECT", phase="STARTING")
             await self.reflect_stage.reflect()
             
-            self._update_dynamic_context(stage="CLEANUP", phase="STARTING")
-            await self.cleanup_stage.cleanup(self.cycle_count)
+            # CLEANUP phase disabled - maintenance tasks and biofeedback handle cleanup
+            # self._update_dynamic_context(stage="CLEANUP", phase="STARTING")
+            # await self.cleanup_stage.cleanup(self.cycle_count)
                 
             # Save checkpoint after completing all stages
             await self._save_checkpoint()
             
             # End execution tracking
             self.execution_tracker.end_execution("completed", {
-                "stages_completed": ["observation", "decision", "execution", "reflect", "cleanup"],
+                "stages_completed": ["observation", "decision", "execution", "reflect"],  # cleanup removed
             })
             
             # Mark cycle as complete in recorder

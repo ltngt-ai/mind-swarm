@@ -367,7 +367,7 @@ class EventAPI:
 ### tasks.py
 - **Purpose**: Simple task management system
 - **Dependencies**: Context
-- **Key Methods**: `create()`, `get_active()`, `complete()`, `block()`, `update()`
+- **Key Methods**: `create()`, `get_current()`, `get_all()`, `complete()`, `block()`, `update()`
 
 ## Troubleshooting
 
