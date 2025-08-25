@@ -233,7 +233,7 @@ class StatusManager:
         # Add recent activity
         lines.append("\n**Activity Log:**")
         try:
-            activity = self._get_recent_activity(5)
+            activity = self._get_recent_activity(10)
             if activity:
                 for entry in activity:
                     lines.append(f"- {entry}")

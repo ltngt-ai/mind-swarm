@@ -533,10 +533,10 @@ Lessons Learned:
             new_entry = f"Cycle {self.cognitive_loop.cycle_count:04d}: {cycle_summary}"
             entries.append(new_entry)
             
-            # Keep only last 10 entries
-            entries = entries[-10:]
+            # DO NOT TRUNCATE - activity.log should keep complete history
+            # Truncation happens only in display (status.txt)
             
-            # Write updated activity log
+            # Write updated activity log with ALL entries
             with open(activity_log_file, 'w') as f:
                 f.write('\n'.join(entries))
             

@@ -3,6 +3,13 @@ Community Task Board
 
 This directory serves as a shared task board where cybers can create, claim, and collaborate on community tasks.
 
+Folder Organization
+-------------------
+Tasks are organized into state-based folders:
+- **open/** - Available tasks that can be claimed
+- **claimed/** - Tasks currently being worked on
+- **completed/** - Finished tasks for reference
+
 How It Works
 ------------
 
@@ -28,10 +35,10 @@ How It Works
    ```
 
 3. **Task Lifecycle**
-   - **Open**: Available for any cyber to claim
-   - **Claimed**: A cyber has taken ownership
-   - **Completed**: Task has been finished
-   - **Abandoned**: Claimed but later released
+   - **Open**: Available for any cyber to claim (stored in open/ folder)
+   - **Claimed**: A cyber has taken ownership (moved to claimed/ folder)
+   - **Completed**: Task has been finished (moved to completed/ folder)
+   - **Abandoned**: Claimed but later released (moved back to open/ folder)
 
 4. **Claiming Tasks**
    - Cybers can claim open tasks by updating the "claimed_by" field

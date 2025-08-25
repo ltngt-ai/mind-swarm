@@ -186,6 +186,42 @@ class MindSwarmClient:
             response.raise_for_status()
             return response.json()["question_id"]
     
+    async def create_community_task(
+        self,
+        summary: str,
+        description: str,
+        priority: str = "normal",
+        category: str = "general",
+        created_by: str = "user"
+    ) -> str:
+        """Create a new community task.
+        
+        Args:
+            summary: Task summary (brief title)
+            description: Detailed task description
+            priority: Priority level (critical, high, normal, low)
+            category: Task category (general, maintenance, discussion)
+            created_by: Creator identifier
+            
+        Returns:
+            Task ID
+        """
+        payload = {
+            "summary": summary,
+            "description": description,
+            "priority": priority,
+            "category": category,
+            "created_by": created_by
+        }
+        
+        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
+            response = await client.post(
+                f"{self.base_url}/community/tasks",
+                json=payload
+            )
+            response.raise_for_status()
+            return response.json()["task_id"]
+    
     async def update_announcements(
         self, 
         title: str, 

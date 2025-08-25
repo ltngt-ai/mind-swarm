@@ -50,6 +50,15 @@ class QuestionRequest(BaseModel):
     created_by: str = "user"
 
 
+class TaskRequest(BaseModel):
+    """Request to create a community task."""
+    summary: str
+    description: str
+    priority: str = "normal"
+    category: str = "general"
+    created_by: str = "user"
+
+
 class AnnouncementRequest(BaseModel):
     """Request to create or update system announcements."""
     title: str
@@ -417,6 +426,52 @@ class MindSwarmServer:
             
             questions = await self.coordinator.get_community_questions()
             return {"questions": questions}
+        
+        @self.app.post("/community/tasks")
+        async def create_task(request: TaskRequest):
+            """Create a new community task."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            if not getattr(self, '_coordinator_ready', False):
+                raise HTTPException(status_code=503, detail="Server still initializing, please wait")
+            
+            try:
+                task_id = await self.coordinator.create_community_task_manual(
+                    summary=request.summary,
+                    description=request.description,
+                    priority=request.priority,
+                    category=request.category,
+                    created_by=request.created_by
+                )
+                
+                # Notify websocket clients
+                await self._broadcast_event({
+                    "type": "task_created",
+                    "task_id": task_id,
+                    "summary": request.summary,
+                    "created_by": request.created_by,
+                    "timestamp": datetime.now().isoformat()
+                })
+                
+                return {"task_id": task_id}
+            except Exception as e:
+                logger.error(f"Failed to create task: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.get("/community/tasks")
+        async def get_tasks():
+            """Get all community tasks."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            if not getattr(self, '_coordinator_ready', False):
+                return {"tasks": []}
+            
+            try:
+                tasks = await self.coordinator.get_community_tasks()
+                return {"tasks": tasks}
+            except Exception as e:
+                logger.error(f"Failed to get tasks: {e}")
+                return {"tasks": []}
         
         @self.app.post("/community/announcements")
         async def update_announcements(request: AnnouncementRequest):

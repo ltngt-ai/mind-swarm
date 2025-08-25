@@ -884,38 +884,12 @@ class EnvironmentScanner:
             cycle_count: Current cycle count
             
         Returns:
-            List containing MemoryBlock for activity.log if it exists
+            Empty list - activity log is now included in status.txt to save tokens
         """
-        from ..memory.memory_blocks import MemoryBlock, Priority, ContentType
-        memories = []
-        
-        try:
-            # Activity log is now in .internal since it's system-generated
-            activity_log_path = self.memory_path / "activity.log"
-            
-            # Only create memory if the file exists
-            if activity_log_path.exists():
-                # Create a HIGH priority, pinned memory for the activity log
-                activity_memory = MemoryBlock(
-                    location="personal/.internal/memory/activity.log",
-                    priority=Priority.HIGH,  # High priority to ensure it's included
-                    confidence=1.0,
-                    pinned=True,  # Always visible in working memory
-                    metadata={
-                        "file_type": "activity_log",
-                        "description": "Recent activity history (last 10 cycles)",
-                    },
-                    cycle_count=cycle_count,
-                    no_cache=True,  # Always read fresh content
-                    content_type=ContentType.TEXT_PLAIN
-                )
-                memories.append(activity_memory)
-                logger.debug(f"Created pinned memory for activity.log")
-            
-        except Exception as e:
-            logger.error(f"Error scanning activity log: {e}")
-        
-        return memories
+        # REMOVED: activity.log content is now included in status.txt to save token space
+        # The last 10 activity entries are shown in the status file
+        # No longer adding activity.log as a separate memory block
+        return []
     
     def _scan_status_file(self, cycle_count: int = 0) -> List[MemoryBlock]:
         """Scan the consolidated status file and create a pinned memory for it.

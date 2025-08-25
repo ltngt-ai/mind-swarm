@@ -68,6 +68,9 @@ class ExecutionStage:
         self._extract_and_save_module_docs(self.cbr_api, "cbr_api_docs")
         self._extract_and_save_module_docs(self.communication_api, "communication_api_docs")
         self._extract_and_save_module_docs(self.tasks_api, "tasks_api_docs")
+        
+        # Initialize error case tracking
+        self.error_case_ids = []  # Track current cycle's error cases for cleanup
     
     def _load_stage_instructions(self):
         """Load stage instructions from knowledge into memory."""
@@ -364,6 +367,9 @@ class ExecutionStage:
         """Run the execution stage."""
         logger.info("=== EXECUTION STAGE V3 ===")
         
+        # Reset error case tracking for this cycle
+        self.error_case_ids = []
+        
         try:
             # Load stage instructions
             self._load_stage_instructions()
@@ -573,9 +579,23 @@ The provided API docs describe the available operations and their usage.
                 if attempt < max_attempts:
                     try:
                         logger.info(f"⚠️ Script error: {result.get('error_type', 'Unknown')}, attempting fix...")
-                        fixed_script = await self._fix_script_error(current_script, result)
+                        
+                        # First try to find similar past errors and their solutions
+                        similar_solutions = await self._search_similar_error_cases(result, current_script)
+                        
+                        fixed_script = await self._fix_script_error(current_script, result, similar_solutions)
                         
                         if fixed_script and fixed_script != current_script:
+                            # Store this as a potential solution (will be confirmed later)
+                            case_id = await self._store_error_case(
+                                script=current_script,
+                                error=result,
+                                solution=fixed_script,
+                                status="pending"  # Will update to success/fail later
+                            )
+                            if case_id:
+                                self.error_case_ids.append(case_id)
+                            
                             current_script = fixed_script
                             # Log formatted fixed script for debugging
                             formatted_fixed = self._format_script_for_logging(fixed_script, max_lines=8)
@@ -627,6 +647,13 @@ The provided API docs describe the available operations and their usage.
             self.cognitive_loop.memory_system.touch_memory(execution_buffer.id, self.cognitive_loop.cycle_count)
             
             logger.info(f"⚡ Execution complete after {attempt} attempt(s)")
+            
+            # Update CBR case scores based on final outcome
+            if self.error_case_ids:
+                await self._update_error_case_scores(
+                    case_ids=self.error_case_ids,
+                    success=execution_content["success"]
+                )
             
             # Record stage data for cycle history
             try:
@@ -845,8 +872,8 @@ The provided API docs describe the available operations and their usage.
                 "attempt": attempt
             }
     
-    async def _fix_script_error(self, script: str, error: Dict[str, Any]) -> Optional[str]:
-        """Try to fix an error in the script by showing the full error context to the AI."""
+    async def _fix_script_error(self, script: str, error: Dict[str, Any], similar_solutions: List[Dict[str, Any]] = None) -> Optional[str]:
+        """Try to fix an error in the script using similar past solutions and AI analysis."""
         
         # Create tag filter - allow execution-related knowledge
         tag_filter = TagFilter(blacklist=self.KNOWLEDGE_BLACKLIST)
@@ -855,7 +882,7 @@ The provided API docs describe the available operations and their usage.
         # This ensures the recovery stage sees exactly what the initial stage saw
         working_memory_context = self.memory_system.build_context(
             max_tokens=self.cognitive_loop.max_context_tokens // 2,
-            current_task="Fix Python script error based on error details",
+            current_task="Fix Python script error based on error details and past solutions",
             selection_strategy="balanced",
             tag_filter=tag_filter,
             exclude_content_types=[]
@@ -876,14 +903,26 @@ The provided API docs describe the available operations and their usage.
         if "traceback" in error:
             error_context["traceback"] = error["traceback"]
         
-        instruction = """
+        # Format similar solutions if available
+        similar_solutions_text = ""
+        if similar_solutions:
+            similar_solutions_text = "\n\nSIMILAR PAST ERRORS AND SOLUTIONS:\n"
+            for i, case in enumerate(similar_solutions[:3], 1):  # Limit to top 3
+                similar_solutions_text += f"\n{i}. Similar Error (Score: {case.get('metadata', {}).get('success_score', 0):.2f}):\n"
+                similar_solutions_text += f"   Problem: {case.get('problem_context', 'N/A')}\n"
+                similar_solutions_text += f"   Solution: {case.get('solution', 'N/A')}\n"
+                similar_solutions_text += f"   Outcome: {case.get('outcome', 'N/A')}\n"
+        
+        instruction = f"""
 The Python script failed with an error. Analyze the error and fix the script.
 
 The API documentation is in your working memory.
 The error details show exactly what went wrong.
+{similar_solutions_text}
 
 CRITICAL: Output ONLY the corrected Python code - no markdown, no explanations, just Python.
 Remember: NO async/await, all operations are synchronous.
+If similar past solutions exist, consider adapting them to the current context.
 """
         
         fix_request = {
@@ -893,7 +932,8 @@ Remember: NO async/await, all operations are synchronous.
                     "script": "The script that failed",
                     "error_details": "Full error information including traceback",
                     "working_memory": "Complete memory context including API documentation",
-                    "partial_output": "Any output before the error"
+                    "partial_output": "Any output before the error",
+                    "similar_solutions": "Past solutions to similar errors (if any)"
                 },
                 "outputs": {
                     "fixed_script": "The corrected Python script"
@@ -903,7 +943,8 @@ Remember: NO async/await, all operations are synchronous.
                 "script": script,
                 "error_details": json.dumps(error_context, indent=2),
                 "working_memory": working_memory_context,
-                "partial_output": "\n".join(error.get("partial_output", []))
+                "partial_output": "\n".join(error.get("partial_output", [])),
+                "similar_solutions": similar_solutions_text if similar_solutions else "No similar solutions found"
             }
         }
         
@@ -918,4 +959,118 @@ Remember: NO async/await, all operations are synchronous.
             logger.error(f"Failed to fix script error: {e}")
         
         return None
+    
+    async def _search_similar_error_cases(self, error: Dict[str, Any], script: str) -> List[Dict[str, Any]]:
+        """Search for similar past errors and their solutions using CBR."""
+        try:
+            # Build a context string that describes the error
+            error_context = f"Error type: {error.get('error_type', 'Unknown')}\n"
+            error_context += f"Error message: {error.get('error', '')}\n"
+            
+            # Include relevant parts of traceback if available
+            if "traceback" in error:
+                # Extract the most relevant line from traceback
+                tb_lines = error["traceback"].split('\n')
+                for line in tb_lines:
+                    if 'File "<cyber_script>"' in line or error.get("error", "") in line:
+                        error_context += f"Traceback: {line}\n"
+                        break
+            
+            # Add script context (first few lines to understand what was being attempted)
+            script_lines = script.split('\n')[:5]
+            error_context += f"Script context: {' '.join(script_lines)}"
+            
+            # Search for similar cases
+            similar_cases = self.cbr_api.retrieve_similar_cases(
+                context=error_context,
+                limit=5,
+                min_score=0.3,  # Lower threshold to catch more potential matches
+                timeout=3.0  # Quick timeout to not delay execution
+            )
+            
+            if similar_cases:
+                logger.info(f"🔍 Found {len(similar_cases)} similar error cases from CBR")
+                for case in similar_cases[:2]:  # Log top 2 for debugging
+                    logger.debug(f"  - Similar case (score {case.get('similarity', 0):.2f}): {case.get('problem_context', '')[:100]}")
+            
+            return similar_cases
+            
+        except Exception as e:
+            logger.warning(f"Failed to search CBR for similar errors: {e}")
+            return []
+    
+    async def _store_error_case(self, script: str, error: Dict[str, Any], solution: str, status: str = "pending") -> Optional[str]:
+        """Store an error and its solution as a CBR case."""
+        try:
+            # Build problem description
+            problem = f"Script execution failed with {error.get('error_type', 'Unknown')} error: {error.get('error', '')[:200]}"
+            
+            # Build solution description
+            solution_desc = f"Fixed script by modifying the code (see solution field for details)"
+            
+            # Extract key differences if possible (simplified)
+            script_lines = script.split('\n')
+            solution_lines = solution.split('\n')
+            if len(script_lines) != len(solution_lines):
+                solution_desc += f" - Changed from {len(script_lines)} to {len(solution_lines)} lines"
+            
+            # Prepare metadata
+            tags = [
+                f"error_{error.get('error_type', 'Unknown').lower()}",
+                "execution_fix",
+                f"attempt_{error.get('attempt', 1)}"
+            ]
+            
+            # Store the case
+            case_id = self.cbr_api.store_case(
+                problem=problem,
+                solution=solution_desc,
+                outcome=f"Status: {status}",
+                success_score=0.5,  # Initial neutral score, will be updated
+                tags=tags,
+                metadata={
+                    "original_script": script[:500],  # Store first 500 chars
+                    "fixed_script": solution[:500],
+                    "error_details": {
+                        "type": error.get("error_type"),
+                        "message": error.get("error", "")[:200],
+                        "line": error.get("line")
+                    },
+                    "cycle_count": self.cognitive_loop.cycle_count
+                },
+                timeout=3.0
+            )
+            
+            if case_id:
+                logger.debug(f"📝 Stored error case: {case_id}")
+            
+            return case_id
+            
+        except Exception as e:
+            logger.warning(f"Failed to store error case in CBR: {e}")
+            return None
+    
+    async def _update_error_case_scores(self, case_ids: List[str], success: bool):
+        """Update the scores of error cases based on final execution outcome."""
+        try:
+            for case_id in case_ids:
+                # Update score based on success
+                new_score = 0.85 if success else 0.15
+                
+                success_text = "successfully" if success else "unsuccessfully"
+                logger.debug(f"📊 Updating case {case_id} score to {new_score:.2f} ({success_text} resolved error)")
+                
+                # Update the case
+                updated = self.cbr_api.update_case_score(
+                    case_id=case_id,
+                    new_score=new_score,
+                    reused=True,  # Mark as used
+                    timeout=2.0
+                )
+                
+                if not updated:
+                    logger.warning(f"Failed to update score for case {case_id}")
+                    
+        except Exception as e:
+            logger.warning(f"Failed to update error case scores: {e}")
     

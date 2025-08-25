@@ -574,6 +574,46 @@ class MindSwarmCLI:
                     q_id = await self.client.create_community_question(question_text)
                     console.print(f"Posted to Community: {q_id}")
                 
+                elif cmd == "task" and len(parts) > 1:
+                    # Create a community task
+                    # Format: task <summary> | <description> [--priority HIGH/MEDIUM/LOW] [--category general/maintenance/discussion]
+                    task_text = " ".join(parts[1:])
+                    
+                    if "|" in task_text:
+                        summary, rest = task_text.split("|", 1)
+                        summary = summary.strip()
+                        
+                        # Parse description and optional flags
+                        desc_parts = rest.strip().split("--")
+                        description = desc_parts[0].strip()
+                        
+                        # Parse optional flags
+                        priority = "normal"
+                        category = "general"
+                        
+                        for flag_part in desc_parts[1:]:
+                            flag_part = flag_part.strip()
+                            if flag_part.startswith("priority "):
+                                priority = flag_part[9:].strip().lower()
+                            elif flag_part.startswith("category "):
+                                category = flag_part[9:].strip().lower()
+                        
+                        try:
+                            task_id = await self.client.create_community_task(
+                                summary=summary,
+                                description=description,
+                                priority=priority,
+                                category=category
+                            )
+                            console.print(f"[green]✓ Created community task: {task_id}[/green]")
+                            console.print(f"  Summary: {summary}")
+                            console.print(f"  Priority: {priority}")
+                            console.print(f"  Category: {category}")
+                        except Exception as e:
+                            console.print(f"[red]Error creating task: {e}[/red]")
+                    else:
+                        console.print("[yellow]Format: task <summary> | <description> [--priority HIGH/MEDIUM/LOW] [--category general/maintenance/discussion][/yellow]")
+                
                 elif cmd == "announce" and len(parts) > 1:
                     # Create system announcement
                     # Format: announce <title> | <message> [--priority HIGH] [--expires 2025-12-31]

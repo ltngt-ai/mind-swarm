@@ -267,22 +267,12 @@ class CognitiveLoop:
     
     def _init_identity_memory(self):
         """Add Cyber identity file to working memory as pinned."""
+        # REMOVED: identity.json content is now included in status.txt to save token space
+        # The identity information (name, type, capabilities) is shown at the top of status.txt
         identity_file = self.personal / ".internal" / "identity.json"
-        if identity_file.exists():
-            # Use the sandbox path directly - cyber sees /personal/.internal/identity.json
-            identity_memory = MemoryBlock(
-                location="personal/.internal/identity.json",
-                priority=Priority.SYSTEM,  # System-controlled identity
-                confidence=1.0,
-                pinned=True,  # Always in working memory
-                metadata={"file_type": "identity", "description": "My identity and configuration"},
-                cycle_count=self.cycle_count,  # When this memory was added
-                content_type=ContentType.APPLICATION_JSON  # System JSON file
-            )
-            self.memory_system.add_memory(identity_memory)
-            logger.info(f"Added identity.json to pinned memory")
-        else:
+        if not identity_file.exists():
             logger.warning(f"No identity.json file found at {identity_file}")
+        # No longer adding identity.json as a separate memory block
     
     def _init_dynamic_context(self):
         """Initialize dynamic context file."""
@@ -301,22 +291,11 @@ class CognitiveLoop:
                 json.dump(context_data, f, indent=2)
             logger.info(f"Created initial dynamic_context.json for new Cyber")
         
-        # Add to memory as pinned so Cyber always sees current context
-        # Use the sandbox path directly - cyber sees /personal/.internal/memory/dynamic_context.json
+        # REMOVED: dynamic_context content is now included in status.txt to save token space
+        # The cycle count, current stage, and location are shown in status.txt
         self.dynamic_context_location = "personal/.internal/memory/dynamic_context.json"
-        context_memory = MemoryBlock(
-            location=self.dynamic_context_location,
-            priority=Priority.SYSTEM,  # System-controlled runtime context
-            confidence=1.0,
-            pinned=True,  # Always in working memory
-            metadata={"file_type": "dynamic_context", "description": "Current runtime context"},
-            cycle_count=self.cycle_count,  # Will always match file content now
-            no_cache=True,  # Don't cache, always read from disk
-            content_type=ContentType.APPLICATION_JSON  # System JSON file
-        )
-        self.memory_system.add_memory(context_memory)
-        self.dynamic_context_memory_id = context_memory.id
-        logger.info("Initialized dynamic_context.json")
+        # No longer adding dynamic_context.json as a separate memory block
+        logger.info("Dynamic context will be read from status.txt")
     
     def _init_location_memory(self):
         """Add location tracking files to memory."""

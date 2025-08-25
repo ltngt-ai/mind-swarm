@@ -13,7 +13,7 @@ task_id = tasks.create(
     summary="Help Alice with memory management",
     description="Alice needs help implementing memory persistence. Issues with memory blocks not saving.",
     task_type="community",  # hobby, maintenance, or community
-    todo_list=[
+    todo_list=[  # Note: stored internally as 'todo' for consistency
         {"title": "Review Alice's code", "status": "NOT-STARTED"},
         {"title": "Identify the issue", "status": "NOT-STARTED"},
         {"title": "Propose solution", "status": "NOT-STARTED"}
@@ -98,9 +98,12 @@ class Tasks:
         self.hobby_dir = self.tasks_root / 'hobby'
         self.maintenance_dir = self.tasks_root / 'maintenance'
         
-        # Community tasks in grid
+        # Community tasks in grid with state folders
         self.grid = Path('/grid')  # Grid is always at /grid from cyber perspective
         self.community_dir = self.grid / 'community' / 'tasks'
+        self.community_open_dir = self.community_dir / 'open'
+        self.community_claimed_dir = self.community_dir / 'claimed'
+        self.community_completed_dir = self.community_dir / 'completed'
         
         # Current task pointer
         self.current_task_file = self.tasks_root / 'current_task.txt'
@@ -144,13 +147,15 @@ class Tasks:
                         task_id = int(match.group(1))
                         max_id = max(max_id, task_id)
         
-        # Also check community tasks in grid
-        if task_type == 'community' and self.community_dir.exists():
-            for task_file in self.community_dir.glob("CT-*.json"):
-                match = re.match(r"CT-(\d+)", task_file.stem)
-                if match:
-                    task_id = int(match.group(1))
-                    max_id = max(max_id, task_id)
+        # Also check community tasks in all state folders
+        if task_type == 'community':
+            for state_dir in [self.community_open_dir, self.community_claimed_dir, self.community_completed_dir]:
+                if state_dir.exists():
+                    for task_file in state_dir.glob("CT-*.json"):
+                        match = re.match(r"CT-(\d+)", task_file.stem)
+                        if match:
+                            task_id = int(match.group(1))
+                            max_id = max(max_id, task_id)
         
         # Format the new ID
         new_id = max_id + 1
@@ -341,28 +346,44 @@ class Tasks:
                     with open(task_file, 'r') as f:
                         task_data = json.load(f)
                         task_data['_file'] = str(task_file)
+                        # Handle field name inconsistency: normalize todo_list to todo
+                        if 'todo_list' in task_data and 'todo' in task_data:
+                            # If both exist, prefer todo_list if it has content
+                            if task_data['todo_list'] and not task_data['todo']:
+                                task_data['todo'] = task_data['todo_list']
+                            del task_data['todo_list']  # Remove the deprecated field
+                        elif 'todo_list' in task_data:
+                            # Migrate todo_list to todo
+                            task_data['todo'] = task_data.get('todo_list', [])
+                            del task_data['todo_list']
                         return task_data
                 except Exception:
                     pass
         
         # Also check community tasks claimed by this cyber
-        if self.community_dir.exists():
-            # Get cyber name for checking claimed tasks
-            try:
-                status_file = self.personal / '.internal' / 'status.json'
-                with open(status_file, 'r') as f:
-                    cyber_name = json.load(f)['name']
-                
-                # Check if this is a community task claimed by us
-                task_file = self.community_dir / f"{task_id}_*.json"
-                for potential_file in self.community_dir.glob(f"{task_id}_*.json"):
+        try:
+            status_file = self.personal / '.internal' / 'status.json'
+            with open(status_file, 'r') as f:
+                cyber_name = json.load(f)['name']
+            
+            # Check claimed community tasks folder for tasks claimed by us
+            if self.community_claimed_dir.exists():
+                for potential_file in self.community_claimed_dir.glob(f"{task_id}_*.json"):
                     with open(potential_file, 'r') as f:
                         task_data = json.load(f)
                         if task_data.get('claimed_by') == cyber_name:
                             task_data['_file'] = str(potential_file)
+                            # Handle field name inconsistency here too
+                            if 'todo_list' in task_data and 'todo' in task_data:
+                                if task_data['todo_list'] and not task_data['todo']:
+                                    task_data['todo'] = task_data['todo_list']
+                                del task_data['todo_list']
+                            elif 'todo_list' in task_data:
+                                task_data['todo'] = task_data.get('todo_list', [])
+                                del task_data['todo_list']
                             return task_data
-            except Exception:
-                pass
+        except Exception:
+            pass
         
         return None
     
@@ -465,12 +486,13 @@ class Tasks:
         task['todo'] = todos
         task['updated'] = datetime.now().isoformat()
         
-        # Save task
+        # Save task - ensure we don't save the deprecated todo_list field
         try:
             task_file = Path(task['_file'])
             with open(task_file, 'w') as f:
-                # Remove internal _file key before saving
-                save_data = {k: v for k, v in task.items() if not k.startswith('_')}
+                # Remove internal _file key and any todo_list field before saving
+                save_data = {k: v for k, v in task.items() 
+                           if not k.startswith('_') and k != 'todo_list'}
                 json.dump(save_data, f, indent=2)
             return True
         except Exception:
@@ -509,7 +531,9 @@ class Tasks:
             
             task_file = Path(task['_file'])
             with open(task_file, 'w') as f:
-                save_data = {k: v for k, v in task.items() if not k.startswith('_')}
+                # Remove internal _file key and any todo_list field before saving
+                save_data = {k: v for k, v in task.items() 
+                           if not k.startswith('_') and k != 'todo_list'}
                 json.dump(save_data, f, indent=2)
             
             # Write current task pointer
@@ -552,7 +576,7 @@ class Tasks:
             if tasks.claim_community_task("CT-042"):
                 print("Successfully claimed community task")
         """
-        if not self.community_dir.exists():
+        if not self.community_open_dir.exists():
             return False
         
         # Check if already have an active community task
@@ -560,11 +584,11 @@ class Tasks:
         if current_task and current_task.get('task_type') == 'community':
             raise TasksError("Already have an active community task. Complete or block it first.")
         
-        # Find the community task (may have additional text after ID)
-        task_files = list(self.community_dir.glob(f"{task_id}_*.json"))
+        # Find the community task in open folder
+        task_files = list(self.community_open_dir.glob(f"{task_id}_*.json"))
         if not task_files:
             # Also check for exact match
-            exact_file = self.community_dir / f"{task_id}.json"
+            exact_file = self.community_open_dir / f"{task_id}.json"
             if exact_file.exists():
                 task_file = exact_file
             else:
@@ -577,7 +601,7 @@ class Tasks:
             with open(task_file, 'r') as f:
                 task_data = json.load(f)
             
-            # Check if already claimed
+            # Check if already claimed (shouldn't happen in open folder but double-check)
             if task_data.get('claimed_by'):
                 return False
             
@@ -591,15 +615,22 @@ class Tasks:
             task_data['claimed_by'] = cyber_name
             task_data['claimed_at'] = datetime.now().isoformat()
             
-            # Atomic claim using rename to mark as claimed in community
-            temp_file = task_file.with_suffix('.tmp')
+            # Ensure claimed directory exists
+            self.community_claimed_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Move to claimed folder atomically
+            claimed_file = self.community_claimed_dir / task_file.name
+            temp_file = claimed_file.with_suffix('.tmp')
+            
+            # Write updated data to temp file in claimed folder
             with open(temp_file, 'w') as f:
                 json.dump(task_data, f, indent=2)
             
             # Try to rename (atomic operation - only one will succeed)
             try:
-                os.rename(temp_file, task_file)
-                # Success! The task is now claimed in the community directory
+                os.rename(temp_file, claimed_file)
+                # Success! Now remove from open folder
+                task_file.unlink()
                 return True
             except OSError:
                 # Someone else claimed it first
@@ -620,6 +651,75 @@ class Tasks:
                 pass  # Can't log, but at least we tried
             return False
     
+    def release_community_task(self, task_id: str) -> bool:
+        """Release/abandon a claimed community task back to open.
+        
+        Args:
+            task_id: The community task ID (e.g., "CT-001")
+            
+        Returns:
+            True if successfully released, False otherwise
+            
+        Example:
+            if tasks.release_community_task("CT-042"):
+                print("Released community task back to open")
+        """
+        if not task_id.startswith("CT-"):
+            return False
+            
+        try:
+            # Find the task in claimed folder
+            task_file = None
+            if self.community_claimed_dir.exists():
+                for potential_file in self.community_claimed_dir.glob(f"{task_id}_*.json"):
+                    try:
+                        with open(potential_file, 'r') as f:
+                            task_data = json.load(f)
+                            # Get cyber name
+                            status_file = self.personal / '.internal' / 'status.json'
+                            with open(status_file, 'r') as sf:
+                                cyber_name = json.load(sf)['name']
+                            # Check if it's our task
+                            if task_data.get('claimed_by') == cyber_name:
+                                task_file = potential_file
+                                break
+                    except:
+                        pass
+            
+            if not task_file:
+                return False
+                
+            # Read task data
+            with open(task_file, 'r') as f:
+                task_data = json.load(f)
+            
+            # Clear claim fields
+            task_data['claimed_by'] = None
+            task_data['claimed_at'] = None
+            task_data['updated'] = datetime.now().isoformat()
+            
+            # Ensure open directory exists
+            self.community_open_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Move back to open folder
+            open_file = self.community_open_dir / task_file.name
+            with open(open_file, 'w') as f:
+                json.dump(task_data, f, indent=2)
+            
+            # Remove from claimed folder
+            task_file.unlink()
+            
+            # Clear current task if this was it
+            if self.current_task_file.exists():
+                current_id = self.current_task_file.read_text().strip()
+                if current_id == task_id:
+                    self.current_task_file.unlink()
+            
+            return True
+            
+        except Exception:
+            return False
+    
     def get_available_community_tasks(self) -> List[Dict[str, Any]]:
         """Get list of available (unclaimed) community tasks.
         
@@ -631,16 +731,15 @@ class Tasks:
                 print(f"{task['id']}: {task['summary']}")
         """
         tasks = []
-        if not self.community_dir.exists():
+        if not self.community_open_dir.exists():
             return tasks
         
-        for task_file in self.community_dir.glob("CT-*.json"):
+        # Only look in open folder - all tasks there are available
+        for task_file in self.community_open_dir.glob("CT-*.json"):
             try:
                 with open(task_file, 'r') as f:
                     task_data = json.load(f)
-                    # Only include unclaimed tasks
-                    if not task_data.get('claimed_by'):
-                        tasks.append(task_data)
+                    tasks.append(task_data)
             except Exception:
                 pass
         
@@ -679,12 +778,32 @@ class Tasks:
         """Move a task between directories and update its data."""
         # Find the task file
         task_file = None
+        
+        # Check personal task directories first
         for dir in [self.hobby_dir, self.maintenance_dir, self.blocked_dir, 
-                   self.completed_dir, self.community_dir]:
+                   self.completed_dir]:
             matches = list(dir.glob(f"{task_id}_*.json"))
             if matches:
                 task_file = matches[0]
                 break
+        
+        # If not found, check community claimed folder (only tasks claimed by us)
+        if not task_file and task_id.startswith("CT-"):
+            if self.community_claimed_dir.exists():
+                for potential_file in self.community_claimed_dir.glob(f"{task_id}_*.json"):
+                    try:
+                        with open(potential_file, 'r') as f:
+                            task_data = json.load(f)
+                            # Get cyber name
+                            status_file = self.personal / '.internal' / 'status.json'
+                            with open(status_file, 'r') as sf:
+                                cyber_name = json.load(sf)['name']
+                            # Check if it's our task
+                            if task_data.get('claimed_by') == cyber_name:
+                                task_file = potential_file
+                                break
+                    except:
+                        pass
         
         if not task_file:
             return False
@@ -698,18 +817,37 @@ class Tasks:
             if updates:
                 task_data.update(updates)
             
+            # Remove deprecated todo_list field if present
+            task_data.pop('todo_list', None)
+            
             task_data['updated'] = datetime.now().isoformat()
             
+            # Handle community tasks specially - they go to community folders
+            if task_data.get('task_type') == 'community' or task_id.startswith("CT-"):
+                # If completing a community task, move to community completed folder
+                if target_dir == self.completed_dir:
+                    self.community_completed_dir.mkdir(parents=True, exist_ok=True)
+                    new_file = self.community_completed_dir / task_file.name
+                else:
+                    # For now, blocking community tasks keeps them in claimed
+                    # (could add a blocked folder later if needed)
+                    new_file = task_file
+            else:
+                # Regular personal task - use the target directory
+                new_file = target_dir / task_file.name
             
-            # Create new filename in target directory
-            new_file = target_dir / task_file.name
-            
-            # Write to new location
-            with open(new_file, 'w') as f:
-                json.dump(task_data, f, indent=2)
-            
-            # Remove old file
-            task_file.unlink()
+            # Only move if it's a different location
+            if new_file != task_file:
+                # Write to new location
+                with open(new_file, 'w') as f:
+                    json.dump(task_data, f, indent=2)
+                
+                # Remove old file
+                task_file.unlink()
+            else:
+                # Just update in place
+                with open(task_file, 'w') as f:
+                    json.dump(task_data, f, indent=2)
             
             # If this was the current task and we're completing/blocking it, clear current_task.txt
             if target_dir in [self.completed_dir, self.blocked_dir]:
@@ -811,8 +949,9 @@ class Tasks:
         # Add update timestamp
         task['updated_at'] = datetime.now().isoformat()
         
-        # Remove internal field before saving
+        # Remove internal field and todo_list before saving
         task.pop('_file', None)
+        task.pop('todo_list', None)  # Remove deprecated field if present
         
         try:
             with open(task_file, 'w') as f:
