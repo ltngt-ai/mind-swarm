@@ -20,10 +20,6 @@ from mind_swarm.utils.logging import logger, setup_logging
 app = typer.Typer(name="mind-swarm", help="Mind-Swarm: Multi-Cyber AI system")
 console = Console()
 
-# Import subcommands
-from mind_swarm.cli.check_llm import app as check_llm_app
-app.add_typer(check_llm_app, name="check-llm", help="Check local LLM server status")
-
 # Import logs command
 from mind_swarm.cli.commands.logs import logs
 app.command()(logs)

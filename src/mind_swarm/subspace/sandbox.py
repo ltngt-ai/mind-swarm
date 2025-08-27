@@ -344,54 +344,17 @@ class SubspaceManager:
             sandbox = BubblewrapSandbox(name, self.root_path, cyber_type)
             self.sandboxes[name] = sandbox
         
-        # For existing Cybers, update their base_code and structure
-        if agent_exists:
-            # Create new organized directory structure
-            internal_dir = sandbox.cyber_personal / ".internal"
-            internal_dir.mkdir(exist_ok=True)
-            
-            base_code = internal_dir / "base_code"
-            if not base_code.exists():
-                logger.info(f"Creating base_code directory for existing Cyber {name}")
-                base_code.mkdir(exist_ok=True)
-            logger.info(f"Updating base_code for existing Cyber {name}")
-            self._copy_agent_base_code(base_code, cyber_type)
-            
-            # Also update boot ROM
-            self._copy_boot_rom(internal_dir, cyber_type)
-            
-            # Copy/update maintenance tasks for existing Cyber
-            self._copy_maintenance_tasks(internal_dir)
-            
-            # Create organized directory structure
-            # Only inbox is visible to cybers (outbox and mail_archive are in .internal)
-            (sandbox.cyber_personal / "inbox").mkdir(exist_ok=True)
-            
-            # Memory areas (now inside .internal)
-            memory_dir = internal_dir / "memory"
-            memory_dir.mkdir(exist_ok=True)
-            # Only create directories that are actually used by the cyber code
-            for subdir in ["orientations",  # Used by observation_stage for orientations
-                         "action_results"]:  # Used by all actions for their results
-                (memory_dir / subdir).mkdir(exist_ok=True)
-            
-            # Internal logs
-            (internal_dir / "logs").mkdir(exist_ok=True)
-            
-            return sandbox
-        
         # Initialize organized Cyber directory structure
         # Internal system files (hidden from Cyber's conscious view)
         internal_dir = sandbox.cyber_personal / ".internal"
         internal_dir.mkdir(exist_ok=True)
-        
+
         # Base code goes in internal
         base_code = internal_dir / "base_code"
         base_code.mkdir(exist_ok=True)
-        
+
         # Internal logs
         (internal_dir / "logs").mkdir(exist_ok=True)
-        
         # Mail directories (directly under personal)
         # Only inbox is visible to cybers (outbox and mail_archive are in .internal)
         (sandbox.cyber_personal / "inbox").mkdir(exist_ok=True)
@@ -399,11 +362,7 @@ class SubspaceManager:
         # Memory directory with subdirectories (now inside .internal)
         memory_dir = internal_dir / "memory"
         memory_dir.mkdir(exist_ok=True)
-        # Only create directories that are actually used by the cyber code
-        for subdir in ["orientations",  # Used by observation_stage for orientations
-                     "action_results"]:  # Used by all actions for their results
-            (memory_dir / subdir).mkdir(exist_ok=True)
-        
+            
         # Copy Cyber code to base_code directory
         self._copy_agent_base_code(base_code, cyber_type)
         
