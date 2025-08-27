@@ -630,22 +630,49 @@ class SubspaceCoordinator:
                     except OSError:
                         inbox_count = 0
                 
-                # Get current location from dynamic_context.json
+                # Get information from unified_state.json
                 current_location = None
-                dynamic_context_file = cyber_dir / ".internal" / "memory" / "dynamic_context.json"
-                if await aiofiles.os.path.exists(dynamic_context_file):
+                additional_info = {}
+                unified_state_file = cyber_dir / ".internal" / "memory" / "unified_state.json"
+                if await aiofiles.os.path.exists(unified_state_file):
                     try:
-                        async with aiofiles.open(dynamic_context_file, 'r') as f:
+                        async with aiofiles.open(unified_state_file, 'r') as f:
                             content = await f.read()
                             import json
-                            dynamic_context = json.loads(content)
-                            current_location = dynamic_context.get("current_location", "/personal")
-                    except (OSError, json.JSONDecodeError):
+                            unified_state = json.loads(content)
+                            
+                            # Extract location info
+                            location_data = unified_state.get("location", {})
+                            current_location = location_data.get("current_location", "/personal")
+                            
+                            # Extract other useful information
+                            cognitive_data = unified_state.get("cognitive", {})
+                            task_data = unified_state.get("task", {})
+                            biofeedback_data = unified_state.get("biofeedback", {})
+                            performance_data = unified_state.get("performance", {})
+                            
+                            additional_info = {
+                                "cycle_count": cognitive_data.get("cycle_count", 0),
+                                "current_stage": cognitive_data.get("current_stage"),
+                                "current_phase": cognitive_data.get("current_phase"),
+                                "status": cognitive_data.get("status", "unknown"),
+                                "current_task": task_data.get("current_task_summary"),
+                                "current_task_type": task_data.get("current_task_type"),
+                                "boredom": biofeedback_data.get("boredom", 0),
+                                "duty": biofeedback_data.get("duty", 100),
+                                "previous_location": location_data.get("previous_location"),
+                                "visited_locations": location_data.get("visited_locations", []),
+                                "brain_requests": performance_data.get("brain_requests", 0),
+                                "brain_tokens_used": performance_data.get("brain_tokens_used", 0),
+                            }
+                    except (OSError, json.JSONDecodeError) as e:
+                        logger.warning(f"Failed to read unified state for {name}: {e}")
                         current_location = "/personal"
                 
                 state.update({
                     "inbox_count": inbox_count,
                     "current_location": current_location or "/personal",
+                    **additional_info  # Include all additional info from unified state
                 })
             
             # Add persistent state info

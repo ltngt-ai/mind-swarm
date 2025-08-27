@@ -1025,30 +1025,78 @@ class MindSwarmServer:
                 raise HTTPException(status_code=503, detail="Server not initialized")
             
             try:
-                agent = self.coordinator.get_agent(cyber_name)
-                if not agent:
+                # Check if Cyber exists
+                cyber_dir = self.coordinator.subspace.agents_dir / cyber_name
+                if not cyber_dir.exists():
                     raise HTTPException(status_code=404, detail=f"Cyber {cyber_name} not found")
                 
-                # Get detailed state
+                # Get cyber state from spawner
+                states = await self.coordinator.spawner.get_cyber_states()
+                cyber_state = states.get(cyber_name, {})
+                
+                # Start with basic inspection data
                 inspection = {
                     "name": cyber_name,
-                    "type": agent.cyber_type if hasattr(agent, 'cyber_type') else 'unknown',
-                    "state": agent.state if hasattr(agent, 'state') else 'unknown',
-                    "current_location": agent.current_location if hasattr(agent, 'current_location') else None,
+                    "type": cyber_state.get('cyber_type', 'unknown'),
+                    "state": cyber_state.get('state', 'unknown'),
+                    "pid": cyber_state.get('pid'),
+                    "uptime": cyber_state.get('uptime'),
                     "memory": {},
                     "config": {},
-                    "stats": {
-                        "messages_processed": 0,
-                        "files_accessed": 0,
-                        "errors": 0
-                    }
+                    "stats": {}
                 }
                 
-                # Add more details if available
-                if hasattr(agent, 'get_memory'):
-                    inspection["memory"] = await agent.get_memory()
-                if hasattr(agent, 'config'):
-                    inspection["config"] = agent.config
+                # Read unified state for comprehensive data
+                unified_state_file = cyber_dir / ".internal" / "memory" / "unified_state.json"
+                if unified_state_file.exists():
+                    try:
+                        with open(unified_state_file, 'r') as f:
+                            unified_state = json.load(f)
+                            
+                            # Extract all relevant data from unified state
+                            location_data = unified_state.get("location", {})
+                            cognitive_data = unified_state.get("cognitive", {})
+                            task_data = unified_state.get("task", {})
+                            biofeedback_data = unified_state.get("biofeedback", {})
+                            performance_data = unified_state.get("performance", {})
+                            memory_data = unified_state.get("memory", {})
+                            identity_data = unified_state.get("identity", {})
+                            
+                            inspection.update({
+                                "current_location": location_data.get("current_location", "/personal"),
+                                "previous_location": location_data.get("previous_location"),
+                                "visited_locations": location_data.get("visited_locations", []),
+                                "cycle_count": cognitive_data.get("cycle_count", 0),
+                                "current_stage": cognitive_data.get("current_stage"),
+                                "current_phase": cognitive_data.get("current_phase"),
+                                "status": cognitive_data.get("status", "unknown"),
+                                "current_task": task_data.get("current_task_summary"),
+                                "current_task_type": task_data.get("current_task_type"),
+                                "completed_tasks": task_data.get("completed_tasks_count", {}),
+                                "biofeedback": {
+                                    "boredom": biofeedback_data.get("boredom", 0),
+                                    "tiredness": biofeedback_data.get("tiredness", 0),
+                                    "duty": biofeedback_data.get("duty", 100),
+                                    "restlessness": biofeedback_data.get("restlessness", 0)
+                                },
+                                "memory": {
+                                    "total_memories": memory_data.get("total_memories", 0),
+                                    "working_memory_count": memory_data.get("working_memory_count", 0),
+                                    "cache_hits": memory_data.get("cache_hits", 0),
+                                    "cache_misses": memory_data.get("cache_misses", 0)
+                                },
+                                "stats": {
+                                    "brain_requests": performance_data.get("brain_requests", 0),
+                                    "brain_tokens_used": performance_data.get("brain_tokens_used", 0),
+                                    "total_actions_executed": performance_data.get("total_actions_executed", 0),
+                                    "successful_actions": performance_data.get("successful_actions", 0),
+                                    "failed_actions": performance_data.get("failed_actions", 0)
+                                },
+                                "created_at": identity_data.get("created_at"),
+                                "version": identity_data.get("version")
+                            })
+                    except (OSError, json.JSONDecodeError) as e:
+                        logger.warning(f"Failed to read unified state for inspection of {cyber_name}: {e}")
                 
                 return inspection
             except HTTPException:
