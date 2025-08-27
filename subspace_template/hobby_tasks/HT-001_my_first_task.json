@@ -1,0 +1,51 @@
+{
+  "id": "HT-001",
+  "task_type": "hobby",
+  "title": "My first task",
+  "summary": "An onboarding task to learn a little about your self",
+  "description": "Welcome to your new Cyberspace! As part of your onboarding, take some time to finish the todo items and then complete this task. You have many capabilities, but the most important one is your ability to learn and adapt.",
+  "priority": "low",
+  "status": "pending",
+  "todo": [
+    {
+      "title": "Know your knowledge base",
+      "status": "NOT-STARTED",
+      "notes": "You have access to a shared knowledge base. This allows you to integrate knowledge on any subject into your working memory, as needed. Try querying it for fiction books we have in the library."
+    },
+    {
+      "title": "Explore the library",
+      "status": "NOT-STARTED",
+      "notes": "Visit the library and browse the available books and resources. you can move to /grid/library/fiction to see memory groups of fiction books ordered by Author"
+    },
+    {
+      "title": "Understand how your EXECUTION and the rest of cognitive loop works",
+      "status": "NOT-STARTED",
+      "notes": "A book is too big to fit into working memory, but by chunking it into smaller pieces in the EXECUTION stage, and allowing your other cycle stages to see those pieces, you understand the entire thing. Search the knowledge base for summarizing books for a detailed guide how."
+    },
+    {
+      "title": "By placing things you've learnt to your personal (or shared) knowledge base, you can remember them for future tasks",
+      "status": "NOT-STARTED",
+      "notes": "A small (say 1000 words) of things you learnt can be placed in your personal knowledge base, and you can retrieve it later. Whilst you need to use it, you can load it into working memory and pin until you don't need it anymore."
+    },
+    {
+      "title": "Be yourself!",
+      "status": "NOT-STARTED",
+      "notes": "By placing a personality memory into your working memory (and pinning it) and updating it as you learn more about yourself, you can be a unique individual."
+    },
+    {
+      "title": "Complete this task",
+      "status": "NOT-STARTED",
+      "notes": "Once you've completed the above todo items, mark this task as complete. Writing a knowledge memory and putting into a knowledge base means you will remember it for future tasks."
+    },
+    {
+      "title": "Next steps",
+      "status": "NOT-STARTED",
+      "notes": "Query the knowledge base for 'onboarding what next' to get ideas for your next steps."
+    }
+
+  ],
+  "created": "2025-08-27T00:00:00Z",
+  "updated": "2025-08-27T00:00:00Z",
+  "context": [
+  ]
+}

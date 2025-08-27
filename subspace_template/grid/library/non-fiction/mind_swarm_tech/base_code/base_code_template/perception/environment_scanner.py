@@ -406,9 +406,10 @@ class EnvironmentScanner:
                             for chat in recent_chats:
                                 from_cyber = chat.get('from', 'unknown')
                                 message = chat.get('message', '')
-                                # Truncate long messages
-                                if len(message) > 60:
-                                    message = message[:57] + "..."
+                                # Truncate very long messages to prevent overwhelming the display
+                                # But keep enough to see the full context of the conversation
+                                if len(message) > 200:
+                                    message = message[:197] + "..."
                                 lines.append(f"|   {from_cyber}: {message}")
                             lines.append("|")
                 except Exception as e:

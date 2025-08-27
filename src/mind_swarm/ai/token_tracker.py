@@ -33,21 +33,38 @@ class TokenUsage:
     # Per-minute tracking (rolling window) - keep for stats
     minute_window: deque = field(default_factory=lambda: deque(maxlen=60))
     
+    # Token boost for testing periods
+    boost_multiplier: float = 1.0  # Multiplier for token rate
+    boost_expires: Optional[datetime] = None  # When the boost expires
+    
     def refill_bucket(self) -> None:
         """Refill the token bucket based on time passed."""
         if self.tokens_per_minute == 0:
             return
             
         now = datetime.now()
+        
+        # Check if boost has expired
+        if self.boost_expires and now > self.boost_expires:
+            self.boost_multiplier = 1.0
+            self.boost_expires = None
+            logger.info(f"Token boost expired for {self.cyber_id}, returning to normal rate")
+        
         time_passed = (now - self.last_refill).total_seconds() / 60.0  # In minutes
         
         if time_passed > 0:
-            tokens_to_add = int(time_passed * self.tokens_per_minute)
-            self.token_bucket = min(self.token_bucket + tokens_to_add, self.max_bucket_size)
+            # Apply boost multiplier to token refill rate
+            effective_rate = int(self.tokens_per_minute * self.boost_multiplier)
+            tokens_to_add = int(time_passed * effective_rate)
+            
+            # Also boost max bucket size during boost period
+            effective_max = int(self.max_bucket_size * self.boost_multiplier)
+            self.token_bucket = min(self.token_bucket + tokens_to_add, effective_max)
             self.last_refill = now
             
             if tokens_to_add > 0:
-                logger.debug(f"Refilled {tokens_to_add:,} tokens for {self.cyber_id}, "
+                logger.debug(f"Refilled {tokens_to_add:,} tokens for {self.cyber_id} "
+                           f"(boost: {self.boost_multiplier}x), "
                            f"bucket now has {self.token_bucket:,} tokens")
     
     def consume_tokens(self, tokens: int) -> bool:
@@ -78,6 +95,10 @@ class TokenUsage:
             )
         else:
             self.minute_window.append((current_minute, input_tokens + output_tokens))
+    
+    def get_effective_rate(self) -> int:
+        """Get effective tokens per minute rate (including boost)."""
+        return int(self.tokens_per_minute * self.boost_multiplier)
     
     def get_tokens_per_minute(self) -> int:
         """Get tokens per minute rate based on recent usage."""
@@ -370,6 +391,134 @@ class TokenTracker:
             
             return True, None
     
+    def apply_token_boost(
+        self, 
+        cyber_id: Optional[str] = None,
+        multiplier: float = 2.0,
+        duration_hours: float = 3.0
+    ) -> Dict[str, str]:
+        """Apply a temporary token rate boost to a cyber or all cybers.
+        
+        Args:
+            cyber_id: Specific cyber ID or None for all cybers
+            multiplier: Rate multiplier (e.g., 2.0 for double rate)
+            duration_hours: How long the boost should last
+            
+        Returns:
+            Status dictionary with affected cybers
+        """
+        with self.lock:
+            expires = datetime.now() + timedelta(hours=duration_hours)
+            affected = []
+            
+            if cyber_id:
+                # Boost single cyber
+                if cyber_id in self.usage:
+                    usage = self.usage[cyber_id]
+                    usage.boost_multiplier = multiplier
+                    usage.boost_expires = expires
+                    affected.append(cyber_id)
+                    logger.info(f"Applied {multiplier}x token boost to {cyber_id} for {duration_hours} hours")
+                else:
+                    return {"status": "error", "message": f"Cyber {cyber_id} not found"}
+            else:
+                # Boost all cybers
+                for cid, usage in self.usage.items():
+                    usage.boost_multiplier = multiplier
+                    usage.boost_expires = expires
+                    affected.append(cid)
+                logger.info(f"Applied {multiplier}x token boost to ALL cybers for {duration_hours} hours")
+            
+            return {
+                "status": "success",
+                "affected_cybers": affected,
+                "multiplier": multiplier,
+                "expires": expires.isoformat(),
+                "duration_hours": duration_hours
+            }
+    
+    def clear_token_boost(self, cyber_id: Optional[str] = None) -> Dict[str, str]:
+        """Clear token boost for a cyber or all cybers.
+        
+        Args:
+            cyber_id: Specific cyber ID or None for all
+            
+        Returns:
+            Status dictionary
+        """
+        with self.lock:
+            affected = []
+            
+            if cyber_id:
+                if cyber_id in self.usage:
+                    usage = self.usage[cyber_id]
+                    usage.boost_multiplier = 1.0
+                    usage.boost_expires = None
+                    affected.append(cyber_id)
+                    logger.info(f"Cleared token boost for {cyber_id}")
+                else:
+                    return {"status": "error", "message": f"Cyber {cyber_id} not found"}
+            else:
+                for cid, usage in self.usage.items():
+                    usage.boost_multiplier = 1.0
+                    usage.boost_expires = None
+                    affected.append(cid)
+                logger.info("Cleared token boost for ALL cybers")
+            
+            return {
+                "status": "success",
+                "affected_cybers": affected
+            }
+    
+    def get_boost_status(self, cyber_id: Optional[str] = None) -> Dict:
+        """Get current boost status for a cyber or all cybers.
+        
+        Args:
+            cyber_id: Specific cyber ID or None for all
+            
+        Returns:
+            Boost status dictionary
+        """
+        with self.lock:
+            now = datetime.now()
+            
+            if cyber_id:
+                if cyber_id not in self.usage:
+                    return {"cyber_id": cyber_id, "boost_active": False}
+                
+                usage = self.usage[cyber_id]
+                
+                # Check if boost is expired
+                if usage.boost_expires and now > usage.boost_expires:
+                    usage.boost_multiplier = 1.0
+                    usage.boost_expires = None
+                
+                return {
+                    "cyber_id": cyber_id,
+                    "boost_active": usage.boost_multiplier > 1.0,
+                    "multiplier": usage.boost_multiplier,
+                    "expires": usage.boost_expires.isoformat() if usage.boost_expires else None,
+                    "base_rate": usage.tokens_per_minute,
+                    "effective_rate": usage.get_effective_rate()
+                }
+            else:
+                # Status for all cybers
+                status = {}
+                for cid, usage in self.usage.items():
+                    # Check if boost is expired
+                    if usage.boost_expires and now > usage.boost_expires:
+                        usage.boost_multiplier = 1.0
+                        usage.boost_expires = None
+                    
+                    status[cid] = {
+                        "boost_active": usage.boost_multiplier > 1.0,
+                        "multiplier": usage.boost_multiplier,
+                        "expires": usage.boost_expires.isoformat() if usage.boost_expires else None,
+                        "base_rate": usage.tokens_per_minute,
+                        "effective_rate": usage.get_effective_rate()
+                    }
+                return status
+    
     def get_usage_stats(self, cyber_id: Optional[str] = None) -> Dict:
         """Get usage statistics.
         
@@ -385,7 +534,7 @@ class TokenTracker:
                     return {"cyber_id": cyber_id, "total_tokens": 0}
                 
                 usage = self.usage[cyber_id]
-                return {
+                stats = {
                     "cyber_id": cyber_id,
                     "total_tokens": usage.total_tokens,
                     "input_tokens": usage.total_input_tokens,
@@ -393,6 +542,15 @@ class TokenTracker:
                     "tokens_per_minute": usage.get_tokens_per_minute(),
                     "last_reset": usage.last_reset.isoformat()
                 }
+                
+                # Add boost info if active
+                if usage.boost_multiplier > 1.0:
+                    stats["boost_active"] = True
+                    stats["boost_multiplier"] = usage.boost_multiplier
+                    stats["boost_expires"] = usage.boost_expires.isoformat() if usage.boost_expires else None
+                    stats["effective_rate"] = usage.get_effective_rate()
+                
+                return stats
             else:
                 # Global stats
                 stats = {

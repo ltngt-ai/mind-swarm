@@ -1659,7 +1659,7 @@ class SubspaceCoordinator:
         """
         try:
             # Check if this is the first cyber (no community tasks needed)
-            all_cybers = list(self.cyber_registry.get_all_agents())
+            all_cybers = self.cyber_registry.list_cybers()
             if len(all_cybers) <= 1:
                 logger.debug(f"First cyber {new_cyber_name} created, no welcome task needed")
                 return

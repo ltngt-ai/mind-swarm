@@ -583,3 +583,65 @@ class MindSwarmClient:
             response = await client.get(f"{self.base_url}/cybers/frozen")
             response.raise_for_status()
             return response.json()
+    
+    # Token Boost Methods
+    
+    async def apply_token_boost(
+        self,
+        cyber_id: Optional[str] = None,
+        multiplier: float = 2.0,
+        duration_hours: float = 3.0
+    ) -> Dict[str, Any]:
+        """Apply a temporary token rate boost to cybers.
+        
+        Args:
+            cyber_id: Specific cyber ID or None for all cybers
+            multiplier: Rate multiplier (e.g., 2.0 for double rate)
+            duration_hours: How long the boost should last
+            
+        Returns:
+            Result dictionary with affected cybers
+        """
+        payload = {
+            "cyber_id": cyber_id,
+            "multiplier": multiplier,
+            "duration_hours": duration_hours
+        }
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+            response = await client.post(f"{self.base_url}/token/boost", json=payload)
+            response.raise_for_status()
+            return response.json()
+    
+    async def clear_token_boost(self, cyber_id: Optional[str] = None) -> Dict[str, Any]:
+        """Clear token boost for a cyber or all cybers.
+        
+        Args:
+            cyber_id: Specific cyber ID or None for all
+            
+        Returns:
+            Status dictionary
+        """
+        params = {}
+        if cyber_id:
+            params["cyber_id"] = cyber_id
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+            response = await client.delete(f"{self.base_url}/token/boost", params=params)
+            response.raise_for_status()
+            return response.json()
+    
+    async def get_token_boost_status(self, cyber_id: Optional[str] = None) -> Dict[str, Any]:
+        """Get current token boost status.
+        
+        Args:
+            cyber_id: Specific cyber ID or None for all
+            
+        Returns:
+            Boost status dictionary
+        """
+        params = {}
+        if cyber_id:
+            params["cyber_id"] = cyber_id
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+            response = await client.get(f"{self.base_url}/token/boost", params=params)
+            response.raise_for_status()
+            return response.json()

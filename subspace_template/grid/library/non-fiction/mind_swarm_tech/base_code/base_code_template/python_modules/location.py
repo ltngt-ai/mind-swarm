@@ -35,14 +35,16 @@ class Location:
         """Initialize the location system.
         
         Args:
-            context: Execution context with cyber_id, paths, etc.
+            context: Execution context with cyber_id, paths, state_manager, etc.
         """
         self._context = context
         self._personal_root = Path(context.get('personal_dir', '/personal'))
         self._grid_root = Path('/grid')
         
-        # Path to unified state file
-        self._unified_state_file = self._personal_root / ".internal" / "memory" / "unified_state.json"
+        # State manager is REQUIRED
+        self._state_manager = context.get('state_manager')
+        if not self._state_manager:
+            raise LocationError("State manager is required in context for Location API")
     
     def _read_dynamic_context(self) -> Dict[str, Any]:
         """Read the current dynamic context from unified state.
@@ -54,20 +56,13 @@ class Location:
             LocationError: If unable to read context
         """
         try:
-            if not self._unified_state_file.exists():
-                raise LocationError("Unified state file not found")
-            
-            # Read unified state
-            with open(self._unified_state_file, 'r') as f:
-                state = json.load(f)
-            
-            # Extract dynamic context from unified state
+            from ..state.unified_state_manager import StateSection
             return {
-                "cycle_count": state.get("cognitive", {}).get("cycle_count", 0),
-                "current_stage": state.get("cognitive", {}).get("current_stage", "INIT"),
-                "current_phase": state.get("cognitive", {}).get("current_phase", "STARTING"),
-                "current_location": state.get("location", {}).get("current_location", "/personal"),
-                "previous_location": state.get("location", {}).get("previous_location", None)
+                "cycle_count": self._state_manager.get_value(StateSection.COGNITIVE, "cycle_count", 0),
+                "current_stage": self._state_manager.get_value(StateSection.COGNITIVE, "current_stage", "INIT"),
+                "current_phase": self._state_manager.get_value(StateSection.COGNITIVE, "current_phase", "STARTING"),
+                "current_location": self._state_manager.get_value(StateSection.LOCATION, "current_location", "/personal"),
+                "previous_location": self._state_manager.get_value(StateSection.LOCATION, "previous_location", None)
             }
             
         except Exception as e:
@@ -83,21 +78,10 @@ class Location:
             LocationError: If unable to write context
         """
         try:
-            # Read current unified state
-            with open(self._unified_state_file, 'r') as f:
-                state = json.load(f)
-            
-            # Update location section
-            if "location" not in state:
-                state["location"] = {}
-            
-            state["location"]["current_location"] = context.get("current_location")
-            if "previous_location" in context:
-                state["location"]["previous_location"] = context.get("previous_location")
-            
-            # Write back unified state
-            with open(self._unified_state_file, 'w') as f:
-                json.dump(state, f, indent=2)
+            # Use state manager's update_location method
+            new_location = context.get("current_location")
+            if new_location:
+                self._state_manager.update_location(new_location)
                 
         except Exception as e:
             raise LocationError(f"Failed to write location to unified state: {e}")

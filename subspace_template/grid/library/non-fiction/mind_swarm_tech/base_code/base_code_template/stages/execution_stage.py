@@ -343,6 +343,7 @@ class ExecutionStage:
             'cognitive_loop': self.cognitive_loop,
             'memory_system': self.memory_system,
             'brain_interface': self.brain_interface,
+            'state_manager': self.cognitive_loop.state_manager,  # Add state manager
             'cyber_id': self.cyber_id,
             'personal_dir': self.personal,
             'outbox_dir': self.outbox_dir,
@@ -688,6 +689,7 @@ The provided API docs describe the available operations and their usage.
             'cognitive_loop': self.cognitive_loop,
             'memory_system': self.memory_system,
             'brain_interface': self.brain_interface,
+            'state_manager': self.cognitive_loop.state_manager,  # Add state manager
             'cyber_id': self.cyber_id,
             'personal_dir': self.personal,
             'outbox_dir': self.outbox_dir,

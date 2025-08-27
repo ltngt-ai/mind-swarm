@@ -272,7 +272,15 @@ class CognitiveLoop:
             # First run of a new Cyber
             self.state_manager.set_value(StateSection.COGNITIVE, "current_stage", "STARTING", save=False)
             self.state_manager.set_value(StateSection.COGNITIVE, "current_phase", "INIT", save=False)
-            self.state_manager.update_location("/grid/community/school/onboarding/new_cyber_introduction")
+            
+            # Only set onboarding location if no visited locations exist (truly new cyber)
+            visited_locations = self.state_manager.get_value(StateSection.LOCATION, "visited_locations", [])
+            if not visited_locations:
+                self.state_manager.update_location("/grid/community/school/onboarding/new_cyber_introduction")
+                logger.info(f"Set initial location to onboarding for new Cyber")
+            else:
+                logger.info(f"Preserving existing location for resumed Cyber")
+            
             logger.info(f"Initialized dynamic context for new Cyber")
         
         logger.info("Dynamic context managed through unified state")

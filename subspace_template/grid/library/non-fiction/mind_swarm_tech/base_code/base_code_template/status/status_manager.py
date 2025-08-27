@@ -39,6 +39,9 @@ class StatusManager:
         # Activity log for recent entries
         self.activity_log = self.personal / '.internal' / 'memory' / 'activity.log'
         
+        # Get cyber name for community task filtering
+        self.cyber_name = self._get_cyber_name()
+        
         # Load or initialize biofeedback state
         self.state = self._load_state()
         
@@ -248,13 +251,22 @@ class StatusManager:
     def _get_cyber_name(self) -> str:
         """Get cyber name from identity file."""
         try:
+            # Try unified state first
+            unified_state_file = self.personal / '.internal' / 'memory' / 'unified_state.json'
+            if unified_state_file.exists():
+                with open(unified_state_file, 'r') as f:
+                    state_data = json.load(f)
+                    identity = state_data.get('identity', {})
+                    return identity.get('name', identity.get('cyber_id', 'Unknown'))
+            
+            # Fallback to status.json
             status_file = self.personal / '.internal' / 'status.json'
             if status_file.exists():
                 with open(status_file, 'r') as f:
                     status_data = json.load(f)
                     return status_data.get('name', 'Unknown')
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Error getting cyber name: {e}")
         return 'Unknown'
     
     def _check_messages(self) -> str:
@@ -378,7 +390,7 @@ class StatusManager:
                 'Hobby Tasks': 'hobby', 
                 'Maintenance Tasks': 'maintenance',
                 'Blocked Tasks': 'blocked',
-                'Community Tasks': '/grid/community/tasks'
+                'Community Tasks': '/grid/community/tasks/claimed'
             }
             
             for category_name, subdir in categories.items():

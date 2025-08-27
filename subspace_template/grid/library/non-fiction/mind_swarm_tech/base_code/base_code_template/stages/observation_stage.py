@@ -245,16 +245,11 @@ class ObservationStage:
         
         thinking_request = {
             "signature": {
-                "instruction": """You are preparing an intelligence briefing for the Decision stage.
-
+                "instruction": """
+You are preparing an intelligence briefing for the Decision stage.
 Your working memory already contains current task, recent reflections, and context.
 Focus on analyzing the new information provided and suggesting what to do regarding tasks and todos.
-
-Based on your analysis, provide:
-1. A summary of what's happening
-2. What should be the focus for this cycle
-
-Always start with [[ ## Briefing ## ]]""",
+""",
                 "inputs": {
                     "working_memory": "Current working memory including tasks and reflections",
                     "new_information": "New messages and observations this cycle"
@@ -278,14 +273,19 @@ Always start with [[ ## Briefing ## ]]""",
         
         # Extract the analysis
         output_values = analysis_response.get("output_values", {})
-        
+        results = ""
+        if output_values.get("recommended_focus"):
+            query = output_values["recommended_focus"]
+            results = self.knowledge_manager.remember_knowledge(query, limit=1)
+
         # 8. Create briefing for Decision stage (only analysis results, not raw data)
         intelligence_briefing = {
             "cycle_count": self.cognitive_loop.cycle_count,
             "situation_summary": output_values.get("situation_summary", "No significant changes"),
             "recommended_focus": output_values.get("recommended_focus", "Continue current activities"),
             "new_message_paths": [msg['path'] for msg in message_contents] if message_contents else [],
-            "observation_count": len(observations)
+            "observation_count": len(observations),
+            "recommended_focus_knowledge": results,
         }
         
         # Write to observation pipeline buffer for Decision stage

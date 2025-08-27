@@ -1154,6 +1154,98 @@ class MindSwarmCLI:
                         else:
                             console.print(f"Unknown knowledge command: {subcmd}", style="red")
                 
+                elif cmd == "boost":
+                    # Token boost commands
+                    if len(parts) == 1:
+                        # Show boost status
+                        try:
+                            status = await self.client.get_token_boost_status()
+                            if status:
+                                console.print("[bold]Token Boost Status:[/bold]")
+                                
+                                # Check if any boosts are active
+                                any_active = False
+                                for cyber_id, boost_info in status.items():
+                                    if boost_info.get("boost_active"):
+                                        any_active = True
+                                        console.print(f"\n[cyan]{cyber_id}:[/cyan]")
+                                        console.print(f"  Multiplier: {boost_info.get('multiplier', 1.0)}x")
+                                        console.print(f"  Base rate: {boost_info.get('base_rate', 0):,} tokens/min")
+                                        console.print(f"  Boosted rate: {boost_info.get('effective_rate', 0):,} tokens/min")
+                                        console.print(f"  Expires: {boost_info.get('expires', 'N/A')}")
+                                
+                                if not any_active:
+                                    console.print("[dim]No active token boosts[/dim]")
+                                
+                                console.print("\n[dim]Commands:[/dim]")
+                                console.print("[dim]  boost apply [cyber] [multiplier] [hours] - Apply boost[/dim]")
+                                console.print("[dim]  boost clear [cyber]                     - Clear boost[/dim]")
+                            else:
+                                console.print("[yellow]No cybers active[/yellow]")
+                        except Exception as e:
+                            console.print(f"[red]Failed to get boost status: {e}[/red]")
+                    
+                    elif len(parts) > 1:
+                        subcmd = parts[1].lower()
+                        
+                        if subcmd == "apply":
+                            # Apply boost: boost apply [cyber] [multiplier] [hours]
+                            cyber_id = None
+                            multiplier = 2.0
+                            duration_hours = 3.0
+                            
+                            if len(parts) > 2 and parts[2] != "all":
+                                cyber_id = parts[2]
+                            if len(parts) > 3:
+                                try:
+                                    multiplier = float(parts[3])
+                                except ValueError:
+                                    console.print("[red]Invalid multiplier, using default 2.0[/red]")
+                            if len(parts) > 4:
+                                try:
+                                    duration_hours = float(parts[4])
+                                except ValueError:
+                                    console.print("[red]Invalid duration, using default 3.0 hours[/red]")
+                            
+                            try:
+                                target = cyber_id if cyber_id else "ALL cybers"
+                                console.print(f"[cyan]Applying {multiplier}x boost to {target} for {duration_hours} hours...[/cyan]")
+                                result = await self.client.apply_token_boost(
+                                    cyber_id=cyber_id,
+                                    multiplier=multiplier,
+                                    duration_hours=duration_hours
+                                )
+                                if result.get("status") == "success":
+                                    affected = result.get("affected_cybers", [])
+                                    console.print(f"[green]✓ Token boost applied to {len(affected)} cyber(s)[/green]")
+                                    console.print(f"  Expires: {result.get('expires', 'N/A')}")
+                                else:
+                                    console.print(f"[red]Failed: {result.get('message', 'Unknown error')}[/red]")
+                            except Exception as e:
+                                console.print(f"[red]Failed to apply boost: {e}[/red]")
+                        
+                        elif subcmd == "clear":
+                            # Clear boost: boost clear [cyber]
+                            cyber_id = None
+                            if len(parts) > 2 and parts[2] != "all":
+                                cyber_id = parts[2]
+                            
+                            try:
+                                target = cyber_id if cyber_id else "ALL cybers"
+                                console.print(f"[cyan]Clearing token boost for {target}...[/cyan]")
+                                result = await self.client.clear_token_boost(cyber_id=cyber_id)
+                                if result.get("status") == "success":
+                                    affected = result.get("affected_cybers", [])
+                                    console.print(f"[green]✓ Token boost cleared for {len(affected)} cyber(s)[/green]")
+                                else:
+                                    console.print(f"[red]Failed: {result.get('message', 'Unknown error')}[/red]")
+                            except Exception as e:
+                                console.print(f"[red]Failed to clear boost: {e}[/red]")
+                        
+                        else:
+                            console.print(f"Unknown boost command: {subcmd}", style="red")
+                            console.print("[dim]Use 'boost' to see available commands[/dim]")
+                
                 else:
                     console.print(f"Unknown command: {command}", style="red")
                 

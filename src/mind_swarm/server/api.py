@@ -95,6 +95,13 @@ class MarkMessageReadRequest(BaseModel):
     message_index: int
 
 
+class TokenBoostRequest(BaseModel):
+    """Request model for applying token boost."""
+    cyber_id: Optional[str] = None  # None means all cybers
+    multiplier: float = 2.0
+    duration_hours: float = 3.0
+
+
 class StatusResponse(BaseModel):
     """Server status response."""
     Cybers: Dict[str, Dict[str, Any]]
@@ -965,6 +972,61 @@ class MindSwarmServer:
                 }
             except Exception as e:
                 logger.error(f"Failed to get metrics: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        # Token boost endpoints
+        @self.app.post("/token/boost")
+        async def apply_token_boost(request: TokenBoostRequest):
+            """Apply a temporary token rate boost to cybers."""
+            try:
+                from mind_swarm.ai.token_tracker import token_tracker
+                result = token_tracker.apply_token_boost(
+                    cyber_id=request.cyber_id,
+                    multiplier=request.multiplier,
+                    duration_hours=request.duration_hours
+                )
+                
+                # Notify websocket clients about boost
+                await self._broadcast_event({
+                    "type": "token_boost_applied",
+                    "cyber_id": request.cyber_id or "all",
+                    "multiplier": request.multiplier,
+                    "duration_hours": request.duration_hours,
+                    "timestamp": datetime.now().isoformat()
+                })
+                
+                return result
+            except Exception as e:
+                logger.error(f"Failed to apply token boost: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.delete("/token/boost")
+        async def clear_token_boost(cyber_id: Optional[str] = None):
+            """Clear token boost for a cyber or all cybers."""
+            try:
+                from mind_swarm.ai.token_tracker import token_tracker
+                result = token_tracker.clear_token_boost(cyber_id=cyber_id)
+                
+                # Notify websocket clients about boost cleared
+                await self._broadcast_event({
+                    "type": "token_boost_cleared",
+                    "cyber_id": cyber_id or "all",
+                    "timestamp": datetime.now().isoformat()
+                })
+                
+                return result
+            except Exception as e:
+                logger.error(f"Failed to clear token boost: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.get("/token/boost")
+        async def get_token_boost_status(cyber_id: Optional[str] = None):
+            """Get current token boost status."""
+            try:
+                from mind_swarm.ai.token_tracker import token_tracker
+                return token_tracker.get_boost_status(cyber_id=cyber_id)
+            except Exception as e:
+                logger.error(f"Failed to get token boost status: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
         @self.app.get("/Cybers/{cyber_name}/inspect")

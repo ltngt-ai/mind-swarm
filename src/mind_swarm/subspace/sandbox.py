@@ -470,7 +470,7 @@ class SubspaceManager:
                 logger.error("No Cyber base code found to copy!")
     
     def _copy_maintenance_tasks(self, internal_dir: Path):
-        """Copy standard maintenance tasks to the Cyber's tasks directory.
+        """Copy standard maintenance and hobby tasks to the Cyber's tasks directory.
         
         Args:
             internal_dir: The .internal directory in Cyber's home
@@ -483,13 +483,16 @@ class SubspaceManager:
         for subdir in ["completed", "blocked", "hobby", "maintenance"]:
             (tasks_dir / subdir).mkdir(exist_ok=True)
         
-        # Get the maintenance tasks template directory
+        # Get the template directories
         template_root = Path(__file__).parent.parent.parent.parent / "subspace_template"
         maintenance_template = template_root / "maintenance_tasks"
+        hobby_template = template_root / "hobby_tasks"
         
+        import json
+        from datetime import datetime
+        
+        # Process maintenance tasks
         if maintenance_template.exists():
-            import shutil
-            
             # Check if maintenance tasks already exist (don't overwrite existing tasks)
             maintenance_dir = tasks_dir / "maintenance"
             completed_dir = tasks_dir / "completed"
@@ -504,9 +507,6 @@ class SubspaceManager:
                     existing_mt_ids.add(task_id)
             
             # Copy maintenance tasks that don't already exist
-            import json
-            from datetime import datetime
-            
             for task_file in maintenance_template.glob("*.json"):
                 task_id = task_file.name.split('_')[0]
                 
@@ -530,6 +530,42 @@ class SubspaceManager:
                     logger.debug(f"Maintenance task {task_id} already exists, skipping")
         else:
             logger.warning(f"Maintenance tasks template not found at {maintenance_template}")
+        
+        # Process hobby tasks
+        if hobby_template.exists():
+            hobby_dir = tasks_dir / "hobby"
+            
+            # Get list of all existing hobby task IDs
+            existing_ht_ids = set()
+            for dir in [hobby_dir, completed_dir, blocked_dir]:
+                for f in dir.glob("HT-*.json"):
+                    # Extract task ID from filename (e.g., "HT-001" from "HT-001_explore_library.json")
+                    task_id = f.name.split('_')[0]
+                    existing_ht_ids.add(task_id)
+            
+            # Copy hobby tasks that don't already exist
+            for task_file in hobby_template.glob("*.json"):
+                task_id = task_file.name.split('_')[0]
+                
+                if task_id not in existing_ht_ids:
+                    # Load the task (keep as pending for hobby tasks)
+                    with open(task_file, 'r') as f:
+                        task_data = json.load(f)
+                    
+                    # Update timestamps
+                    task_data['created'] = datetime.now().isoformat()
+                    task_data['updated'] = datetime.now().isoformat()
+                    
+                    # Copy to hobby directory (hobby tasks start as pending)
+                    dst_file = hobby_dir / task_file.name
+                    with open(dst_file, 'w') as f:
+                        json.dump(task_data, f, indent=2)
+                    
+                    logger.debug(f"Copied hobby task {task_file.name} to hobby folder")
+                else:
+                    logger.debug(f"Hobby task {task_id} already exists, skipping")
+        else:
+            logger.debug(f"Hobby tasks template not found at {hobby_template} - no default hobbies will be added")
     
     async def check_bubblewrap(self) -> bool:
         """Check if bubblewrap is installed and available.
