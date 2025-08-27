@@ -68,6 +68,7 @@ class ExecutionStage:
         self._extract_and_save_module_docs(self.cbr_api, "cbr_api_docs")
         self._extract_and_save_module_docs(self.communication_api, "communication_api_docs")
         self._extract_and_save_module_docs(self.tasks_api, "tasks_api_docs")
+        self._extract_and_save_module_docs(self.terminal_api, "terminal_api_docs")
         
         # Initialize error case tracking
         self.error_case_ids = []  # Track current cycle's error cases for cleanup
@@ -362,6 +363,9 @@ class ExecutionStage:
         from ..python_modules.tasks import Tasks
         self.tasks_api = Tasks(context)
         
+        # Import Terminal API
+        from ..python_modules.terminal import Terminal
+        self.terminal_api = Terminal(context)
     
     async def execute(self):
         """Run the execution stage."""
@@ -767,6 +771,13 @@ The provided API docs describe the available operations and their usage.
         namespace['tasks'] = tasks_instance
         namespace['TasksError'] = TasksError
         
+        # Import and initialize the Terminal API
+        from ..python_modules.terminal import Terminal, TerminalError
+        
+        # Create terminal instance
+        terminal_instance = Terminal(context)
+        namespace['terminal'] = terminal_instance
+        namespace['TerminalError'] = TerminalError
         
         # Capture output
         output_lines = []

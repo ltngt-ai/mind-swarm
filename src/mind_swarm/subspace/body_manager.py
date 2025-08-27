@@ -35,7 +35,7 @@ class BodyFile:
 class BodyManager:
     """Manages body files for an Cyber."""
     
-    def __init__(self, name: str, cyber_personal: Path, knowledge_handler=None, awareness_handler=None, cbr_handler=None):
+    def __init__(self, name: str, cyber_personal: Path, knowledge_handler=None, awareness_handler=None, cbr_handler=None, terminal_handler=None):
         """Initialize body manager for an Cyber.
         
         Args:
@@ -44,6 +44,7 @@ class BodyManager:
             knowledge_handler: Optional knowledge handler for knowledge body file
             awareness_handler: Optional awareness handler for awareness body file
             cbr_handler: Optional CBR handler for CBR body file
+            terminal_handler: Optional terminal handler for terminal body file
         """
         self.name = name
         self.cyber_personal = cyber_personal
@@ -52,6 +53,7 @@ class BodyManager:
         self.knowledge_handler = knowledge_handler
         self.awareness_handler = awareness_handler
         self.cbr_handler = cbr_handler
+        self.terminal_handler = terminal_handler
         
     async def create_body_files(self):
         """Create the standard body files for an Cyber."""
@@ -73,6 +75,11 @@ class BodyManager:
         if self.cbr_handler:
             cbr = BodyFile("cbr_api", "")
             self.body_files["cbr_api"] = cbr
+        
+        # Terminal - for terminal sessions
+        if self.terminal_handler:
+            terminal = BodyFile("terminal", "")
+            self.body_files["terminal"] = terminal
         
         # Voice file removed - not implemented
         
@@ -404,6 +411,58 @@ class BodyManager:
                             if processing.get(name, False):
                                 logger.debug(f"MONITOR: Awareness file ready for next request from {self.name}")
                             processing[name] = False
+                    
+                    # For terminal file, handle terminal requests
+                    elif name == "terminal" and self.terminal_handler:
+                        # Check if content is not empty and not already processed
+                        if content.strip() and not processing.get(name, False):
+                            try:
+                                # Parse the JSON request
+                                data = json.loads(content)
+                                
+                                if "request" in data:
+                                    processing[name] = True
+                                    request = data["request"]
+                                    action = request.get("action")
+                                    logger.info(f"BODY: Terminal request from {self.name}: {action}")
+                                    
+                                    # Process the request using terminal handler
+                                    await self.terminal_handler.handle_terminal_body(self.name, file_path)
+                                    
+                                    logger.info(f"BODY: Terminal response written for {self.name}")
+                                    processing[name] = False
+                                    
+                            except json.JSONDecodeError as e:
+                                logger.error(f"Invalid JSON in terminal request from {self.name}: {e}")
+                                # Write error response
+                                error_data = {
+                                    "response": {
+                                        "status": "error",
+                                        "message": f"Invalid JSON: {str(e)}"
+                                    }
+                                }
+                                async with aiofiles.open(file_path, 'w') as f:
+                                    await f.write(json.dumps(error_data, indent=2))
+                                processing[name] = False
+                                
+                            except Exception as e:
+                                logger.error(f"Error processing terminal request for {self.name}: {e}")
+                                # Write error response
+                                error_data = {
+                                    "response": {
+                                        "status": "error",
+                                        "message": str(e)
+                                    }
+                                }
+                                async with aiofiles.open(file_path, 'w') as f:
+                                    await f.write(json.dumps(error_data, indent=2))
+                                processing[name] = False
+                        
+                        elif not content.strip() or ("response" in content and not "request" in content):
+                            # File is empty or has response without request, ready for next request
+                            if processing.get(name, False):
+                                logger.debug(f"MONITOR: Terminal file ready for next request from {self.name}")
+                            processing[name] = False
                 
                 # Adaptive delay - longer when nothing is happening
                 if any(processing.values()):
@@ -421,12 +480,13 @@ class BodyManager:
 class BodySystemManager:
     """Manages body files for all Cybers."""
     
-    def __init__(self, knowledge_handler=None, awareness_handler=None, cbr_handler=None):
+    def __init__(self, knowledge_handler=None, awareness_handler=None, cbr_handler=None, terminal_handler=None):
         """Initialize the body system manager."""
         self.body_managers: Dict[str, BodyManager] = {}
         self.knowledge_handler = knowledge_handler
         self.awareness_handler = awareness_handler
         self.cbr_handler = cbr_handler
+        self.terminal_handler = terminal_handler
         
     async def create_agent_body(self, name: str, cyber_personal: Path) -> BodyManager:
         """Create body files for a new Cyber.
@@ -438,7 +498,7 @@ class BodySystemManager:
         Returns:
             BodyManager instance for the Cyber
         """
-        manager = BodyManager(name, cyber_personal, self.knowledge_handler, self.awareness_handler, self.cbr_handler)
+        manager = BodyManager(name, cyber_personal, self.knowledge_handler, self.awareness_handler, self.cbr_handler, self.terminal_handler)
         await manager.create_body_files()
         self.body_managers[name] = manager
         return manager

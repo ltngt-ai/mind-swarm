@@ -59,6 +59,17 @@ class TaskRequest(BaseModel):
     created_by: str = "user"
 
 
+class TerminalCreateRequest(BaseModel):
+    """Request to create a terminal session."""
+    command: str = "bash"
+    name: Optional[str] = None
+
+
+class TerminalInputRequest(BaseModel):
+    """Request to send input to a terminal."""
+    input: str
+
+
 class AnnouncementRequest(BaseModel):
     """Request to create or update system announcements."""
     title: str
@@ -543,6 +554,86 @@ class MindSwarmServer:
             
             Cybers = await self.coordinator.list_all_agents()
             return {"cybers": Cybers}
+        
+        # Terminal endpoints
+        @self.app.post("/cybers/{cyber_id}/terminals")
+        async def create_terminal(cyber_id: str, request: TerminalCreateRequest):
+            """Create a new terminal session for a Cyber."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            if not getattr(self, '_coordinator_ready', False):
+                raise HTTPException(status_code=503, detail="Server still initializing")
+            
+            try:
+                session_id = await self.coordinator.terminal_manager.create_session(
+                    cyber_id=cyber_id,
+                    command=request.command,
+                    name=request.name
+                )
+                return {"session_id": session_id, "status": "created"}
+            except Exception as e:
+                logger.error(f"Failed to create terminal: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.get("/cybers/{cyber_id}/terminals")
+        async def list_terminals(cyber_id: str):
+            """List all terminal sessions for a Cyber."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            if not getattr(self, '_coordinator_ready', False):
+                return {"sessions": []}
+            
+            try:
+                sessions = await self.coordinator.terminal_manager.list_sessions(cyber_id)
+                return {"sessions": sessions}
+            except Exception as e:
+                logger.error(f"Failed to list terminals: {e}")
+                return {"sessions": []}
+        
+        @self.app.post("/cybers/{cyber_id}/terminals/{session_id}/input")
+        async def send_terminal_input(cyber_id: str, session_id: str, request: TerminalInputRequest):
+            """Send input to a terminal session."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            if not getattr(self, '_coordinator_ready', False):
+                raise HTTPException(status_code=503, detail="Server still initializing")
+            
+            try:
+                await self.coordinator.terminal_manager.send_input(cyber_id, session_id, request.input)
+                return {"status": "sent"}
+            except Exception as e:
+                logger.error(f"Failed to send terminal input: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.get("/cybers/{cyber_id}/terminals/{session_id}/screen")
+        async def read_terminal_screen(cyber_id: str, session_id: str, format: str = "text"):
+            """Read current screen content from a terminal."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            if not getattr(self, '_coordinator_ready', False):
+                raise HTTPException(status_code=503, detail="Server still initializing")
+            
+            try:
+                screen_data = await self.coordinator.terminal_manager.read_screen(cyber_id, session_id, format)
+                return screen_data
+            except Exception as e:
+                logger.error(f"Failed to read terminal screen: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.delete("/cybers/{cyber_id}/terminals/{session_id}")
+        async def close_terminal(cyber_id: str, session_id: str):
+            """Close a terminal session."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            if not getattr(self, '_coordinator_ready', False):
+                raise HTTPException(status_code=503, detail="Server still initializing")
+            
+            try:
+                await self.coordinator.terminal_manager.close_session(cyber_id, session_id)
+                return {"status": "closed"}
+            except Exception as e:
+                logger.error(f"Failed to close terminal: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
         
         @self.app.post("/developers/register")
         async def register_developer(request: RegisterDeveloperRequest):

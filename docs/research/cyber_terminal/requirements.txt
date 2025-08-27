@@ -1,0 +1,19 @@
+# Core dependencies for Cyber Terminal
+# No external dependencies required - uses only Python standard library
+
+# Optional dependencies for enhanced functionality
+# psutil>=5.8.0  # For enhanced process monitoring (optional)
+# pexpect>=4.8.0  # For alternative terminal automation (optional)
+
+# Development dependencies (install with pip install -e .[dev])
+# pytest>=6.0
+# pytest-asyncio>=0.18.0
+# pytest-cov>=2.0
+# black>=22.0
+# flake8>=4.0
+# mypy>=0.900
+
+# Documentation dependencies (install with pip install -e .[docs])
+# sphinx>=4.0
+# sphinx-rtd-theme>=1.0
+

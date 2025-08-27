@@ -129,25 +129,32 @@ class CyberCBRHandler:
             metadata['case_id'] = case_id
             metadata['case_type'] = 'cbr_case'
             
+            # Sanitize metadata - ChromaDB only accepts str, int, float, bool, None
+            sanitized_metadata = {}
+            for key, value in metadata.items():
+                sanitized_value = self._sanitize_metadata_value(value)
+                if sanitized_value is not None:
+                    sanitized_metadata[key] = sanitized_value
+            
             # Convert lists to strings for ChromaDB (it doesn't accept lists in metadata)
-            if 'tags' in metadata and isinstance(metadata['tags'], list):
-                metadata['tags'] = ','.join(metadata['tags']) if metadata['tags'] else ''
+            if 'tags' in sanitized_metadata and isinstance(sanitized_metadata['tags'], list):
+                sanitized_metadata['tags'] = ','.join(sanitized_metadata['tags']) if sanitized_metadata['tags'] else ''
             
             # Convert cbr_cases_used list to string
-            if 'cbr_cases_used' in metadata and isinstance(metadata['cbr_cases_used'], list):
-                metadata['cbr_cases_used'] = ','.join(metadata['cbr_cases_used']) if metadata['cbr_cases_used'] else ''
+            if 'cbr_cases_used' in sanitized_metadata and isinstance(sanitized_metadata['cbr_cases_used'], list):
+                sanitized_metadata['cbr_cases_used'] = ','.join(sanitized_metadata['cbr_cases_used']) if sanitized_metadata['cbr_cases_used'] else ''
             
             # Ensure timestamp
-            if 'timestamp' not in metadata:
-                metadata['timestamp'] = datetime.now().isoformat()
+            if 'timestamp' not in sanitized_metadata:
+                sanitized_metadata['timestamp'] = datetime.now().isoformat()
             
             # Determine collection (personal by default)
-            collection = self.personal_cbr if not metadata.get('shared', False) else self.shared_cbr
+            collection = self.personal_cbr if not sanitized_metadata.get('shared', False) else self.shared_cbr
             
             # Store in ChromaDB
             collection.add(
                 documents=[case_doc],
-                metadatas=[metadata],
+                metadatas=[sanitized_metadata],
                 ids=[case_id]
             )
             
@@ -488,6 +495,43 @@ class CyberCBRHandler:
                 "error": str(e),
                 "cases": []
             }
+    
+    def _sanitize_metadata_value(self, value: Any) -> Any:
+        """Sanitize a metadata value for ChromaDB storage.
+        
+        ChromaDB only accepts str, int, float, bool, or None.
+        Nested dicts and lists are serialized to JSON strings.
+        """
+        # Handle None and primitives
+        if value is None:
+            return None
+        if isinstance(value, (str, int, float, bool)):
+            return value
+        
+        # Handle lists - convert to comma-separated string or JSON
+        if isinstance(value, list):
+            # Try to join simple lists as comma-separated
+            if all(isinstance(item, (str, int, float, bool)) for item in value):
+                return ','.join(str(item) for item in value)
+            else:
+                # Complex list - serialize as JSON
+                try:
+                    return json.dumps(value)
+                except:
+                    return str(value)
+        
+        # Handle dicts - serialize as JSON
+        if isinstance(value, dict):
+            try:
+                return json.dumps(value)
+            except:
+                return str(value)
+        
+        # Handle any other type - convert to string
+        try:
+            return str(value)
+        except:
+            return None
     
     def _format_cases(self, results: Dict, source: str) -> List[Dict]:
         """Format ChromaDB results into CBR cases."""

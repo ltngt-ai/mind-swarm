@@ -267,10 +267,14 @@ class SubspaceCoordinator:
         # Initialize freeze handler
         self.freeze_handler = FreezeHandler(self.subspace.root_path)
         
+        # Initialize terminal manager
+        from .terminal_manager import CyberTerminalManager
+        self.terminal_manager = CyberTerminalManager(self)
+        
         # Cycle monitoring removed - stages now handle their own recording directly
         
         # Pass all handlers to body system
-        self.body_system = BodySystemManager(self.knowledge_handler, self.awareness_handler, self.cbr_handler)
+        self.body_system = BodySystemManager(self.knowledge_handler, self.awareness_handler, self.cbr_handler, self.terminal_manager)
         
         self.state_manager = CyberStateManager(self.subspace.root_path)
         self.cyber_registry = CyberRegistry(self.subspace.root_path)
@@ -305,6 +309,9 @@ class SubspaceCoordinator:
         # Load default knowledge into ChromaDB if this is a new subspace
         await self._load_default_knowledge()
         
+        # Start terminal manager
+        await self.terminal_manager.start()
+        
         # Start message routing
         self._router_task = asyncio.create_task(self._message_routing_loop())
         
@@ -336,6 +343,11 @@ class SubspaceCoordinator:
         logger.info("Shutting down body system...")
         await self.body_system.shutdown()
         logger.info("Body system shut down")
+        
+        # Shutdown terminal manager
+        logger.info("Shutting down terminal manager...")
+        await self.terminal_manager.stop()
+        logger.info("Terminal manager shut down")
         
         # Shutdown all Cybers gracefully
         logger.info("Shutting down Cyber spawner...")

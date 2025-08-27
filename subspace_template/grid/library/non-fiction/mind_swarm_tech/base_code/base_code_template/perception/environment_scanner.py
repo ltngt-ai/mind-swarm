@@ -182,6 +182,9 @@ class EnvironmentScanner:
         # Scan status file (consolidated status with biofeedback)
         memories.extend(self._scan_status_file(cycle_count))
         
+        # Scan terminal sessions
+        memories.extend(self._scan_terminal_sessions(cycle_count))
+        
         # Scan different areas - these return observations and MemoryBlocks
         inbox_results = self._scan_inbox(cycle_count)
         observations.extend(inbox_results)
@@ -932,6 +935,96 @@ class EnvironmentScanner:
             
         except Exception as e:
             logger.error(f"Error scanning status file: {e}")
+        
+        return memories
+    
+    def _scan_terminal_sessions(self, cycle_count: int = 0) -> List[MemoryBlock]:
+        """Scan active terminal sessions and create memory blocks for their screens.
+        
+        Terminal sessions allow cybers to interact with shells, REPLs, and CLI tools.
+        Their screen content is made available in working memory.
+        
+        Args:
+            cycle_count: Current cycle count
+            
+        Returns:
+            List of MemoryBlocks for terminal sessions
+        """
+        from ..memory.memory_blocks import MemoryBlock, Priority, ContentType
+        memories = []
+        
+        try:
+            # Check terminal body file for active sessions
+            terminal_body = self.personal_path / '.internal' / 'terminal'
+            
+            if not terminal_body.exists():
+                return memories
+            
+            # Read terminal state
+            try:
+                with open(terminal_body, 'r') as f:
+                    terminal_data = json.load(f)
+            except (json.JSONDecodeError, IOError):
+                return memories
+            
+            # Check if there's a response with session list
+            if 'response' in terminal_data and terminal_data['response'].get('status') == 'success':
+                response_data = terminal_data['response'].get('data', {})
+                
+                # Handle list response
+                if 'sessions' in response_data:
+                    for session in response_data['sessions']:
+                        # Create memory block for each session
+                        session_memory = MemoryBlock(
+                            location=f"terminal/{session['session_id']}/info",
+                            priority=Priority.MEDIUM,
+                            confidence=1.0,
+                            pinned=False,
+                            metadata={
+                                "session_id": session['session_id'],
+                                "command": session.get('command', 'unknown'),
+                                "name": session.get('name', ''),
+                                "created_at": session.get('created_at', ''),
+                                "last_activity": session.get('last_activity', ''),
+                                "is_active": session.get('is_active', True),
+                                "tags": ["terminal", "session", "interactive"]
+                            },
+                            cycle_count=cycle_count,
+                            content_type=ContentType.TEXT_PLAIN,
+                            content=f"Terminal session '{session.get('name', session['session_id'])}' running: {session.get('command', 'unknown')}"
+                        )
+                        memories.append(session_memory)
+                        logger.debug(f"Created memory for terminal session {session['session_id']}")
+                
+                # Handle read response with screen content
+                elif 'screen' in response_data:
+                    # Extract session ID from request if available
+                    session_id = 'current'
+                    if 'request' in terminal_data:
+                        session_id = terminal_data['request'].get('session_id', 'current')
+                    
+                    # Create memory block for screen content
+                    screen_memory = MemoryBlock(
+                        location=f"terminal/{session_id}/screen",
+                        priority=Priority.HIGH,  # High priority as it's active content
+                        confidence=1.0,
+                        pinned=False,
+                        metadata={
+                            "session_id": session_id,
+                            "cursor": response_data.get('cursor', [0, 0]),
+                            "terminal_size": response_data.get('terminal_size', [24, 80]),
+                            "tags": ["terminal", "screen", "output"]
+                        },
+                        cycle_count=cycle_count,
+                        no_cache=True,  # Always get fresh screen content
+                        content_type=ContentType.TEXT_PLAIN,
+                        content=f"Terminal {session_id} screen:\n{response_data['screen']}"
+                    )
+                    memories.append(screen_memory)
+                    logger.debug(f"Created memory for terminal screen {session_id}")
+                    
+        except Exception as e:
+            logger.error(f"Error scanning terminal sessions: {e}")
         
         return memories
     
