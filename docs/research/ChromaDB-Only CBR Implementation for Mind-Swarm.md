@@ -901,7 +901,7 @@ from .knowledge.simplified_knowledge import SimplifiedKnowledgeManager
 from .state import CyberStateManager, ExecutionStateTracker
 from .utils import CognitiveUtils, FileManager
 from .brain import BrainInterface
-from .stages import ObservationStage, ReflectStage, DecisionStage, ExecutionStage, CleanupStage
+from .stages import ObservationStage, ReflectStage, DecisionStage, ExecutionStage
 
 # ChromaDB-only CBR imports
 from .chromadb_cbr_memory_layer import ChromaDBCBRMemoryLayer, SolutionCase
@@ -976,7 +976,6 @@ class ChromaDBEnhancedCognitiveLoop:
         self.decision_stage = ChromaDBEnhancedDecisionStage(self)
         self.execution_stage = ExecutionStage(self)  # Unchanged
         self.reflect_stage = ChromaDBEnhancedReflectStage(self)
-        self.cleanup_stage = CleanupStage(self)
         
         logger.info(f"ChromaDB Enhanced CognitiveLoop initialized for Cyber {cyber_id}")
     

@@ -28,7 +28,6 @@ class StateSection(Enum):
     LOCATION = "location"
     MEMORY = "memory"
     PERFORMANCE = "performance"
-    ACTIVITY = "activity"
 
 
 class UnifiedStateManager:
@@ -146,12 +145,6 @@ class UnifiedStateManager:
                 "brain_tokens_used": 0,
             },
             
-            # Activity section (recent activity log)
-            StateSection.ACTIVITY.value: {
-                "recent_activities": [],  # Last 20 activities
-                "last_error": None,
-                "last_success": None,
-            },
             
             # Metadata
             "_metadata": {
@@ -227,18 +220,26 @@ class UnifiedStateManager:
                 logger.error("Failed to parse unified state file")
                 return None
             
-            # Merge with default state to ensure all fields exist
+            # Start with default state to ensure correct structure
             default_state = self._create_default_state()
-            for section in StateSection:
-                if section.value not in state_data:
-                    state_data[section.value] = default_state[section.value]
-                else:
-                    # Merge section fields
-                    for key, default_value in default_state[section.value].items():
-                        if key not in state_data[section.value]:
-                            state_data[section.value][key] = default_value
             
-            self.state = state_data
+            # Only copy over valid sections from loaded state
+            for section in StateSection:
+                if section.value in state_data:
+                    # Merge loaded values into default structure
+                    for key in default_state[section.value].keys():
+                        if key in state_data[section.value]:
+                            default_state[section.value][key] = state_data[section.value][key]
+            
+            # Copy metadata if it exists
+            if "_metadata" in state_data:
+                default_state["_metadata"] = state_data["_metadata"]
+            
+            # Remove any invalid sections (like 'activity')
+            valid_sections = {s.value for s in StateSection} | {"_metadata"}
+            clean_state = {k: v for k, v in default_state.items() if k in valid_sections or k == "_metadata"}
+            
+            self.state = clean_state
             
             cycle = self.get_value(StateSection.COGNITIVE, "cycle_count", 0)
             logger.info(f"Loaded unified state for Cyber {self.cyber_id}: cycle {cycle}")
@@ -353,44 +354,6 @@ class UnifiedStateManager:
         self.set_value(section, key, new_value)
         return new_value
     
-    def add_activity(self, activity: str, activity_type: str = "info") -> bool:
-        """Add an activity to the activity log.
-        
-        Args:
-            activity: Activity description
-            activity_type: Type of activity (info, success, error)
-            
-        Returns:
-            True if added successfully
-        """
-        try:
-            activities = self.state[StateSection.ACTIVITY.value]["recent_activities"]
-            
-            activity_entry = {
-                "timestamp": datetime.now().isoformat(),
-                "cycle": self.get_value(StateSection.COGNITIVE, "cycle_count", 0),
-                "type": activity_type,
-                "description": activity
-            }
-            
-            activities.append(activity_entry)
-            
-            # Keep only last 20 activities
-            if len(activities) > 20:
-                activities = activities[-20:]
-                self.state[StateSection.ACTIVITY.value]["recent_activities"] = activities
-            
-            # Update last success/error
-            if activity_type == "success":
-                self.state[StateSection.ACTIVITY.value]["last_success"] = activity
-            elif activity_type == "error":
-                self.state[StateSection.ACTIVITY.value]["last_error"] = activity
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to add activity: {e}")
-            return False
     
     def update_biofeedback(self, current_task: Optional[Dict[str, Any]] = None) -> Dict[str, int]:
         """Update biofeedback metrics based on current state.
@@ -497,7 +460,6 @@ class UnifiedStateManager:
                         bio["credited_community_tasks"] = bio["credited_community_tasks"][-10:]
                     
                     task_section["completed_tasks_count"]["community"] += 1
-                    self.add_activity(f"Completed community task {task_id}", "success")
                     logger.info(f"Credited community task {task_id}, duty increased")
                     
             elif task_type == "maintenance":
@@ -510,12 +472,10 @@ class UnifiedStateManager:
                         bio["credited_maintenance_tasks"] = bio["credited_maintenance_tasks"][-10:]
                     
                     task_section["completed_tasks_count"]["maintenance"] += 1
-                    self.add_activity(f"Completed maintenance task {task_id}", "success")
                     logger.info(f"Credited maintenance task {task_id}, tiredness reduced")
                     
             elif task_type == "hobby":
                 task_section["completed_tasks_count"]["hobby"] += 1
-                self.add_activity(f"Completed hobby task {task_id}", "success")
             
             self.save_state()
             return True
@@ -549,7 +509,6 @@ class UnifiedStateManager:
                     if len(location["visited_locations"]) > 50:
                         location["visited_locations"] = location["visited_locations"][-50:]
                 
-                self.add_activity(f"Moved to {new_location}", "info")
                 self.save_state()
             
             return True
@@ -581,12 +540,7 @@ class UnifiedStateManager:
             }
             
             checkpoint_json = safe_json_encode(checkpoint_data, indent=2)
-            success = self.file_manager.save_file(checkpoint_file, checkpoint_json)
-            
-            if success:
-                self.add_activity(f"Created checkpoint: {checkpoint_name}", "info")
-            
-            return success
+            return self.file_manager.save_file(checkpoint_file, checkpoint_json)
             
         except Exception as e:
             logger.error(f"Failed to create checkpoint: {e}")

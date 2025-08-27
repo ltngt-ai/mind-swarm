@@ -112,7 +112,9 @@ class CyberMind:
             while self.running and not self.stop_requested:
                 # Run one cognitive cycle with error recovery
                 try:
+                    logger.debug(f"About to run cycle, running={self.running}, stop_requested={self.stop_requested}")
                     await self.cognitive_loop.run_cycle()
+                    logger.debug(f"Cycle completed, running={self.running}, stop_requested={self.stop_requested}")
                 except Exception as cycle_error:
                     logger.error(f"Error in cognitive cycle {self.cognitive_loop.cycle_count}: {cycle_error}", exc_info=True)
                     await asyncio.sleep(2)  # Brief pause after error
@@ -123,6 +125,9 @@ class CyberMind:
                     logger.info("Graceful stop requested, saving state and exiting...")
                     await self.cognitive_loop.save_memory()
                     break
+                
+                # Brief pause between cycles to yield to other tasks
+                await asyncio.sleep(0.1)
                 
         except Exception as e:
             logger.error(f"Error in main loop: {e}", exc_info=True)
@@ -205,6 +210,7 @@ class CyberMind:
     async def _shutdown_monitor_loop(self):
         """Monitor for shutdown signal from coordinator."""
         shutdown_file = self.personal / ".internal" / "shutdown"
+        logger.info(f"Shutdown monitor started, monitoring {shutdown_file}")
         
         while self.running:
             try:

@@ -316,11 +316,7 @@ class CognitiveLoop:
                 )
                 self.memory_system.add_memory(current_location_memory)
                 logger.info(f"Added current_location.txt to pinned memory with id: {current_location_memory.id}")
-        
-        # personal.txt functionality removed - status.txt now provides this information
-    
-    # _update_personal_file function removed - functionality moved to status.txt
-    
+            
     def get_dynamic_context(self) -> Dict[str, Any]:
         """Get the current dynamic context from unified state.
         

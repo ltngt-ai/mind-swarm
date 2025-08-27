@@ -729,7 +729,7 @@ from .knowledge.simplified_knowledge import SimplifiedKnowledgeManager
 from .state import CyberStateManager, ExecutionStateTracker
 from .utils import CognitiveUtils, FileManager
 from .brain import BrainInterface
-from .stages import ObservationStage, ReflectStage, DecisionStage, ExecutionStage, CleanupStage
+from .stages import ObservationStage, ReflectStage, DecisionStage, ExecutionStage
 
 # New CBR imports
 from .mem0_cbr_memory_layer import Mem0CBRMemoryLayer, SolutionCase, SolutionType
@@ -802,7 +802,6 @@ class EnhancedCognitiveLoop:
         self.decision_stage = EnhancedDecisionStage(self)
         self.execution_stage = ExecutionStage(self)  # Unchanged for now
         self.reflect_stage = EnhancedReflectStage(self)
-        self.cleanup_stage = CleanupStage(self)
         
         logger.info(f"Enhanced CognitiveLoop initialized for Cyber {cyber_id} with CBR capabilities")
     
