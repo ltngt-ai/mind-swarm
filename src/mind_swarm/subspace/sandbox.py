@@ -1,7 +1,12 @@
 """Sandbox implementation using bubblewrap for Cyber isolation."""
 
 import asyncio
+import json
+import os
+import shutil
+import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
@@ -562,10 +567,103 @@ class SubspaceManager:
                         json.dump(task_data, f, indent=2)
                     
                     logger.debug(f"Copied hobby task {task_file.name} to hobby folder")
+                    
+                    # If this is HT-001 and it's a new Cyber, set it as current task
+                    if task_id == "HT-001" and not (internal_dir / "memory" / "unified_state.json").exists():
+                        self._set_initial_current_task(internal_dir, task_data)
                 else:
                     logger.debug(f"Hobby task {task_id} already exists, skipping")
         else:
             logger.debug(f"Hobby tasks template not found at {hobby_template} - no default hobbies will be added")
+    
+    def _set_initial_current_task(self, internal_dir: Path, task_data: dict):
+        """Set HT-001 as the initial current task for a new Cyber.
+        
+        Args:
+            internal_dir: The .internal directory in Cyber's home
+            task_data: The task data for HT-001
+        """
+        # Create initial unified state with HT-001 as current task
+        memory_dir = internal_dir / "memory"
+        memory_dir.mkdir(parents=True, exist_ok=True)
+        
+        unified_state_file = memory_dir / "unified_state.json"
+        
+        # Create minimal initial state with current task set
+        initial_state = {
+            "identity": {
+                "cyber_id": internal_dir.parent.name,
+                "name": internal_dir.parent.name,
+                "created_at": datetime.now().isoformat(),
+                "version": "2.0.0"
+            },
+            "cognitive": {
+                "cycle_count": 0,
+                "current_stage": "OBSERVATION",
+                "current_phase": "OBSERVE",
+                "last_activity": datetime.now().isoformat(),
+                "status": "active",
+                "thinking_depth": 0
+            },
+            "biofeedback": {
+                "boredom": 0,
+                "tiredness": 0,
+                "duty": 100,
+                "restlessness": 0,
+                "last_update_cycle": 0,
+                "cycles_on_current_task": 0,
+                "cycles_since_maintenance": 0,
+                "cycles_since_move": 0,
+                "last_duty_decrement_cycle": 0,
+                "credited_community_tasks": [],
+                "credited_maintenance_tasks": []
+            },
+            "task": {
+                "current_task_id": "HT-001",
+                "current_task_type": "hobby",
+                "current_task_summary": task_data.get("summary", "My first task"),
+                "task_started_cycle": 0,
+                "task_progress": {},
+                "completed_tasks_count": {
+                    "community": 0,
+                    "maintenance": 0,
+                    "hobby": 0
+                }
+            },
+            "location": {
+                "current_location": "/grid/community/school/onboarding/new_cyber_introduction",
+                "previous_location": None,
+                "location_changed_cycle": 0,
+                "visited_locations": []
+            },
+            "memory": {
+                "total_memories": 0,
+                "working_memory_count": 0,
+                "last_cleanup_cycle": 0,
+                "memory_usage_bytes": 0,
+                "cache_hits": 0,
+                "cache_misses": 0
+            },
+            "performance": {
+                "average_cycle_duration_ms": 0,
+                "total_actions_executed": 0,
+                "successful_actions": 0,
+                "failed_actions": 0,
+                "brain_requests": 0,
+                "brain_tokens_used": 0
+            },
+            "_metadata": {
+                "last_saved": datetime.now().isoformat(),
+                "save_count": 0,
+                "format_version": "2.0.0"
+            }
+        }
+        
+        # Write the initial state
+        with open(unified_state_file, 'w') as f:
+            json.dump(initial_state, f, indent=2)
+        
+        logger.info(f"Set HT-001 as initial current task for new Cyber {internal_dir.parent.name}")
     
     async def check_bubblewrap(self) -> bool:
         """Check if bubblewrap is installed and available.

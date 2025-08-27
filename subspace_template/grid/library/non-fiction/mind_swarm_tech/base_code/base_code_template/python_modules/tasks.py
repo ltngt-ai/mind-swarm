@@ -91,6 +91,11 @@ class Tasks:
         self.context = context
         self.personal = Path(context.get('personal_dir', '/personal'))
         
+        # Get state manager from context for unified state access
+        self.state_manager = context.get('state_manager')
+        if not self.state_manager:
+            raise TasksError("State manager is required in context for Tasks API")
+        
         # Task directories
         self.tasks_root = self.personal / '.internal' / 'tasks'
         self.completed_dir = self.tasks_root / 'completed'
@@ -104,9 +109,6 @@ class Tasks:
         self.community_open_dir = self.community_dir / 'open'
         self.community_claimed_dir = self.community_dir / 'claimed'
         self.community_completed_dir = self.community_dir / 'completed'
-        
-        # Current task pointer
-        self.current_task_file = self.tasks_root / 'current_task.txt'
         
         # Ensure directories exist (no more active directory)
         for dir in [self.completed_dir, self.blocked_dir, 
@@ -536,9 +538,17 @@ class Tasks:
                            if not k.startswith('_') and k != 'todo_list'}
                 json.dump(save_data, f, indent=2)
             
-            # Write current task pointer
-            with open(self.current_task_file, 'w') as f:
-                f.write(task_id)
+            # Update unified state with current task
+            from ..state.unified_state_manager import StateSection
+            self.state_manager.update_value(StateSection.TASK, "current_task_id", task_id)
+            self.state_manager.update_value(StateSection.TASK, "current_task_type", 
+                                           "hobby" if task_id.startswith("HT-") else 
+                                           "maintenance" if task_id.startswith("MT-") else 
+                                           "community")
+            self.state_manager.update_value(StateSection.TASK, "current_task_summary", 
+                                           task.get('summary', ''))
+            self.state_manager.update_value(StateSection.TASK, "task_started_cycle", 
+                                           self.state_manager.get_value(StateSection.COGNITIVE, "cycle_count", 0))
             
             return True
         except Exception:
@@ -556,8 +566,10 @@ class Tasks:
                 print(f"Working on: {current['summary']}")
         """
         try:
-            if self.current_task_file.exists():
-                task_id = self.current_task_file.read_text().strip()
+            # Get current task ID from unified state
+            from ..state.unified_state_manager import StateSection
+            task_id = self.state_manager.get_value(StateSection.TASK, "current_task_id")
+            if task_id:
                 return self.get(task_id)
         except Exception:
             pass
@@ -710,10 +722,13 @@ class Tasks:
             task_file.unlink()
             
             # Clear current task if this was it
-            if self.current_task_file.exists():
-                current_id = self.current_task_file.read_text().strip()
-                if current_id == task_id:
-                    self.current_task_file.unlink()
+            from ..state.unified_state_manager import StateSection
+            current_id = self.state_manager.get_value(StateSection.TASK, "current_task_id")
+            if current_id == task_id:
+                self.state_manager.update_value(StateSection.TASK, "current_task_id", None)
+                self.state_manager.update_value(StateSection.TASK, "current_task_type", None)
+                self.state_manager.update_value(StateSection.TASK, "current_task_summary", None)
+                self.state_manager.update_value(StateSection.TASK, "task_started_cycle", None)
             
             return True
             
@@ -849,12 +864,15 @@ class Tasks:
                 with open(task_file, 'w') as f:
                     json.dump(task_data, f, indent=2)
             
-            # If this was the current task and we're completing/blocking it, clear current_task.txt
+            # If this was the current task and we're completing/blocking it, clear from unified state
             if target_dir in [self.completed_dir, self.blocked_dir]:
-                if self.current_task_file.exists():
-                    current_id = self.current_task_file.read_text().strip()
-                    if current_id == task_id:
-                        self.current_task_file.unlink()
+                from ..state.unified_state_manager import StateSection
+                current_id = self.state_manager.get_value(StateSection.TASK, "current_task_id")
+                if current_id == task_id:
+                    self.state_manager.update_value(StateSection.TASK, "current_task_id", None)
+                    self.state_manager.update_value(StateSection.TASK, "current_task_type", None)
+                    self.state_manager.update_value(StateSection.TASK, "current_task_summary", None)
+                    self.state_manager.update_value(StateSection.TASK, "task_started_cycle", None)
             
             # Check if this was a maintenance task being completed
             if (task_data.get('task_type') == 'maintenance' and 
@@ -875,12 +893,13 @@ class Tasks:
             
             # Also check if current task is a maintenance task
             current_is_maintenance = False
-            if self.current_task_file.exists():
-                try:
-                    current_id = self.current_task_file.read_text().strip()
+            try:
+                from ..state.unified_state_manager import StateSection
+                current_id = self.state_manager.get_value(StateSection.TASK, "current_task_id")
+                if current_id:
                     current_is_maintenance = current_id.startswith('MT-')
-                except:
-                    pass
+            except:
+                pass
             
             # If no maintenance tasks are pending (all are completed), reset all
             if not backlog_maintenance and not blocked_maintenance and not current_is_maintenance:

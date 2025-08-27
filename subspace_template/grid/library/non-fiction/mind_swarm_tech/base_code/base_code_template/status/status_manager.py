@@ -302,37 +302,46 @@ class StatusManager:
         return ""
     
     def _get_current_task(self) -> Optional[Dict[str, Any]]:
-        """Get the current active task."""
+        """Get the current active task from unified state."""
         try:
-            current_task_file = self.personal / '.internal' / 'tasks' / 'current_task.txt'
-            if current_task_file.exists():
-                task_id = current_task_file.read_text().strip()
-                if not task_id:
-                    return None
+            # Read from unified state
+            unified_state_file = self.personal / '.internal' / 'memory' / 'unified_state.json'
+            if not unified_state_file.exists():
+                return None
                 
-                # Determine which directory to look in based on task prefix
-                tasks_base = self.personal / '.internal' / 'tasks'
+            with open(unified_state_file, 'r') as f:
+                state = json.load(f)
+            
+            task_info = state.get('task', {})
+            task_id = task_info.get('current_task_id')
+            
+            if not task_id:
+                return None
                 
-                if task_id.startswith('HT-'):
-                    task_dir = tasks_base / 'hobby'
-                elif task_id.startswith('MT-'):
-                    task_dir = tasks_base / 'maintenance'
-                elif task_id.startswith('CT-'):
-                    # Community tasks are in grid
-                    task_dir = Path('/grid/community/tasks')
-                else:
-                    # Unknown task type, check all directories
-                    for dir_name in ['hobby', 'maintenance', 'blocked']:
-                        task_dir = tasks_base / dir_name
-                        for task_file in task_dir.glob(f"{task_id}_*.json"):
-                            with open(task_file, 'r') as f:
-                                return json.load(f)
-                    return None
-                
-                # Look for the task file
-                for task_file in task_dir.glob(f"{task_id}_*.json"):
-                    with open(task_file, 'r') as f:
-                        return json.load(f)
+            # Now load the actual task file based on the ID
+            tasks_base = self.personal / '.internal' / 'tasks'
+            
+            if task_id.startswith('HT-'):
+                task_dir = tasks_base / 'hobby'
+            elif task_id.startswith('MT-'):
+                task_dir = tasks_base / 'maintenance'
+            elif task_id.startswith('CT-'):
+                # Community tasks are in grid
+                task_dir = Path('/grid/community/tasks/claimed')
+            else:
+                # Unknown task type, check all directories
+                for dir_name in ['hobby', 'maintenance', 'blocked']:
+                    task_dir = tasks_base / dir_name
+                    for task_file in task_dir.glob(f"{task_id}_*.json"):
+                        with open(task_file, 'r') as f:
+                            return json.load(f)
+                return None
+            
+            # Look for the task file
+            for task_file in task_dir.glob(f"{task_id}*.json"):
+                with open(task_file, 'r') as f:
+                    return json.load(f)
+                    
         except Exception as e:
             logger.debug(f"No current task found: {e}")
         
