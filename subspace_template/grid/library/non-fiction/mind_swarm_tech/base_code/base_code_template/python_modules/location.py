@@ -126,6 +126,12 @@ Raises: LocationError -  If the location is invalid or change fails
         if not new_location:
             new_location = '/personal'
         
+        # Check if the location actually exists before allowing change
+        if not self.exists(new_location):
+            raise LocationError(
+                f"Cannot move to {new_location}: location does not exist"
+            )
+        
         try:
             # Read current dynamic context
             dynamic_context = self._read_dynamic_context()
@@ -189,13 +195,15 @@ Returns: True if location is valid and exists, False otherwise
         if not location.startswith(('/personal', '/grid')):
             return False
         
-        # Map to actual filesystem path
-        if location.startswith('/personal'):
-            rel_path = location[len('/personal'):]
-            actual_path = self._personal_root / rel_path.lstrip('/') if rel_path else self._personal_root
-        elif location.startswith('/grid'):
-            actual_path = Path(location)
-        else:
+        # Map to actual filesystem path using same logic as change()
+        try:
+            actual_path = self._grid_root if location.startswith("/grid") else self._personal_root
+            if location != "/grid" and location != "/personal":
+                # Build the actual filesystem path
+                relative_path = location[6:] if location.startswith("/grid/") else location[10:]
+                if relative_path:
+                    actual_path = actual_path / relative_path
+            
+            return actual_path.exists() and actual_path.is_dir()
+        except Exception:
             return False
-        
-        return actual_path.exists() and actual_path.is_dir()

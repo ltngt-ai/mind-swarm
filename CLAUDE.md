@@ -193,6 +193,7 @@ LOG_LEVEL=INFO
 - Body file operations appear instant to cybers
 - Use cyber names for routing (no hardcoded "subspace" address)
 - I/O cybers use special naming: Ian-io, Ivy-io, etc.
+- Location changes are validated - cybers cannot move to non-existent locations
 
 ### Memory System
 - **Unified Memory**: Single system for all memory types
