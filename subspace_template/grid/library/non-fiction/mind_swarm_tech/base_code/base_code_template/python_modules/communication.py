@@ -91,7 +91,7 @@ class Communication:
         # Don't create outbox directory - it will be created only when needed
         
         # Path to dynamic context for getting current location
-        self._dynamic_context_file = self.personal / ".internal" / "memory" / "dynamic_context.json"
+        self._unified_state_file = self.personal / ".internal" / "memory" / "unified_state.json"
     
     def send_message(self, 
                     to: str,
@@ -166,12 +166,12 @@ class Communication:
             Current location path or None if not available
         """
         try:
-            if not self._dynamic_context_file.exists():
+            if not self._unified_state_file.exists():
                 return None
             
-            with open(self._dynamic_context_file, 'r') as f:
-                dynamic_context = json.load(f)
-                return dynamic_context.get("current_location")
+            with open(self._unified_state_file, 'r') as f:
+                state = json.load(f)
+                return state.get("location", {}).get("current_location")
         except Exception:
             return None
     

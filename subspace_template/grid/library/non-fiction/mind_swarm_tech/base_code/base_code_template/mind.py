@@ -107,16 +107,14 @@ class CyberMind:
         
         try:
             # Main cognitive loop
-            idle_cycles = 0
+            self.state = "THINKING"
             
             while self.running and not self.stop_requested:
                 # Run one cognitive cycle with error recovery
                 try:
-                    was_active = await self.cognitive_loop.run_cycle()
+                    await self.cognitive_loop.run_cycle()
                 except Exception as cycle_error:
                     logger.error(f"Error in cognitive cycle {self.cognitive_loop.cycle_count}: {cycle_error}", exc_info=True)
-                    was_active = False
-                    # Continue to next cycle after error
                     await asyncio.sleep(2)  # Brief pause after error
                     continue
                 
@@ -125,21 +123,6 @@ class CyberMind:
                     logger.info("Graceful stop requested, saving state and exiting...")
                     await self.cognitive_loop.save_memory()
                     break
-                
-                if was_active:
-                    idle_cycles = 0
-                    self.state = "THINKING"
-                else:
-                    idle_cycles += 1
-                    self.state = "IDLE"
-                    
-                    # After being idle for a while, maybe explore
-                    if idle_cycles > 10:  # About 5 seconds
-                        await self._autonomous_action()
-                        idle_cycles = 0
-                
-                # Brief pause between cycles
-                await asyncio.sleep(0.5)
                 
         except Exception as e:
             logger.error(f"Error in main loop: {e}", exc_info=True)
@@ -235,19 +218,3 @@ class CyberMind:
                 logger.error(f"Error checking shutdown file: {e}")
             
             await asyncio.sleep(0.1)  # Check every 0.1 seconds for faster shutdown
-    
-    async def _autonomous_action(self):
-        """Take autonomous action when idle."""
-        # For now, just log that we could explore
-        logger.debug("Cyber is idle - could explore the Grid or review memory")
-        
-        # In future: 
-        # - Check Plaza for unanswered questions
-        # - Review and organize memory
-        # - Explore Grid areas
-        # - Practice skills
-        
-        # Update state
-        self.state = "EXPLORING"
-        await asyncio.sleep(2)
-        self.state = "IDLE"

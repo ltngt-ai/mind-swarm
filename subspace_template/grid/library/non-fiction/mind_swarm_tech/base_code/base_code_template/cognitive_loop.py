@@ -22,11 +22,10 @@ from .memory import (
 from .memory.memory_blocks import MemoryBlock
 from .perception import EnvironmentScanner
 from .knowledge.simplified_knowledge import SimplifiedKnowledgeManager
-from .state import CyberStateManager, ExecutionStateTracker
+from .state import UnifiedStateManager, StateSection, ExecutionStateTracker
 from .utils import CognitiveUtils, FileManager
 from .brain import BrainInterface
 from .stages import ObservationStage, ReflectStage, DecisionStage, ExecutionStage
-# CleanupStage disabled - maintenance tasks and biofeedback handle cleanup now
 from .cycle_recorder_client import get_cycle_recorder
 
 logger = logging.getLogger("Cyber.cognitive")
@@ -63,7 +62,7 @@ class CognitiveLoop:
         # Core file interfaces - define these first
         self.brain_file = self.personal / ".internal" / "brain"
         self.inbox_dir = self.personal / "inbox"
-        self.outbox_dir = self.personal / ".internal" / "outbox"  # Outbox is hidden in .internal
+        self.outbox_dir = self.personal / ".internal" / "outbox"
         self.memory_dir = self.personal / ".internal" / "memory"
         
         # Initialize state early so it's available for managers
@@ -75,8 +74,6 @@ class CognitiveLoop:
         
         # Ensure directories exist
         self.file_manager.ensure_directory(self.inbox_dir)
-        # Don't create outbox - it should only be created when actually needed
-        # self.file_manager.ensure_directory(self.outbox_dir)
         self.file_manager.ensure_directory(self.memory_dir)
         
         # Initialize systems
@@ -84,10 +81,9 @@ class CognitiveLoop:
         
         # Initialize cognitive stages (4 stages now)
         self.observation_stage = ObservationStage(self)
-        self.decision_stage = DecisionStage(self)  # This is now V2
-        self.execution_stage = ExecutionStage(self)  # This is now V2
+        self.decision_stage = DecisionStage(self)
+        self.execution_stage = ExecutionStage(self)
         self.reflect_stage = ReflectStage(self)
-        # self.cleanup_stage = CleanupStage(self)  # Disabled - maintenance tasks handle cleanup
         
         # Initialize cycle recorder
         self.cycle_recorder = get_cycle_recorder(cyber_id, personal)
@@ -191,13 +187,10 @@ class CognitiveLoop:
         # Each stage has a single buffer that gets cleared each cycle
         self._initialize_pipeline_buffers()
         
-        # State management
-        self.state_manager = CyberStateManager(self.cyber_id, self.memory_dir)
+        # State management - using new unified state manager
+        self.state_manager = UnifiedStateManager(self.cyber_id, self.memory_dir)
         self.execution_tracker = ExecutionStateTracker(self.cyber_id, self.memory_dir)
-        
-        # V2 doesn't need action system - actions are Python functions in scripts
-        # self.action_tracker = ActionTracker()
-        
+                
         # Perception system
         grid_path = self.personal.parent.parent / "grid"
         self.environment_scanner = EnvironmentScanner(
@@ -252,10 +245,7 @@ class CognitiveLoop:
         
         # Load execution state
         self.execution_tracker.load_execution_state()
-        
-        # Add identity to memory (pinned so always visible)
-        self._init_identity_memory()
-        
+                
         # Initialize dynamic context file
         self._init_dynamic_context()
         
@@ -275,41 +265,22 @@ class CognitiveLoop:
         # No longer adding identity.json as a separate memory block
     
     def _init_dynamic_context(self):
-        """Initialize dynamic context file."""
-        self.dynamic_context_file = self.memory_dir / "dynamic_context.json"
+        """Initialize dynamic context in unified state."""
+        # Dynamic context is now managed through UnifiedStateManager
+        # Set initial values if this is a new Cyber
+        if self.state_manager.get_value(StateSection.COGNITIVE, "cycle_count") == 0:
+            # First run of a new Cyber
+            self.state_manager.set_value(StateSection.COGNITIVE, "current_stage", "STARTING", save=False)
+            self.state_manager.set_value(StateSection.COGNITIVE, "current_phase", "INIT", save=False)
+            self.state_manager.update_location("/grid/community/school/onboarding/new_cyber_introduction")
+            logger.info(f"Initialized dynamic context for new Cyber")
         
-        # File should already exist - if not, create minimal one
-        if not self.dynamic_context_file.exists():
-            # Only happens on very first run of a new Cyber
-            context_data = {
-                "cycle_count": self.cycle_count,
-                "current_stage": "STARTING",
-                "current_phase": "INIT",
-                "current_location": "/grid/community/school/onboarding/new_cyber_introduction"  # Starting location for new Cybers
-            }
-            with open(self.dynamic_context_file, 'w') as f:
-                json.dump(context_data, f, indent=2)
-            logger.info(f"Created initial dynamic_context.json for new Cyber")
-        
-        # REMOVED: dynamic_context content is now included in status.txt to save token space
-        # The cycle count, current stage, and location are shown in status.txt
-        self.dynamic_context_location = "personal/.internal/memory/dynamic_context.json"
-        # No longer adding dynamic_context.json as a separate memory block
-        logger.info("Dynamic context will be read from status.txt")
+        logger.info("Dynamic context managed through unified state")
     
     def _init_location_memory(self):
         """Add location tracking files to memory."""
         self._ensure_location_files_in_memory()
     
-    def _read_dynamic_context(self):
-        """Read the dynamic context file if it exists."""
-        try:
-            if self.dynamic_context_file.exists():
-                with open(self.dynamic_context_file, 'r') as f:
-                    return json.load(f)
-        except:
-            pass
-        return {}
     
     def _ensure_location_files_in_memory(self):
         """Ensure location files are in memory, creating them if needed."""
@@ -319,9 +290,8 @@ class CognitiveLoop:
         
         # Create the file if it doesn't exist
         if not current_location_file.exists():
-            # Get current location from dynamic context or use default
-            dynamic_context = self._read_dynamic_context()
-            current_loc = dynamic_context.get("current_location", "/personal")
+            # Get current location from unified state or use default
+            current_loc = self.state_manager.get_value(StateSection.LOCATION, "current_location", "/personal")
             
             # Create basic location file content
             current_location_file.write_text(f"| {current_loc} (📁=memory group, 📄=memory)\n")
@@ -352,69 +322,49 @@ class CognitiveLoop:
     # _update_personal_file function removed - functionality moved to status.txt
     
     def get_dynamic_context(self) -> Dict[str, Any]:
-        """Get the current dynamic context from file.
+        """Get the current dynamic context from unified state.
         
         Returns:
             Dictionary containing the current dynamic context
         """
-        if not hasattr(self, 'dynamic_context_file'):
-            logger.error("Dynamic context file not initialized!")
-            return {}
-        
         try:
-            # Read current data from file
-            with open(self.dynamic_context_file, 'r') as f:
-                return json.load(f)
-            
+            return {
+                "cycle_count": self.state_manager.get_value(StateSection.COGNITIVE, "cycle_count", 0),
+                "current_stage": self.state_manager.get_value(StateSection.COGNITIVE, "current_stage", "INIT"),
+                "current_phase": self.state_manager.get_value(StateSection.COGNITIVE, "current_phase", "STARTING"),
+                "current_location": self.state_manager.get_value(StateSection.LOCATION, "current_location", "/personal"),
+                "previous_location": self.state_manager.get_value(StateSection.LOCATION, "previous_location", None)
+            }
         except Exception as e:
-            logger.error(f"Error reading dynamic context: {e}")
+            logger.error(f"Error reading dynamic context from state: {e}")
             return {}
     
     def _update_dynamic_context(self, stage=None, phase=None, **updates):
-        """Update the dynamic context file with new values.
+        """Update the dynamic context with new values.
+        
+        Uses UnifiedStateManager for all state management.
         
         Args:
             stage: Current stage (OBSERVATION, DECISION, EXECUTION, MAINTENANCE)
             phase: Current phase within the stage (e.g., OBSERVE, DECIDE, etc.)
             **updates: Additional key-value pairs to update
         """
-        if not hasattr(self, 'dynamic_context_file'):
-            return
-            
         try:
-            # Read current data from file
-            try:
-                with open(self.dynamic_context_file, 'r') as f:
-                    context_data = json.load(f)
-            except (json.JSONDecodeError, FileNotFoundError):
-                # If corrupted or missing, reset to defaults
-                context_data = {
-                    "cycle_count": self.cycle_count,
-                    "current_stage": "ERROR_RECOVERY",
-                    "current_phase": "RESET",
-                    "current_location": "/grid/community/school/onboarding/new_cyber_introduction"
-                }
-            
-            # Update cycle count
-            context_data["cycle_count"] = self.cycle_count
-            
-            # Update stage and phase if provided
+            # Update unified state
             if stage:
-                context_data["current_stage"] = stage
+                self.state_manager.set_value(StateSection.COGNITIVE, "current_stage", stage, save=False)
             if phase:
-                context_data["current_phase"] = phase
+                self.state_manager.set_value(StateSection.COGNITIVE, "current_phase", phase, save=False)
             
-            # Apply any specific updates
-            for key, value in updates.items():
-                context_data[key] = value
+            # Update cycle count in state
+            self.state_manager.set_value(StateSection.COGNITIVE, "cycle_count", self.cycle_count, save=False)
             
-            # Write back to file
-            with open(self.dynamic_context_file, 'w') as f:
-                json.dump(context_data, f, indent=2)
+            # Handle location updates
+            if "current_location" in updates:
+                self.state_manager.update_location(updates["current_location"])
             
-            # Touch the memory block so it knows the file was updated
-            if hasattr(self, 'dynamic_context_memory_id'):
-                self.memory_system.touch_memory(self.dynamic_context_memory_id, self.cycle_count)
+            # Save state
+            self.state_manager.save_state()
             
         except Exception as e:
             logger.error(f"Failed to update dynamic context: {e}")
@@ -450,7 +400,7 @@ class CognitiveLoop:
     
     
     
-    async def run_cycle(self) -> bool:
+    async def run_cycle(self):
         """Run one complete cognitive cycle using four-stage architecture.
 
         The cycle is organized into four fundamental stages:
@@ -510,10 +460,6 @@ class CognitiveLoop:
             
             self._update_dynamic_context(stage="REFLECT", phase="STARTING")
             await self.reflect_stage.reflect()
-            
-            # CLEANUP phase disabled - maintenance tasks and biofeedback handle cleanup
-            # self._update_dynamic_context(stage="CLEANUP", phase="STARTING")
-            # await self.cleanup_stage.cleanup(self.cycle_count)
                 
             # Save checkpoint after completing all stages
             await self._save_checkpoint()
@@ -528,35 +474,17 @@ class CognitiveLoop:
                 self.cycle_recorder.complete_cycle("completed")
             except Exception as e:
                 logger.debug(f"Failed to complete cycle recording: {e}")
-            
-            return True
-            
+                        
         except Exception as e:
             logger.error(f"Error in cognitive cycle: {e}", exc_info=True)
             self.execution_tracker.end_execution("failed", {"error": str(e)})
             
             # Reset context on error
             self._update_dynamic_context(stage="ERROR_RECOVERY", phase="RESET")
-            return False
     
     # === HELPER METHODS USED BY STAGES ===
     
-    # === SUPPORTING METHODS ===
-    
-    async def maintain(self):
-        """Perform maintenance tasks when idle.
-        
-        This is called when the cyber has no work to do.
-        Note: Regular cleanup is now done at the end of each cycle.
-        """
-        # Save state periodically
-        if self.cycle_count % 100 == 0:
-            logger.info(f"💾 Saving checkpoint at cycle {self.cycle_count}")
-            await self._save_checkpoint()
-            self.execution_tracker.save_execution_state()
-        elif self.cycle_count % 10 == 0:
-            logger.debug(f"Idle maintenance at cycle {self.cycle_count}")
-    
+    # === SUPPORTING METHODS ===    
     async def _save_checkpoint(self):
         """Save current state and memory."""
         # Save memory snapshot

@@ -69,11 +69,11 @@ class Environment:
     def _update_working_dir(self):
         """Update working directory from the cyber's current location."""
         try:
-            dynamic_context_file = self.personal_dir / ".internal" / "memory" / "dynamic_context.json"
-            if dynamic_context_file.exists():
-                with open(dynamic_context_file, 'r') as f:
-                    dynamic_context = json.load(f)
-                    current_location = dynamic_context.get("current_location", str(self.personal_dir))
+            unified_state_file = self.personal_dir / ".internal" / "memory" / "unified_state.json"
+            if unified_state_file.exists():
+                with open(unified_state_file, 'r') as f:
+                    state = json.load(f)
+                    current_location = state.get("location", {}).get("current_location", str(self.personal_dir))
                     # Map the location to the actual filesystem path
                     if current_location.startswith("/personal"):
                         # Replace /personal with the actual personal directory path

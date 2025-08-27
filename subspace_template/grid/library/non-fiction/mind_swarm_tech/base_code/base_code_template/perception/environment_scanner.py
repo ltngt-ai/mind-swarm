@@ -224,16 +224,16 @@ class EnvironmentScanner:
         try:
             # Get current location from dynamic context
             # Note: Scanner doesn't have access to cognitive_loop's memory map,
-            # so we read the file directly, handling the null-padded format
+            # so we read the file directly from unified state
             current_location = None
-            dynamic_context_file = self.personal_path / ".internal" / "memory" / "dynamic_context.json"
+            unified_state_file = self.personal_path / ".internal" / "memory" / "unified_state.json"
             
-            if dynamic_context_file.exists():
+            if unified_state_file.exists():
                 try:
-                    # Read as standard JSON file
-                    with open(dynamic_context_file, 'r') as f:
-                        dynamic_context = json.load(f)
-                        current_location = dynamic_context.get("current_location")
+                    # Read unified state file
+                    with open(unified_state_file, 'r') as f:
+                        state = json.load(f)
+                        current_location = state.get("location", {}).get("current_location")
                 except Exception as e:
                     logger.debug(f"Error reading dynamic context: {e}")
                     return memories  # Can't scan without location
