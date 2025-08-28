@@ -506,11 +506,12 @@ Returns:
             Response dictionary or None if timeout
         """
         try:
-            # Clear any stale responses first
-            current_content = self.knowledge_file.read_text()
-            if "<<<KNOWLEDGE_COMPLETE>>>" in current_content:
-                logger.debug("Clearing stale knowledge response before new request")
-                self.knowledge_file.write_text("")
+            # Clear any stale responses first (only if file exists)
+            if self.knowledge_file.exists():
+                current_content = self.knowledge_file.read_text()
+                if "<<<KNOWLEDGE_COMPLETE>>>" in current_content:
+                    logger.debug("Clearing stale knowledge response before new request")
+                    self.knowledge_file.write_text("")
             
             # Write request with end marker
             request_text = json.dumps(request, indent=2)
