@@ -14,6 +14,7 @@ from typing import Dict, Any, TYPE_CHECKING
 import json
 import time
 from datetime import datetime
+from mind_swarm.core.config import KNOWLEDGE_QUERY_TRUNCATE_CHARS
 
 if TYPE_CHECKING:
     from ..cognitive_loop import CognitiveLoop
@@ -148,7 +149,7 @@ class DecisionStage:
         try:
             knowledge_context = self.cognitive_loop.knowledge_context.build(
                 stage="decision",
-                queries=[suggested_problem] if suggested_problem else [decision_context[:400]],
+                queries=[suggested_problem] if suggested_problem else [decision_context[:KNOWLEDGE_QUERY_TRUNCATE_CHARS]],
                 limit=3,
                 budget_chars=900,
                 blacklist_tags=self.KNOWLEDGE_BLACKLIST,

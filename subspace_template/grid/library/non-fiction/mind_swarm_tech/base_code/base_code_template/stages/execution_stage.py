@@ -11,6 +11,10 @@ from pathlib import Path
 import json
 import traceback
 import yaml  # Still needed for reading the file
+from mind_swarm.core.config import (
+    WORKING_MEMORY_TRUNCATE_CHARS,
+    OUTPUT_EXCERPT_TRUNCATE_CHARS,
+)
 
 if TYPE_CHECKING:
     from ..cognitive_loop import CognitiveLoop
@@ -486,7 +490,7 @@ class ExecutionStage:
 
             helpful_refs = self.cognitive_loop.knowledge_context.build(
                 stage="execution",
-                queries=[intention_text] if intention_text else [working_memory[:300]],
+                queries=[intention_text] if intention_text else [working_memory[:WORKING_MEMORY_TRUNCATE_CHARS]],
                 limit=2,
                 budget_chars=700,
                 blacklist_tags=self.KNOWLEDGE_BLACKLIST,
@@ -703,9 +707,9 @@ The provided API docs describe the available operations and their usage.
                     status = result_summary.get("status", "completed")
                     output_excerpt = result_summary.get("output", "")
                     if isinstance(output_excerpt, str):
-                        output_excerpt = output_excerpt[:300]
+                        output_excerpt = output_excerpt[:OUTPUT_EXCERPT_TRUNCATE_CHARS]
                     else:
-                        output_excerpt = str(output_excerpt)[:300]
+                        output_excerpt = str(output_excerpt)[:OUTPUT_EXCERPT_TRUNCATE_CHARS]
 
                     note = "Execution succeeded."
                     if intention_text:

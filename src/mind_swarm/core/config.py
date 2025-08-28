@@ -62,3 +62,9 @@ class Settings(BaseModel):
 settings = Settings.from_env()
 import logging
 logging.info(f"Settings initialized with subspace root: {settings.subspace.root_path}")
+
+# Shared truncation limits (configurable via environment variables)
+# These constants avoid scattering magic numbers across the codebase.
+KNOWLEDGE_QUERY_TRUNCATE_CHARS = int(os.getenv("KNOWLEDGE_QUERY_TRUNCATE_CHARS", "400"))
+WORKING_MEMORY_TRUNCATE_CHARS = int(os.getenv("WORKING_MEMORY_TRUNCATE_CHARS", "300"))
+OUTPUT_EXCERPT_TRUNCATE_CHARS = int(os.getenv("OUTPUT_EXCERPT_TRUNCATE_CHARS", "300"))

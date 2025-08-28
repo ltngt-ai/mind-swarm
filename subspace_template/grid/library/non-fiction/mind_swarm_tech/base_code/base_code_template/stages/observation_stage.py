@@ -13,6 +13,7 @@ import time
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 from pathlib import Path
+from mind_swarm.core.config import KNOWLEDGE_QUERY_TRUNCATE_CHARS
 
 from ..memory.memory_blocks import MemoryBlock
 from ..memory.memory_types import Priority, ContentType
@@ -247,7 +248,7 @@ class ObservationStage:
         try:
             knowledge_context = self.cognitive_loop.knowledge_context.build(
                 stage="observation",
-                queries=[new_information[:400]] if new_information else ["current situation"],
+                queries=[new_information[:KNOWLEDGE_QUERY_TRUNCATE_CHARS]] if new_information else ["current situation"],
                 limit=3,
                 budget_chars=800,
                 blacklist_tags=self.KNOWLEDGE_BLACKLIST,
