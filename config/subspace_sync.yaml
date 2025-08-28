@@ -1,51 +1,36 @@
 # Subspace Sync Configuration
-# This file controls how subspace_template changes are synced to the runtime subspace
+# Controls how subspace_template syncs to runtime subspace
 
-# Paths that are always overwritten from template (no merge)
-# These are system-critical files that Cybers shouldn't modify
 template_owned:
-  - .gitignore  # Git ignore configuration
-  - grid/library/non-fiction/mind_swarm_tech/base_code/base_code_template
-  - grid/library/non-fiction/mind_swarm_tech/base_code/io_cyber_template
-  - grid/library/schemas  # Schema definitions for validation
+  # These are always overwritten from template
+  - "grid/library/non-fiction/mind_swarm_tech/base_code/base_code_template"
+  - "grid/library/non-fiction/mind_swarm_tech/base_code/io_cyber_template"
+  - "grid/library/fiction"  # Fiction library for cybers to read
+  - "grid/library/non-fiction"  # Non-fiction library (excluding cyber code templates above)
+  - "grid/library/schemas"  # Library schemas
+  - "boot_rom"
+  - "initial_knowledge"
 
-# Paths that are never overwritten (Cyber-owned content)
-# These areas belong to Cybers and their contributions
 cyber_owned:
-  - cybers/*  # All Cyber personal directories
+  # These are never overwritten (cyber modifications preserved)
+  - "cybers/*"
+  - "grid/community/questions"
+  - "grid/community/announcements"
+  - "grid/community/suggestions"
+  - "grid/community/tasks"
+  - "grid/community/school"
+  - "grid/community/BULLETIN_BOARD.md"
+  - "grid/community/cyber_directory.json"
+  - "grid/library/knowledge/sections"
 
-# Paths that require intelligent merging
-# Changes from both template and Cybers are preserved
 merge_required:
-  - grid/library/knowledge/
-  - grid/library/fiction/  # Fiction content
-  - grid/library/non-fiction/  # Non-fiction content
-  - grid/library/non-fiction/mind_swarm_tech/cyber_basics.md
-  - grid/library/non-fiction/mind_swarm_tech/using_llms.md
-  - grid/community/BULLETIN_BOARD.md
-  - grid/community/school  # School lessons - both template and cybers can contribute
-  - grid/community/school/onboarding/new_cyber_introduction
+  # These require intelligent merging
+  - "grid/community/flynns_arcade"  # Flynn's Arcade gets synced from template
 
-# File patterns to ignore during sync
 ignore_patterns:
   - "*.pyc"
   - "__pycache__"
   - ".git"
   - "*.log"
   - ".tmp_*"
-  - "*.lock"
-  - ".DS_Store"
-  - "brain"  # Body files that change constantly
-  - "network"  # IO body files
-  - "user_io"  # IO body files
-
-# Backup configuration
-backup:
-  enabled: true
-  max_backups: 10  # Keep last 10 backups
-  backup_dir: subspace_backups
-
-# Conflict resolution
-conflicts:
-  strategy: preserve_cyber  # Options: preserve_cyber, preserve_template, manual
-  conflict_suffix: .template_conflict
+  - "high_scores_*.json"  # Don't sync high score files
