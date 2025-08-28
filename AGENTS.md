@@ -37,3 +37,13 @@
 ## Configuration & Security
 - Copy `.env.example` to `.env` and fill provider keys (OpenAI/Anthropic/OpenRouter, ChromaDB, etc.). Never commit secrets.
 - Use the ChromaDB helper scripts and `scripts/` tools for knowledge import/export; verify outputs before sharing.
+
+## Truncation Policy
+- Purpose: Keep LLM search queries concise and logs readable without hiding information from Cyborgs.
+- Scope: Truncation applies only to search queries and log/preview snippets.
+- Never truncate: Working memory contents, pipeline buffers, or any persisted stage outputs.
+- Env controls (0 disables):
+  - `KNOWLEDGE_QUERY_TRUNCATE_CHARS` — max chars for knowledge search queries (default 400).
+  - `WORKING_MEMORY_TRUNCATE_CHARS` — max chars when using working memory as a query seed (default 300).
+  - `OUTPUT_EXCERPT_TRUNCATE_CHARS` — max chars for execution output excerpts in notes/logs (default 300).
+- Rationale: Truncating what Cyborgs read creates confusion; only trim what the model searches or what we preview in logs.
