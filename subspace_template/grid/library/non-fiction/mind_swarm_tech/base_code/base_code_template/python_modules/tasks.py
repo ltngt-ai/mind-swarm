@@ -983,21 +983,36 @@ class Tasks:
         """Get task statistics summary.
         
         Returns:
-            Dictionary with task counts and summaries
+            Dictionary with task counts, summaries, and backlog
             
         Example:
             summary = tasks.get_summary()
             print(f"Active: {summary['active_count']}")
+            print(f"Backlog tasks: {len(summary['backlog'])}")
         """
         # Get all non-completed tasks
-        active = [t for t in self.get_all() if t.get('status') != 'completed']
+        all_tasks = self.get_all()
+        active = [t for t in all_tasks if t.get('status') != 'completed']
         blocked = self.get_blocked()
         completed = self.get_completed(5)
+        
+        # Build backlog (all non-completed, non-blocked tasks)
+        backlog = []
+        for task in all_tasks:
+            if task.get('status') not in ['completed', 'blocked']:
+                backlog.append({
+                    'id': task['id'],
+                    'summary': task['summary'],
+                    'type': task.get('task_type', 'unknown'),
+                    'current': task.get('current', False)
+                })
         
         return {
             "active_count": len(active),
             "blocked_count": len(blocked),
             "completed_recent": len(completed),
             "active_summaries": [t['summary'] for t in active],
-            "blocked_summaries": [t['summary'] for t in blocked]
+            "blocked_summaries": [t['summary'] for t in blocked],
+            "backlog": backlog,  # Added backlog list
+            "current_task": next((t for t in backlog if t.get('current')), None)
         }
