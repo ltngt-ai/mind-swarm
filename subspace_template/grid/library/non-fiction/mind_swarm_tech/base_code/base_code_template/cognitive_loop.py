@@ -1,11 +1,10 @@
-"""Cognitive Loop - Five-stage architecture.
+"""Cognitive Loop - Four-stage architecture.
 
-This refactored version uses a five-stage cognitive architecture:
-1. Observation Stage)
+This refactored version uses a four-stage cognitive architecture:
+1. Observation Stage
 2. Decision Stage
 3. Execution Stage
 4. Reflection Stage
-5. Cleanup Stage
 """
 
 import json
@@ -22,6 +21,7 @@ from .memory import (
 from .memory.memory_blocks import MemoryBlock
 from .perception import EnvironmentScanner
 from .knowledge.simplified_knowledge import SimplifiedKnowledgeManager
+from .knowledge.knowledge_context_builder import KnowledgeContextBuilder
 from .state import UnifiedStateManager, StateSection, ExecutionStateTracker
 from .utils import CognitiveUtils, FileManager
 from .brain import BrainInterface
@@ -33,14 +33,13 @@ logger = logging.getLogger("Cyber.cognitive")
 
 class CognitiveLoop:
     """
-    Streamlined cognitive processing engine using five-stage architecture.
+    Streamlined cognitive processing engine using four-stage architecture.
 
-    The cognitive loop is organized into five fundamental stages:
+    The cognitive loop is organized into four fundamental stages:
     1. Observation - Gather and understand information
     2. Decision - Choose what to do
     3. Execution - Take action
     4. Reflection - Reflect on what has happened
-    5. Cleanup - See what memories aren't needed to conserve working memory space
     """
     
     def __init__(self, cyber_id: str, personal: Path, 
@@ -190,6 +189,13 @@ class CognitiveLoop:
         # State management - using new unified state manager
         self.state_manager = UnifiedStateManager(self.cyber_id, self.memory_dir)
         self.execution_tracker = ExecutionStateTracker(self.cyber_id, self.memory_dir)
+
+        # Knowledge context builder (requires state_manager)
+        self.knowledge_context = KnowledgeContextBuilder(
+            self.knowledge_manager,
+            self.memory_system,
+            self.state_manager,
+        )
                 
         # Perception system
         grid_path = self.personal.parent.parent / "grid"

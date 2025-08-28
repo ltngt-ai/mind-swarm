@@ -143,10 +143,22 @@ class DecisionStage:
         
         # Retrieve similar CBR cases using the suggested problem
         cbr_cases = await self._retrieve_cbr_cases(suggested_problem if suggested_problem else decision_context)
+
+        # Retrieve concise knowledge references related to the suggested problem/context
+        try:
+            knowledge_context = self.cognitive_loop.knowledge_context.build(
+                stage="decision",
+                queries=[suggested_problem] if suggested_problem else [decision_context[:400]],
+                limit=3,
+                budget_chars=900,
+                blacklist_tags=self.KNOWLEDGE_BLACKLIST,
+            )
+        except Exception:
+            knowledge_context = ""
         
         # Use brain to generate intention
         logger.info("🤔 Generating intention based on situation...")
-        intention_response = await self._generate_intention(decision_context, cbr_cases)
+        intention_response = await self._generate_intention(decision_context, cbr_cases, knowledge_context)
         
         # Extract intention from the response
         output_values = intention_response.get("output_values", {})
@@ -228,7 +240,7 @@ class DecisionStage:
             logger.error(f"Failed to retrieve CBR cases: {e}")
             return []
     
-    async def _generate_intention(self, memory_context: str, cbr_cases: list) -> Dict[str, Any]:
+    async def _generate_intention(self, memory_context: str, cbr_cases: list, knowledge_context: str) -> Dict[str, Any]:
         """Use brain to generate a plain text intention.
         
         Args:
@@ -255,7 +267,9 @@ class DecisionStage:
             logger.debug("No CBR cases to add to decision prompt")
         
         # Combine memory context with CBR cases
-        full_context = memory_context + cbr_context
+        # Append helpful knowledge (if any)
+        knowledge_block = "\n\n" + knowledge_context if knowledge_context else ""
+        full_context = memory_context + cbr_context + knowledge_block
         
         # Debug: Log if CBR is actually in the context
         if cbr_cases:
@@ -283,7 +297,7 @@ Think of this as telling a skilled assistant what you want done, not how to do i
 Always start your output with [[ ## reasoning ## ]]
 """,
                 "inputs": {
-                    "working_memory": "Your complete working memory including the recent orientation and any similar past solutions"
+                    "working_memory": "Your complete working memory including the recent orientation and any similar past solutions and helpful knowledge"
                 },
                 "outputs": {
                     "reasoning": "Why this intention makes sense given the situation",

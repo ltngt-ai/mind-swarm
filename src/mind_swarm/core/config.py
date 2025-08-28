@@ -47,7 +47,8 @@ class Settings(BaseModel):
                 anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"),
             ),
             subspace=SubspaceConfig(
-                root_path=Path(os.getenv("SUBSPACE_ROOT", "/personal/deano/projects/mind-swarm/subspace")),
+                # Default subspace is a folder inside the project
+                root_path=Path(os.getenv("SUBSPACE_ROOT", "./subspace")),
                 max_agents=int(os.getenv("MAX_AGENTS", "5")),
                 agent_memory_limit_mb=int(os.getenv("AGENT_MEMORY_LIMIT_MB", "512")),
                 agent_cpu_limit_percent=float(os.getenv("AGENT_CPU_LIMIT_PERCENT", "20.0")),

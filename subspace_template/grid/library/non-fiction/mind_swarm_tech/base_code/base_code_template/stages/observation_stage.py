@@ -242,7 +242,19 @@ class ObservationStage:
         
         # 7. Use brain to analyze and suggest task updates
         logger.info("🧠 Analyzing intelligence and preparing briefing...")
-        
+
+        # Build concise knowledge context related to new information and location
+        try:
+            knowledge_context = self.cognitive_loop.knowledge_context.build(
+                stage="observation",
+                queries=[new_information[:400]] if new_information else ["current situation"],
+                limit=3,
+                budget_chars=800,
+                blacklist_tags=self.KNOWLEDGE_BLACKLIST,
+            )
+        except Exception:
+            knowledge_context = ""
+
         thinking_request = {
             "signature": {
                 "instruction": """
@@ -252,7 +264,8 @@ Focus on analyzing the new information provided and suggesting what to do regard
 """,
                 "inputs": {
                     "working_memory": "Current working memory including tasks and reflections",
-                    "new_information": "New messages and observations this cycle"
+                    "new_information": "New messages and observations this cycle",
+                    "helpful_knowledge": "Concise relevant knowledge for this situation (may be empty)"
                 },
                 "outputs": {
                     "situation_summary": "Brief summary of the current situation",
@@ -262,7 +275,8 @@ Focus on analyzing the new information provided and suggesting what to do regard
             },
             "input_values": {
                 "working_memory": memory_context,
-                "new_information": new_information if new_information else "No new messages or observations this cycle"
+                "new_information": new_information if new_information else "No new messages or observations this cycle",
+                "helpful_knowledge": knowledge_context
             },
             "request_id": f"observe_{int(time.time()*1000)}",
             "timestamp": datetime.now().isoformat()
