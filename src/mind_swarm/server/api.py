@@ -282,7 +282,16 @@ class MindSwarmServer:
                 )
                 
                 # Notify websocket clients
-                await self._broadcast_event(make_event("agent_created", {"name": name}))
+                await self._broadcast_event(
+                    make_event(
+                        "agent_created",
+                        {
+                            "name": name,
+                            "cyber_type": request.cyber_type,
+                            "config": request.config or {},
+                        },
+                    )
+                )
                 
                 return {"name": name}
             except Exception as e:
