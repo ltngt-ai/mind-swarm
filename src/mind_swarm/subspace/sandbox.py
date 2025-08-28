@@ -210,6 +210,7 @@ class SubspaceManager:
         
         # Create standard directories
         self.agents_dir = self.root_path / "cybers"
+        self.cybers_dir = self.agents_dir  # Alias for compatibility
         self.grid_dir = self.root_path / "grid"
         self.cyber_rootfs = self.root_path / "cyber_rootfs"  # Debian rootfs for cybers
         
