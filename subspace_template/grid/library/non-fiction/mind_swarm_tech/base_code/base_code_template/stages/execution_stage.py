@@ -11,10 +11,23 @@ from pathlib import Path
 import json
 import traceback
 import yaml  # Still needed for reading the file
-from mind_swarm.core.config import (
-    WORKING_MEMORY_TRUNCATE_CHARS,
-    OUTPUT_EXCERPT_TRUNCATE_CHARS,
-)
+# Avoid server package dependency; prefer env with sane defaults.
+try:  # pragma: no cover
+    from mind_swarm.core.config import (
+        WORKING_MEMORY_TRUNCATE_CHARS as _WM_TRUNC,
+        OUTPUT_EXCERPT_TRUNCATE_CHARS as _OUT_TRUNC,
+    )
+except Exception:
+    import os
+    def _to_int(name: str, default: int) -> int:
+        try:
+            return int(os.environ.get(name, str(default)))
+        except Exception:
+            return default
+    _WM_TRUNC = _to_int("WORKING_MEMORY_TRUNCATE_CHARS", 300)
+    _OUT_TRUNC = _to_int("OUTPUT_EXCERPT_TRUNCATE_CHARS", 300)
+WORKING_MEMORY_TRUNCATE_CHARS = _WM_TRUNC
+OUTPUT_EXCERPT_TRUNCATE_CHARS = _OUT_TRUNC
 
 if TYPE_CHECKING:
     from ..cognitive_loop import CognitiveLoop

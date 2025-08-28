@@ -14,7 +14,16 @@ from typing import Dict, Any, TYPE_CHECKING
 import json
 import time
 from datetime import datetime
-from mind_swarm.core.config import KNOWLEDGE_QUERY_TRUNCATE_CHARS
+# Avoid hard dependency on server package inside sandbox. Prefer env with defaults.
+try:  # pragma: no cover
+    from mind_swarm.core.config import KNOWLEDGE_QUERY_TRUNCATE_CHARS as _TRUNC
+except Exception:
+    import os
+    try:
+        _TRUNC = int(os.environ.get("KNOWLEDGE_QUERY_TRUNCATE_CHARS", "400"))
+    except Exception:
+        _TRUNC = 400
+KNOWLEDGE_QUERY_TRUNCATE_CHARS = _TRUNC
 
 if TYPE_CHECKING:
     from ..cognitive_loop import CognitiveLoop

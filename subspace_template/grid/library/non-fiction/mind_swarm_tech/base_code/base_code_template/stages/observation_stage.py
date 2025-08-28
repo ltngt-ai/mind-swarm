@@ -13,7 +13,16 @@ import time
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 from pathlib import Path
-from mind_swarm.core.config import KNOWLEDGE_QUERY_TRUNCATE_CHARS
+# Avoid server package dependency in sandbox; use env defaults.
+try:  # pragma: no cover
+    from mind_swarm.core.config import KNOWLEDGE_QUERY_TRUNCATE_CHARS as _TRUNC
+except Exception:
+    import os
+    try:
+        _TRUNC = int(os.environ.get("KNOWLEDGE_QUERY_TRUNCATE_CHARS", "400"))
+    except Exception:
+        _TRUNC = 400
+KNOWLEDGE_QUERY_TRUNCATE_CHARS = _TRUNC
 
 from ..memory.memory_blocks import MemoryBlock
 from ..memory.memory_types import Priority, ContentType

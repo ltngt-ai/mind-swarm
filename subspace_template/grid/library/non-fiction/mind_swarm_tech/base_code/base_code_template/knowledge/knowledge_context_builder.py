@@ -12,7 +12,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Optional, Sequence, Set
 import json
-from mind_swarm.core.config import KNOWLEDGE_QUERY_TRUNCATE_CHARS
+# NOTE: Base code runs inside the Cyber's sandbox and should not depend on
+# importing the server package. Read truncation limits from env with sane
+# defaults; if the server package is available, use it, but never require it.
+try:  # pragma: no cover - optional path only
+    from mind_swarm.core.config import KNOWLEDGE_QUERY_TRUNCATE_CHARS as _TRUNC
+except Exception:  # Fallback when mind_swarm is not importable in sandbox
+    import os
+    try:
+        _TRUNC = int(os.environ.get("KNOWLEDGE_QUERY_TRUNCATE_CHARS", "400"))
+    except Exception:
+        _TRUNC = 400
+
+KNOWLEDGE_QUERY_TRUNCATE_CHARS = _TRUNC
 
 
 logger = logging.getLogger("Cyber.knowledge.context_builder")
