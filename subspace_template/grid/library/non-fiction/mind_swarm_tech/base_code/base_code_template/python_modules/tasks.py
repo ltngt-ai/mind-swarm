@@ -983,21 +983,45 @@ class Tasks:
         """Get task statistics summary.
         
         Returns:
-            Dictionary with task counts and summaries
+            Dictionary with task counts, summaries, and backlog
             
         Example:
             summary = tasks.get_summary()
             print(f"Active: {summary['active_count']}")
+            print(f"Backlog tasks: {len(summary['backlog'])}")
         """
         # Get all non-completed tasks
-        active = [t for t in self.get_all() if t.get('status') != 'completed']
+        all_tasks = self.get_all()
+        active = [t for t in all_tasks if t.get('status') != 'completed']
         blocked = self.get_blocked()
         completed = self.get_completed(5)
+        
+        # Create set of blocked task IDs for consistent filtering
+        blocked_ids = set(t.get('id') for t in blocked)
+        
+        # Build backlog (all non-completed, non-blocked tasks) and find current task
+        backlog = []
+        current_task = None
+        for task in all_tasks:
+            # Use blocked_ids for consistent filtering with get_blocked()
+            if task.get('status') != 'completed' and task.get('id') not in blocked_ids:
+                task_info = {
+                    'id': task['id'],
+                    'summary': task['summary'],
+                    'type': task.get('task_type', 'unknown'),
+                    'current': task.get('current', False)
+                }
+                backlog.append(task_info)
+                # Track current task while building backlog (optimization)
+                if task_info['current'] and current_task is None:
+                    current_task = task_info
         
         return {
             "active_count": len(active),
             "blocked_count": len(blocked),
             "completed_recent": len(completed),
             "active_summaries": [t['summary'] for t in active],
-            "blocked_summaries": [t['summary'] for t in blocked]
+            "blocked_summaries": [t['summary'] for t in blocked],
+            "backlog": backlog,  # Added backlog list
+            "current_task": current_task  # Found during backlog construction
         }
