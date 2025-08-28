@@ -6,7 +6,9 @@ A simplified terminal version of the classic Pong
 
 import sys
 import os
-sys.path.insert(0, '/grid/community/flynns_arcade/lib')
+from pathlib import Path
+# Add parent lib directory to path for kiosk_base import
+sys.path.insert(0, str(Path(__file__).parent.parent / 'lib'))
 
 from kiosk_base import KioskGame
 import time
@@ -33,7 +35,7 @@ class TextPong(KioskGame):
         self.ball_x = self.width // 2
         self.ball_y = self.height // 2
         self.ball_vx = random.choice([-1, 1])
-        self.ball_vy = random.choice([-1, 0, 1])
+        self.ball_vy = random.choice([-1, 1])  # Removed 0 to prevent horizontal-only movement
         
         # Scores
         self.player_score = 0
@@ -99,7 +101,7 @@ class TextPong(KioskGame):
         if self.ball_x <= 2:
             if abs(self.ball_y - self.player_y) <= self.paddle_size // 2 + 1:
                 self.ball_vx = abs(self.ball_vx)
-                self.ball_vy = random.choice([-1, 0, 1])
+                self.ball_vy = random.choice([-1, 1])  # Removed 0 to prevent horizontal-only movement
                 self.score += 10
                 self.player_score += 1
             else:
@@ -110,7 +112,7 @@ class TextPong(KioskGame):
         elif self.ball_x >= self.width - 3:
             if abs(self.ball_y - self.ai_y) <= self.paddle_size // 2 + 1:
                 self.ball_vx = -abs(self.ball_vx)
-                self.ball_vy = random.choice([-1, 0, 1])
+                self.ball_vy = random.choice([-1, 1])  # Removed 0 to prevent horizontal-only movement
             else:
                 # Player scores
                 self.player_score += 1
@@ -122,7 +124,7 @@ class TextPong(KioskGame):
         self.ball_x = self.width // 2
         self.ball_y = self.height // 2
         self.ball_vx = random.choice([-1, 1])
-        self.ball_vy = random.choice([-1, 0, 1])
+        self.ball_vy = random.choice([-1, 1])  # Removed 0 to prevent horizontal-only movement
         
     def update_ai(self):
         """Update AI paddle position."""

@@ -6,7 +6,9 @@ Guess the number with hints and score multipliers
 
 import sys
 import os
-sys.path.insert(0, '/grid/community/flynns_arcade/lib')
+from pathlib import Path
+# Add parent lib directory to path for kiosk_base import
+sys.path.insert(0, str(Path(__file__).parent.parent / 'lib'))
 
 from kiosk_base import KioskGame
 import random
