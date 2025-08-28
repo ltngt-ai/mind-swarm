@@ -47,7 +47,8 @@ class Settings(BaseModel):
                 anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"),
             ),
             subspace=SubspaceConfig(
-                root_path=Path(os.getenv("SUBSPACE_ROOT", "/personal/deano/projects/mind-swarm/subspace")),
+                # Default subspace is a folder inside the project
+                root_path=Path(os.getenv("SUBSPACE_ROOT", "./subspace")),
                 max_agents=int(os.getenv("MAX_AGENTS", "5")),
                 agent_memory_limit_mb=int(os.getenv("AGENT_MEMORY_LIMIT_MB", "512")),
                 agent_cpu_limit_percent=float(os.getenv("AGENT_CPU_LIMIT_PERCENT", "20.0")),
@@ -61,3 +62,10 @@ class Settings(BaseModel):
 settings = Settings.from_env()
 import logging
 logging.info(f"Settings initialized with subspace root: {settings.subspace.root_path}")
+
+# Shared truncation limits (configurable via environment variables)
+# 0 or negative disables truncation. Intended ONLY for queries/logging, not
+# for mutating data stored in working memory.
+KNOWLEDGE_QUERY_TRUNCATE_CHARS = int(os.getenv("KNOWLEDGE_QUERY_TRUNCATE_CHARS", "400"))
+WORKING_MEMORY_TRUNCATE_CHARS = int(os.getenv("WORKING_MEMORY_TRUNCATE_CHARS", "300"))
+OUTPUT_EXCERPT_TRUNCATE_CHARS = int(os.getenv("OUTPUT_EXCERPT_TRUNCATE_CHARS", "300"))

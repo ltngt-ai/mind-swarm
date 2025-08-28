@@ -83,8 +83,8 @@ case $COMMAND in
             sleep 2
             
             # Check if server is actually running
-            # We need to use the full command since mind-swarm might not be in PATH
-            if python3 -m mind_swarm.cli status --quiet 2>/dev/null || mind-swarm status --quiet 2>/dev/null; then
+            # Prefer a robust check on the PID file written by the daemon
+            if [ -f "/tmp/mind-swarm-server.pid" ] && kill -0 "$(cat /tmp/mind-swarm-server.pid)" 2>/dev/null; then
                 echo ""
                 echo -e "${GREEN}✓ Server started successfully!${NC}"
                 echo "View logs with: ./run.sh logs"

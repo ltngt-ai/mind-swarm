@@ -11,6 +11,10 @@ from pathlib import Path
 import json
 import traceback
 import yaml  # Still needed for reading the file
+from mind_swarm.core.config import (
+    WORKING_MEMORY_TRUNCATE_CHARS,
+    OUTPUT_EXCERPT_TRUNCATE_CHARS,
+)
 
 if TYPE_CHECKING:
     from ..cognitive_loop import CognitiveLoop
@@ -471,6 +475,32 @@ class ExecutionStage:
     
     async def _request_script_generation(self, working_memory: str) -> Optional[Dict[str, Any]]:
         """Request script generation from brain with full working memory context."""
+        # Try to augment with concise knowledge based on the current intention
+        try:
+            # Read intention from decision buffer
+            decision_buffer = self.cognitive_loop.get_current_pipeline("decision")
+            decision_file = self.cognitive_loop.personal.parent / decision_buffer.location
+            intention_text = ""
+            try:
+                with open(decision_file, 'r') as f:
+                    decision_data = json.load(f)
+                    intention_text = str(decision_data.get("intention", ""))
+            except Exception:
+                intention_text = ""
+
+            # Only truncate the working_memory when forming search queries
+            qwm = working_memory
+            if (not intention_text) and WORKING_MEMORY_TRUNCATE_CHARS and WORKING_MEMORY_TRUNCATE_CHARS > 0:
+                qwm = working_memory[:WORKING_MEMORY_TRUNCATE_CHARS]
+            helpful_refs = self.cognitive_loop.knowledge_context.build(
+                stage="execution",
+                queries=[intention_text] if intention_text else [qwm],
+                limit=2,
+                budget_chars=700,
+                blacklist_tags=self.KNOWLEDGE_BLACKLIST,
+            )
+        except Exception:
+            helpful_refs = ""
         thinking_request = {
             "signature": {
                 "instruction": """
@@ -481,7 +511,8 @@ If there's no clear intention, return an empty script.
 The provided API docs describe the available operations and their usage.
 """,
                 "inputs": {
-                    "working_memory": "Full working memory context including decision buffer with intention"
+                    "working_memory": "Full working memory context including decision buffer with intention",
+                    "helpful_references": "Concise relevant knowledge to guide script authoring (may be empty)"
                 },
                 "outputs": {
                     "script": "Python script using Cyber API's (or empty if no intention)"
@@ -489,7 +520,8 @@ The provided API docs describe the available operations and their usage.
                 "display_field": "script"
             },
             "input_values": {
-                "working_memory": working_memory
+                "working_memory": working_memory,
+                "helpful_references": helpful_refs
             },
             "request_id": f"generate_script_{int(datetime.now().timestamp()*1000)}",
             "timestamp": datetime.now().isoformat()
@@ -659,6 +691,57 @@ The provided API docs describe the available operations and their usage.
                     case_ids=self.error_case_ids,
                     success=execution_content["success"]
                 )
+
+            # On successful execution, store a concise result as personal knowledge
+            try:
+                if execution_content.get("success"):
+                    # Read intention from decision buffer
+                    decision_buffer = self.cognitive_loop.get_current_pipeline("decision")
+                    decision_file = self.cognitive_loop.personal.parent / decision_buffer.location
+                    intention_text = ""
+                    try:
+                        with open(decision_file, 'r') as f:
+                            decision_data = json.load(f)
+                            intention_text = str(decision_data.get("intention", "")).strip()
+                    except Exception:
+                        intention_text = ""
+
+                    # Summarize outcome
+                    result_summary = execution_content["results"][0] if execution_content.get("results") else {}
+                    status = result_summary.get("status", "completed")
+                    output_excerpt = result_summary.get("output", "")
+                    if isinstance(output_excerpt, str):
+                        output_excerpt = (
+                            output_excerpt[:OUTPUT_EXCERPT_TRUNCATE_CHARS]
+                            if OUTPUT_EXCERPT_TRUNCATE_CHARS and OUTPUT_EXCERPT_TRUNCATE_CHARS > 0
+                            else output_excerpt
+                        )
+                    else:
+                        s = str(output_excerpt)
+                        output_excerpt = (
+                            s[:OUTPUT_EXCERPT_TRUNCATE_CHARS]
+                            if OUTPUT_EXCERPT_TRUNCATE_CHARS and OUTPUT_EXCERPT_TRUNCATE_CHARS > 0
+                            else s
+                        )
+
+                    note = "Execution succeeded."
+                    if intention_text:
+                        note += f" Intention: {intention_text}"
+                    if output_excerpt:
+                        note += f"\nOutput: {output_excerpt}"
+
+                    # Store as personal knowledge (small, concise)
+                    _ = self.cognitive_loop.knowledge_manager.store_knowledge(
+                        content=note,
+                        metadata={
+                            "personal": True,
+                            "category": "execution_result",
+                            "tags": ["execution", "result", "autolog"],
+                            "confidence": 0.8,
+                        },
+                    )
+            except Exception as e:
+                logger.debug(f"Failed to store execution result knowledge: {e}")
             
             # Record stage data for cycle history
             try:
