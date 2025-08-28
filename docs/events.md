@@ -4,7 +4,7 @@
 - Purpose: Consistent, typed events for the 3D monitor client.
 
 - Core Types:
-  - `agent_created`: `{ name }`
+  - `agent_created`: `{ name, cyber_type?, config?, current_location? }`
   - `agent_terminated`: `{ name }`
   - `agent_state_changed`: `{ name, old_state, new_state }`
   - `agent_thinking`: `{ name, thought, token_count? }`
