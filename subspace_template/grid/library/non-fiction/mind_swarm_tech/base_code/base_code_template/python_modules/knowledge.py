@@ -144,7 +144,7 @@ class Knowledge:
         self._min_request_interval = 0.1  # Minimum time between requests
         
     def search(self, query: str, limit: int = 5, scope: Optional[List[str]] = None, 
-               timeout: float = 5.0) -> List[Dict[str, Any]]:
+               timeout: float = 30.0) -> List[Dict[str, Any]]:
         """
 Search for relevant knowledge.
 Args:
@@ -205,7 +205,7 @@ Returns:
     
     def store(self, content: str, tags: Optional[List[str]] = None, 
               personal: bool = False, metadata: Optional[Dict[str, Any]] = None,
-              timeout: float = 5.0) -> Optional[str]:
+              timeout: float = 30.0) -> Optional[str]:
         """
         Store new knowledge.
         
@@ -253,7 +253,7 @@ Returns:
             logger.warning(f"Knowledge store failed: {error}")
             return None
     
-    def get(self, knowledge_id: str, timeout: float = 5.0) -> Optional[Dict[str, Any]]:
+    def get(self, knowledge_id: str, timeout: float = 30.0) -> Optional[Dict[str, Any]]:
         """
         Get knowledge by its ID.
         
@@ -300,7 +300,7 @@ Returns:
             logger.warning(f"Knowledge get failed: {error}")
             return None
     
-    def forget(self, knowledge_id: str, timeout: float = 5.0) -> bool:
+    def forget(self, knowledge_id: str, timeout: float = 30.0) -> bool:
         """
         Remove knowledge by ID.
         
@@ -336,7 +336,7 @@ Returns:
     
     def update(self, knowledge_id: str, content: Optional[str] = None, 
                tags: Optional[List[str]] = None, metadata: Optional[Dict[str, Any]] = None,
-               timeout: float = 5.0) -> bool:
+               timeout: float = 30.0) -> bool:
         """
         Update existing knowledge by ID. Any provided fields will overwrite existing ones.
         
@@ -506,6 +506,12 @@ Returns:
             Response dictionary or None if timeout
         """
         try:
+            # Clear any stale responses first
+            current_content = self.knowledge_file.read_text()
+            if "<<<KNOWLEDGE_COMPLETE>>>" in current_content:
+                logger.debug("Clearing stale knowledge response before new request")
+                self.knowledge_file.write_text("")
+            
             # Write request with end marker
             request_text = json.dumps(request, indent=2)
             full_request = f"{request_text}\n<<<END_KNOWLEDGE_REQUEST>>>"
@@ -531,6 +537,12 @@ Returns:
                             # Clear the file for next request
                             self.knowledge_file.write_text("")
                             return response
+                        else:
+                            # Wrong response (old or from another request)
+                            # Clear it and resend our request
+                            logger.warning(f"Got response for wrong request ID: {response.get('request_id')} != {request['request_id']}, resending")
+                            self.knowledge_file.write_text(full_request)
+                            # Continue waiting for our response
                         
                 except json.JSONDecodeError:
                     # Response might still be writing
