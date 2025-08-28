@@ -1,6 +1,7 @@
 """Main CLI application for Mind-Swarm."""
 
 import asyncio
+import os
 import signal
 import subprocess
 import sys
@@ -406,7 +407,9 @@ class MindSwarmCLI:
                     import time
                     from pathlib import Path
                     
-                    pid_file = Path("/tmp/mind-swarm-server.pid")
+                    # Get port from client
+                    port = self.client.base_url.split(':')[-1].replace('/', '')
+                    pid_file = Path(f"/tmp/mind-swarm-server-{port}.pid")
                     
                     if not pid_file.exists():
                         console.print("[yellow]Server not running (no PID file)[/yellow]")
@@ -1441,10 +1444,10 @@ def server(
     debug: bool = typer.Option(False, "--debug", "-d", help="Enable debug logging"),
     llm_debug: bool = typer.Option(False, "--llm-debug", help="Enable LLM API call logging"),
     host: str = typer.Option("127.0.0.1", "--host", "-h", help="Server host"),
-    port: int = typer.Option(8888, "--port", "-p", help="Server port"),
+    port: int = typer.Option(int(os.environ.get("MIND_SWARM_PORT", 8888)), "--port", "-p", help="Server port"),
 ):
     """Manage Mind-Swarm server."""
-    pid_file = Path("/tmp/mind-swarm-server.pid")
+    pid_file = Path(f"/tmp/mind-swarm-server-{port}.pid")
     # Use project root for log file
     project_root = Path(__file__).parent.parent.parent.parent
     log_file = project_root / "mind-swarm.log"

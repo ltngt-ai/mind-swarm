@@ -41,6 +41,8 @@ class ServerDaemon:
     """Server daemon manager."""
     
     def __init__(self, host: str = "0.0.0.0", port: int = 8888):
+        self.host = host
+        self.port = port
         self.server = MindSwarmServer(host, port)
         self._shutdown_event = asyncio.Event()
         self._shutting_down = False
@@ -60,8 +62,8 @@ class ServerDaemon:
         for sig in (signal.SIGTERM, signal.SIGINT):
             loop.add_signal_handler(sig, self.handle_signal)
         
-        # Define PID file path
-        pid_file = Path("/tmp/mind-swarm-server.pid")
+        # Define PID file path with port number
+        pid_file = Path(f"/tmp/mind-swarm-server-{self.port}.pid")
         
         try:
             # Start the server in a separate task
@@ -175,7 +177,9 @@ def main():
     """Main entry point for server daemon."""
     parser = argparse.ArgumentParser(description="Mind-Swarm Server Daemon")
     parser.add_argument("--host", default="0.0.0.0", help="Server host address (0.0.0.0 for network access)")
-    parser.add_argument("--port", type=int, default=8888, help="Server port")
+    # Use port from env if available, otherwise default to 8888
+    default_port = int(os.environ.get("MIND_SWARM_PORT", 8888))
+    parser.add_argument("--port", type=int, default=default_port, help="Server port")
     # Default log file in project root
     project_root = Path(__file__).parent.parent.parent.parent
     default_log = project_root / "mind-swarm.log"

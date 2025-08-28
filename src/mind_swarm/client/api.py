@@ -33,13 +33,16 @@ class ServerStatus(BaseModel):
 class MindSwarmClient:
     """Client for connecting to Mind-Swarm server."""
     
-    def __init__(self, host: str = "127.0.0.1", port: int = 8888):
+    def __init__(self, host: str = "127.0.0.1", port: int = None):
         """Initialize the client.
         
         Args:
             host: Server host address
-            port: Server port
+            port: Server port (defaults to MIND_SWARM_PORT env var or 8888)
         """
+        import os
+        if port is None:
+            port = int(os.environ.get("MIND_SWARM_PORT", 8888))
         self.base_url = f"http://{host}:{port}"
         self.ws_url = f"ws://{host}:{port}/ws"
         self._ws_connection = None
@@ -442,7 +445,9 @@ class MindSwarmClient:
         Returns:
             True if server appears to be running
         """
-        pid_file = Path("/tmp/mind-swarm-server.pid")
+        # Extract port from base_url
+        port = self.base_url.split(':')[-1].replace('/', '')
+        pid_file = Path(f"/tmp/mind-swarm-server-{port}.pid")
         if not pid_file.exists():
             return False
         
