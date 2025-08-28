@@ -46,9 +46,8 @@ show_usage() {
     echo "  client            - Connect to the server (interactive mode)"
     echo "  status            - Check server and system status"
     echo "  stop              - Stop the server"
-    echo "  restart [--debug] [--llm-debug] - Restart the server"
+    echo "  restart [--debug] [--llm-debug] - Restart the server (respects MIND_SWARM_PORT)"
     echo "  logs              - View server logs"
-    echo "  demo              - Start server and create 3 agents"
     echo "  export-knowledge  - Export knowledge from ChromaDB for review"
     echo "  import-knowledge  - Import knowledge into ChromaDB"
     echo ""
@@ -84,7 +83,9 @@ case $COMMAND in
             
             # Check if server is actually running
             # Prefer a robust check on the PID file written by the daemon
-            if [ -f "/tmp/mind-swarm-server.pid" ] && kill -0 "$(cat /tmp/mind-swarm-server.pid)" 2>/dev/null; then
+            PORT=${MIND_SWARM_PORT:-8888}
+            PID_FILE="/tmp/mind-swarm-server-${PORT}.pid"
+            if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
                 echo ""
                 echo -e "${GREEN}✓ Server started successfully!${NC}"
                 echo "View logs with: ./run.sh logs"
@@ -119,7 +120,8 @@ case $COMMAND in
         ;;
     
     restart)
-        echo -e "${YELLOW}Restarting Mind-Swarm server...${NC}"
+        PORT=${MIND_SWARM_PORT:-8888}
+        echo -e "${YELLOW}Restarting Mind-Swarm server on port ${PORT}...${NC}"
         # Build command with optional flags
         CMD="mind-swarm server"
         if [[ " $@ " =~ " --debug " ]]; then
@@ -131,24 +133,14 @@ case $COMMAND in
             CMD="$CMD --llm-debug"
         fi
         CMD="$CMD restart"
-        $CMD
+        MIND_SWARM_PORT="$PORT" $CMD
         ;;
     
     logs)
         mind-swarm server logs
         ;;
     
-    demo)
-        echo -e "${GREEN}Starting Mind-Swarm demo...${NC}"
-        echo "1. Starting server..."
-        mind-swarm server start
-        sleep 3
-        echo "2. Creating 3 agents..."
-        mind-swarm connect --create 3 --no-interactive
-        echo ""
-        echo -e "${GREEN}Demo ready!${NC}"
-        echo "Connect with: ./run.sh client"
-        ;;
+    
     
     export-knowledge)
         echo -e "${GREEN}Exporting knowledge from ChromaDB...${NC}"

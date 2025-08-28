@@ -1,0 +1,1833 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Mind-Swarm Server",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/": {
+      "get": {
+        "summary": "Root",
+        "description": "Root endpoint.",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/status": {
+      "get": {
+        "summary": "Get Status",
+        "description": "Get server and Cyber status.\n\nArgs:\n    check_llm: Whether to check local LLM status (can be slow)",
+        "operationId": "get_status_status_get",
+        "parameters": [
+          {
+            "name": "check_llm",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Check Llm"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/Cybers/create": {
+      "post": {
+        "summary": "Create Agent",
+        "description": "Create a new Cyber.",
+        "operationId": "create_agent_Cybers_create_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAgentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/Cybers/{name}": {
+      "delete": {
+        "summary": "Terminate Agent",
+        "description": "Terminate an Cyber.",
+        "operationId": "terminate_agent_Cybers__name__delete",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/Cybers/{name}/command": {
+      "post": {
+        "summary": "Send Command",
+        "description": "Send a command to an Cyber.",
+        "operationId": "send_command_Cybers__name__command_post",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommandRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/Cybers/{name}/message": {
+      "post": {
+        "summary": "Send Message",
+        "description": "Send a message to an Cyber.",
+        "operationId": "send_message_Cybers__name__message_post",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MessageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/community/questions": {
+      "get": {
+        "summary": "Get Questions",
+        "description": "Get all community questions.",
+        "operationId": "get_questions_community_questions_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create Question",
+        "description": "Create a new community question.",
+        "operationId": "create_question_community_questions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuestionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/community/tasks": {
+      "get": {
+        "summary": "Get Tasks",
+        "description": "Get all community tasks.",
+        "operationId": "get_tasks_community_tasks_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create Task",
+        "description": "Create a new community task.",
+        "operationId": "create_task_community_tasks_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/community/announcements": {
+      "post": {
+        "summary": "Update Announcements",
+        "description": "Update system announcements for all Cybers.",
+        "operationId": "update_announcements_community_announcements_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnnouncementRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Clear Announcements",
+        "description": "Clear all system announcements.",
+        "operationId": "clear_announcements_community_announcements_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/Cybers/all": {
+      "get": {
+        "summary": "List All Agents",
+        "description": "List all known Cybers including hibernating ones.",
+        "operationId": "list_all_agents_Cybers_all_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cybers/{cyber_id}/terminals": {
+      "post": {
+        "summary": "Create Terminal",
+        "description": "Create a new terminal session for a Cyber.",
+        "operationId": "create_terminal_cybers__cyber_id__terminals_post",
+        "parameters": [
+          {
+            "name": "cyber_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cyber Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TerminalCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List Terminals",
+        "description": "List all terminal sessions for a Cyber.",
+        "operationId": "list_terminals_cybers__cyber_id__terminals_get",
+        "parameters": [
+          {
+            "name": "cyber_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cyber Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cybers/{cyber_id}/terminals/{session_id}/input": {
+      "post": {
+        "summary": "Send Terminal Input",
+        "description": "Send input to a terminal session.",
+        "operationId": "send_terminal_input_cybers__cyber_id__terminals__session_id__input_post",
+        "parameters": [
+          {
+            "name": "cyber_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cyber Id"
+            }
+          },
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TerminalInputRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cybers/{cyber_id}/terminals/{session_id}/screen": {
+      "get": {
+        "summary": "Read Terminal Screen",
+        "description": "Read current screen content from a terminal.",
+        "operationId": "read_terminal_screen_cybers__cyber_id__terminals__session_id__screen_get",
+        "parameters": [
+          {
+            "name": "cyber_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cyber Id"
+            }
+          },
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "text",
+              "title": "Format"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cybers/{cyber_id}/terminals/{session_id}": {
+      "delete": {
+        "summary": "Close Terminal",
+        "description": "Close a terminal session.",
+        "operationId": "close_terminal_cybers__cyber_id__terminals__session_id__delete",
+        "parameters": [
+          {
+            "name": "cyber_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cyber Id"
+            }
+          },
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/developers/register": {
+      "post": {
+        "summary": "Register Developer",
+        "description": "Register a new developer.",
+        "operationId": "register_developer_developers_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDeveloperRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/developers/current": {
+      "get": {
+        "summary": "Get Current Developer",
+        "description": "Get the current developer.",
+        "operationId": "get_current_developer_developers_current_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Set Current Developer",
+        "description": "Set the current developer.",
+        "operationId": "set_current_developer_developers_current_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetCurrentDeveloperRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/developers": {
+      "get": {
+        "summary": "List Developers",
+        "description": "List all registered developers.",
+        "operationId": "list_developers_developers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/developers/mailbox": {
+      "get": {
+        "summary": "Check Mailbox",
+        "description": "Check current developer's mailbox.",
+        "operationId": "check_mailbox_developers_mailbox_get",
+        "parameters": [
+          {
+            "name": "include_read",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Read"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/developers/mailbox/read": {
+      "post": {
+        "summary": "Mark Message Read",
+        "description": "Mark a message as read.",
+        "operationId": "mark_message_read_developers_mailbox_read_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkMessageReadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/filesystem/structure": {
+      "get": {
+        "summary": "Get Filesystem Structure",
+        "description": "Get the subspace filesystem structure.",
+        "operationId": "get_filesystem_structure_filesystem_structure_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/knowledge/search": {
+      "get": {
+        "summary": "Search Knowledge",
+        "description": "Search the knowledge system.",
+        "operationId": "search_knowledge_knowledge_search_get",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Query"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/knowledge/add": {
+      "post": {
+        "summary": "Add Knowledge",
+        "description": "Add knowledge to the shared system.",
+        "operationId": "add_knowledge_knowledge_add_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/knowledge/list": {
+      "get": {
+        "summary": "List Knowledge",
+        "description": "List all shared knowledge.",
+        "operationId": "list_knowledge_knowledge_list_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/knowledge/{knowledge_id}": {
+      "delete": {
+        "summary": "Remove Knowledge",
+        "description": "Remove knowledge from the system.",
+        "operationId": "remove_knowledge_knowledge__knowledge_id__delete",
+        "parameters": [
+          {
+            "name": "knowledge_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Knowledge Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/knowledge/stats": {
+      "get": {
+        "summary": "Get Knowledge Stats",
+        "description": "Get knowledge system statistics.",
+        "operationId": "get_knowledge_stats_knowledge_stats_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/knowledge/sync": {
+      "post": {
+        "summary": "Sync Knowledge",
+        "description": "Sync knowledge from initial_knowledge templates to ChromaDB.",
+        "operationId": "sync_knowledge_knowledge_sync_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cybers/freeze/{cyber_name}": {
+      "post": {
+        "summary": "Freeze Cyber",
+        "description": "Freeze a single Cyber to a tar.gz archive.",
+        "operationId": "freeze_cyber_cybers_freeze__cyber_name__post",
+        "parameters": [
+          {
+            "name": "cyber_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cyber Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cybers/freeze-all": {
+      "post": {
+        "summary": "Freeze All Cybers",
+        "description": "Freeze all Cybers to a single tar.gz archive.",
+        "operationId": "freeze_all_cybers_cybers_freeze_all_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cybers/unfreeze": {
+      "post": {
+        "summary": "Unfreeze Cybers",
+        "description": "Unfreeze Cybers from a tar.gz archive.",
+        "operationId": "unfreeze_cybers_cybers_unfreeze_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnfreezeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cybers/frozen": {
+      "get": {
+        "summary": "List Frozen Cybers",
+        "description": "List all frozen Cyber archives.",
+        "operationId": "list_frozen_cybers_cybers_frozen_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "summary": "Get System Metrics",
+        "description": "Get system metrics for developer mode.",
+        "operationId": "get_system_metrics_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/token/boost": {
+      "post": {
+        "summary": "Apply Token Boost",
+        "description": "Apply a temporary token rate boost to cybers.",
+        "operationId": "apply_token_boost_token_boost_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenBoostRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Clear Token Boost",
+        "description": "Clear token boost for a cyber or all cybers.",
+        "operationId": "clear_token_boost_token_boost_delete",
+        "parameters": [
+          {
+            "name": "cyber_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cyber Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Get Token Boost Status",
+        "description": "Get current token boost status.",
+        "operationId": "get_token_boost_status_token_boost_get",
+        "parameters": [
+          {
+            "name": "cyber_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cyber Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/Cybers/{cyber_name}/inspect": {
+      "get": {
+        "summary": "Inspect Cyber",
+        "description": "Get detailed inspection data for a specific Cyber.",
+        "operationId": "inspect_cyber_Cybers__cyber_name__inspect_get",
+        "parameters": [
+          {
+            "name": "cyber_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cyber Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/Cybers/{cyber_name}/restart": {
+      "post": {
+        "summary": "Restart Cyber",
+        "description": "Restart a specific Cyber.",
+        "operationId": "restart_cyber_Cybers__cyber_name__restart_post",
+        "parameters": [
+          {
+            "name": "cyber_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cyber Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/Cybers/{cyber_name}/pause": {
+      "post": {
+        "summary": "Pause Cyber",
+        "description": "Pause a specific Cyber.",
+        "operationId": "pause_cyber_Cybers__cyber_name__pause_post",
+        "parameters": [
+          {
+            "name": "cyber_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cyber Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AnnouncementRequest": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "priority": {
+            "type": "string",
+            "title": "Priority",
+            "default": "HIGH"
+          },
+          "expires": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "message"
+        ],
+        "title": "AnnouncementRequest",
+        "description": "Request to create or update system announcements."
+      },
+      "CommandRequest": {
+        "properties": {
+          "command": {
+            "type": "string",
+            "title": "Command"
+          },
+          "params": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Params"
+          }
+        },
+        "type": "object",
+        "required": [
+          "command"
+        ],
+        "title": "CommandRequest",
+        "description": "Request to send a command to an Cyber."
+      },
+      "CreateAgentRequest": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "cyber_type": {
+            "type": "string",
+            "title": "Cyber Type",
+            "default": "general"
+          },
+          "config": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config"
+          }
+        },
+        "type": "object",
+        "title": "CreateAgentRequest",
+        "description": "Request to create a new Cyber."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "MarkMessageReadRequest": {
+        "properties": {
+          "message_index": {
+            "type": "integer",
+            "title": "Message Index"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message_index"
+        ],
+        "title": "MarkMessageReadRequest",
+        "description": "Request model for marking message as read."
+      },
+      "MessageRequest": {
+        "properties": {
+          "content": {
+            "type": "string",
+            "title": "Content"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          }
+        },
+        "type": "object",
+        "required": [
+          "content"
+        ],
+        "title": "MessageRequest",
+        "description": "Request to send a message to an Cyber."
+      },
+      "QuestionRequest": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "created_by": {
+            "type": "string",
+            "title": "Created By",
+            "default": "user"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "QuestionRequest",
+        "description": "Request to create a community question."
+      },
+      "RegisterDeveloperRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "RegisterDeveloperRequest",
+        "description": "Request model for registering a developer."
+      },
+      "SetCurrentDeveloperRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "SetCurrentDeveloperRequest",
+        "description": "Request model for setting current developer."
+      },
+      "StatusResponse": {
+        "properties": {
+          "Cybers": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Cybers"
+          },
+          "community_questions": {
+            "type": "integer",
+            "title": "Community Questions"
+          },
+          "server_uptime": {
+            "type": "number",
+            "title": "Server Uptime"
+          },
+          "server_start_time": {
+            "type": "string",
+            "title": "Server Start Time"
+          },
+          "token_usage": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token Usage"
+          }
+        },
+        "type": "object",
+        "required": [
+          "Cybers",
+          "community_questions",
+          "server_uptime",
+          "server_start_time"
+        ],
+        "title": "StatusResponse",
+        "description": "Server status response."
+      },
+      "TaskRequest": {
+        "properties": {
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "priority": {
+            "type": "string",
+            "title": "Priority",
+            "default": "normal"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category",
+            "default": "general"
+          },
+          "created_by": {
+            "type": "string",
+            "title": "Created By",
+            "default": "user"
+          }
+        },
+        "type": "object",
+        "required": [
+          "summary",
+          "description"
+        ],
+        "title": "TaskRequest",
+        "description": "Request to create a community task."
+      },
+      "TerminalCreateRequest": {
+        "properties": {
+          "command": {
+            "type": "string",
+            "title": "Command",
+            "default": "bash"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "title": "TerminalCreateRequest",
+        "description": "Request to create a terminal session."
+      },
+      "TerminalInputRequest": {
+        "properties": {
+          "input": {
+            "type": "string",
+            "title": "Input"
+          }
+        },
+        "type": "object",
+        "required": [
+          "input"
+        ],
+        "title": "TerminalInputRequest",
+        "description": "Request to send input to a terminal."
+      },
+      "TokenBoostRequest": {
+        "properties": {
+          "cyber_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cyber Id"
+          },
+          "multiplier": {
+            "type": "number",
+            "title": "Multiplier",
+            "default": 2.0
+          },
+          "duration_hours": {
+            "type": "number",
+            "title": "Duration Hours",
+            "default": 3.0
+          }
+        },
+        "type": "object",
+        "title": "TokenBoostRequest",
+        "description": "Request model for applying token boost."
+      },
+      "UnfreezeRequest": {
+        "properties": {
+          "archive_path": {
+            "type": "string",
+            "title": "Archive Path"
+          },
+          "force": {
+            "type": "boolean",
+            "title": "Force",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "archive_path"
+        ],
+        "title": "UnfreezeRequest",
+        "description": "Request to unfreeze Cybers from an archive."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}
