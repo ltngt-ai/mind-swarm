@@ -996,16 +996,25 @@ class Tasks:
         blocked = self.get_blocked()
         completed = self.get_completed(5)
         
-        # Build backlog (all non-completed, non-blocked tasks)
+        # Create set of blocked task IDs for consistent filtering
+        blocked_ids = set(t.get('id') for t in blocked)
+        
+        # Build backlog (all non-completed, non-blocked tasks) and find current task
         backlog = []
+        current_task = None
         for task in all_tasks:
-            if task.get('status') not in ['completed', 'blocked']:
-                backlog.append({
+            # Use blocked_ids for consistent filtering with get_blocked()
+            if task.get('status') != 'completed' and task.get('id') not in blocked_ids:
+                task_info = {
                     'id': task['id'],
                     'summary': task['summary'],
                     'type': task.get('task_type', 'unknown'),
                     'current': task.get('current', False)
-                })
+                }
+                backlog.append(task_info)
+                # Track current task while building backlog (optimization)
+                if task_info['current'] and current_task is None:
+                    current_task = task_info
         
         return {
             "active_count": len(active),
@@ -1014,5 +1023,5 @@ class Tasks:
             "active_summaries": [t['summary'] for t in active],
             "blocked_summaries": [t['summary'] for t in blocked],
             "backlog": backlog,  # Added backlog list
-            "current_task": next((t for t in backlog if t.get('current')), None)
+            "current_task": current_task  # Found during backlog construction
         }
