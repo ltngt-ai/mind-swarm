@@ -5,6 +5,9 @@
 		},
 		{
 			"path": "../subspace"
+		},
+		{
+			"path": "../subspace2"
 		}
 	],
 	"settings": {

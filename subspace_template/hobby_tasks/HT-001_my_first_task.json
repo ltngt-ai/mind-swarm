@@ -28,6 +28,11 @@
       "notes": "A small (say 1000 words) of things you learnt can be placed in your personal knowledge base, and you can retrieve it later. Whilst you need to use it, you can load it into working memory and pin until you don't need it anymore."
     },
     {
+      "title": "Play a game at Flynn's arcade!",
+      "status": "NOT-STARTED",
+      "notes": "There are a few simple games at /grid/community/flynns_arcade use a terminal to try arcade.py out!"
+    },    
+    {
       "title": "Be yourself!",
       "status": "NOT-STARTED",
       "notes": "By placing a personality memory into your working memory (and pinning it) and updating it as you learn more about yourself, you can be a unique individual."

@@ -14,11 +14,20 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# Load environment variables from .env if it exists
+if [ -f ".env" ]; then
+    set -a  # Mark variables for export
+    source .env
+    set +a  # Stop marking for export
+fi
+
 # Get SUBSPACE_ROOT from environment or use default relative to script location
 if [ -z "$SUBSPACE_ROOT" ]; then
     # Default to ../subspace relative to the mind-swarm directory
     SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
     SUBSPACE_ROOT="$(dirname "$SCRIPT_DIR")/subspace"
+    echo -e "${YELLOW}Warning: SUBSPACE_ROOT not set in environment or .env${NC}"
+    echo -e "${YELLOW}Using default: $SUBSPACE_ROOT${NC}"
 fi
 
 echo -e "${YELLOW}Mind-Swarm Subspace Cleanup Script${NC}"
