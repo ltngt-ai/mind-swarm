@@ -488,9 +488,13 @@ class ExecutionStage:
             except Exception:
                 intention_text = ""
 
+            # Only truncate the working_memory when forming search queries
+            qwm = working_memory
+            if (not intention_text) and WORKING_MEMORY_TRUNCATE_CHARS and WORKING_MEMORY_TRUNCATE_CHARS > 0:
+                qwm = working_memory[:WORKING_MEMORY_TRUNCATE_CHARS]
             helpful_refs = self.cognitive_loop.knowledge_context.build(
                 stage="execution",
-                queries=[intention_text] if intention_text else [working_memory[:WORKING_MEMORY_TRUNCATE_CHARS]],
+                queries=[intention_text] if intention_text else [qwm],
                 limit=2,
                 budget_chars=700,
                 blacklist_tags=self.KNOWLEDGE_BLACKLIST,
@@ -707,9 +711,18 @@ The provided API docs describe the available operations and their usage.
                     status = result_summary.get("status", "completed")
                     output_excerpt = result_summary.get("output", "")
                     if isinstance(output_excerpt, str):
-                        output_excerpt = output_excerpt[:OUTPUT_EXCERPT_TRUNCATE_CHARS]
+                        output_excerpt = (
+                            output_excerpt[:OUTPUT_EXCERPT_TRUNCATE_CHARS]
+                            if OUTPUT_EXCERPT_TRUNCATE_CHARS and OUTPUT_EXCERPT_TRUNCATE_CHARS > 0
+                            else output_excerpt
+                        )
                     else:
-                        output_excerpt = str(output_excerpt)[:OUTPUT_EXCERPT_TRUNCATE_CHARS]
+                        s = str(output_excerpt)
+                        output_excerpt = (
+                            s[:OUTPUT_EXCERPT_TRUNCATE_CHARS]
+                            if OUTPUT_EXCERPT_TRUNCATE_CHARS and OUTPUT_EXCERPT_TRUNCATE_CHARS > 0
+                            else s
+                        )
 
                     note = "Execution succeeded."
                     if intention_text:

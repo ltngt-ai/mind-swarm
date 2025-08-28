@@ -147,9 +147,13 @@ class DecisionStage:
 
         # Retrieve concise knowledge references related to the suggested problem/context
         try:
+            # Only truncate the decision_context when forming search queries
+            qctx = decision_context
+            if (not suggested_problem) and KNOWLEDGE_QUERY_TRUNCATE_CHARS and KNOWLEDGE_QUERY_TRUNCATE_CHARS > 0:
+                qctx = decision_context[:KNOWLEDGE_QUERY_TRUNCATE_CHARS]
             knowledge_context = self.cognitive_loop.knowledge_context.build(
                 stage="decision",
-                queries=[suggested_problem] if suggested_problem else [decision_context[:KNOWLEDGE_QUERY_TRUNCATE_CHARS]],
+                queries=[suggested_problem] if suggested_problem else [qctx],
                 limit=3,
                 budget_chars=900,
                 blacklist_tags=self.KNOWLEDGE_BLACKLIST,

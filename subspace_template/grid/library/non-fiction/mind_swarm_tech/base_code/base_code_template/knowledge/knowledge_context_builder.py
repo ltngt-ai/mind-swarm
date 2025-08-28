@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Optional, Sequence, Set
 import json
+from mind_swarm.core.config import KNOWLEDGE_QUERY_TRUNCATE_CHARS
 
 
 logger = logging.getLogger("Cyber.knowledge.context_builder")
@@ -76,7 +77,10 @@ class KnowledgeContextBuilder:
         for s in queries:
             s = (s or "").strip()
             if s:
-                q.append(s[:400])  # basic guard
+                if KNOWLEDGE_QUERY_TRUNCATE_CHARS and KNOWLEDGE_QUERY_TRUNCATE_CHARS > 0:
+                    q.append(s[:KNOWLEDGE_QUERY_TRUNCATE_CHARS])  # basic guard
+                else:
+                    q.append(s)
 
         reflection = self._recent_reflection_summary()
         if reflection:
@@ -161,7 +165,13 @@ class KnowledgeContextBuilder:
         try:
             from ..state.unified_state_manager import StateSection
             summary = self.state_manager.get_value(StateSection.TASK, "current_task_summary")
-            return str(summary)[:400] if summary else None
+            if not summary:
+                return None
+            return (
+                str(summary)[:KNOWLEDGE_QUERY_TRUNCATE_CHARS]
+                if KNOWLEDGE_QUERY_TRUNCATE_CHARS and KNOWLEDGE_QUERY_TRUNCATE_CHARS > 0
+                else str(summary)
+            )
         except Exception:
             return None
 
@@ -185,7 +195,13 @@ class KnowledgeContextBuilder:
                 return None
             data = json.loads(decision_file.read_text())
             intention = data.get("intention") or ""
-            return str(intention)[:400] if intention else None
+            if not intention:
+                return None
+            return (
+                str(intention)[:KNOWLEDGE_QUERY_TRUNCATE_CHARS]
+                if KNOWLEDGE_QUERY_TRUNCATE_CHARS and KNOWLEDGE_QUERY_TRUNCATE_CHARS > 0
+                else str(intention)
+            )
         except Exception:
             return None
 
@@ -202,9 +218,19 @@ class KnowledgeContextBuilder:
             for k in ("summary", "learnings", "reflection", "notes"):
                 v = data.get(k)
                 if isinstance(v, str) and v.strip():
-                    return v.strip()[:400]
+                    text = v.strip()
+                    return (
+                        text[:KNOWLEDGE_QUERY_TRUNCATE_CHARS]
+                        if KNOWLEDGE_QUERY_TRUNCATE_CHARS and KNOWLEDGE_QUERY_TRUNCATE_CHARS > 0
+                        else text
+                    )
             # Fallback: first 400 chars of the file
-            return reflection_file.read_text()[:400]
+            text = reflection_file.read_text()
+            return (
+                text[:KNOWLEDGE_QUERY_TRUNCATE_CHARS]
+                if KNOWLEDGE_QUERY_TRUNCATE_CHARS and KNOWLEDGE_QUERY_TRUNCATE_CHARS > 0
+                else text
+            )
         except Exception:
             return None
 
@@ -230,6 +256,11 @@ class KnowledgeContextBuilder:
                     continue
             if not items:
                 return None
-            return "Active TODOs: " + "; ".join(items)[:400]
+            joined = "; ".join(items)
+            return (
+                "Active TODOs: " + joined[:KNOWLEDGE_QUERY_TRUNCATE_CHARS]
+                if KNOWLEDGE_QUERY_TRUNCATE_CHARS and KNOWLEDGE_QUERY_TRUNCATE_CHARS > 0
+                else "Active TODOs: " + joined
+            )
         except Exception:
             return None

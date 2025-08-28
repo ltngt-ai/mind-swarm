@@ -246,9 +246,13 @@ class ObservationStage:
 
         # Build concise knowledge context related to new information and location
         try:
+            # Only truncate the query string if a positive limit is configured
+            q = new_information
+            if new_information and KNOWLEDGE_QUERY_TRUNCATE_CHARS and KNOWLEDGE_QUERY_TRUNCATE_CHARS > 0:
+                q = new_information[:KNOWLEDGE_QUERY_TRUNCATE_CHARS]
             knowledge_context = self.cognitive_loop.knowledge_context.build(
                 stage="observation",
-                queries=[new_information[:KNOWLEDGE_QUERY_TRUNCATE_CHARS]] if new_information else ["current situation"],
+                queries=[q] if new_information else ["current situation"],
                 limit=3,
                 budget_chars=800,
                 blacklist_tags=self.KNOWLEDGE_BLACKLIST,
