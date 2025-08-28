@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from mind_swarm.server.schemas.events import make_event
 
 from mind_swarm.subspace.coordinator import SubspaceCoordinator
 from mind_swarm.utils.logging import logger
@@ -281,11 +282,7 @@ class MindSwarmServer:
                 )
                 
                 # Notify websocket clients
-                await self._broadcast_event({
-                    "type": "agent_created",
-                    "name": name,
-                    "timestamp": datetime.now().isoformat()
-                })
+                await self._broadcast_event(make_event("agent_created", {"name": name}))
                 
                 return {"name": name}
             except Exception as e:
@@ -306,11 +303,7 @@ class MindSwarmServer:
                 await self.coordinator.terminate_agent(name)
                 
                 # Notify websocket clients
-                await self._broadcast_event({
-                    "type": "agent_terminated",
-                    "name": name,
-                    "timestamp": datetime.now().isoformat()
-                })
+                await self._broadcast_event(make_event("agent_terminated", {"name": name}))
                 
                 return {"message": f"Cyber {name} terminated"}
             except Exception as e:
@@ -370,13 +363,16 @@ class MindSwarmServer:
                 )
                 
                 # Notify websocket clients
-                await self._broadcast_event({
-                    "type": "question_created",
-                    "question_id": question_id,
-                    "text": request.text,
-                    "created_by": request.created_by,
-                    "timestamp": datetime.now().isoformat()
-                })
+                await self._broadcast_event(
+                    make_event(
+                        "question_created",
+                        {
+                            "question_id": question_id,
+                            "text": request.text,
+                            "created_by": request.created_by,
+                        },
+                    )
+                )
                 
                 return {"question_id": question_id}
             except Exception as e:
@@ -412,13 +408,16 @@ class MindSwarmServer:
                 )
                 
                 # Notify websocket clients
-                await self._broadcast_event({
-                    "type": "task_created",
-                    "task_id": task_id,
-                    "summary": request.summary,
-                    "created_by": request.created_by,
-                    "timestamp": datetime.now().isoformat()
-                })
+                await self._broadcast_event(
+                    make_event(
+                        "task_created",
+                        {
+                            "task_id": task_id,
+                            "summary": request.summary,
+                            "created_by": request.created_by,
+                        },
+                    )
+                )
                 
                 return {"task_id": task_id}
             except Exception as e:
@@ -458,13 +457,16 @@ class MindSwarmServer:
                 
                 if success:
                     # Notify websocket clients
-                    await self._broadcast_event({
-                        "type": "announcement_updated",
-                        "title": request.title,
-                        "message": request.message,
-                        "priority": request.priority,
-                        "timestamp": datetime.now().isoformat()
-                    })
+                    await self._broadcast_event(
+                        make_event(
+                            "announcement_updated",
+                            {
+                                "title": request.title,
+                                "message": request.message,
+                                "priority": request.priority,
+                            },
+                        )
+                    )
                     
                     return {"success": True, "message": "Announcement updated successfully"}
                 else:
@@ -487,10 +489,7 @@ class MindSwarmServer:
                 
                 if success:
                     # Notify websocket clients
-                    await self._broadcast_event({
-                        "type": "announcements_cleared",
-                        "timestamp": datetime.now().isoformat()
-                    })
+                    await self._broadcast_event(make_event("announcements_cleared", {}))
                     
                     return {"success": True, "message": "All announcements cleared"}
                 else:
@@ -607,12 +606,12 @@ class MindSwarmServer:
                 )
                 
                 # Notify websocket clients
-                await self._broadcast_event({
-                    "type": "developer_registered",
-                    "name": request.name,
-                    "cyber_name": cyber_name,
-                    "timestamp": datetime.now().isoformat()
-                })
+                await self._broadcast_event(
+                    make_event(
+                        "developer_registered",
+                        {"name": request.name, "cyber_name": cyber_name},
+                    )
+                )
                 
                 return {"cyber_name": cyber_name}
             except Exception as e:
@@ -987,13 +986,16 @@ class MindSwarmServer:
                 )
                 
                 # Notify websocket clients about boost
-                await self._broadcast_event({
-                    "type": "token_boost_applied",
-                    "cyber_id": request.cyber_id or "all",
-                    "multiplier": request.multiplier,
-                    "duration_hours": request.duration_hours,
-                    "timestamp": datetime.now().isoformat()
-                })
+                await self._broadcast_event(
+                    make_event(
+                        "token_boost_applied",
+                        {
+                            "cyber_id": request.cyber_id or "all",
+                            "multiplier": request.multiplier,
+                            "duration_hours": request.duration_hours,
+                        },
+                    )
+                )
                 
                 return result
             except Exception as e:
@@ -1008,11 +1010,9 @@ class MindSwarmServer:
                 result = token_tracker.clear_token_boost(cyber_id=cyber_id)
                 
                 # Notify websocket clients about boost cleared
-                await self._broadcast_event({
-                    "type": "token_boost_cleared",
-                    "cyber_id": cyber_id or "all",
-                    "timestamp": datetime.now().isoformat()
-                })
+                await self._broadcast_event(
+                    make_event("token_boost_cleared", {"cyber_id": cyber_id or "all"})
+                )
                 
                 return result
             except Exception as e:
@@ -1137,11 +1137,9 @@ class MindSwarmServer:
                     raise HTTPException(status_code=500, detail=f"Failed to restart Cyber {cyber_name}")
                 
                 # Notify via websocket
-                await self._broadcast_event({
-                    "type": "cyber_restarted",
-                    "name": cyber_name,
-                    "timestamp": datetime.now().isoformat()
-                })
+                await self._broadcast_event(
+                    make_event("cyber_restarted", {"name": cyber_name})
+                )
                 
                 return {"success": True, "message": f"Cyber {cyber_name} restarted"}
             except HTTPException:
@@ -1166,11 +1164,9 @@ class MindSwarmServer:
                     await agent.set_state('sleeping')
                 
                 # Notify via websocket
-                await self._broadcast_event({
-                    "type": "cyber_paused",
-                    "name": cyber_name,
-                    "timestamp": datetime.now().isoformat()
-                })
+                await self._broadcast_event(
+                    make_event("cyber_paused", {"name": cyber_name})
+                )
                 
                 return {"success": True, "message": f"Cyber {cyber_name} paused"}
             except HTTPException:
@@ -1270,16 +1266,30 @@ class MindSwarmServer:
                     self.clients.remove(websocket)
     
     async def _broadcast_event(self, event: Dict[str, Any]):
-        """Broadcast an event to all connected WebSocket clients."""
+        """Broadcast an event to all connected WebSocket clients.
+
+        Accepts either a raw dict or a Pydantic model (converted to dict).
+        """
+        try:
+            # Support Pydantic BaseModel instances (typed events)
+            from pydantic import BaseModel  # Local import to avoid hard dep at import time
+
+            if isinstance(event, BaseModel):
+                payload: Dict[str, Any] = event.dict()
+            else:
+                payload = event
+        except Exception:
+            payload = event
+
         # Use WebSocket state manager for broadcasting
         ws_manager = get_ws_state_manager()
-        await ws_manager.broadcast_event(event)
+        await ws_manager.broadcast_event(payload)
         
         # Also send to legacy clients (for backward compatibility)
         disconnected = []
         for client in self.clients:
             try:
-                await client.send_json(event)
+                await client.send_json(payload)
             except:
                 disconnected.append(client)
         
