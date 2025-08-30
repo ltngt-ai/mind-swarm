@@ -417,7 +417,14 @@ class UnifiedStateManager:
                 # Check if the previous task was actually completed
                 # Look for it in the completed directory
                 if prev_task_id and prev_task_type:
-                    completed_path = Path("/personal/tasks/completed")
+                    # Community tasks are in grid, personal tasks are in personal
+                    if prev_task_type == 'community':
+                        completed_path = Path("/grid/community/tasks/completed")
+                    elif prev_task_type == 'maintenance':
+                        completed_path = Path("/personal/tasks/completed")
+                    else:  # hobby
+                        completed_path = Path("/personal/tasks/completed")
+                    
                     if completed_path.exists():
                         # Check if the task file exists in completed directory
                         for completed_file in completed_path.glob(f"{prev_task_id}_*.json"):
@@ -461,7 +468,7 @@ class UnifiedStateManager:
             if memory_stats:
                 # Use actual working memory tokens from execution stage (most accurate measure)
                 working_memory_tokens = memory_stats.get('last_working_memory_tokens', 0)
-                max_tokens = memory_stats.get('max_tokens', 100000)  # Default to 100k if not set
+                max_tokens = memory_stats.get('max_tokens', 65536)  # Default to 65k standard context
                 
                 # If we haven't run execution yet, fall back to memory count estimate
                 if working_memory_tokens == 0:
@@ -477,7 +484,11 @@ class UnifiedStateManager:
                 
                 # Also update memory_pressure as a standalone biofeedback metric (0-100)
                 # Use full max_tokens for the percentage display
-                bio["memory_pressure"] = min(100, (working_memory_tokens / max_tokens) * 100)
+                # Cap at 100% even if we exceed max (can happen with large prompts)
+                if max_tokens > 0:
+                    bio["memory_pressure"] = min(100, (working_memory_tokens / max_tokens) * 100)
+                else:
+                    bio["memory_pressure"] = 0
             
             # Combine factors for total tiredness
             bio["tiredness"] = min(100, time_factor + memory_pressure_factor)
