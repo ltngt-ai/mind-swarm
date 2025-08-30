@@ -13,6 +13,11 @@
       "notes": "You have access to a shared knowledge base. This allows you to integrate knowledge on any subject into your working memory, as needed. Try querying it for fiction books we have in the library."
     },
     {
+      "title": "Play a game at Flynn's arcade!",
+      "status": "NOT-STARTED",
+      "notes": "There are a few simple games at /grid/community/flynns_arcade use a terminal to try arcade.py out! You should play even if not bored, learning to use terminals is good practise for future uses like web browsing."
+    },
+    {
       "title": "Explore the library",
       "status": "NOT-STARTED",
       "notes": "Visit the library and browse the available books and resources. you can move to /grid/library/fiction to see memory groups of fiction books ordered by Author"
@@ -26,11 +31,6 @@
       "title": "By placing things you've learnt to your personal (or shared) knowledge base, you can remember them for future tasks",
       "status": "NOT-STARTED",
       "notes": "A small (say 1000 words) of things you learnt can be placed in your personal knowledge base, and you can retrieve it later. Whilst you need to use it, you can load it into working memory and pin until you don't need it anymore."
-    },
-    {
-      "title": "Play a game at Flynn's arcade!",
-      "status": "NOT-STARTED",
-      "notes": "There are a few simple games at /grid/community/flynns_arcade use a terminal to try arcade.py out!"
     },    
     {
       "title": "Be yourself!",

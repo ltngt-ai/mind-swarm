@@ -474,6 +474,14 @@ class ExecutionStage:
         script_response = await self._request_script_generation(working_memory_context)
         
         if script_response:
+            # Store token usage for memory pressure calculation
+            token_usage = script_response.get("token_usage", {})
+            if token_usage:
+                prompt_tokens = token_usage.get("prompt_tokens", 0)
+                # Store in memory system for pressure calculation
+                self.memory_system._last_working_memory_tokens = prompt_tokens
+                logger.debug(f"Execution stage used {prompt_tokens} prompt tokens")
+            
             script = script_response.get("output_values", {}).get("script", "")
             
             if script:

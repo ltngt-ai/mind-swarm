@@ -538,17 +538,12 @@ class Tasks:
                            if not k.startswith('_') and k != 'todo_list'}
                 json.dump(save_data, f, indent=2)
             
-            # Update unified state with current task
-            from ..state.unified_state_manager import StateSection
-            self.state_manager.update_value(StateSection.TASK, "current_task_id", task_id)
-            self.state_manager.update_value(StateSection.TASK, "current_task_type", 
-                                           "hobby" if task_id.startswith("HT-") else 
-                                           "maintenance" if task_id.startswith("MT-") else 
-                                           "community")
-            self.state_manager.update_value(StateSection.TASK, "current_task_summary", 
-                                           task.get('summary', ''))
-            self.state_manager.update_value(StateSection.TASK, "task_started_cycle", 
-                                           self.state_manager.get_value(StateSection.COGNITIVE, "cycle_count", 0))
+            # Update unified state with current task - use the new set_current_task method
+            # which automatically determines task type from ID
+            self.state_manager.set_current_task(
+                task_id=task_id,
+                summary=task.get('summary', '')
+            )
             
             return True
         except Exception:

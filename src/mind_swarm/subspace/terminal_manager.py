@@ -8,6 +8,7 @@ process management, and body file communication.
 import os
 import pty
 import select
+import sys
 import termios
 import tty
 import fcntl
@@ -91,6 +92,26 @@ class CyberTerminalManager:
             for session_id in list(self.sessions[cyber_id].keys()):
                 await self.close_session(cyber_id, session_id)
     
+    async def cleanup_cyber_sessions(self, cyber_id: str):
+        """Clean up all sessions for a specific cyber.
+        
+        This should be called when a cyber is stopped or terminated.
+        
+        Args:
+            cyber_id: ID of the Cyber
+        """
+        if cyber_id not in self.sessions:
+            return
+        
+        logger.info(f"Cleaning up {len(self.sessions[cyber_id])} terminal sessions for Cyber {cyber_id}")
+        
+        # Close all sessions for this cyber
+        for session_id in list(self.sessions[cyber_id].keys()):
+            try:
+                await self.close_session(cyber_id, session_id)
+            except Exception as e:
+                logger.error(f"Error closing session {session_id} for {cyber_id}: {e}")
+    
     async def create_session(self, cyber_id: str, command: str = "bash", 
                            name: Optional[str] = None,
                            working_dir: Optional[str] = None) -> str:
@@ -109,7 +130,13 @@ class CyberTerminalManager:
         if cyber_id not in self.sessions:
             self.sessions[cyber_id] = {}
         
-        if len(self.sessions[cyber_id]) >= self.max_sessions_per_cyber:
+        # Debug logging to understand the issue
+        current_sessions = len(self.sessions[cyber_id])
+        logger.debug(f"Cyber {cyber_id} has {current_sessions} active sessions, max is {self.max_sessions_per_cyber}")
+        if current_sessions > 0:
+            logger.debug(f"Active sessions for {cyber_id}: {list(self.sessions[cyber_id].keys())}")
+        
+        if current_sessions >= self.max_sessions_per_cyber:
             raise ValueError(f"Cyber {cyber_id} has reached maximum session limit ({self.max_sessions_per_cyber})")
         
         # Generate session ID
@@ -120,18 +147,69 @@ class CyberTerminalManager:
         if not cyber_dir.exists():
             raise ValueError(f"Cyber {cyber_id} not found")
         
-        if working_dir is None:
-            working_dir = str(cyber_dir)
+        # Determine working directory inside sandbox
+        sandbox_working_dir = "/personal"  # Default
+        if working_dir:
+            # Map host path to sandbox path
+            if str(self.coordinator.subspace.root_path / "grid") in working_dir:
+                # It's in grid, map to /grid/...
+                rel_path = Path(working_dir).relative_to(self.coordinator.subspace.root_path / "grid")
+                sandbox_working_dir = f"/grid/{rel_path}"
+            elif str(cyber_dir) in working_dir:
+                # It's in personal, map to /personal/...
+                rel_path = Path(working_dir).relative_to(cyber_dir)
+                sandbox_working_dir = f"/personal/{rel_path}"
         
         try:
-            # Create PTY
+            # Build bwrap command for sandboxed terminal
+            cyber_rootfs = self.coordinator.subspace.root_path / "cyber_rootfs"
+            
+            # Check if rootfs exists
+            if not cyber_rootfs.exists() or not (cyber_rootfs / ".mind_swarm_rootfs").exists():
+                logger.error(f"Cyber rootfs not found at {cyber_rootfs}")
+                raise RuntimeError("Cyber rootfs not initialized. Run setup_cyber_rootfs.sh as root.")
+            
+            # Create PTY first
             master_fd, slave_fd = pty.openpty()
             
             # Set terminal size
             winsize = struct.pack('HHHH', 24, 80, 0, 0)
             fcntl.ioctl(slave_fd, termios.TIOCSWINSZ, winsize)
             
-            # Fork and exec
+            # Build the bwrap command
+            bwrap_cmd = [
+                "bwrap",
+                "--die-with-parent",
+                "--unshare-all",
+                # IMPORTANT: Allow network for terminals (for package installs, etc)
+                "--share-net",
+                # Use the Debian rootfs
+                "--bind", str(cyber_rootfs), "/",
+                # Proc and dev
+                "--proc", "/proc",
+                "--dev", "/dev",
+                # Cyber's personal space
+                "--bind", str(cyber_dir), "/personal",
+                # The Grid
+                "--bind", str(self.coordinator.subspace.root_path / "grid"), "/grid",
+                # Temp directory
+                "--tmpfs", "/tmp",
+                # Set working directory
+                "--chdir", sandbox_working_dir,
+                # Environment
+                "--setenv", "CYBER_NAME", cyber_id,
+                "--setenv", "HOME", "/personal",
+                "--setenv", "PATH", "/usr/local/bin:/usr/bin:/bin",
+                "--setenv", "USER", "cyber",
+                "--setenv", "LANG", "C.UTF-8",
+                "--setenv", "TERM", "xterm-256color",
+                # The actual command to run
+                command
+            ]
+            
+            logger.debug(f"Starting sandboxed terminal with command: {' '.join(bwrap_cmd)}")
+            
+            # Fork to handle PTY properly
             pid = os.fork()
             if pid == 0:  # Child process
                 # Set up the slave terminal
@@ -144,17 +222,10 @@ class CyberTerminalManager:
                 os.close(master_fd)
                 os.close(slave_fd)
                 
-                # Change to working directory
-                os.chdir(working_dir)
-                
-                # Set environment
-                env = os.environ.copy()
-                env['TERM'] = 'xterm-256color'
-                env['HOME'] = str(cyber_dir)
-                env['USER'] = cyber_id
-                
-                # Execute command
-                os.execvpe('/bin/bash', ['/bin/bash', '-c', command], env)
+                # Execute bwrap
+                os.execvp("bwrap", bwrap_cmd)
+                # If we get here, exec failed
+                sys.exit(1)
                 
             # Parent process
             os.close(slave_fd)
@@ -184,14 +255,14 @@ class CyberTerminalManager:
             
             logger.info(f"Created terminal session {session_id} for Cyber {cyber_id}: {command}")
             
-            # Broadcast event
-            await self.coordinator.broadcast_event({
-                'type': 'terminal_created',
-                'cyber_id': cyber_id,
-                'session_id': session_id,
-                'command': command,
-                'name': name
-            })
+            # Broadcast event (disabled - broadcast_event not implemented)
+            # await self.coordinator.broadcast_event({
+            #     'type': 'terminal_created',
+            #     'cyber_id': cyber_id,
+            #     'session_id': session_id,
+            #     'command': command,
+            #     'name': name
+            # })
             
             return session_id
             
@@ -249,6 +320,12 @@ class CyberTerminalManager:
         
         session = self.sessions[cyber_id][session_id]
         
+        # Check if session is still active
+        if not session.is_active:
+            # Clean up the dead session
+            await self.close_session(cyber_id, session_id)
+            raise ValueError(f"Session {session_id} has terminated - process exited")
+        
         # Update activity
         session.last_activity = datetime.now()
         
@@ -256,7 +333,9 @@ class CyberTerminalManager:
             # Return clean text
             return {
                 'screen': '\n'.join(session.screen_buffer),
-                'cursor': session.cursor_position
+                'cursor': session.cursor_position,
+                'is_active': session.is_active,
+                'exit_status': 'running' if session.is_active else 'exited'
             }
         elif format == "structured":
             # Return structured data
@@ -270,7 +349,8 @@ class CyberTerminalManager:
                     'command': session.command,
                     'name': session.name,
                     'created_at': session.created_at.isoformat(),
-                    'is_active': session.is_active
+                    'is_active': session.is_active,
+                    'exit_status': 'running' if session.is_active else 'exited'
                 }
             }
         elif format == "raw":
@@ -356,12 +436,12 @@ class CyberTerminalManager:
             
             logger.info(f"Closed terminal session {session_id} for Cyber {cyber_id}")
             
-            # Broadcast event
-            await self.coordinator.broadcast_event({
-                'type': 'terminal_closed',
-                'cyber_id': cyber_id,
-                'session_id': session_id
-            })
+            # Broadcast event (disabled - broadcast_event not implemented)
+            # await self.coordinator.broadcast_event({
+            #     'type': 'terminal_closed',
+            #     'cyber_id': cyber_id,
+            #     'session_id': session_id
+            # })
             
         except Exception as e:
             logger.error(f"Failed to close session {cyber_id}/{session_id}: {e}")
@@ -379,7 +459,12 @@ class CyberTerminalManager:
             with open(body_path, 'r') as f:
                 data = json.load(f)
             
-            request = data.get('request', {})
+            request = data.get('request')
+            
+            # Skip if no request or request has been cleared
+            if not request:
+                return
+                
             action = request.get('action')
             
             response = {'status': 'error', 'message': 'Unknown action'}
@@ -388,8 +473,32 @@ class CyberTerminalManager:
                 # Create new session
                 command = request.get('data', {}).get('command', 'bash')
                 name = request.get('data', {}).get('name')
+                working_dir = request.get('data', {}).get('working_dir')
                 
-                session_id = await self.create_session(cyber_id, command, name)
+                # If no working_dir provided, try to get cyber's current location
+                if not working_dir:
+                    try:
+                        # Map cyber's location to filesystem path
+                        cyber_dir = self.coordinator.subspace.cybers_dir / cyber_id
+                        state_file = cyber_dir / '.internal' / 'memory' / 'unified_state.json'
+                        if state_file.exists():
+                            with open(state_file, 'r') as f:
+                                state = json.load(f)
+                            # Get location from unified state
+                            location = state.get('location', {}).get('current_location')
+                            if location:
+                                # Map the location to actual filesystem path
+                                if location.startswith('/grid/'):
+                                    # Map grid location to actual path
+                                    working_dir = str(self.coordinator.subspace.root_path / location.lstrip('/'))
+                                elif location.startswith('/personal/'):
+                                    # Map personal location to cyber's directory
+                                    personal_path = location.replace('/personal/', '')
+                                    working_dir = str(cyber_dir / personal_path)
+                    except Exception as e:
+                        logger.debug(f"Could not determine working directory from location: {e}")
+                
+                session_id = await self.create_session(cyber_id, command, name, working_dir)
                 response = {
                     'status': 'success',
                     'session_id': session_id,
@@ -439,14 +548,15 @@ class CyberTerminalManager:
                     'data': {'closed': True}
                 }
             
-            # Write response
+            # Write response and clear the request to prevent reprocessing
             data['response'] = response
+            data['request'] = None  # Clear request to indicate it's been processed
             with open(body_path, 'w') as f:
                 json.dump(data, f, indent=2)
                 
         except Exception as e:
             logger.error(f"Failed to handle terminal body for {cyber_id}: {e}")
-            # Write error response
+            # Write error response and clear request
             try:
                 with open(body_path, 'r') as f:
                     data = json.load(f)
@@ -454,6 +564,7 @@ class CyberTerminalManager:
                     'status': 'error',
                     'message': str(e)
                 }
+                data['request'] = None  # Clear request even on error to prevent infinite retries
                 with open(body_path, 'w') as f:
                     json.dump(data, f, indent=2)
             except:
@@ -482,13 +593,13 @@ class CyberTerminalManager:
                         output = data.decode('utf-8', errors='replace')
                         self._update_screen_buffer(session, output)
                         
-                        # Broadcast output event
-                        await self.coordinator.broadcast_event({
-                            'type': 'terminal_output',
-                            'cyber_id': cyber_id,
-                            'session_id': session_id,
-                            'output': output
-                        })
+                        # Broadcast output event (disabled - broadcast_event not implemented)
+                        # await self.coordinator.broadcast_event({
+                        #     'type': 'terminal_output',
+                        #     'cyber_id': cyber_id,
+                        #     'session_id': session_id,
+                        #     'output': output
+                        # })
                     else:
                         # Process has exited
                         session.is_active = False

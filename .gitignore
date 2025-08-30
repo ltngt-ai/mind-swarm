@@ -11,6 +11,7 @@ downloads/
 eggs/
 .eggs/
 lib/
+!subspace_template/grid/community/flynns_arcade/lib/
 lib64/
 parts/
 sdist/

@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 import logging
 
+from ..state.unified_state_manager import StateSection
+
 logger = logging.getLogger("Cyber.status")
 
 
@@ -27,6 +29,7 @@ class StatusManager:
         self.cognitive_loop = cognitive_loop
         self.personal = Path(cognitive_loop.personal)
         self.memory_system = cognitive_loop.memory_system
+        self.state_manager = cognitive_loop.state_manager
         
         # Status file paths
         self.status_dir = self.personal / '.internal' / 'memory' / 'status'
@@ -135,10 +138,11 @@ class StatusManager:
         lines.append(f"I am Cyber {name}.")
         
         lines.append("\n**Personal Stats:**")
-        lines.append(f"- Boredom:     {self._make_bar(stats['boredom'])} ({stats['boredom']}%)")
-        lines.append(f"- Tiredness:   {self._make_bar(stats['tiredness'])} ({stats['tiredness']}%)")
-        lines.append(f"- Duty:        {self._make_bar(stats['duty'])} ({stats['duty']}%)")
-        lines.append(f"- Restlessness:{self._make_bar(stats['restlessness'])} ({stats['restlessness']}%)")
+        lines.append(f"- Boredom:     {self._make_bar(int(stats['boredom']))} ({int(stats['boredom'])}%)")
+        lines.append(f"- Tiredness:   {self._make_bar(int(stats['tiredness']))} ({int(stats['tiredness'])}%)")
+        lines.append(f"- Duty:        {self._make_bar(int(stats['duty']))} ({int(stats['duty'])}%)")
+        lines.append(f"- Restlessness:{self._make_bar(int(stats['restlessness']))} ({int(stats['restlessness'])}%)")
+        lines.append(f"- Memory:      {self._make_bar(int(stats.get('memory_pressure', 0)))} ({int(stats.get('memory_pressure', 0))}%)")
         lines.append(f"- Cycle:       {cycle}")
         
         # Add warnings if needed
@@ -161,6 +165,11 @@ class StatusManager:
             lines.append("\n⚠ Very restless - you need to explore! Move to a new location.")
         elif stats['restlessness'] > 60:
             lines.append("\n💭 Getting restless - maybe explore a different area?")
+        
+        if stats.get('memory_pressure', 0) > 80:
+            lines.append("\n⚠ High memory pressure - consider cleaning up old memories!")
+        elif stats.get('memory_pressure', 0) > 60:
+            lines.append("\n💭 Memory filling up - might want to review and consolidate memories")
         
         lines.append(f"\n**Environment:**")
         lines.append(f"- Time: {current_time}")
@@ -483,23 +492,28 @@ class StatusManager:
             logger.error(f"Failed to save state: {e}")
     
     def get_biofeedback(self) -> Dict[str, int]:
-        """Calculate current biofeedback stats.
+        """Get current biofeedback stats from UnifiedStateManager.
         
         Returns:
-            Dict with boredom, tiredness, and duty percentages (0-100)
+            Dict with boredom, tiredness, duty, restlessness, and memory_pressure percentages (0-100)
         """
-        # Update state based on current task and activity
-        self._update_biofeedback()
+        # Get current task info for biofeedback update
+        current_task = None
+        task_id = self.state_manager.get_value(StateSection.TASK, "current_task_id")
+        if task_id:
+            current_task = {
+                'id': task_id,
+                'summary': self.state_manager.get_value(StateSection.TASK, "current_task_summary")
+            }
         
-        # Manage maintenance tasks based on tiredness
-        self._manage_maintenance_tasks()
+        # Get memory stats
+        memory_stats = self.memory_system.get_memory_stats()
         
-        return {
-            'boredom': min(100, max(0, self.state['boredom'])),
-            'tiredness': min(100, max(0, self.state['tiredness'])),
-            'duty': min(100, max(0, self.state['duty'])),
-            'restlessness': min(100, max(0, self.state.get('restlessness', 0)))
-        }
+        # Update and get biofeedback from UnifiedStateManager (single source of truth)
+        return self.state_manager.update_biofeedback(
+            current_task=current_task,
+            memory_stats=memory_stats
+        )
     
     def _manage_maintenance_tasks(self):
         """Manage maintenance tasks based on tiredness level.

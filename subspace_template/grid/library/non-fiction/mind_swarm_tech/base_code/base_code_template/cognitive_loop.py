@@ -470,6 +470,23 @@ class CognitiveLoop:
             
             self._update_dynamic_context(stage="REFLECT", phase="STARTING")
             await self.reflect_stage.reflect()
+            
+            # Update biofeedback with memory stats
+            try:
+                memory_stats = self.memory_system.get_memory_stats()
+                task_id = self.state_manager.get_value(StateSection.TASK, "current_task_id")
+                task_info = {
+                    'id': task_id,
+                    'summary': self.state_manager.get_value(StateSection.TASK, "current_task_summary")
+                } if task_id else None
+                
+                self.state_manager.update_biofeedback(
+                    current_task=task_info,
+                    memory_stats=memory_stats
+                )
+                logger.debug(f"Updated biofeedback with memory stats: {memory_stats.get('total_memories', 0)} memories")
+            except Exception as e:
+                logger.debug(f"Failed to update biofeedback: {e}")
                 
             # Save checkpoint after completing all stages
             await self._save_checkpoint()

@@ -501,6 +501,10 @@ class SubspaceCoordinator:
             del self._io_handlers[name]
             logger.info(f"Cleaned up I/O handlers for {name}")
         
+        # Clean up any terminal sessions for this cyber
+        if hasattr(self, 'terminal_manager') and self.terminal_manager:
+            await self.terminal_manager.cleanup_cyber_sessions(name)
+        
         # Terminate the Cyber process
         await self.spawner.terminate_agent(name)
     

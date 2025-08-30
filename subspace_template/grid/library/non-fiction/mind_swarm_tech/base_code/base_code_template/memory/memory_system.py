@@ -59,6 +59,9 @@ class MemorySystem:
             "cache_misses": 0
         }
         
+        # Track actual working memory size from execution stage
+        self._last_working_memory_tokens = 0
+        
         logger.info(f"Memory system initialized with {max_tokens} token budget")
     
     # === CORE MEMORY OPERATIONS ===
@@ -494,11 +497,18 @@ class MemorySystem:
         """
         base_stats = self._memory_manager.get_memory_stats()
         
+        # Calculate total token usage
+        token_breakdown = self.get_token_usage_breakdown()
+        total_token_usage = sum(token_breakdown.values())
+        
         return {
             **base_stats,
             "cache_size": len(self._content_loader.cache.cache),
             "system_stats": self._stats.copy(),
             "max_tokens": self.max_tokens,
+            "token_breakdown": token_breakdown,
+            "total_token_usage": total_token_usage,
+            "last_working_memory_tokens": self._last_working_memory_tokens,
             "filesystem_root": str(self.filesystem_root)
         }
     

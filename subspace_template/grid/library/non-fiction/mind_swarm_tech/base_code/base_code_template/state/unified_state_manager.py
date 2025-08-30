@@ -55,12 +55,16 @@ class UnifiedStateManager:
             'boredom_increment': 5,
             'tiredness_increment': 2,
             'tiredness_decay': 20,
-            'duty_decay_cycles': 20,
-            'duty_decay_amount': 5,
-            'duty_completion_bonus': 20,
+            'duty_decay_cycles': 20,  # Duty decays over time
+            'duty_decay_amount': 5,   # Amount duty decreases
+            'duty_completion_bonus': 20,  # Amount duty increases when CT completed
+            'duty_working_increment': 2,  # Amount duty increases per cycle working on CT
             'restlessness_increment_cycles': 10,
             'restlessness_increment': 10,
             'restlessness_move_decay': 10,
+            # Memory pressure configuration
+            'memory_usage_factor': 0.7,  # Use 70% of available context as target
+            'expected_working_memories': 50,  # Expected healthy working memory count
         }
         
     def _create_default_state(self) -> Dict[str, Any]:
@@ -92,8 +96,9 @@ class UnifiedStateManager:
             StateSection.BIOFEEDBACK.value: {
                 "boredom": 0,
                 "tiredness": 0,
-                "duty": 100,
+                "duty": 100,  # Starts at 100, decays over time
                 "restlessness": 0,
+                "memory_pressure": 0,  # Memory usage as percentage (0-100)
                 "last_update_cycle": 0,
                 "cycles_on_current_task": 0,
                 "cycles_since_maintenance": 0,
@@ -355,11 +360,14 @@ class UnifiedStateManager:
         return new_value
     
     
-    def update_biofeedback(self, current_task: Optional[Dict[str, Any]] = None) -> Dict[str, int]:
+    def update_biofeedback(self, 
+                          current_task: Optional[Dict[str, Any]] = None,
+                          memory_stats: Optional[Dict[str, Any]] = None) -> Dict[str, int]:
         """Update biofeedback metrics based on current state.
         
         Args:
             current_task: Current task information
+            memory_stats: Memory system statistics (from memory_system.get_memory_stats())
             
         Returns:
             Updated biofeedback metrics
@@ -371,6 +379,13 @@ class UnifiedStateManager:
         
         current_cycle = cognitive["cycle_count"]
         
+        # Debug logging for task tracking
+        if current_task:
+            # Ensure task type is set, derive from ID if needed
+            if not current_task.get('task_type') and current_task.get('id'):
+                current_task['task_type'] = self._get_task_type_from_id(current_task['id'])
+            logger.debug(f"Biofeedback update - task: {current_task.get('id')}, type: {current_task.get('task_type')}")
+        
         # Skip if same cycle
         if current_cycle <= bio["last_update_cycle"]:
             return self.get_biofeedback_stats()
@@ -380,27 +395,94 @@ class UnifiedStateManager:
             if current_task['id'] == task["current_task_id"]:
                 # Same task
                 bio["cycles_on_current_task"] += 1
-                if current_task.get('task_type') != 'hobby':
-                    # Increase boredom for non-hobby tasks
+                # Determine task type from ID
+                task_type = self._get_task_type_from_id(current_task['id'])
+                
+                if task_type == 'community':
+                    # Increase duty while working on community tasks
+                    bio["duty"] = min(100, bio["duty"] + self.config['duty_working_increment'])
+                    # Community tasks don't increase boredom as much
+                    bio["boredom"] = min(100, bio["boredom"] + self.config['boredom_increment'] // 2)
+                elif task_type == 'hobby':
+                    # Decrease boredom for hobby tasks
+                    bio["boredom"] = max(0, bio["boredom"] - self.config['boredom_increment'])
+                else:
+                    # Increase boredom for other tasks (maintenance, etc)
                     bio["boredom"] = min(100, bio["boredom"] + self.config['boredom_increment'])
             else:
-                # Task changed - reset boredom
+                # Task changed - check if previous task was completed
+                prev_task_id = task["current_task_id"]
+                prev_task_type = task["current_task_type"]
+                
+                # Check if the previous task was actually completed
+                # Look for it in the completed directory
+                if prev_task_id and prev_task_type:
+                    completed_path = Path("/personal/tasks/completed")
+                    if completed_path.exists():
+                        # Check if the task file exists in completed directory
+                        for completed_file in completed_path.glob(f"{prev_task_id}_*.json"):
+                            # Task was completed, credit it
+                            logger.info(f"Task {prev_task_id} found in completed directory, crediting completion")
+                            self.credit_task_completion(prev_task_id, prev_task_type)
+                            break
+                
+                # Update to new task
                 task["current_task_id"] = current_task['id']
-                task["current_task_type"] = current_task.get('task_type')
+                # Derive task type from ID
+                task["current_task_type"] = self._get_task_type_from_id(current_task['id'])
                 task["current_task_summary"] = current_task.get('summary')
                 task["task_started_cycle"] = current_cycle
                 bio["cycles_on_current_task"] = 1
                 bio["boredom"] = max(0, bio["boredom"] - 20)
         
-        # Update tiredness based on maintenance activity
-        if current_task and current_task.get('task_type') == 'maintenance':
-            bio["tiredness"] = max(0, bio["tiredness"] - self.config['tiredness_decay'])
+        # Update tiredness using hybrid calculation (time + memory pressure)
+        if current_task and self._get_task_type_from_id(current_task['id']) == 'maintenance':
+            # Gradually reduce tiredness while doing maintenance (not just on completion)
+            reduction = self.config.get('tiredness_decay', 20)
+            logger.info(f"Maintenance task in progress: {current_task.get('id')} - reducing tiredness by {reduction}")
+            bio["tiredness"] = max(0, bio["tiredness"] - reduction)
             bio["cycles_since_maintenance"] = 0
+            
+            # Still update memory_pressure even during maintenance
+            if memory_stats:
+                total_memories = memory_stats.get('total_memories', 0)
+                expected_max = self.config.get('expected_working_memories', 50)
+                bio["memory_pressure"] = min(100, (total_memories / expected_max) * 100)
         else:
             bio["cycles_since_maintenance"] += 1
-            bio["tiredness"] = min(100, bio["tiredness"] + self.config['tiredness_increment'])
+            
+            # Calculate hybrid tiredness
+            # Time component (0-50% of tiredness)
+            maintenance_interval = 100  # Expected cycles between maintenance
+            time_factor = min(bio["cycles_since_maintenance"] / maintenance_interval, 1.0) * 50
+            
+            # Memory pressure component (0-50% of tiredness) 
+            memory_pressure_factor = 0
+            if memory_stats:
+                # Use actual working memory tokens from execution stage (most accurate measure)
+                working_memory_tokens = memory_stats.get('last_working_memory_tokens', 0)
+                max_tokens = memory_stats.get('max_tokens', 100000)  # Default to 100k if not set
+                
+                # If we haven't run execution yet, fall back to memory count estimate
+                if working_memory_tokens == 0:
+                    # Rough estimate: assume 100 tokens per memory block
+                    total_memories = memory_stats.get('total_memories', 0)
+                    working_memory_tokens = total_memories * 100
+                
+                # Use a comfortable threshold (e.g., 70% of max tokens)
+                comfortable_threshold = max_tokens * 0.7
+                
+                # Calculate pressure as ratio of current to comfortable threshold
+                memory_pressure_factor = min(working_memory_tokens / comfortable_threshold, 1.0) * 50
+                
+                # Also update memory_pressure as a standalone biofeedback metric (0-100)
+                # Use full max_tokens for the percentage display
+                bio["memory_pressure"] = min(100, (working_memory_tokens / max_tokens) * 100)
+            
+            # Combine factors for total tiredness
+            bio["tiredness"] = min(100, time_factor + memory_pressure_factor)
         
-        # Update duty decay
+        # Update duty decay (duty decreases over time)
         cycles_since_decrement = current_cycle - bio["last_duty_decrement_cycle"]
         if cycles_since_decrement >= self.config['duty_decay_cycles']:
             decrements = cycles_since_decrement // self.config['duty_decay_cycles']
@@ -433,7 +515,8 @@ class UnifiedStateManager:
             'boredom': min(100, max(0, bio['boredom'])),
             'tiredness': min(100, max(0, bio['tiredness'])),
             'duty': min(100, max(0, bio['duty'])),
-            'restlessness': min(100, max(0, bio['restlessness']))
+            'restlessness': min(100, max(0, bio['restlessness'])),
+            'memory_pressure': min(100, max(0, bio.get('memory_pressure', 0)))
         }
     
     def credit_task_completion(self, task_id: str, task_type: str) -> bool:
@@ -483,6 +566,51 @@ class UnifiedStateManager:
         except Exception as e:
             logger.error(f"Failed to credit task completion: {e}")
             return False
+    
+    def _get_task_type_from_id(self, task_id: str) -> str:
+        """Determine task type from task ID prefix.
+        
+        Args:
+            task_id: Task identifier (e.g., MT-001, HT-002, CT-003)
+            
+        Returns:
+            Task type (maintenance, hobby, community, general)
+        """
+        if not task_id:
+            return "general"
+            
+        prefix = task_id.split('-')[0].upper() if '-' in task_id else task_id[:2].upper()
+        
+        type_map = {
+            'MT': 'maintenance',
+            'HT': 'hobby',
+            'CT': 'community',
+            'ST': 'system',
+            'RT': 'routine',
+        }
+        
+        return type_map.get(prefix, 'general')
+    
+    def set_current_task(self, task_id: str, summary: str = None) -> None:
+        """Set the current task information.
+        
+        Args:
+            task_id: Task identifier (type determined from prefix)
+            summary: Task summary/description
+        """
+        task = self.state[StateSection.TASK.value]
+        task["current_task_id"] = task_id
+        
+        # Automatically determine task type from ID
+        task_type = self._get_task_type_from_id(task_id)
+        task["current_task_type"] = task_type
+        
+        if summary:
+            task["current_task_summary"] = summary
+        task["task_started_cycle"] = self.state[StateSection.COGNITIVE.value]["cycle_count"]
+        
+        logger.info(f"Set current task: {task_id} (type={task_type})")
+        self.save_state()
     
     def update_location(self, new_location: str) -> bool:
         """Update current location.
