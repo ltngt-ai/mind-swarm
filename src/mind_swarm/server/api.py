@@ -162,6 +162,11 @@ class MindSwarmServer:
             self.cycle_monitor = get_cycle_monitor(subspace_root, event_emitter=get_event_emitter())
             asyncio.create_task(self.cycle_monitor.start())
             
+            # Initialize and start biofeedback monitor
+            from mind_swarm.server.biofeedback import get_biofeedback_monitor
+            self.biofeedback_monitor = get_biofeedback_monitor()
+            asyncio.create_task(self.biofeedback_monitor.start())
+            
             # Start the coordinator initialization in background
             # This prevents blocking the HTTP server startup
             asyncio.create_task(_initialize_coordinator())
@@ -206,6 +211,10 @@ class MindSwarmServer:
             # Stop cycle monitor
             if hasattr(self, 'cycle_monitor'):
                 await self.cycle_monitor.stop()
+            
+            # Stop biofeedback monitor
+            if hasattr(self, 'biofeedback_monitor'):
+                await self.biofeedback_monitor.stop()
             
             # The actual shutdown is handled by the daemon's shutdown method
             # We just need to close websocket connections here
@@ -1183,6 +1192,35 @@ class MindSwarmServer:
             except Exception as e:
                 logger.error(f"Failed to pause Cyber {cyber_name}: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
+        
+        # Biofeedback endpoints
+        @self.app.get("/biofeedback/{name}/current")
+        async def get_biofeedback_current(name: str):
+            """Get the latest biofeedback state for a given Cyber."""
+            from mind_swarm.server.biofeedback import get_biofeedback_monitor
+            
+            monitor = get_biofeedback_monitor()
+            state = await monitor.get_current_state(name)
+            
+            if not state:
+                raise HTTPException(status_code=404, detail=f"Cyber {name} not found or no biofeedback data available")
+            
+            return state.to_dict()
+        
+        @self.app.get("/biofeedback/{name}/history")
+        async def get_biofeedback_history(name: str, minutes: int = 15):
+            """Get recent biofeedback history for a Cyber."""
+            from mind_swarm.server.biofeedback import get_biofeedback_monitor
+            
+            if minutes < 1 or minutes > 60:
+                raise HTTPException(status_code=400, detail="Minutes must be between 1 and 60")
+            
+            monitor = get_biofeedback_monitor()
+            history = await monitor.get_history(name, minutes)
+            
+            return {
+                "items": [state.to_dict() for state in history]
+            }
         
         @self.app.websocket("/logs/stream")
         async def logs_websocket_endpoint(websocket: WebSocket):
