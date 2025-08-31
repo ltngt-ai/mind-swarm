@@ -73,26 +73,9 @@ class StatusManager:
                 os.fsync(f.fileno())  # Force write to disk
             os.rename(temp_file, self.status_file)
             
-            # Save JSON version for machine reading
-            current_task = self._get_current_task()
-            
-            stats = self.get_biofeedback()
-            status_data = {
-                'cycle': self.cognitive_loop.cycle,
-                'timestamp': datetime.now().isoformat(),
-                'name': self._get_cyber_name(),
-                'biofeedback': stats,
-                'current_task': {
-                    'id': current_task.get('id') if current_task else None,
-                    'type': current_task.get('task_type') if current_task else None,
-                    'summary': current_task.get('summary') if current_task else None
-                }
-            }
-            
-            temp_json = self.status_json.with_suffix('.tmp')
-            with open(temp_json, 'w') as f:
-                json.dump(status_data, f, indent=2)
-            os.rename(temp_json, self.status_json)
+            # REMOVED: JSON version was violating single source of truth
+            # All state should be read from unified_state.json, not duplicated here
+            # The status.txt file is just for human-readable display
             
             logger.debug(f"Status rendered to {self.status_file}")
             

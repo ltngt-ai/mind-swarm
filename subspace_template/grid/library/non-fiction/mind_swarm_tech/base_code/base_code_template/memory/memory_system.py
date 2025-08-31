@@ -237,9 +237,15 @@ class MemorySystem:
         # Build context
         context = self._context_builder.build_context(selected_memories, format_type)
         
+        # DON'T update last working memory tokens here - execution stage sets the ACTUAL token count
+        # from the LLM response. Only update if we don't have a real count yet.
+        if self._last_working_memory_tokens == 0:
+            # Only use estimate if we don't have actual token count from execution stage
+            self._last_working_memory_tokens = len(context) // 4  # Rough token estimate
+        
         self._stats["contexts_built"] += 1
         logger.debug(f"Built context with {len(selected_memories)} memories, "
-                    f"~{len(context)//4} tokens (budget: {token_budget})")
+                    f"~{self._last_working_memory_tokens} tokens (budget: {token_budget})")
         
         return context
     

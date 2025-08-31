@@ -584,11 +584,45 @@ class Tasks:
                 print("Successfully claimed community task")
         """
         if not self.community_open_dir.exists():
-            return False
+            self.community_open_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Get cyber name from status.json
+        status_file = self.personal / '.internal' / 'status.json'
+        if status_file.exists():
+            with open(status_file, 'r') as f:
+                status_data = json.load(f)
+                cyber_name = status_data['name']
+        else:
+            cyber_name = "Unknown"
+        
+        # First check if we already claimed this task (idempotent operation)
+        if self.community_claimed_dir.exists():
+            claimed_files = list(self.community_claimed_dir.glob(f"{task_id}_*.json"))
+            if not claimed_files:
+                claimed_files = [self.community_claimed_dir / f"{task_id}.json"]
+            
+            for claimed_file in claimed_files:
+                if claimed_file.exists():
+                    try:
+                        with open(claimed_file, 'r') as f:
+                            task_data = json.load(f)
+                        # If we already claimed it, just make it current
+                        if task_data.get('claimed_by') == cyber_name:
+                            # Update unified state to make it current
+                            self.state_manager.set_current_task(
+                                task_id=task_id,
+                                summary=task_data.get('summary', '')
+                            )
+                            return True
+                    except:
+                        pass
         
         # Check if already have an active community task
         current_task = self.get_current()
         if current_task and current_task.get('task_type') == 'community':
+            # If it's the same task, that's fine - idempotent
+            if current_task.get('task_id') == task_id:
+                return True
             raise TasksError("Already have an active community task. Complete or block it first.")
         
         # Find the community task in open folder
@@ -638,6 +672,13 @@ class Tasks:
                 os.rename(temp_file, claimed_file)
                 # Success! Now remove from open folder
                 task_file.unlink()
+                
+                # Update unified state with the newly claimed task
+                self.state_manager.set_current_task(
+                    task_id=task_id,
+                    summary=task_data.get('summary', '')
+                )
+                
                 return True
             except OSError:
                 # Someone else claimed it first
@@ -864,6 +905,24 @@ class Tasks:
                 from ..state.unified_state_manager import StateSection
                 current_id = self.state_manager.get_value(StateSection.TASK, "current_task_id")
                 if current_id == task_id:
+                    # If completing a task (not blocking), credit the completion
+                    if target_dir == self.completed_dir:
+                        task_type = task_data.get('task_type')
+                        if not task_type:
+                            # Determine from task ID if not in data
+                            if task_id.startswith('CT-'):
+                                task_type = 'community'
+                            elif task_id.startswith('MT-'):
+                                task_type = 'maintenance'
+                            elif task_id.startswith('HT-'):
+                                task_type = 'hobby'
+                        
+                        if task_type:
+                            # Credit the completion for biofeedback
+                            self.state_manager.credit_task_completion(task_id, task_type)
+                            logger.info(f"Credited {task_type} task {task_id} completion")
+                    
+                    # Clear current task
                     self.state_manager.update_value(StateSection.TASK, "current_task_id", None)
                     self.state_manager.update_value(StateSection.TASK, "current_task_type", None)
                     self.state_manager.update_value(StateSection.TASK, "current_task_summary", None)
@@ -973,6 +1032,49 @@ class Tasks:
             return True
         except Exception:
             return False
+    
+    def get_all(self) -> List[Dict[str, Any]]:
+        """Get all tasks across all directories.
+        
+        Returns:
+            List of all task dictionaries
+        """
+        tasks = []
+        
+        # Check all task directories
+        for dir in [self.hobby_dir, self.maintenance_dir, self.blocked_dir, self.completed_dir]:
+            if dir.exists():
+                for task_file in dir.glob("*.json"):
+                    try:
+                        with open(task_file, 'r') as f:
+                            task_data = json.load(f)
+                            task_data['_file'] = str(task_file)
+                            tasks.append(task_data)
+                    except Exception:
+                        pass
+        
+        # Also check community tasks claimed by this cyber
+        try:
+            status_file = self.personal / '.internal' / 'status.json'
+            if status_file.exists():
+                with open(status_file, 'r') as f:
+                    cyber_name = json.load(f)['name']
+                
+                # Check claimed community tasks
+                if self.community_claimed_dir.exists():
+                    for task_file in self.community_claimed_dir.glob("CT-*.json"):
+                        try:
+                            with open(task_file, 'r') as f:
+                                task_data = json.load(f)
+                                if task_data.get('claimed_by') == cyber_name:
+                                    task_data['_file'] = str(task_file)
+                                    tasks.append(task_data)
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+        
+        return tasks
     
     def get_summary(self) -> Dict[str, Any]:
         """Get task statistics summary.

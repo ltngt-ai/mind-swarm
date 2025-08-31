@@ -61,7 +61,7 @@ class UnifiedStateManager:
             'duty_working_increment': 2,  # Amount duty increases per cycle working on CT
             'restlessness_increment_cycles': 10,
             'restlessness_increment': 10,
-            'restlessness_move_decay': 10,
+            'restlessness_move_decay': 30,  # Increased from 10 to make moves more effective
             # Memory pressure configuration
             'memory_usage_factor': 0.7,  # Use 70% of available context as target
             'expected_working_memories': 50,  # Expected healthy working memory count
@@ -390,50 +390,61 @@ class UnifiedStateManager:
         if current_cycle <= bio["last_update_cycle"]:
             return self.get_biofeedback_stats()
         
+        # Check if task has changed (including task completion where current_task becomes None)
+        current_task_id = current_task['id'] if current_task else None
+        prev_task_id = task["current_task_id"]
+        prev_task_type = task["current_task_type"]
+        
         # Update boredom based on task continuity
-        if current_task:
-            if current_task['id'] == task["current_task_id"]:
-                # Same task
-                bio["cycles_on_current_task"] += 1
-                # Determine task type from ID
-                task_type = self._get_task_type_from_id(current_task['id'])
-                
-                if task_type == 'community':
-                    # Increase duty while working on community tasks
-                    bio["duty"] = min(100, bio["duty"] + self.config['duty_working_increment'])
-                    # Community tasks don't increase boredom as much
-                    bio["boredom"] = min(100, bio["boredom"] + self.config['boredom_increment'] // 2)
-                elif task_type == 'hobby':
-                    # Decrease boredom for hobby tasks
-                    bio["boredom"] = max(0, bio["boredom"] - self.config['boredom_increment'])
-                else:
-                    # Increase boredom for other tasks (maintenance, etc)
-                    bio["boredom"] = min(100, bio["boredom"] + self.config['boredom_increment'])
+        if current_task_id == prev_task_id and current_task_id is not None:
+            # Same task (and not None)
+            bio["cycles_on_current_task"] += 1
+            # Determine task type from ID
+            task_type = self._get_task_type_from_id(current_task['id'])
+            
+            if task_type == 'community':
+                # Increase duty while working on community tasks
+                bio["duty"] = min(100, bio["duty"] + self.config['duty_working_increment'])
+                # Community tasks don't increase boredom as much
+                bio["boredom"] = min(100, bio["boredom"] + self.config['boredom_increment'] // 2)
+            elif task_type == 'hobby':
+                # Decrease boredom for hobby tasks
+                bio["boredom"] = max(0, bio["boredom"] - self.config['boredom_increment'])
             else:
-                # Task changed - check if previous task was completed
-                prev_task_id = task["current_task_id"]
-                prev_task_type = task["current_task_type"]
+                # Increase boredom for other tasks (maintenance, etc)
+                bio["boredom"] = min(100, bio["boredom"] + self.config['boredom_increment'])
+        else:
+            # Task changed - check if previous task was completed
+            logger.info(f"Task changed from {prev_task_id} ({prev_task_type}) to {current_task_id} ({self._get_task_type_from_id(current_task_id) if current_task_id else 'none'})")
+            
+            # Check if the previous task was actually completed
+            # Look for it in the completed directory
+            if prev_task_id and prev_task_type:
+                # Community tasks are in grid, personal tasks are in personal
+                if prev_task_type == 'community':
+                    completed_path = Path("/grid/community/tasks/completed")
+                elif prev_task_type == 'maintenance':
+                    completed_path = Path("/personal/.internal/tasks/completed")  # Fixed path
+                else:  # hobby
+                    completed_path = Path("/personal/.internal/tasks/completed")  # Fixed path
                 
-                # Check if the previous task was actually completed
-                # Look for it in the completed directory
-                if prev_task_id and prev_task_type:
-                    # Community tasks are in grid, personal tasks are in personal
-                    if prev_task_type == 'community':
-                        completed_path = Path("/grid/community/tasks/completed")
-                    elif prev_task_type == 'maintenance':
-                        completed_path = Path("/personal/tasks/completed")
-                    else:  # hobby
-                        completed_path = Path("/personal/tasks/completed")
-                    
-                    if completed_path.exists():
-                        # Check if the task file exists in completed directory
-                        for completed_file in completed_path.glob(f"{prev_task_id}_*.json"):
-                            # Task was completed, credit it
-                            logger.info(f"Task {prev_task_id} found in completed directory, crediting completion")
-                            self.credit_task_completion(prev_task_id, prev_task_type)
-                            break
-                
-                # Update to new task
+                logger.info(f"Checking for completed task in {completed_path}")
+                if completed_path.exists():
+                    # Check if the task file exists in completed directory
+                    found = False
+                    for completed_file in completed_path.glob(f"{prev_task_id}_*.json"):
+                        # Task was completed, credit it
+                        logger.info(f"Task {prev_task_id} found in completed directory at {completed_file}, crediting completion")
+                        self.credit_task_completion(prev_task_id, prev_task_type)
+                        found = True
+                        break
+                    if not found:
+                        logger.info(f"Task {prev_task_id} not found in completed directory")
+                else:
+                    logger.warning(f"Completed directory does not exist: {completed_path}")
+            
+            # Update to new task
+            if current_task:
                 task["current_task_id"] = current_task['id']
                 # Derive task type from ID
                 task["current_task_type"] = self._get_task_type_from_id(current_task['id'])
@@ -441,6 +452,13 @@ class UnifiedStateManager:
                 task["task_started_cycle"] = current_cycle
                 bio["cycles_on_current_task"] = 1
                 bio["boredom"] = max(0, bio["boredom"] - 20)
+            else:
+                # No current task
+                task["current_task_id"] = None
+                task["current_task_type"] = None
+                task["current_task_summary"] = None
+                task["task_started_cycle"] = None
+                bio["cycles_on_current_task"] = 0
         
         # Update tiredness using hybrid calculation (time + memory pressure)
         if current_task and self._get_task_type_from_id(current_task['id']) == 'maintenance':
@@ -450,11 +468,28 @@ class UnifiedStateManager:
             bio["tiredness"] = max(0, bio["tiredness"] - reduction)
             bio["cycles_since_maintenance"] = 0
             
-            # Still update memory_pressure even during maintenance
+            # Still update memory_pressure even during maintenance - use same token-based calculation
             if memory_stats:
-                total_memories = memory_stats.get('total_memories', 0)
-                expected_max = self.config.get('expected_working_memories', 50)
-                bio["memory_pressure"] = min(100, (total_memories / expected_max) * 100)
+                # Use actual working memory tokens from execution stage (most accurate measure)
+                working_memory_tokens = memory_stats.get('last_working_memory_tokens', 0)
+                max_tokens = memory_stats.get('max_tokens', 65536)  # Default to 65k standard context
+                
+                # Working memory is limited to half of max_context_tokens (32K out of 64K)
+                working_memory_limit = max_tokens // 2
+                
+                # If we haven't run execution yet, fall back to memory count estimate
+                if working_memory_tokens == 0:
+                    # Rough estimate: assume 100 tokens per memory block
+                    total_memories = memory_stats.get('total_memories', 0)
+                    working_memory_tokens = total_memories * 100
+                
+                # Show actual percentage of working memory limit (32K) - same as non-maintenance
+                if working_memory_limit > 0:
+                    # Direct percentage without artificial caps or scaling
+                    bio["memory_pressure"] = min(100, (working_memory_tokens / working_memory_limit) * 100)
+                    logger.debug(f"Maintenance memory pressure: {working_memory_tokens}/{working_memory_limit} = {bio['memory_pressure']}%")
+                else:
+                    bio["memory_pressure"] = 0
         else:
             bio["cycles_since_maintenance"] += 1
             
@@ -470,23 +505,27 @@ class UnifiedStateManager:
                 working_memory_tokens = memory_stats.get('last_working_memory_tokens', 0)
                 max_tokens = memory_stats.get('max_tokens', 65536)  # Default to 65k standard context
                 
+                # Working memory is limited to half of max_context_tokens (32K out of 64K)
+                # This is enforced in execution_stage.py and other stages
+                working_memory_limit = max_tokens // 2
+                
                 # If we haven't run execution yet, fall back to memory count estimate
                 if working_memory_tokens == 0:
                     # Rough estimate: assume 100 tokens per memory block
                     total_memories = memory_stats.get('total_memories', 0)
                     working_memory_tokens = total_memories * 100
                 
-                # Use a comfortable threshold (e.g., 70% of max tokens)
-                comfortable_threshold = max_tokens * 0.7
+                # Use a comfortable threshold (e.g., 70% of working memory limit, not full context)
+                comfortable_threshold = working_memory_limit * 0.7
                 
                 # Calculate pressure as ratio of current to comfortable threshold
                 memory_pressure_factor = min(working_memory_tokens / comfortable_threshold, 1.0) * 50
                 
                 # Also update memory_pressure as a standalone biofeedback metric (0-100)
-                # Use full max_tokens for the percentage display
-                # Cap at 100% even if we exceed max (can happen with large prompts)
-                if max_tokens > 0:
-                    bio["memory_pressure"] = min(100, (working_memory_tokens / max_tokens) * 100)
+                # Show actual percentage of working memory limit (32K)
+                if working_memory_limit > 0:
+                    # Direct percentage without artificial caps or scaling
+                    bio["memory_pressure"] = min(100, (working_memory_tokens / working_memory_limit) * 100)
                 else:
                     bio["memory_pressure"] = 0
             
@@ -501,14 +540,19 @@ class UnifiedStateManager:
             bio["last_duty_decrement_cycle"] = current_cycle
         
         # Update restlessness based on location
-        if location["current_location"] != location.get("previous_location"):
+        location_changed_cycle = location.get("location_changed_cycle", 0)
+        actual_cycles_since_move = current_cycle - location_changed_cycle
+        bio["cycles_since_move"] = actual_cycles_since_move
+        
+        # Check if we moved very recently (within last 2 cycles) and haven't already reduced restlessness
+        last_restlessness_reduction = bio.get("last_restlessness_reduction_cycle", 0)
+        if actual_cycles_since_move <= 1 and location_changed_cycle > last_restlessness_reduction:
+            # We just moved, reduce restlessness
             bio["restlessness"] = max(0, bio["restlessness"] - self.config['restlessness_move_decay'])
-            bio["cycles_since_move"] = 0
-        else:
-            bio["cycles_since_move"] += 1
-            if bio["cycles_since_move"] >= self.config['restlessness_increment_cycles']:
-                bio["restlessness"] = min(100, bio["restlessness"] + self.config['restlessness_increment'])
-                bio["cycles_since_move"] = 0
+            bio["last_restlessness_reduction_cycle"] = location_changed_cycle
+        elif actual_cycles_since_move > 0 and actual_cycles_since_move % self.config['restlessness_increment_cycles'] == 0:
+            # Only increment restlessness every N cycles, not continuously
+            bio["restlessness"] = min(100, bio["restlessness"] + self.config['restlessness_increment'])
         
         bio["last_update_cycle"] = current_cycle
         self.save_state()

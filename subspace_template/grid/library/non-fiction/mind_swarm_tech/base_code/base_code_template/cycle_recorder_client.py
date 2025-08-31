@@ -27,6 +27,7 @@ class CycleRecorderClient:
         self.cycles_dir = personal_path / ".internal" / "cycles"
         self.cycles_dir.mkdir(parents=True, exist_ok=True)
         self.current_cycle = 0
+        self.current_cycle_dir = None
         
     def set_cycle(self, cycle_number: int):
         """Set the current cycle number."""
@@ -137,6 +138,25 @@ class CycleRecorderClient:
         except Exception as e:
             logger.error(f"Failed to record brain interaction: {e}")
     
+    def record_status(self):
+        """Record the current status.txt file for this cycle.
+        
+        This captures a snapshot of the cyber's status at this point in the cycle.
+        """
+        if not self.current_cycle_dir:
+            return
+            
+        try:
+            # Find and copy status.txt
+            status_source = Path("/personal/.internal/memory/status/status.txt")
+            if status_source.exists():
+                status_dest = self.current_cycle_dir / "status.txt"
+                with open(status_source, 'r') as src, open(status_dest, 'w') as dst:
+                    dst.write(src.read())
+                logger.debug(f"Recorded status.txt for cycle {self.current_cycle}")
+        except Exception as e:
+            logger.error(f"Failed to record status.txt: {e}")
+    
     def complete_cycle(self, status: str = "completed"):
         """Mark the current cycle as complete.
         
@@ -147,6 +167,9 @@ class CycleRecorderClient:
             return
             
         try:
+            # Record status.txt before completing cycle
+            self.record_status()
+            
             # Update cycle metadata
             metadata_file = self.current_cycle_dir / "metadata.json"
             metadata = {
