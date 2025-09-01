@@ -885,6 +885,10 @@ The provided API docs describe the available operations and their usage.
         namespace['terminal'] = terminal_instance
         namespace['TerminalError'] = TerminalError
         
+        # Add convenience alias for exec_command with network access
+        # This replaces the deprecated environment.exec_command
+        namespace['exec_command'] = terminal_instance.execute_command
+        
         # Capture output
         output_lines = []
         

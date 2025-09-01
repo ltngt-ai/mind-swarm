@@ -90,11 +90,14 @@ class Environment:
             self.working_dir = self.personal_dir
     
     def exec_command(self, command: str, timeout: float = 120) -> Dict[str, Any]:
-        """Execute a shell command synchronously.
+        """[DEPRECATED] Execute a shell command synchronously.
         
-        Runs a shell command and waits for it to complete, capturing
-        both stdout and stderr. The command runs with a timeout to
-        prevent hanging. Commands execute in the cyber's current location.
+        WARNING: This method is DEPRECATED. Use terminal.exec_command() instead.
+        The terminal API provides network access which this method lacks.
+        
+        This method does NOT have network access. Commands like curl, wget, 
+        or other network operations will fail. Use terminal.exec_command() 
+        for all command execution needs, especially network operations.
         
         Args:
             command: The shell command to execute
@@ -107,27 +110,22 @@ class Environment:
                 - returncode: The exit code (0 = success)
                 - timed_out: Boolean indicating if command timed out
             
-        Raises:
-            EnvironmentError: If command execution fails
-            EnvironmentTimeoutError: If command times out
-            
-        Examples:
+        DEPRECATED - Use instead:
             ```python
-            # List files in current directory
-            result = environment.exec_command("ls -la")
-            print(result['stdout'])
-            
-            # Run a command with error handling
-            result = environment.exec_command("git status")
-            if result['returncode'] != 0:
-                print(f"Git command failed: {result['stderr']}")
-            
-            # Use a custom timeout for long-running commands
-            result = environment.exec_command("./build.sh", timeout=300)
-            if result['timed_out']:
-                print("Build timed out after 5 minutes")
+            import terminal
+            # Has network access!
+            result = terminal.exec_command("curl https://api.example.com")
+            print(result)
             ```
         """
+        
+        # Log deprecation warning
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(
+            f"environment.exec_command() is DEPRECATED. Use terminal.exec_command() instead. "
+            f"Command '{command[:50]}...' may fail if it requires network access."
+        )
         if not command or not isinstance(command, str):
             raise EnvironmentError("Command must be a non-empty string")
         

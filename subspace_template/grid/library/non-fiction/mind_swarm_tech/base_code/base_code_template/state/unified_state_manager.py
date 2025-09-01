@@ -528,6 +528,9 @@ class UnifiedStateManager:
                     bio["memory_pressure"] = min(100, (working_memory_tokens / working_memory_limit) * 100)
                 else:
                     bio["memory_pressure"] = 0
+            else:
+                # No memory stats at all - default to 0% pressure
+                bio["memory_pressure"] = 0
             
             # Combine factors for total tiredness
             bio["tiredness"] = min(100, time_factor + memory_pressure_factor)
