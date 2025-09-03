@@ -13,6 +13,16 @@ from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
 import asyncio
 
+from ..utils.metadata_helpers import (
+    normalize_metadata,
+    normalize_cyber_metadata,
+    compute_content_hash,
+    compute_short_hash,
+    content_has_changed,
+    prepare_for_chromadb,
+    extract_lists_from_metadata
+)
+
 try:
     import chromadb
     from chromadb.utils import embedding_functions
@@ -94,24 +104,18 @@ class CyberKnowledgeHandler:
             metadata = request.get('metadata', {})
             is_personal = metadata.get('personal', False)
             
-            # Generate unique ID
-            content_hash = hashlib.md5(content.encode()).hexdigest()[:8]
+            # Generate unique ID using content hash
+            content_hash = compute_short_hash(content)
             knowledge_id = f"{self.cyber_id}_{content_hash}_{int(time.time())}"
             
-            # Prepare metadata - convert lists to strings for ChromaDB
-            full_metadata = {
+            # Prepare metadata using normalization helper
+            base_metadata = {
                 'cyber_id': self.cyber_id,
                 'timestamp': datetime.now().isoformat(),
-                'personal': is_personal
+                'personal': is_personal,
+                **metadata
             }
-            
-            # Add metadata, converting lists to strings
-            for key, value in metadata.items():
-                if key != 'personal':  # Skip, already handled
-                    if isinstance(value, list):
-                        full_metadata[key] = ','.join(str(v) for v in value) if value else ''
-                    else:
-                        full_metadata[key] = value
+            full_metadata = normalize_cyber_metadata(base_metadata)
             
             # Select collection
             collection = self.personal_collection if is_personal else self.shared_collection
@@ -308,19 +312,14 @@ class CyberKnowledgeHandler:
             
             # Update tags if provided
             if 'tags' in request:
-                tags = request['tags']
-                if isinstance(tags, list):
-                    new_metadata['tags'] = ','.join(str(t) for t in tags) if tags else ''
-                else:
-                    new_metadata['tags'] = tags
+                new_metadata['tags'] = request['tags']
             
             # Update additional metadata if provided
             if 'metadata' in request:
-                for key, value in request['metadata'].items():
-                    if isinstance(value, list):
-                        new_metadata[key] = ','.join(str(v) for v in value) if value else ''
-                    else:
-                        new_metadata[key] = value
+                new_metadata.update(request['metadata'])
+            
+            # Normalize all metadata for ChromaDB
+            new_metadata = normalize_cyber_metadata(new_metadata)
             
             # Delete and re-add (ChromaDB doesn't have direct update)
             collection.delete(ids=[knowledge_id])
@@ -521,20 +520,14 @@ class KnowledgeHandler:
             return False, "Knowledge system not available"
         
         try:
-            # Prepare metadata - convert lists to strings for ChromaDB
-            full_metadata = {
-                'source': metadata.get('source', 'initial_knowledge'),
+            # Prepare metadata using normalization helper
+            base_metadata = {
+                'source': 'initial_knowledge',
                 'timestamp': datetime.now().isoformat(),
-                'personal': False
+                'personal': False,
+                **(metadata or {})
             }
-            
-            if metadata:
-                for key, value in metadata.items():
-                    if isinstance(value, list):
-                        # Convert lists to comma-separated strings
-                        full_metadata[key] = ','.join(str(v) for v in value) if value else ''
-                    else:
-                        full_metadata[key] = value
+            full_metadata = normalize_cyber_metadata(base_metadata)
             
             # Add to shared collection with specified ID
             self.shared_collection.add(
@@ -586,24 +579,18 @@ class KnowledgeHandler:
             return False, "Knowledge system not available"
         
         try:
-            # Generate ID
-            content_hash = hashlib.md5(content.encode()).hexdigest()[:8]
+            # Generate ID using content hash
+            content_hash = compute_short_hash(content)
             knowledge_id = f"cli_{content_hash}_{int(time.time())}"
             
-            # Prepare metadata - convert lists to strings for ChromaDB
-            full_metadata = {
+            # Prepare metadata using normalization helper
+            base_metadata = {
                 'source': 'cli',
                 'timestamp': datetime.now().isoformat(),
-                'personal': False
+                'personal': False,
+                **(metadata or {})
             }
-            
-            if metadata:
-                for key, value in metadata.items():
-                    if isinstance(value, list):
-                        # Convert lists to comma-separated strings
-                        full_metadata[key] = ','.join(str(v) for v in value) if value else ''
-                    else:
-                        full_metadata[key] = value
+            full_metadata = normalize_cyber_metadata(base_metadata)
             
             # Add to shared collection
             self.shared_collection.add(
