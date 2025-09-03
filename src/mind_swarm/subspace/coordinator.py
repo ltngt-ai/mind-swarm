@@ -1015,6 +1015,7 @@ class SubspaceCoordinator:
                 "added": 0,
                 "updated": 0,
                 "unchanged": 0,
+                "migrated": 0,
                 "errors": 0,
                 "total_files": 0
             }
@@ -1099,6 +1100,25 @@ class SubspaceCoordinator:
                         
                         # Try to get existing knowledge by normalized path-based ID
                         existing = await self.knowledge_handler.get_shared_knowledge(knowledge_id)
+
+                        # One-time migration: if old ID exists (relative_path) and new does not, migrate
+                        if not existing:
+                            existing_old = await self.knowledge_handler.get_shared_knowledge(relative_path)
+                            if existing_old:
+                                # Move old ID to new normalized ID using current file content/metadata
+                                success_mig, msg_mig = await self.knowledge_handler.add_shared_knowledge_with_id(
+                                    knowledge_id=knowledge_id,
+                                    content=full_content,
+                                    metadata=metadata,
+                                )
+                                if success_mig:
+                                    # Remove old entry
+                                    await self.knowledge_handler.remove_shared_knowledge(relative_path)
+                                    stats["migrated"] += 1
+                                    existing = {"id": knowledge_id}  # Treat as existing for update path
+                                    logger.debug(f"Migrated {relative_path} -> {knowledge_id}")
+                                else:
+                                    logger.warning(f"Failed to migrate {relative_path} -> {knowledge_id}: {msg_mig}")
                         
                         if existing:
                             # Update existing knowledge
