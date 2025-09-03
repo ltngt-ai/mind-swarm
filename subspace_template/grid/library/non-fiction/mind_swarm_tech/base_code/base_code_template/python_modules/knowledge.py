@@ -199,7 +199,7 @@ Returns:
             "operation": "search",
             "query": query,
             "options": {
-                "limit": min(limit, MAX_SEARCH_LIMIT)
+                "limit": min(limit, MAX_SEARCH_LIMIT),
                 "scope": scope
             }
         }
