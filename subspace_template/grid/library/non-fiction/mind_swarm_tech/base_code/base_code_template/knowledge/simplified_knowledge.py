@@ -9,7 +9,7 @@ from typing import Dict, Optional, Any
 
 # Import the existing Knowledge class from python_modules
 from ..python_modules.knowledge import Knowledge
-from .constants import DEFAULT_SEARCH_LIMIT
+from .constants import DEFAULT_SEARCH_LIMIT, DEFAULT_PERSONAL_PATH, DEFAULT_MEMORY_DIR_PATH
 
 logger = logging.getLogger("Cyber.knowledge.simplified")
 
@@ -34,8 +34,8 @@ class SimplifiedKnowledgeManager:
             memory_api = None
             _context = {
                 "cyber_id": "unknown",
-                "personal": Path("/personal"),
-                "memory_dir": Path("/personal/.internal/memory")
+                "personal": Path(DEFAULT_PERSONAL_PATH),
+                "memory_dir": Path(DEFAULT_MEMORY_DIR_PATH)
             }
         
         return MinimalMemoryContext()

@@ -36,7 +36,7 @@ class KnowledgeSnippet:
     content: str
     score: float
     source: str
-    tags: Optional[str]
+    tags: Optional[str]  # Tags are stored as comma-separated string in ChromaDB
 
 
 class KnowledgeContextBuilder:

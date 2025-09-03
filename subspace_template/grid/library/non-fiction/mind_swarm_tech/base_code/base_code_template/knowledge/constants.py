@@ -1,5 +1,9 @@
 """Constants for the knowledge system."""
 
+# Default paths
+DEFAULT_PERSONAL_PATH = "/personal"
+DEFAULT_MEMORY_DIR_PATH = "/personal/.internal/memory"
+
 # Rate limiting
 MIN_REQUEST_INTERVAL = 0.1  # Minimum seconds between API requests
 
