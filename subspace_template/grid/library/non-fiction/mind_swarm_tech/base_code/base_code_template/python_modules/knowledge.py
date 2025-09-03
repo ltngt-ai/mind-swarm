@@ -122,6 +122,17 @@ from pathlib import Path
 from typing import List, Dict, Optional, Any
 import logging
 
+from ..knowledge.constants import (
+    MIN_REQUEST_INTERVAL,
+    DEFAULT_SEARCH_LIMIT,
+    MAX_SEARCH_LIMIT,
+    DEFAULT_REQUEST_TIMEOUT,
+    REQUEST_END_MARKER,
+    RESPONSE_COMPLETE_MARKER,
+    DEFAULT_CONFIDENCE,
+    RESPONSE_POLL_INTERVAL
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -141,10 +152,10 @@ class Knowledge:
         self.knowledge_file = Path("/personal/.internal/knowledge_api")
         self.request_counter = 0
         self._last_request_time = 0
-        self._min_request_interval = 0.1  # Minimum time between requests
+        self._min_request_interval = MIN_REQUEST_INTERVAL
         
-    def search(self, query: str, limit: int = 5, scope: Optional[List[str]] = None, 
-               timeout: float = 30.0) -> List[Dict[str, Any]]:
+    def search(self, query: str, limit: int = DEFAULT_SEARCH_LIMIT, scope: Optional[List[str]] = None, 
+               timeout: float = DEFAULT_REQUEST_TIMEOUT) -> List[Dict[str, Any]]:
         """
 Search for relevant knowledge.
 Args:
@@ -188,7 +199,7 @@ Returns:
             "operation": "search",
             "query": query,
             "options": {
-                "limit": min(limit, 20),  # Cap at 20
+                "limit": min(limit, MAX_SEARCH_LIMIT)
                 "scope": scope
             }
         }
@@ -205,7 +216,7 @@ Returns:
     
     def store(self, content: str, tags: Optional[List[str]] = None, 
               personal: bool = False, metadata: Optional[Dict[str, Any]] = None,
-              timeout: float = 30.0) -> Optional[str]:
+              timeout: float = DEFAULT_REQUEST_TIMEOUT) -> Optional[str]:
         """
         Store new knowledge.
         
@@ -253,7 +264,7 @@ Returns:
             logger.warning(f"Knowledge store failed: {error}")
             return None
     
-    def get(self, knowledge_id: str, timeout: float = 30.0) -> Optional[Dict[str, Any]]:
+    def get(self, knowledge_id: str, timeout: float = DEFAULT_REQUEST_TIMEOUT) -> Optional[Dict[str, Any]]:
         """
         Get knowledge by its ID.
         
@@ -300,7 +311,7 @@ Returns:
             logger.warning(f"Knowledge get failed: {error}")
             return None
     
-    def forget(self, knowledge_id: str, timeout: float = 30.0) -> bool:
+    def forget(self, knowledge_id: str, timeout: float = DEFAULT_REQUEST_TIMEOUT) -> bool:
         """
         Remove knowledge by ID.
         
@@ -336,7 +347,7 @@ Returns:
     
     def update(self, knowledge_id: str, content: Optional[str] = None, 
                tags: Optional[List[str]] = None, metadata: Optional[Dict[str, Any]] = None,
-               timeout: float = 30.0) -> bool:
+               timeout: float = DEFAULT_REQUEST_TIMEOUT) -> bool:
         """
         Update existing knowledge by ID. Any provided fields will overwrite existing ones.
         
@@ -436,7 +447,7 @@ Returns:
         return knowledge_text
     
     def share_learning(self, content: str, category: str = "experience", 
-                      confidence: float = 0.8) -> Optional[str]:
+                      confidence: float = DEFAULT_CONFIDENCE) -> Optional[str]:
         """
         Share a learning or insight with the hive mind.
         
@@ -506,61 +517,86 @@ Returns:
             Response dictionary or None if timeout
         """
         try:
-            # Clear any stale responses first (only if file exists)
-            if self.knowledge_file.exists():
-                current_content = self.knowledge_file.read_text()
-                if "<<<KNOWLEDGE_COMPLETE>>>" in current_content:
-                    logger.debug("Clearing stale knowledge response before new request")
-                    self.knowledge_file.write_text("")
+            # Clear any stale responses
+            self._clear_stale_responses()
             
-            # Write request with end marker
-            request_text = json.dumps(request, indent=2)
-            full_request = f"{request_text}\n<<<END_KNOWLEDGE_REQUEST>>>"
+            # Write request
+            full_request = self._format_request(request)
             self.knowledge_file.write_text(full_request)
             
-            # Wait for response with completion marker
-            start_time = time.time()
-            
-            while time.time() - start_time < timeout:
-                try:
-                    content = self.knowledge_file.read_text()
-                    
-                    # Check for completion marker
-                    if "<<<KNOWLEDGE_COMPLETE>>>" in content:
-                        # Extract response (everything before the marker)
-                        response_text = content.split("<<<KNOWLEDGE_COMPLETE>>>")[0].strip()
-                        
-                        # Parse the response
-                        response = json.loads(response_text)
-                        
-                        # Verify this is our response
-                        if response.get("request_id") == request["request_id"]:
-                            # Clear the file for next request
-                            self.knowledge_file.write_text("")
-                            return response
-                        else:
-                            # Wrong response (old or from another request)
-                            # Clear it and resend our request
-                            logger.warning(f"Got response for wrong request ID: {response.get('request_id')} != {request['request_id']}, resending")
-                            self.knowledge_file.write_text(full_request)
-                            # Continue waiting for our response
-                        
-                except json.JSONDecodeError:
-                    # Response might still be writing
-                    pass
-                except Exception as e:
-                    logger.error(f"Error reading knowledge response: {e}")
-                    
-                # Small delay before checking again
-                time.sleep(0.05)
-            
-            # Timeout reached - clear file
-            self.knowledge_file.write_text("")
-            logger.warning(f"Knowledge request timed out after {timeout}s")
-            return None
+            # Wait for and process response
+            return self._wait_for_response(request["request_id"], full_request, timeout)
             
         except Exception as e:
             logger.error(f"Error sending knowledge request: {e}")
+            return None
+    
+    def _clear_stale_responses(self):
+        """Clear any stale responses from the knowledge file."""
+        if self.knowledge_file.exists():
+            content = self.knowledge_file.read_text()
+            if RESPONSE_COMPLETE_MARKER in content:
+                logger.debug("Clearing stale knowledge response before new request")
+                self.knowledge_file.write_text("")
+    
+    def _format_request(self, request: Dict[str, Any]) -> str:
+        """Format request with end marker."""
+        request_text = json.dumps(request, indent=2)
+        return f"{request_text}\n{REQUEST_END_MARKER}"
+    
+    def _wait_for_response(
+        self, request_id: str, full_request: str, timeout: float
+    ) -> Optional[Dict[str, Any]]:
+        """Wait for response with completion marker."""
+        start_time = time.time()
+        
+        while time.time() - start_time < timeout:
+            response = self._check_for_response(request_id, full_request)
+            if response is not None:
+                return response
+            
+            # Small delay before checking again
+            time.sleep(RESPONSE_POLL_INTERVAL)
+        
+        # Timeout reached - clear file
+        self.knowledge_file.write_text("")
+        logger.warning(f"Knowledge request timed out after {timeout}s")
+        return None
+    
+    def _check_for_response(
+        self, request_id: str, full_request: str
+    ) -> Optional[Dict[str, Any]]:
+        """Check if a valid response is available."""
+        try:
+            content = self.knowledge_file.read_text()
+            
+            # Check for completion marker
+            if RESPONSE_COMPLETE_MARKER not in content:
+                return None
+            
+            # Extract and parse response
+            response_text = content.split(RESPONSE_COMPLETE_MARKER)[0].strip()
+            response = json.loads(response_text)
+            
+            # Verify this is our response
+            if response.get("request_id") == request_id:
+                # Clear the file for next request
+                self.knowledge_file.write_text("")
+                return response
+            else:
+                # Wrong response - resend request
+                logger.warning(
+                    f"Got response for wrong request ID: "
+                    f"{response.get('request_id')} != {request_id}, resending"
+                )
+                self.knowledge_file.write_text(full_request)
+                return None
+                
+        except json.JSONDecodeError:
+            # Response might still be writing
+            return None
+        except Exception as e:
+            logger.error(f"Error reading knowledge response: {e}")
             return None
     
     def __repr__(self) -> str:

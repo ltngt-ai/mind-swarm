@@ -9,6 +9,7 @@ from typing import Dict, Optional, Any
 
 # Import the existing Knowledge class from python_modules
 from ..python_modules.knowledge import Knowledge
+from .constants import DEFAULT_SEARCH_LIMIT
 
 logger = logging.getLogger("Cyber.knowledge.simplified")
 
@@ -16,19 +17,28 @@ logger = logging.getLogger("Cyber.knowledge.simplified")
 class SimplifiedKnowledgeManager:
     """Manages knowledge access through the existing Knowledge API."""
     
-    def __init__(self):
-        """Initialize the simplified knowledge manager."""
-        # Create a dummy memory instance for Knowledge (it needs Memory for init)
-        # Knowledge needs _context attribute
-        class DummyMemory:
+    def __init__(self, memory_context=None):
+        """Initialize the simplified knowledge manager.
+        
+        Args:
+            memory_context: Optional memory context. If None, creates a minimal context.
+        """
+        if memory_context is None:
+            memory_context = self._create_minimal_context()
+        self.knowledge = Knowledge(memory_context)
+    
+    def _create_minimal_context(self):
+        """Create a minimal memory context for standalone usage."""
+        class MinimalMemoryContext:
+            """Minimal memory context for Knowledge API."""
             memory_api = None
             _context = {
                 "cyber_id": "unknown",
                 "personal": Path("/personal"),
                 "memory_dir": Path("/personal/.internal/memory")
             }
-            
-        self.knowledge = Knowledge(DummyMemory())
+        
+        return MinimalMemoryContext()
         
     def get_stage_instructions(self, stage_name: str) -> Optional[Dict[str, Any]]:
         """Fetch instructions for a specific cognitive stage.
@@ -71,7 +81,7 @@ class SimplifiedKnowledgeManager:
             logger.error(f"Knowledge search failed: {e}")
             return ""
 
-    def search_knowledge(self, query: str, limit: int = 5) -> list:
+    def search_knowledge(self, query: str, limit: int = DEFAULT_SEARCH_LIMIT) -> list:
         """Search the knowledge base.
         
         Args:
