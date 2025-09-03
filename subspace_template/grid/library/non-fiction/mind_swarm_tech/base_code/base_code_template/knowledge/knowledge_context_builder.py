@@ -10,21 +10,20 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Optional, Sequence, Set
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Set
 import json
-# NOTE: Base code runs inside the Cyber's sandbox and should not depend on
-# importing the server package. Read truncation limits from env with sane
-# defaults; if the server package is available, use it, but never require it.
-try:  # pragma: no cover - optional path only
-    from mind_swarm.core.config import KNOWLEDGE_QUERY_TRUNCATE_CHARS as _TRUNC
-except Exception:  # Fallback when mind_swarm is not importable in sandbox
-    import os
-    try:
-        _TRUNC = int(os.environ.get("KNOWLEDGE_QUERY_TRUNCATE_CHARS", "400"))
-    except Exception:
-        _TRUNC = 400
+import os
+from .constants import (
+    DEFAULT_MIN_SCORE,
+    DEFAULT_BUDGET_CHARS,
+    DEFAULT_QUERY_TRUNCATE_CHARS,
+    MAX_ACTIVE_TODOS
+)
 
-KNOWLEDGE_QUERY_TRUNCATE_CHARS = _TRUNC
+# Allow environment override for truncation
+KNOWLEDGE_QUERY_TRUNCATE_CHARS = int(
+    os.environ.get("KNOWLEDGE_QUERY_TRUNCATE_CHARS", DEFAULT_QUERY_TRUNCATE_CHARS)
+)
 
 
 logger = logging.getLogger("Cyber.knowledge.context_builder")
@@ -32,17 +31,25 @@ logger = logging.getLogger("Cyber.knowledge.context_builder")
 
 @dataclass
 class KnowledgeSnippet:
+    """Represents a single knowledge snippet with metadata."""
     id: str
     content: str
     score: float
     source: str
-    tags: str | None
+    tags: Optional[str]  # Tags are stored as comma-separated string in ChromaDB
 
 
 class KnowledgeContextBuilder:
     """Builds concise knowledge context strings for stage prompts."""
 
-    def __init__(self, knowledge_manager, memory_system, state_manager):
+    def __init__(self, knowledge_manager: Any, memory_system: Any, state_manager: Any) -> None:
+        """Initialize the context builder.
+        
+        Args:
+            knowledge_manager: Knowledge manager instance
+            memory_system: Memory system instance
+            state_manager: State manager instance
+        """
         self.knowledge_manager = knowledge_manager
         self.memory_system = memory_system
         self.state_manager = state_manager
@@ -53,9 +60,9 @@ class KnowledgeContextBuilder:
         queries: Sequence[str],
         *,
         limit: int = 3,
-        budget_chars: int = 1200,
+        budget_chars: int = DEFAULT_BUDGET_CHARS,
         blacklist_tags: Optional[Set[str]] = None,
-        min_score: float = 0.35,
+        min_score: float = DEFAULT_MIN_SCORE,
     ) -> str:
         """Search and format knowledge for a stage.
 
@@ -65,106 +72,182 @@ class KnowledgeContextBuilder:
         - Trims to a character budget for predictable token usage
         """
         blacklist_tags = blacklist_tags or set()
-
-        # Build a prioritized list of queries:
-        # 1) Current task summary/intention
-        # 2) Stage-provided queries (e.g., new_information, decision context)
-        # 3) Recent reflection
-        # 4) Current location (lowest priority)
+        
+        # Build prioritized query list
+        q = self._build_query_list(queries)
+        if not q:
+            return ""
+        
+        # Collect relevant knowledge snippets
+        collected = self._collect_knowledge_snippets(
+            q, limit, min_score, blacklist_tags
+        )
+        if not collected:
+            return ""
+        
+        # Order and format results
+        return self._format_knowledge_results(
+            collected, stage, budget_chars
+        )
+    
+    def _build_query_list(self, queries: Sequence[str]) -> List[str]:
+        """Build a prioritized list of queries."""
         q: List[str] = []
-
+        
+        # Priority 1: Current task context
         task_summary = self._current_task_summary()
         if task_summary:
             q.append(task_summary)
-
+        
         decision_intent = self._current_decision_intention()
         if decision_intent:
             q.append(decision_intent)
-
-        # Add current TODO/active task summaries (if any)
+        
         active_todos = self._active_task_summaries()
         if active_todos:
             q.append(active_todos)
-
+        
+        # Priority 2: Provided queries
         for s in queries:
             s = (s or "").strip()
             if s:
-                if KNOWLEDGE_QUERY_TRUNCATE_CHARS and KNOWLEDGE_QUERY_TRUNCATE_CHARS > 0:
-                    q.append(s[:KNOWLEDGE_QUERY_TRUNCATE_CHARS])  # basic guard
-                else:
-                    q.append(s)
-
+                q.append(self._truncate_query(s))
+        
+        # Priority 3: Historical context
         reflection = self._recent_reflection_summary()
         if reflection:
             q.append(reflection)
-
+        
+        # Priority 4: Location
         current_loc = self._current_location()
         if current_loc:
             q.append(str(current_loc))
-
-        if not q:
-            return ""
-
-        collected: dict[str, KnowledgeSnippet] = {}
-        for query in q:
+        
+        return q
+    
+    def _truncate_query(self, query: str) -> str:
+        """Truncate query string if needed."""
+        if KNOWLEDGE_QUERY_TRUNCATE_CHARS and KNOWLEDGE_QUERY_TRUNCATE_CHARS > 0:
+            return query[:KNOWLEDGE_QUERY_TRUNCATE_CHARS]
+        return query
+    
+    def _collect_knowledge_snippets(
+        self,
+        queries: List[str],
+        limit: int,
+        min_score: float,
+        blacklist_tags: Set[str]
+    ) -> Dict[str, KnowledgeSnippet]:
+        """Collect relevant knowledge snippets from searches."""
+        collected: Dict[str, KnowledgeSnippet] = {}
+        
+        for query in queries:
             try:
-                results = self.knowledge_manager.search_knowledge(query=query, limit=limit)
+                results = self.knowledge_manager.search_knowledge(
+                    query=query, limit=limit
+                )
             except Exception as e:
                 logger.debug(f"Knowledge search failed for '{query[:60]}...': {e}")
                 results = []
-
+            
             for item in results or []:
-                try:
-                    kid = str(item.get("id", ""))
-                    if not kid or kid in collected:
-                        continue
-                    score = float(item.get("score", 0.0))
-                    if score < min_score:
-                        continue
-                    tags = item.get("metadata", {}).get("tags")
-                    # tags are stored as comma-separated string
-                    if tags and any(t.strip() in blacklist_tags for t in str(tags).split(",")):
-                        continue
-                    content = str(item.get("content", "")).strip()
-                    if not content:
-                        continue
-                    collected[kid] = KnowledgeSnippet(
-                        id=kid,
-                        content=content,
-                        score=score,
-                        source=str(item.get("source", "shared")),
-                        tags=str(tags) if tags else None,
-                    )
-                except Exception:
-                    continue
-
-        if not collected:
-            return ""
-
+                snippet = self._process_search_result(
+                    item, min_score, blacklist_tags
+                )
+                if snippet and snippet.id not in collected:
+                    collected[snippet.id] = snippet
+        
+        return collected
+    
+    def _process_search_result(
+        self,
+        item: Dict[str, Any],
+        min_score: float,
+        blacklist_tags: Set[str]
+    ) -> Optional[KnowledgeSnippet]:
+        """Process a single search result into a snippet."""
+        try:
+            kid = str(item.get("id", ""))
+            if not kid:
+                return None
+            
+            score = float(item.get("score", 0.0))
+            if score < min_score:
+                return None
+            
+            # Check blacklisted tags
+            tags = item.get("metadata", {}).get("tags")
+            if tags and self._has_blacklisted_tag(tags, blacklist_tags):
+                return None
+            
+            content = str(item.get("content", "")).strip()
+            if not content:
+                return None
+            
+            return KnowledgeSnippet(
+                id=kid,
+                content=content,
+                score=score,
+                source=str(item.get("source", "shared")),
+                tags=str(tags) if tags else None,
+            )
+        except Exception:
+            return None
+    
+    def _has_blacklisted_tag(self, tags: Any, blacklist: Set[str]) -> bool:
+        """Check if tags contain any blacklisted tag."""
+        # Tags are stored as comma-separated string
+        tag_list = str(tags).split(",")
+        return any(t.strip() in blacklist for t in tag_list)
+    
+    def _format_knowledge_results(
+        self,
+        collected: Dict[str, KnowledgeSnippet],
+        stage: str,
+        budget_chars: int
+    ) -> str:
+        """Format collected knowledge snippets within budget."""
         # Order by score desc, prefer personal over shared when equal
         ordered = sorted(
             collected.values(),
             key=lambda s: (s.score, 1 if s.source == "shared" else 2),
             reverse=True,
         )
-
-        # Format with budget
+        
         lines: List[str] = [f"## Helpful Knowledge ({stage})"]
         used = 0
+        
         for i, snip in enumerate(ordered, 1):
-            header = f"\n{i}. [Relevance {snip.score:.2f}] ({snip.source})\n"
-            body_budget = max(0, budget_chars - used - len(header) - 32)
-            if body_budget <= 0:
+            formatted = self._format_snippet(snip, i, budget_chars - used)
+            if not formatted:
                 break
-            body = snip.content
-            if len(body) > body_budget:
-                body = body[: body_budget - 3] + "..."
-            lines.append(header + body)
-            used += len(header) + len(body)
+            
+            lines.append(formatted)
+            used += len(formatted)
+            
             if used >= budget_chars:
                 break
-
+        
         return "\n".join(lines).strip()
+    
+    def _format_snippet(
+        self,
+        snip: KnowledgeSnippet,
+        index: int,
+        remaining_budget: int
+    ) -> Optional[str]:
+        """Format a single knowledge snippet."""
+        header = f"\n{index}. [Relevance {snip.score:.2f}] ({snip.source})\n"
+        body_budget = remaining_budget - len(header) - 32
+        
+        if body_budget <= 0:
+            return None
+        
+        body = snip.content
+        if len(body) > body_budget:
+            body = body[: body_budget - 3] + "..."
+        
+        return header + body
 
     def _current_location(self) -> Optional[str]:
         try:
@@ -262,7 +345,7 @@ class KnowledgeContextBuilder:
                     title = str(data.get("title") or data.get("name") or data.get("summary") or "").strip()
                     if title:
                         items.append(title)
-                    if len(items) >= 5:
+                    if len(items) >= MAX_ACTIVE_TODOS:
                         break
                 except Exception:
                     continue
