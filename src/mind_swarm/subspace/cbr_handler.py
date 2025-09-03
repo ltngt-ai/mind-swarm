@@ -126,27 +126,15 @@ class CyberCBRHandler:
             explicit_case_id = request.get('case_id') or case.get('case_id')
             metadata = case.get('metadata', {})
 
-            def _norm_case_path(path_value: str) -> str:
-                """Normalize a case_path into a canonical cases/<...> ID."""
-                path = str(path_value).strip().lstrip('/')
-                # Ensure cases/ prefix
-                if not path.startswith('cases/'):
-                    path = f"cases/{path}"
-                # Collapse whitespace and replace spaces with hyphens in each segment
-                parts = [
-                    '-'.join(seg.strip().split())
-                    for seg in path.split('/') if seg.strip() != ''
-                ]
-                norm = '/'.join(parts)
-                # Lowercase for determinism
-                return norm.lower()
+            # Use shared normalizer for deterministic case IDs
+            from mind_swarm.utils.id_policy import normalize_cbr_case_id
 
             case_path = metadata.get('case_path')
 
             if explicit_case_id:
-                case_id = _norm_case_path(explicit_case_id) if '/' in explicit_case_id else explicit_case_id
+                case_id = normalize_cbr_case_id(explicit_case_id)
             elif case_path:
-                case_id = _norm_case_path(case_path)
+                case_id = normalize_cbr_case_id(case_path)
             else:
                 # Fallback: Generate unique case ID
                 content_str = f"{case.get('problem_context', '')}_{case.get('solution', '')}"
