@@ -1015,6 +1015,7 @@ class SubspaceCoordinator:
                 "added": 0,
                 "updated": 0,
                 "unchanged": 0,
+                "migrated": 0,
                 "errors": 0,
                 "total_files": 0
             }
@@ -1025,7 +1026,9 @@ class SubspaceCoordinator:
             for file_path in knowledge_dir.rglob("*"):
                 if file_path.suffix in [".yaml", ".yml", ".md", ".txt"]:
                     stats["total_files"] += 1
-                    relative_path = str(file_path.relative_to(knowledge_dir))
+                    relative_path = file_path.relative_to(knowledge_dir).as_posix()
+                    from mind_swarm.utils.id_policy import normalize_knowledge_id
+                    knowledge_id = normalize_knowledge_id("templates", relative_path)
                     
                     try:
                         with open(file_path, 'r', encoding='utf-8') as f:
@@ -1095,13 +1098,32 @@ class SubspaceCoordinator:
                         else:
                             full_content = content
                         
-                        # Try to get existing knowledge by path-based ID
-                        existing = await self.knowledge_handler.get_shared_knowledge(relative_path)
+                        # Try to get existing knowledge by normalized path-based ID
+                        existing = await self.knowledge_handler.get_shared_knowledge(knowledge_id)
+
+                        # One-time migration: if old ID exists (relative_path) and new does not, migrate
+                        if not existing:
+                            existing_old = await self.knowledge_handler.get_shared_knowledge(relative_path)
+                            if existing_old:
+                                # Move old ID to new normalized ID using current file content/metadata
+                                success_mig, msg_mig = await self.knowledge_handler.add_shared_knowledge_with_id(
+                                    knowledge_id=knowledge_id,
+                                    content=full_content,
+                                    metadata=metadata,
+                                )
+                                if success_mig:
+                                    # Remove old entry
+                                    await self.knowledge_handler.remove_shared_knowledge(relative_path)
+                                    stats["migrated"] += 1
+                                    existing = {"id": knowledge_id}  # Treat as existing for update path
+                                    logger.debug(f"Migrated {relative_path} -> {knowledge_id}")
+                                else:
+                                    logger.warning(f"Failed to migrate {relative_path} -> {knowledge_id}: {msg_mig}")
                         
                         if existing:
                             # Update existing knowledge
                             success, message = await self.knowledge_handler.update_shared_knowledge(
-                                relative_path,  # Use path as ID
+                                knowledge_id,  # Use normalized, namespaced ID
                                 full_content, 
                                 metadata
                             )
@@ -1112,15 +1134,15 @@ class SubspaceCoordinator:
                                 stats["errors"] += 1
                                 logger.warning(f"Failed to update {relative_path}: {message}")
                         else:
-                            # Add new knowledge with path as ID
+                            # Add new knowledge with normalized, namespaced ID
                             success, knowledge_id = await self.knowledge_handler.add_shared_knowledge_with_id(
-                                knowledge_id=relative_path,  # Use path as ID
+                                knowledge_id=knowledge_id,  # Use normalized ID
                                 content=full_content, 
                                 metadata=metadata
                             )
                             if success:
                                 stats["added"] += 1
-                                logger.debug(f"Added {relative_path} with ID: {relative_path}")
+                                logger.debug(f"Added {relative_path} with ID: {knowledge_id}")
                             else:
                                 stats["errors"] += 1
                                 logger.warning(f"Failed to add {relative_path}: {knowledge_id}")

@@ -12,7 +12,15 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Configuration
-SUBSPACE_ROOT="${SUBSPACE_ROOT:-../subspace}"
+# Load .env file if it exists to get SUBSPACE_ROOT
+if [ -f ".env" ]; then
+    set -a  # Mark variables for export
+    source .env
+    set +a  # Stop marking for export
+fi
+
+# Use SUBSPACE_ROOT from environment or .env, with fallback to /home/mind/subspace
+SUBSPACE_ROOT="${SUBSPACE_ROOT:-/home/mind/subspace}"
 ROOTFS_DIR="$SUBSPACE_ROOT/cyber_rootfs"
 
 echo -e "${CYAN}Mind-Swarm Cyber Rootfs Shell${NC}"

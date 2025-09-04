@@ -1252,32 +1252,16 @@ Returns: True if path exists, False otherwise
             from ..memory.memory_blocks import MemoryBlock
             from ..memory.memory_types import Priority
             
-            # Add accessed files
-            for file_info in self._accessed_files:
-                memory_block = MemoryBlock(
-                    location=file_info['path'],
-                    priority=Priority.MEDIUM,
-                    confidence=1.0,
-                    metadata={
-                        "source": "script_read",
-                        "cycle": self._cognitive_loop.cycle_count
-                    }
-                )
-                self._memory_system.add_memory(memory_block)
+            # REMOVED: Adding memory blocks for file reads and writes
+            # These operations should be ephemeral and not create persistent memories
+            # File reads and writes during script execution are tracked in _accessed_files
+            # and _written_files for rollback purposes, but don't need to persist as memories
             
-            # Add written files
-            for file_info in self._written_files:
-                memory_block = MemoryBlock(
-                    location=file_info['path'],
-                    priority=Priority.MEDIUM,
-                    confidence=1.0,
-                    metadata={
-                        "source": "script_write",
-                        "cycle": self._cognitive_loop.cycle_count,
-                        "new": file_info['new']
-                    }
-                )
-                self._memory_system.add_memory(memory_block)
+            # Previous code was creating persistent memories for every file operation:
+            # - Created a memory block for every file read (script_read)
+            # - Created a memory block for every file write (script_write)
+            # This was causing memory accumulation issues, especially for cybers like Ian
+            # who process many files during literary analysis tasks
             
             # Clear all tracking
             self._changes.clear()

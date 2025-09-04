@@ -66,6 +66,14 @@ class MemorySystem:
     
     # === CORE MEMORY OPERATIONS ===
     
+    def update_cycle(self, cycle_count: int) -> None:
+        """Update the current cycle count for memory aging.
+        
+        Args:
+            cycle_count: Current cycle number
+        """
+        self._memory_manager.update_cycle(cycle_count)
+    
     def add_memory(self, memory: MemoryBlock) -> None:
         """Add a memory block to the system.
         
@@ -472,6 +480,19 @@ class MemorySystem:
         count = self._memory_manager.cleanup_expired()
         if count > 0:
             logger.info(f"Cleaned up {count} expired memories")
+        return count
+    
+    def cleanup_old_memories(self, current_cycle: int, max_age_cycles: int = 100) -> int:
+        """Remove memories older than max_age_cycles.
+        
+        Args:
+            current_cycle: The current cycle count
+            max_age_cycles: Maximum age in cycles before eviction (default 100)
+            
+        Returns:
+            Number of memories removed
+        """
+        count = self._memory_manager.cleanup_old_memories(current_cycle, max_age_cycles)
         return count
     
     # ObservationMemoryBlock removed - observations are now ephemeral

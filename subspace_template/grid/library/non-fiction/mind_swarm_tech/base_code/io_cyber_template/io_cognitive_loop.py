@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional, List
 
 from .base_code_template.cognitive_loop import CognitiveLoop
-from .base_code_template.memory import ObservationMemoryBlock, Priority
+from .base_code_template.memory import MemoryBlock, Priority
 from .base_code_template.actions import Action, ActionResult, ActionStatus, action_registry
 from .io_actions import register_io_actions
 from .base_code_template.memory_actions import register_memory_actions
@@ -141,12 +141,15 @@ class IOCognitiveLoop(CognitiveLoop):
         if network_response:
             # Create memory
             self.memory_manager.add_memory(
-                ObservationMemoryBlock(
-                    observation_type="network_response",
-                    path="/personal/network",
-                    message=f"Network response: {network_response.get('status', 'unknown')}",
-                    cycle_count=self.cycle_count,
-                    priority=Priority.HIGH
+                MemoryBlock(
+                    content=f"Network response: {network_response.get('status', 'unknown')}",
+                    source="network_body_file",
+                    priority=Priority.HIGH,
+                    metadata={
+                        "observation_type": "network_response",
+                        "path": "/personal/network",
+                        "cycle_count": self.cycle_count
+                    }
                 )
             )
             
@@ -161,12 +164,15 @@ class IOCognitiveLoop(CognitiveLoop):
         if user_message:
             # Create memory
             self.memory_manager.add_memory(
-                ObservationMemoryBlock(
-                    observation_type="user_message",
-                    path="/personal/user_io",
-                    message=f"User message: {user_message.get('type', 'unknown')}",
-                    cycle_count=self.cycle_count,
-                    priority=Priority.HIGH
+                MemoryBlock(
+                    content=f"User message: {user_message.get('type', 'unknown')}",
+                    source="user_io_body_file",
+                    priority=Priority.HIGH,
+                    metadata={
+                        "observation_type": "user_message",
+                        "path": "/personal/user_io",
+                        "cycle_count": self.cycle_count
+                    }
                 )
             )
             
