@@ -107,24 +107,48 @@ class CyberCBRHandler:
             }
     
     async def store(self, request: Dict) -> Dict:
-        """Store a new CBR case."""
+        """Store a new CBR case.
+
+        Supports optional deterministic, path-based IDs when provided by caller.
+
+        - If `request["case_id"]` is set, use it verbatim (after sanitization).
+        - Else if `case["metadata"]["case_path"]` is set, normalize it to a
+          path-like ID under the `cases/` namespace.
+        - Else fall back to the existing generated ID scheme.
+
+        If a provided/derived `case_id` already exists, returns an error without
+        overwriting. Callers can update scores via `update_score` or choose a new ID.
+        """
         try:
             case = request.get('case', {})
-            
-            # Generate unique case ID
-            content_str = f"{case.get('problem_context', '')}_{case.get('solution', '')}"
-            content_hash = hashlib.md5(content_str.encode()).hexdigest()[:8]
-            case_id = f"cbr_{self.cyber_id}_{content_hash}_{int(time.time())}"
-            
+
+            # Determine case ID preference order: explicit -> path-based -> generated
+            explicit_case_id = request.get('case_id') or case.get('case_id')
+            metadata = case.get('metadata', {})
+
+            # Use shared normalizer for deterministic case IDs
+            from mind_swarm.utils.id_policy import normalize_cbr_case_id
+
+            case_path = metadata.get('case_path')
+
+            if explicit_case_id:
+                case_id = normalize_cbr_case_id(explicit_case_id)
+            elif case_path:
+                case_id = normalize_cbr_case_id(case_path)
+            else:
+                # Fallback: Generate unique case ID
+                content_str = f"{case.get('problem_context', '')}_{case.get('solution', '')}"
+                content_hash = hashlib.md5(content_str.encode()).hexdigest()[:8]
+                case_id = f"cbr_{self.cyber_id}_{content_hash}_{int(time.time())}"
+
             # Prepare case document
             case_doc = json.dumps({
                 "problem_context": case.get('problem_context', ''),
                 "solution": case.get('solution', ''),
                 "outcome": case.get('outcome', '')
             })
-            
-            # Prepare metadata
-            metadata = case.get('metadata', {})
+
+            # Prepare metadata (after we may have read case_path above)
             metadata['cyber_id'] = self.cyber_id
             metadata['case_id'] = case_id
             metadata['case_type'] = 'cbr_case'
@@ -150,7 +174,29 @@ class CyberCBRHandler:
             
             # Determine collection (personal by default)
             collection = self.personal_cbr if not sanitized_metadata.get('shared', False) else self.shared_cbr
-            
+
+            # Collision check: if an explicit/path-based ID exists, do not overwrite
+            if explicit_case_id or case_path:
+                try:
+                    # Check both personal and shared to guard against duplicates across scopes
+                    exists_personal = False
+                    exists_shared = False
+                    if self.personal_cbr:
+                        res = self.personal_cbr.get(ids=[case_id])
+                        exists_personal = bool(res and res.get('documents'))
+                    if self.shared_cbr and not exists_personal:
+                        res = self.shared_cbr.get(ids=[case_id])
+                        exists_shared = bool(res and res.get('documents'))
+                    if exists_personal or exists_shared:
+                        return {
+                            "request_id": request.get('request_id'),
+                            "status": "error",
+                            "error": f"Case ID already exists: {case_id}"
+                        }
+                except Exception:
+                    # If collision check fails, proceed to attempt add and surface any error from DB
+                    pass
+
             # Store in ChromaDB
             collection.add(
                 documents=[case_doc],

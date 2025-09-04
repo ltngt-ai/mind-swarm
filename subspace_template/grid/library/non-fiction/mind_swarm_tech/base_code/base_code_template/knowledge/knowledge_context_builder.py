@@ -31,12 +31,17 @@ logger = logging.getLogger("Cyber.knowledge.context_builder")
 
 @dataclass
 class KnowledgeSnippet:
-    """Represents a single knowledge snippet with metadata."""
+    """Represents a single knowledge snippet with metadata.
+
+    Notes on tags:
+    - Provide tags as a comma-separated string (e.g., "foo,bar") or None.
+    - ChromaDB stores tags as strings; list values are joined upstream.
+    """
     id: str
     content: str
     score: float
     source: str
-    tags: Optional[str]  # Tags are stored as comma-separated string in ChromaDB
+    tags: Optional[str]  # Comma-separated string (e.g., "foo,bar") or None
 
 
 class KnowledgeContextBuilder:

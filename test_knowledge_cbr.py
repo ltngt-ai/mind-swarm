@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import sys
 import os
+from dotenv import load_dotenv
 
 # Add the src directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
@@ -15,8 +16,17 @@ from mind_swarm.subspace.cbr_handler import CBRHandler
 
 async def test_systems():
     """Test both knowledge and CBR systems."""
-    subspace_root = Path("/opt/mind-swarm/subspace")
-    subspace_root.mkdir(exist_ok=True)
+    # Load SUBSPACE_ROOT from .env if present, otherwise from environment
+    # Fall back to project-local ./subspace
+    try:
+        # Ensure .env values win in this test harness
+        load_dotenv(override=True)
+    except Exception:
+        pass
+
+    subspace_root_env = os.getenv("SUBSPACE_ROOT")
+    subspace_root = Path(os.path.expanduser(subspace_root_env)) if subspace_root_env else Path("./subspace")
+    subspace_root.mkdir(parents=True, exist_ok=True)
     
     print("=" * 50)
     print("Testing Knowledge and CBR Systems")
