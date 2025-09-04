@@ -17,7 +17,7 @@ logger = logging.getLogger("Cyber.knowledge.simplified")
 class SimplifiedKnowledgeManager:
     """Manages knowledge access through the existing Knowledge API."""
     
-    def __init__(self, memory_context=None):
+    def __init__(self, memory_context: Optional[Any] = None):
         """Initialize the simplified knowledge manager.
         
         Args:
