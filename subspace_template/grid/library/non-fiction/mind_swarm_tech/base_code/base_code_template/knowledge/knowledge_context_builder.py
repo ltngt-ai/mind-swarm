@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Set
+from typing import Any, Dict, List, Optional, Sequence, Set
 import json
 import os
 from .constants import (
@@ -31,12 +31,20 @@ logger = logging.getLogger("Cyber.knowledge.context_builder")
 
 @dataclass
 class KnowledgeSnippet:
-    """Represents a single knowledge snippet with metadata."""
+    """Represents a single knowledge snippet with metadata.
+    
+    Attributes:
+        id: Unique identifier for the snippet
+        content: The actual knowledge content
+        score: Relevance score for the snippet
+        source: Source file or reference
+        tags: Comma-separated string of tags (stored as string for ChromaDB compatibility)
+    """
     id: str
     content: str
     score: float
     source: str
-    tags: Optional[str]  # Tags are stored as comma-separated string in ChromaDB
+    tags: Optional[str]
 
 
 class KnowledgeContextBuilder:
