@@ -24,6 +24,7 @@ from mind_swarm.subspace.freeze_handler import FreezeHandler
 from mind_swarm.schemas.cyber_types import CyberType
 from mind_swarm.ai.providers.factory import create_ai_service
 from mind_swarm.utils.logging import logger
+from mind_swarm.utils.knowledge_sync_config import load_knowledge_sync_config, KnowledgeSyncConfig
 
 
 class MessageRouter:
@@ -990,7 +991,13 @@ class SubspaceCoordinator:
             logger.error(f"Error loading default knowledge: {e}")
     
     async def sync_knowledge(self) -> Dict[str, Any]:
-        """Sync knowledge from initial_knowledge templates to ChromaDB.
+        """Sync knowledge from configured sources to ChromaDB.
+        
+        Uses knowledge_sync.yaml configuration to determine:
+        - Which directories to sync from
+        - How to namespace knowledge IDs
+        - Which files to include/exclude
+        - Security filters to apply
         
         Returns:
             Dictionary with sync statistics
@@ -999,7 +1006,262 @@ class SubspaceCoordinator:
             return {"status": "error", "message": "Knowledge system not available"}
         
         try:
-            logger.info("Syncing knowledge from templates...")
+            # Load sync configuration
+            try:
+                config = load_knowledge_sync_config()
+                logger.info(f"Loaded knowledge sync config v{config.version}")
+            except Exception as e:
+                logger.warning(f"Failed to load knowledge sync config, using defaults: {e}")
+                # Fall back to legacy behavior if config not found
+                return await self._sync_knowledge_legacy()
+            
+            logger.info("Syncing knowledge from configured sources...")
+            
+            # Initialize statistics
+            stats = {
+                "added": 0,
+                "updated": 0,
+                "unchanged": 0,
+                "migrated": 0,
+                "errors": 0,
+                "skipped": 0,
+                "security_blocked": 0,
+                "total_files": 0,
+                "roots_processed": []
+            }
+            
+            import yaml
+            from mind_swarm.utils.metadata_helpers import compute_content_hash
+            
+            # Get project root for resolving paths
+            project_root = Path(__file__).parent.parent.parent.parent
+            
+            # Process each enabled sync root
+            for root in config.get_enabled_roots():
+                logger.info(f"Processing sync root '{root.name}' (priority {root.priority})")
+                stats["roots_processed"].append(root.name)
+                
+                # Resolve source path
+                if root.runtime:
+                    # Use runtime subspace path
+                    source_dir = self.subspace.root_path / root.source_path
+                else:
+                    # Use template/project path
+                    source_dir = project_root / root.source_path
+                
+                if not source_dir.exists():
+                    logger.warning(f"Source directory not found for root '{root.name}': {source_dir}")
+                    continue
+                
+                # Process all files in the source directory
+                for file_path in source_dir.rglob("*"):
+                    if not file_path.is_file():
+                        continue
+                    
+                    stats["total_files"] += 1
+                    relative_path = file_path.relative_to(source_dir)
+                    
+                    # Apply security filters first
+                    if config.is_security_risk(relative_path):
+                        logger.debug(f"Security filter blocked: {relative_path}")
+                        stats["security_blocked"] += 1
+                        continue
+                    
+                    # Check include/exclude patterns
+                    if not config.should_include_file(relative_path):
+                        stats["skipped"] += 1
+                        continue
+                    
+                    if config.should_exclude_file(relative_path):
+                        stats["skipped"] += 1
+                        continue
+                    
+                    # Generate knowledge ID with configured prefix
+                    from mind_swarm.utils.id_policy import normalize_knowledge_id
+                    # Extract namespace from prefix (remove trailing slash)
+                    namespace = root.id_prefix.rstrip("/")
+                    knowledge_id = normalize_knowledge_id(namespace, relative_path.as_posix())
+                    
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            raw_content = f.read()
+                        
+                        # Check content size
+                        file_size = file_path.stat().st_size
+                        max_size = config.content_filters.get("max_file_size", 10485760)
+                        min_size = config.content_filters.get("min_file_size", 1)
+                        
+                        if file_size > max_size:
+                            logger.warning(f"File too large ({file_size} bytes): {relative_path}")
+                            stats["skipped"] += 1
+                            continue
+                        
+                        if file_size < min_size:
+                            logger.debug(f"File too small ({file_size} bytes): {relative_path}")
+                            stats["skipped"] += 1
+                            continue
+                        
+                        # Check for sensitive content
+                        if sensitive_match := config.has_sensitive_content(raw_content):
+                            logger.warning(f"Sensitive content detected ({sensitive_match}): {relative_path}")
+                            stats["security_blocked"] += 1
+                            continue
+                        
+                        # Build metadata with defaults and root-specific overrides
+                        metadata = config.metadata_defaults.copy()
+                        metadata.update({
+                            "source": root.name,
+                            "source_root": root.source_path,
+                            "file_name": file_path.name,
+                            "file_type": file_path.suffix[1:] if file_path.suffix else "txt",
+                            "source_path": relative_path.as_posix(),
+                            "synced_at": datetime.now().isoformat()
+                        })
+                        
+                        # Apply root-specific metadata
+                        root_metadata = config.metadata_defaults.get("root_metadata", {}).get(root.name, {})
+                        metadata.update(root_metadata)
+                        
+                        content = raw_content
+                        
+                        # Handle different file types
+                        if file_path.suffix in [".yaml", ".yml"]:
+                            try:
+                                data = yaml.safe_load(raw_content)
+                                if isinstance(data, dict):
+                                    # Extract metadata for searching but store COMPLETE file
+                                    for key in ['title', 'category', 'authors']:
+                                        if key in data:
+                                            metadata[key] = data[key]
+                                    
+                                    # Convert tags list to comma-separated string for searching
+                                    if 'tags' in data:
+                                        if isinstance(data['tags'], list):
+                                            metadata['tags'] = ','.join(str(t) for t in data['tags'])
+                                        else:
+                                            metadata['tags'] = data['tags']
+                                    
+                                    # CRITICAL: Store the ENTIRE YAML file for round-tripping
+                                    content = raw_content
+                                else:
+                                    # Not a dict - use raw content
+                                    content = raw_content
+                            except Exception as e:
+                                logger.warning(f"Failed to parse YAML {file_path}: {e}")
+                                content = raw_content
+                        
+                        elif file_path.suffix == ".md":
+                            lines = raw_content.split('\n')
+                            for line in lines[:5]:
+                                if line.startswith('# '):
+                                    metadata['title'] = line[2:].strip()
+                                    break
+                            else:
+                                metadata['title'] = file_path.stem.replace('_', ' ').replace('-', ' ').title()
+                            content = raw_content
+                        
+                        else:  # .txt files
+                            metadata['title'] = file_path.stem.replace('_', ' ').replace('-', ' ').title()
+                            content = raw_content
+                        
+                        # Clean up content
+                        content = content.strip()
+                        if not content:
+                            logger.warning(f"Skipping {file_path.name} - no content found")
+                            stats["unchanged"] += 1
+                            continue
+                        
+                        # Add title header if available
+                        if 'title' in metadata:
+                            full_content = f"# {metadata['title']}\n\n{content}"
+                        else:
+                            full_content = content
+                        
+                        # Compute content hash if configured
+                        if config.sync_behavior.get("use_content_hash", True):
+                            content_hash = compute_content_hash(full_content, metadata)
+                            metadata["content_hash"] = content_hash
+                        
+                        # Try to get existing knowledge by normalized ID
+                        existing = await self.knowledge_handler.get_shared_knowledge(knowledge_id)
+
+                        # One-time migration: if old ID exists (relative_path.as_posix()) and new does not, migrate
+                        if not existing:
+                            existing_old = await self.knowledge_handler.get_shared_knowledge(relative_path.as_posix())
+                            if existing_old:
+                                # Move old ID to new normalized ID using current file content/metadata
+                                success_mig, msg_mig = await self.knowledge_handler.add_shared_knowledge_with_id(
+                                    knowledge_id=knowledge_id,
+                                    content=full_content,
+                                    metadata=metadata,
+                                )
+                                if success_mig:
+                                    # Remove old entry
+                                    await self.knowledge_handler.remove_shared_knowledge(relative_path)
+                                    stats["migrated"] += 1
+                                    existing = {"id": knowledge_id}  # Treat as existing for update path
+                                    logger.debug(f"Migrated {relative_path.as_posix()} -> {knowledge_id}")
+                                else:
+                                    logger.warning(f"Failed to migrate {relative_path.as_posix()} -> {knowledge_id}: {msg_mig}")
+                        
+                        if existing:
+                            # Update existing knowledge
+                            success, message = await self.knowledge_handler.update_shared_knowledge(
+                                knowledge_id,  # Use normalized, namespaced ID
+                                full_content, 
+                                metadata
+                            )
+                            if success:
+                                stats["updated"] += 1
+                                logger.debug(f"Updated {relative_path}")
+                            else:
+                                stats["errors"] += 1
+                                logger.warning(f"Failed to update {relative_path}: {message}")
+                        else:
+                            # Add new knowledge with normalized, namespaced ID
+                            success, knowledge_id = await self.knowledge_handler.add_shared_knowledge_with_id(
+                                knowledge_id=knowledge_id,  # Use normalized ID
+                                content=full_content, 
+                                metadata=metadata
+                            )
+                            if success:
+                                stats["added"] += 1
+                                logger.debug(f"Added {relative_path} with ID: {knowledge_id}")
+                            else:
+                                stats["errors"] += 1
+                                logger.warning(f"Failed to add {relative_path}: {knowledge_id}")
+                                
+                    except Exception as e:
+                        stats["errors"] += 1
+                        logger.error(f"Error processing {file_path}: {e}")
+            
+            # Log final statistics if configured
+            if config.logging.get("log_statistics", True):
+                logger.info(f"Knowledge sync completed: {stats}")
+            
+            return {
+                "status": "success",
+                "message": "Knowledge sync completed",
+                "stats": stats,
+                "config_version": config.version
+            }
+            
+        except Exception as e:
+            logger.error(f"Knowledge sync failed: {e}")
+            return {"status": "error", "message": str(e)}
+    
+    async def _sync_knowledge_legacy(self) -> Dict[str, Any]:
+        """Legacy knowledge sync implementation for backward compatibility.
+        
+        This is the original sync implementation that only syncs from
+        subspace_template/initial_knowledge with the 'templates/' prefix.
+        Used as fallback when knowledge_sync.yaml is not available.
+        
+        Returns:
+            Dictionary with sync statistics
+        """
+        try:
+            logger.info("Using legacy knowledge sync (no config file)...")
             
             # Find the initial knowledge directory
             template_dir = Path(__file__).parent.parent.parent.parent / "subspace_template"
@@ -1007,9 +1269,6 @@ class SubspaceCoordinator:
             
             if not knowledge_dir.exists():
                 return {"status": "error", "message": f"Initial knowledge directory not found: {knowledge_dir}"}
-            
-            # We'll check each file directly by its path-based ID
-            # No need to list all existing knowledge
             
             stats = {
                 "added": 0,
@@ -1123,7 +1382,7 @@ class SubspaceCoordinator:
                         if existing:
                             # Update existing knowledge
                             success, message = await self.knowledge_handler.update_shared_knowledge(
-                                knowledge_id,  # Use normalized, namespaced ID
+                                knowledge_id,
                                 full_content, 
                                 metadata
                             )
@@ -1135,31 +1394,30 @@ class SubspaceCoordinator:
                                 logger.warning(f"Failed to update {relative_path}: {message}")
                         else:
                             # Add new knowledge with normalized, namespaced ID
-                            success, knowledge_id = await self.knowledge_handler.add_shared_knowledge_with_id(
-                                knowledge_id=knowledge_id,  # Use normalized ID
-                                content=full_content, 
-                                metadata=metadata
+                            success, knowledge_id_result = await self.knowledge_handler.add_shared_knowledge_with_id(
+                                knowledge_id=knowledge_id,
+                                content=full_content,
+                                metadata=metadata,
                             )
                             if success:
                                 stats["added"] += 1
-                                logger.debug(f"Added {relative_path} with ID: {knowledge_id}")
+                                logger.debug(f"Added {relative_path}")
                             else:
                                 stats["errors"] += 1
-                                logger.warning(f"Failed to add {relative_path}: {knowledge_id}")
-                                
+                                logger.warning(f"Failed to add {relative_path}: {knowledge_id_result}")
+                    
                     except Exception as e:
                         stats["errors"] += 1
-                        logger.error(f"Error processing {file_path}: {e}")
+                        logger.error(f"Error syncing {file_path}: {e}")
             
-            logger.info(f"Knowledge sync complete: {stats}")
             return {
                 "status": "success",
-                "stats": stats,
-                "message": f"Synced {stats['total_files']} files: {stats['added']} added, {stats['updated']} updated, {stats['errors']} errors"
+                "message": "Knowledge sync completed (legacy mode)",
+                "stats": stats
             }
-            
+        
         except Exception as e:
-            logger.error(f"Error syncing knowledge: {e}")
+            logger.error(f"Legacy knowledge sync failed: {e}")
             return {"status": "error", "message": str(e)}
     
     async def _start_all_agents(self):
