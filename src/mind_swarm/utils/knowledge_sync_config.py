@@ -274,7 +274,6 @@ class KnowledgeSyncConfig:
         
         # Additional heuristic checks
         # Check for base64 encoded secrets (common pattern)
-        import re
         # Look for long base64 strings that look like tokens/secrets
         base64_pattern = re.compile(r'(?:^|[^A-Za-z0-9+/])([A-Za-z0-9+/]{40,}={0,2})(?:[^A-Za-z0-9+/]|$)')
         matches = base64_pattern.findall(content)
@@ -285,20 +284,6 @@ class KnowledgeSyncConfig:
                 if len(set(match)) > len(match) * 0.5:  # High character diversity
                     return "Potential base64 encoded secret"
         
-        return None
-    
-    def get_root_by_name(self, name: str) -> Optional[SyncRoot]:
-        """Get a sync root configuration by name.
-        
-        Args:
-            name: Root name to find
-            
-        Returns:
-            SyncRoot if found, None otherwise
-        """
-        for root in self.sync_roots:
-            if root.name == name:
-                return root
         return None
     
     def perform_file_sanity_checks(self, file_path: Path, content: bytes) -> Optional[str]:
@@ -343,6 +328,20 @@ class KnowledgeSyncConfig:
             if is_binary_file(file_path):
                 return "Binary file detected"
         
+        return None
+    
+    def get_root_by_name(self, name: str) -> Optional[SyncRoot]:
+        """Get a sync root configuration by name.
+        
+        Args:
+            name: Root name to find
+            
+        Returns:
+            SyncRoot if found, None otherwise
+        """
+        for root in self.sync_roots:
+            if root.name == name:
+                return root
         return None
     
     def get_enabled_roots(self) -> List[SyncRoot]:

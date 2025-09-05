@@ -190,13 +190,10 @@ security_denylist:
   - "**/target/**"
   - "**/dist/**"
   - "**/build/**"
-  - "*.pyc"
-  - "*.pyo"
-  - "*.pyd"
+  - "*.exe"
+  - "*.dll"
   - "*.so"
   - "*.dylib"
-  - "*.dll"
-  - "*.exe"
   - "*.bin"
   - "*.obj"
   - "*.o"
@@ -218,15 +215,7 @@ security_denylist:
   - "error.log*"
   
   # Backup and temporary files
-  - "*.bak"
-  - "*.backup"
-  - "*.old"
   - "*.orig"
-  - "*.tmp"
-  - "*.temp"
-  - "*.swp"
-  - "*.swo"
-  - "*~"
   - ".#*"
   - "#*#"
   
@@ -240,13 +229,6 @@ security_denylist:
   - ".irb_history"
   - ".python_history"
   
-  # IDE and editor configs that might have sensitive data
-  - "**/.idea/**"
-  - "**/.vscode/**"
-  - "*.code-workspace"
-  - "**/.atom/**"
-  - "**/.sublime-*"
-  
   # Git sensitive files
   - ".git-credentials"
   - ".gitconfig"
@@ -256,7 +238,6 @@ security_denylist:
   # Wallet and cryptocurrency files
   - "*wallet*.dat"
   - "*wallet*.json"
-  - "*.keystore"  # Ethereum
   - "*seed*phrase*"
   - "*mnemonic*"
   
