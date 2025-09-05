@@ -1203,8 +1203,8 @@ class SubspaceCoordinator:
                                     metadata=metadata,
                                 )
                                 if success_mig:
-                                    # Remove old entry
-                                    await self.knowledge_handler.remove_shared_knowledge(relative_path)
+                                    # Remove old entry - convert Path to string for Chroma
+                                    await self.knowledge_handler.remove_shared_knowledge(relative_path.as_posix())
                                     stats["migrated"] += 1
                                     existing = {"id": knowledge_id}  # Treat as existing for update path
                                     logger.debug(f"Migrated {relative_path.as_posix()} -> {knowledge_id}")
@@ -1378,8 +1378,8 @@ class SubspaceCoordinator:
                                     metadata=metadata,
                                 )
                                 if success_mig:
-                                    # Remove old entry
-                                    await self.knowledge_handler.remove_shared_knowledge(relative_path)
+                                    # Remove old entry - convert Path to string for Chroma
+                                    await self.knowledge_handler.remove_shared_knowledge(relative_path.as_posix())
                                     stats["migrated"] += 1
                                     existing = {"id": knowledge_id}  # Treat as existing for update path
                                     logger.debug(f"Migrated {relative_path} -> {knowledge_id}")
