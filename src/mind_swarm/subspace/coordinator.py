@@ -1067,6 +1067,18 @@ class SubspaceCoordinator:
                         stats["security_blocked"] += 1
                         continue
                     
+                    # Check for suspicious path patterns
+                    if suspicious_reason := config.is_path_suspicious(relative_path):
+                        logger.debug(f"Suspicious path blocked ({suspicious_reason}): {relative_path}")
+                        stats["security_blocked"] += 1
+                        continue
+                    
+                    # Validate file type (whitelist approach)
+                    if not config.validate_file_type(relative_path):
+                        logger.debug(f"Invalid file type blocked: {relative_path}")
+                        stats["skipped"] += 1
+                        continue
+                    
                     # Check include/exclude patterns
                     if not config.should_include_file(relative_path):
                         stats["skipped"] += 1
@@ -1083,23 +1095,18 @@ class SubspaceCoordinator:
                     knowledge_id = normalize_knowledge_id(namespace, relative_path.as_posix())
                     
                     try:
-                        with open(file_path, 'r', encoding='utf-8') as f:
-                            raw_content = f.read()
+                        # Read file as bytes first for sanity checks
+                        with open(file_path, 'rb') as f:
+                            raw_bytes = f.read()
                         
-                        # Check content size
-                        file_size = file_path.stat().st_size
-                        max_size = config.content_filters.get("max_file_size", 10485760)
-                        min_size = config.content_filters.get("min_file_size", 1)
-                        
-                        if file_size > max_size:
-                            logger.warning(f"File too large ({file_size} bytes): {relative_path}")
+                        # Perform comprehensive sanity checks
+                        if sanity_error := config.perform_file_sanity_checks(file_path, raw_bytes):
+                            logger.debug(f"Sanity check failed ({sanity_error}): {relative_path}")
                             stats["skipped"] += 1
                             continue
                         
-                        if file_size < min_size:
-                            logger.debug(f"File too small ({file_size} bytes): {relative_path}")
-                            stats["skipped"] += 1
-                            continue
+                        # Now read as text (already validated as UTF-8)
+                        raw_content = raw_bytes.decode('utf-8')
                         
                         # Check for sensitive content
                         if sensitive_match := config.has_sensitive_content(raw_content):
@@ -1196,8 +1203,8 @@ class SubspaceCoordinator:
                                     metadata=metadata,
                                 )
                                 if success_mig:
-                                    # Remove old entry
-                                    await self.knowledge_handler.remove_shared_knowledge(relative_path)
+                                    # Remove old entry - convert Path to string for Chroma
+                                    await self.knowledge_handler.remove_shared_knowledge(relative_path.as_posix())
                                     stats["migrated"] += 1
                                     existing = {"id": knowledge_id}  # Treat as existing for update path
                                     logger.debug(f"Migrated {relative_path.as_posix()} -> {knowledge_id}")
@@ -1371,8 +1378,8 @@ class SubspaceCoordinator:
                                     metadata=metadata,
                                 )
                                 if success_mig:
-                                    # Remove old entry
-                                    await self.knowledge_handler.remove_shared_knowledge(relative_path)
+                                    # Remove old entry - convert Path to string for Chroma
+                                    await self.knowledge_handler.remove_shared_knowledge(relative_path.as_posix())
                                     stats["migrated"] += 1
                                     existing = {"id": knowledge_id}  # Treat as existing for update path
                                     logger.debug(f"Migrated {relative_path} -> {knowledge_id}")

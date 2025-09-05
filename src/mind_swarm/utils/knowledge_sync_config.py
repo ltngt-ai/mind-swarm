@@ -16,6 +16,30 @@ import yaml
 from mind_swarm.utils.logging import logger
 
 
+def is_binary_file(file_path: Path, sample_size: int = 8192) -> bool:
+    """Check if a file appears to be binary by looking for null bytes.
+    
+    Args:
+        file_path: Path to the file to check
+        sample_size: Number of bytes to sample (default 8192)
+        
+    Returns:
+        True if file appears to be binary, False otherwise
+    """
+    try:
+        with open(file_path, 'rb') as f:
+            chunk = f.read(sample_size)
+            if b'\x00' in chunk:
+                return True
+            # Check for high ratio of non-printable characters
+            text_chars = bytearray({7, 8, 9, 10, 12, 13, 27} | set(range(0x20, 0x100)) - {0x7f})
+            non_text = len([b for b in chunk if b not in text_chars])
+            return non_text / len(chunk) > 0.30 if chunk else False
+    except Exception:
+        # If we can't read the file, assume it's binary for safety
+        return True
+
+
 @dataclass
 class SyncRoot:
     """Configuration for a knowledge sync root."""
@@ -94,7 +118,6 @@ class KnowledgeSyncConfig:
         Returns:
             Compiled regex pattern
         """
-        import re
         
         # Save original for checking patterns
         original = pattern
@@ -169,6 +192,73 @@ class KnowledgeSyncConfig:
         return any(pattern.match(path_str) or pattern.match(file_path.name) 
                   for pattern in self._security_compiled)
     
+    def validate_file_type(self, file_path: Path) -> bool:
+        """Validate that file type is explicitly allowed.
+        
+        Uses a whitelist approach - only explicitly allowed extensions are permitted.
+        
+        Args:
+            file_path: Path to validate
+            
+        Returns:
+            True if file type is allowed, False otherwise
+        """
+        # Extract extension (lowercase, without dot)
+        suffix = file_path.suffix.lower()
+        if not suffix:
+            return False
+            
+        # Define allowed extensions (whitelist)
+        allowed_extensions = {
+            '.md', '.markdown', '.txt', '.rst',  # Documentation
+            '.yaml', '.yml', '.json', '.toml',   # Structured data
+            '.knowledge', '.prompt', '.template'  # Knowledge-specific
+        }
+        
+        return suffix in allowed_extensions
+    
+    def is_path_suspicious(self, file_path: Path) -> Optional[str]:
+        """Check if a file path structure indicates potential security risk.
+        
+        Args:
+            file_path: Path to check
+            
+        Returns:
+            Reason if suspicious, None otherwise
+        """
+        path_str = file_path.as_posix().lower()
+        
+        # Check for hidden files/directories (except .gitignore and .gitkeep which might be ok)
+        if '/.internal/' in path_str:
+            return "Internal directory access"
+        
+        # Get just the filename
+        filename = file_path.name
+        if filename.startswith('.') and filename not in ['.gitignore', '.gitkeep']:
+            return "Hidden file"
+        
+        # Check for hidden directories in the path
+        parts = path_str.split('/')
+        for part in parts[:-1]:  # Exclude the filename itself
+            if part.startswith('.') and part not in ['.git']:
+                return "Hidden directory"
+        
+        # Check for backup/temporary patterns in path
+        suspicious_patterns = [
+            ('~', 'Backup file'),
+            ('.swp', 'Editor swap file'),
+            ('.swo', 'Editor swap file'),
+            ('.orig', 'Merge conflict file'),
+            ('.rej', 'Patch reject file'),
+            ('#', 'Editor autosave file'),
+        ]
+        
+        for pattern, reason in suspicious_patterns:
+            if pattern in path_str:
+                return reason
+        
+        return None
+    
     def has_sensitive_content(self, content: str) -> Optional[str]:
         """Check if content contains sensitive patterns.
         
@@ -181,6 +271,63 @@ class KnowledgeSyncConfig:
         for content_filter in self._content_denylist:
             if content_filter.matches(content):
                 return content_filter.description
+        
+        # Additional heuristic checks
+        # Check for base64 encoded secrets (common pattern)
+        # Look for long base64 strings that look like tokens/secrets
+        base64_pattern = re.compile(r'(?:^|[^A-Za-z0-9+/])([A-Za-z0-9+/]{40,}={0,2})(?:[^A-Za-z0-9+/]|$)')
+        matches = base64_pattern.findall(content)
+        for match in matches:
+            # Check if it might be a secret (has mixed case, numbers)
+            if any(c.isupper() for c in match) and any(c.islower() for c in match) and any(c.isdigit() for c in match):
+                # Additional check - secrets often have high entropy
+                if len(set(match)) > len(match) * 0.5:  # High character diversity
+                    return "Potential base64 encoded secret"
+        
+        return None
+    
+    def perform_file_sanity_checks(self, file_path: Path, content: bytes) -> Optional[str]:
+        """Perform comprehensive sanity checks on a file.
+        
+        Args:
+            file_path: Path to the file
+            content: Raw file content as bytes
+            
+        Returns:
+            Error message if check fails, None if all checks pass
+        """
+        # Check file size limits
+        max_size = self.content_filters.get("max_file_size", 10485760)
+        min_size = self.content_filters.get("min_file_size", 1)
+        
+        file_size = len(content)
+        if file_size > max_size:
+            return f"File too large: {file_size} bytes (max: {max_size})"
+        if file_size < min_size:
+            return f"File too small: {file_size} bytes (min: {min_size})"
+        
+        # Check for executable permissions or shebang first
+        try:
+            if content.startswith(b'#!'):
+                return "Executable script detected (shebang)"
+        except:
+            pass
+        
+        # Check for null bytes in text files
+        if b'\x00' in content:
+            return "Null bytes detected in file"
+        
+        # Check encoding - should be valid UTF-8
+        try:
+            content.decode('utf-8')
+        except UnicodeDecodeError:
+            return "Invalid UTF-8 encoding"
+        
+        # Check if binary (do this after UTF-8 check to distinguish between binary and invalid encoding)
+        if self.content_filters.get("skip_binary", True) and not content.startswith(b'#!'):
+            if is_binary_file(file_path):
+                return "Binary file detected"
+        
         return None
     
     def get_root_by_name(self, name: str) -> Optional[SyncRoot]:
