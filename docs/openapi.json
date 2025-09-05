@@ -1034,15 +1034,86 @@
     },
     "/knowledge/sync": {
       "post": {
-        "summary": "Sync Knowledge",
-        "description": "Sync knowledge from initial_knowledge templates to ChromaDB.",
-        "operationId": "sync_knowledge_knowledge_sync_post",
+        "summary": "Sync Knowledge Post",
+        "description": "Sync knowledge from configured sources to ChromaDB.\n\nArgs:\n    scope: Optional scope filter (library|template|community|all). Defaults to all.",
+        "operationId": "sync_knowledge_post_knowledge_sync_post",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scope"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Sync Knowledge Get",
+        "description": "Sync knowledge from configured sources to ChromaDB.\n\nArgs:\n    scope: Optional scope filter (library|template|community|all). Defaults to all.",
+        "operationId": "sync_knowledge_get_knowledge_sync_get",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scope"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }
