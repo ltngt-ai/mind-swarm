@@ -547,14 +547,18 @@ class MindSwarmClient:
             response.raise_for_status()
             return response.json()
     
-    async def sync_knowledge(self) -> Dict[str, Any]:
-        """Sync knowledge from initial_knowledge templates to ChromaDB.
+    async def sync_knowledge(self, scope: Optional[str] = None) -> Dict[str, Any]:
+        """Sync knowledge from configured sources to ChromaDB.
+        
+        Args:
+            scope: Optional scope filter (library|template|community|all). Defaults to all.
         
         Returns:
             Sync result with statistics
         """
         async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as client:
-            response = await client.post(f"{self.base_url}/knowledge/sync")
+            params = {"scope": scope} if scope else {}
+            response = await client.post(f"{self.base_url}/knowledge/sync", params=params)
             response.raise_for_status()
             return response.json()
     

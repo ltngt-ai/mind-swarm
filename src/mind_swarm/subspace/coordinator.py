@@ -990,7 +990,7 @@ class SubspaceCoordinator:
         except Exception as e:
             logger.error(f"Error loading default knowledge: {e}")
     
-    async def sync_knowledge(self) -> Dict[str, Any]:
+    async def sync_knowledge(self, scope: Optional[str] = None) -> Dict[str, Any]:
         """Sync knowledge from configured sources to ChromaDB.
         
         Uses knowledge_sync.yaml configuration to determine:
@@ -998,6 +998,11 @@ class SubspaceCoordinator:
         - How to namespace knowledge IDs
         - Which files to include/exclude
         - Security filters to apply
+        
+        Args:
+            scope: Optional scope filter to sync only specific roots.
+                   Options: 'library' (sections+schemas), 'template' (templates only),
+                           'community' (community only), 'all' or None (default, all enabled)
         
         Returns:
             Dictionary with sync statistics
@@ -1036,8 +1041,36 @@ class SubspaceCoordinator:
             # Get project root for resolving paths
             project_root = Path(__file__).parent.parent.parent.parent
             
-            # Process each enabled sync root
-            for root in config.get_enabled_roots():
+            # Filter roots based on scope parameter
+            roots_to_process = config.get_enabled_roots()
+            if scope and scope != 'all':
+                # Map scope to root names
+                scope_mapping = {
+                    'library': ['library_sections', 'library_schemas'],
+                    'template': ['templates'],
+                    'community': ['community']
+                }
+                
+                if scope not in scope_mapping:
+                    return {
+                        "status": "error",
+                        "message": f"Invalid scope '{scope}'. Valid options: library, template, community, all"
+                    }
+                
+                allowed_names = scope_mapping[scope]
+                roots_to_process = [r for r in roots_to_process if r.name in allowed_names]
+                
+                if not roots_to_process:
+                    return {
+                        "status": "warning",
+                        "message": f"No enabled roots found for scope '{scope}'",
+                        "stats": stats
+                    }
+                
+                logger.info(f"Applying scope filter '{scope}' - processing {len(roots_to_process)} root(s)")
+            
+            # Process each selected sync root
+            for root in roots_to_process:
                 logger.info(f"Processing sync root '{root.name}' (priority {root.priority})")
                 stats["roots_processed"].append(root.name)
                 
@@ -1121,8 +1154,8 @@ class SubspaceCoordinator:
                             "source_root": root.source_path,
                             "file_name": file_path.name,
                             "file_type": file_path.suffix[1:] if file_path.suffix else "txt",
-                            "source_path": relative_path.as_posix(),
-                            "synced_at": datetime.now().isoformat()
+                            "source_path": relative_path.as_posix()
+                            # Note: synced_at is added after content hash computation
                         })
                         
                         # Apply root-specific metadata
@@ -1184,10 +1217,18 @@ class SubspaceCoordinator:
                         else:
                             full_content = content
                         
-                        # Compute content hash if configured
+                        # Compute content hash if configured (before adding volatile fields)
                         if config.sync_behavior.get("use_content_hash", True):
-                            content_hash = compute_content_hash(full_content, metadata)
+                            # Create a copy of metadata without volatile fields for hash computation
+                            hash_metadata = metadata.copy()
+                            # Remove any volatile fields that would break idempotency
+                            hash_metadata.pop("synced_at", None)
+                            hash_metadata.pop("last_accessed", None)
+                            content_hash = compute_content_hash(full_content, hash_metadata)
                             metadata["content_hash"] = content_hash
+                        
+                        # Add timestamp after hash computation
+                        metadata["synced_at"] = datetime.now().isoformat()
                         
                         # Try to get existing knowledge by normalized ID
                         existing = await self.knowledge_handler.get_shared_knowledge(knowledge_id)
@@ -1212,18 +1253,30 @@ class SubspaceCoordinator:
                                     logger.warning(f"Failed to migrate {relative_path.as_posix()} -> {knowledge_id}: {msg_mig}")
                         
                         if existing:
-                            # Update existing knowledge
-                            success, message = await self.knowledge_handler.update_shared_knowledge(
-                                knowledge_id,  # Use normalized, namespaced ID
-                                full_content, 
-                                metadata
-                            )
-                            if success:
-                                stats["updated"] += 1
-                                logger.debug(f"Updated {relative_path}")
-                            else:
-                                stats["errors"] += 1
-                                logger.warning(f"Failed to update {relative_path}: {message}")
+                            # Check if content has changed (idempotency)
+                            needs_update = True
+                            if config.sync_behavior.get("use_content_hash", True) and "content_hash" in metadata:
+                                # Compare content hashes if available
+                                existing_metadata = existing.get("metadata", {})
+                                existing_hash = existing_metadata.get("content_hash")
+                                if existing_hash == metadata["content_hash"]:
+                                    needs_update = False
+                                    stats["unchanged"] += 1
+                                    logger.debug(f"Content unchanged (hash match) for {relative_path}")
+                            
+                            if needs_update:
+                                # Update existing knowledge
+                                success, message = await self.knowledge_handler.update_shared_knowledge(
+                                    knowledge_id,  # Use normalized, namespaced ID
+                                    full_content, 
+                                    metadata
+                                )
+                                if success:
+                                    stats["updated"] += 1
+                                    logger.debug(f"Updated {relative_path}")
+                                else:
+                                    stats["errors"] += 1
+                                    logger.warning(f"Failed to update {relative_path}: {message}")
                         else:
                             # Add new knowledge with normalized, namespaced ID
                             success, knowledge_id = await self.knowledge_handler.add_shared_knowledge_with_id(
@@ -1242,16 +1295,47 @@ class SubspaceCoordinator:
                         stats["errors"] += 1
                         logger.error(f"Error processing {file_path}: {e}")
             
+            # Calculate summary statistics
+            total_processed = stats["added"] + stats["updated"] + stats["unchanged"]
+            total_skipped = stats["skipped"] + stats["security_blocked"]
+            
+            # Add summary to stats
+            stats["summary"] = {
+                "total_files_scanned": stats["total_files"],
+                "total_processed": total_processed,
+                "total_skipped": total_skipped,
+                "success_rate": f"{(total_processed / stats['total_files'] * 100) if stats['total_files'] > 0 else 0:.1f}%",
+                "roots_count": len(stats["roots_processed"]),
+                "scope_applied": scope or "all"
+            }
+            
             # Log final statistics if configured
             if config.logging.get("log_statistics", True):
                 logger.info(f"Knowledge sync completed: {stats}")
             
-            return {
+            # Prepare detailed response
+            response = {
                 "status": "success",
-                "message": "Knowledge sync completed",
+                "message": f"Knowledge sync completed for scope: {scope or 'all'}",
                 "stats": stats,
-                "config_version": config.version
+                "config": {
+                    "version": config.version,
+                    "sync_behavior": config.sync_behavior,
+                    "scope": scope or "all",
+                    "roots_processed": stats["roots_processed"]
+                },
+                "timestamp": datetime.now().isoformat()
             }
+            
+            # Add warnings if any issues occurred
+            if stats["errors"] > 0:
+                response["warnings"] = [f"{stats['errors']} errors occurred during sync"]
+            if stats["security_blocked"] > 0:
+                if "warnings" not in response:
+                    response["warnings"] = []
+                response["warnings"].append(f"{stats['security_blocked']} files blocked by security filters")
+            
+            return response
             
         except Exception as e:
             logger.error(f"Knowledge sync failed: {e}")

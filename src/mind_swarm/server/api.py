@@ -872,13 +872,36 @@ class MindSwarmServer:
                 raise HTTPException(status_code=500, detail=str(e))
         
         @self.app.post("/knowledge/sync")
-        async def sync_knowledge():
-            """Sync knowledge from initial_knowledge templates to ChromaDB."""
+        async def sync_knowledge_post(scope: Optional[str] = None):
+            """Sync knowledge from configured sources to ChromaDB.
+            
+            Args:
+                scope: Optional scope filter (library|template|community|all). Defaults to all.
+            """
             if not self.coordinator:
                 raise HTTPException(status_code=503, detail="Server not initialized")
             
             try:
-                result = await self.coordinator.sync_knowledge()
+                result = await self.coordinator.sync_knowledge(scope=scope)
+                if result["status"] == "error":
+                    raise HTTPException(status_code=500, detail=result["message"])
+                return result
+            except Exception as e:
+                logger.error(f"Knowledge sync failed: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.get("/knowledge/sync")
+        async def sync_knowledge_get(scope: Optional[str] = None):
+            """Sync knowledge from configured sources to ChromaDB.
+            
+            Args:
+                scope: Optional scope filter (library|template|community|all). Defaults to all.
+            """
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            
+            try:
+                result = await self.coordinator.sync_knowledge(scope=scope)
                 if result["status"] == "error":
                     raise HTTPException(status_code=500, detail=result["message"])
                 return result
