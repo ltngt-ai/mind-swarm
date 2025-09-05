@@ -1032,7 +1032,8 @@ class SubspaceCoordinator:
                 "skipped": 0,
                 "security_blocked": 0,
                 "total_files": 0,
-                "roots_processed": []
+                "roots_processed": [],
+                "file_actions": []  # Detailed per-file action results
             }
             
             import yaml
@@ -1148,7 +1149,9 @@ class SubspaceCoordinator:
                             continue
                         
                         # Build metadata with defaults and root-specific overrides
-                        metadata = config.metadata_defaults.copy()
+                        # Start with base defaults but exclude root_metadata which is a nested dict
+                        base_defaults = {k: v for k, v in config.metadata_defaults.items() if k != "root_metadata"}
+                        metadata = base_defaults.copy()
                         metadata.update({
                             "source": root.name,
                             "source_root": root.source_path,
@@ -1158,9 +1161,10 @@ class SubspaceCoordinator:
                             # Note: synced_at is added after content hash computation
                         })
                         
-                        # Apply root-specific metadata
+                        # Apply root-specific metadata if present
                         root_metadata = config.metadata_defaults.get("root_metadata", {}).get(root.name, {})
-                        metadata.update(root_metadata)
+                        if root_metadata:
+                            metadata.update(root_metadata)
                         
                         content = raw_content
                         
@@ -1227,8 +1231,9 @@ class SubspaceCoordinator:
                             content_hash = compute_content_hash(full_content, hash_metadata)
                             metadata["content_hash"] = content_hash
                         
-                        # Add timestamp after hash computation
+                        # Add timestamp and updater after hash computation
                         metadata["synced_at"] = datetime.now().isoformat()
+                        metadata["updated_by"] = "knowledge_sync"
                         
                         # Try to get existing knowledge by normalized ID
                         existing = await self.knowledge_handler.get_shared_knowledge(knowledge_id)
@@ -1247,6 +1252,13 @@ class SubspaceCoordinator:
                                     # Remove old entry - convert Path to string for Chroma
                                     await self.knowledge_handler.remove_shared_knowledge(relative_path.as_posix())
                                     stats["migrated"] += 1
+                                    stats["file_actions"].append({
+                                        "file": relative_path.as_posix(),
+                                        "action": "migrated",
+                                        "old_id": relative_path.as_posix(),
+                                        "new_id": knowledge_id,
+                                        "content_hash": metadata.get("content_hash")
+                                    })
                                     existing = {"id": knowledge_id}  # Treat as existing for update path
                                     logger.debug(f"Migrated {relative_path.as_posix()} -> {knowledge_id}")
                                 else:
@@ -1262,6 +1274,12 @@ class SubspaceCoordinator:
                                 if existing_hash == metadata["content_hash"]:
                                     needs_update = False
                                     stats["unchanged"] += 1
+                                    stats["file_actions"].append({
+                                        "file": relative_path.as_posix(),
+                                        "action": "unchanged",
+                                        "knowledge_id": knowledge_id,
+                                        "content_hash": metadata["content_hash"]
+                                    })
                                     logger.debug(f"Content unchanged (hash match) for {relative_path}")
                             
                             if needs_update:
@@ -1273,9 +1291,20 @@ class SubspaceCoordinator:
                                 )
                                 if success:
                                     stats["updated"] += 1
+                                    stats["file_actions"].append({
+                                        "file": relative_path.as_posix(),
+                                        "action": "updated",
+                                        "knowledge_id": knowledge_id,
+                                        "content_hash": metadata.get("content_hash")
+                                    })
                                     logger.debug(f"Updated {relative_path}")
                                 else:
                                     stats["errors"] += 1
+                                    stats["file_actions"].append({
+                                        "file": relative_path.as_posix(),
+                                        "action": "error",
+                                        "error": message
+                                    })
                                     logger.warning(f"Failed to update {relative_path}: {message}")
                         else:
                             # Add new knowledge with normalized, namespaced ID
@@ -1286,13 +1315,29 @@ class SubspaceCoordinator:
                             )
                             if success:
                                 stats["added"] += 1
+                                stats["file_actions"].append({
+                                    "file": relative_path.as_posix(),
+                                    "action": "added",
+                                    "knowledge_id": knowledge_id,
+                                    "content_hash": metadata.get("content_hash")
+                                })
                                 logger.debug(f"Added {relative_path} with ID: {knowledge_id}")
                             else:
                                 stats["errors"] += 1
+                                stats["file_actions"].append({
+                                    "file": relative_path.as_posix(),
+                                    "action": "error",
+                                    "error": knowledge_id  # In error case, knowledge_id contains error message
+                                })
                                 logger.warning(f"Failed to add {relative_path}: {knowledge_id}")
                                 
                     except Exception as e:
                         stats["errors"] += 1
+                        stats["file_actions"].append({
+                            "file": relative_path.as_posix() if 'relative_path' in locals() else str(file_path.relative_to(source_dir)),
+                            "action": "error",
+                            "error": str(e)
+                        })
                         logger.error(f"Error processing {file_path}: {e}")
             
             # Calculate summary statistics
