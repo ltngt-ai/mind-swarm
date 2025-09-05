@@ -217,6 +217,7 @@ class Terminal:
         """Execute a single command and return output.
         
         Convenience method for one-off commands.
+        This method DOES have network access since it uses the terminal infrastructure.
         
         Args:
             command: Command to execute
@@ -227,6 +228,10 @@ class Terminal:
             
         Example:
             result = terminal.execute_command("ls -la")
+            print(result)
+            
+            # Network operations work!
+            result = terminal.execute_command("curl https://api.example.com")
             print(result)
         """
         session = None
@@ -360,3 +365,6 @@ def close(session_id: str):
 def execute_command(command: str, shell: str = "bash") -> str:
     """Execute a single command and return output."""
     return get_terminal({}).execute_command(command, shell)
+
+# Alias for backward compatibility - recommended over environment.exec_command
+exec_command = execute_command

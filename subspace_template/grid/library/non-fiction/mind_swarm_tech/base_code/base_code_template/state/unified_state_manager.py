@@ -528,6 +528,9 @@ class UnifiedStateManager:
                     bio["memory_pressure"] = min(100, (working_memory_tokens / working_memory_limit) * 100)
                 else:
                     bio["memory_pressure"] = 0
+            else:
+                # No memory stats at all - default to 0% pressure
+                bio["memory_pressure"] = 0
             
             # Combine factors for total tiredness
             bio["tiredness"] = min(100, time_factor + memory_pressure_factor)
@@ -555,9 +558,82 @@ class UnifiedStateManager:
             bio["restlessness"] = min(100, bio["restlessness"] + self.config['restlessness_increment'])
         
         bio["last_update_cycle"] = current_cycle
+        
+        # Check if we need to create MT-001 for memory pressure
+        self._check_and_create_memory_task(bio["memory_pressure"])
+        
         self.save_state()
         
         return self.get_biofeedback_stats()
+    
+    def _check_and_create_memory_task(self, memory_pressure: float) -> None:
+        """Check if we need to create MT-001 maintenance task for memory pressure.
+        
+        Args:
+            memory_pressure: Current memory pressure percentage
+        """
+        # Only create task if memory pressure > 60%
+        if memory_pressure <= 60:
+            return
+            
+        # Check if MT-001 already exists in backlog or as current task
+        task_id = "MT-001"
+        
+        # Check current task
+        current_task_id = self.state[StateSection.TASK.value].get("current_task_id")
+        if current_task_id == task_id:
+            return  # Already working on it
+            
+        # Check if task already exists in maintenance directory
+        maintenance_dir = Path("/personal/.internal/tasks/maintenance")
+        if maintenance_dir.exists():
+            for task_file in maintenance_dir.glob(f"{task_id}_*.json"):
+                logger.debug(f"MT-001 already exists in backlog at {task_file}")
+                return  # Already in backlog
+        
+        # Check blocked directory too
+        blocked_dir = Path("/personal/.internal/tasks/blocked")
+        if blocked_dir.exists():
+            for task_file in blocked_dir.glob(f"{task_id}_*.json"):
+                logger.debug(f"MT-001 is blocked at {task_file}")
+                return  # Already exists but blocked
+                
+        # Create MT-001 task
+        logger.info(f"Memory pressure at {memory_pressure:.1f}% - creating MT-001 maintenance task")
+        
+        task_data = {
+            "id": task_id,
+            "summary": "Working memory eviction - clean up old memories",
+            "description": "Memory pressure is above 60%. Review and evict old memories from working memory to reduce token usage and improve performance.",
+            "task_type": "maintenance",
+            "created_at": datetime.now().isoformat(),
+            "created_by": "system",
+            "status": "pending",
+            "priority": "HIGH",
+            "todo": [
+                {"title": "Review current memory blocks", "status": "NOT-STARTED"},
+                {"title": "Identify stale or redundant memories", "status": "NOT-STARTED"},
+                {"title": "Remove low-priority expired memories", "status": "NOT-STARTED"},
+                {"title": "Consolidate related memories if possible", "status": "NOT-STARTED"},
+                {"title": "Verify memory pressure reduced below 60%", "status": "NOT-STARTED"}
+            ],
+            "context": [
+                f"Memory pressure: {memory_pressure:.1f}%",
+                "Target: Reduce below 60%"
+            ]
+        }
+        
+        # Write task file
+        maintenance_dir.mkdir(parents=True, exist_ok=True)
+        task_file = maintenance_dir / f"{task_id}_working_memory_eviction.json"
+        
+        try:
+            with open(task_file, 'w') as f:
+                import json
+                json.dump(task_data, f, indent=2)
+            logger.info(f"Created maintenance task {task_id} at {task_file}")
+        except Exception as e:
+            logger.error(f"Failed to create MT-001 task: {e}")
     
     def get_biofeedback_stats(self) -> Dict[str, int]:
         """Get current biofeedback statistics.
