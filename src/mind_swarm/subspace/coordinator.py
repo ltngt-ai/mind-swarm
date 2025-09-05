@@ -1154,8 +1154,8 @@ class SubspaceCoordinator:
                             "source_root": root.source_path,
                             "file_name": file_path.name,
                             "file_type": file_path.suffix[1:] if file_path.suffix else "txt",
-                            "source_path": relative_path.as_posix(),
-                            "synced_at": datetime.now().isoformat()
+                            "source_path": relative_path.as_posix()
+                            # Note: synced_at is added after content hash computation
                         })
                         
                         # Apply root-specific metadata
@@ -1217,10 +1217,18 @@ class SubspaceCoordinator:
                         else:
                             full_content = content
                         
-                        # Compute content hash if configured
+                        # Compute content hash if configured (before adding volatile fields)
                         if config.sync_behavior.get("use_content_hash", True):
-                            content_hash = compute_content_hash(full_content, metadata)
+                            # Create a copy of metadata without volatile fields for hash computation
+                            hash_metadata = metadata.copy()
+                            # Remove any volatile fields that would break idempotency
+                            hash_metadata.pop("synced_at", None)
+                            hash_metadata.pop("last_accessed", None)
+                            content_hash = compute_content_hash(full_content, hash_metadata)
                             metadata["content_hash"] = content_hash
+                        
+                        # Add timestamp after hash computation
+                        metadata["synced_at"] = datetime.now().isoformat()
                         
                         # Try to get existing knowledge by normalized ID
                         existing = await self.knowledge_handler.get_shared_knowledge(knowledge_id)
