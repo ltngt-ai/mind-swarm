@@ -115,6 +115,10 @@ security_denylist:
   - "**/.env"
   - "**/.env.*"
   - "**/config/secrets.*"
+  - "**/.internal/**"  # Cyber internal directories
+  - "**/private/**"
+  - "**/confidential/**"
+  - "**/sensitive/**"
   
   # API keys and tokens
   - "*api_key*"
@@ -131,30 +135,117 @@ security_denylist:
   - "*.crt"
   - "*.p12"
   - "*.pfx"
+  - "*.jks"  # Java KeyStore
+  - "*.keystore"
+  - "*.truststore"
   - "id_rsa*"
   - "id_dsa*"
   - "id_ecdsa*"
   - "id_ed25519*"
+  - "*.ppk"  # PuTTY private key
+  - "known_hosts"
+  - "authorized_keys"
   
   # Database credentials
   - "*connection_string*"
   - "*database_url*"
   - "*db_password*"
+  - "*.sqlite"
+  - "*.sqlite3"
+  - "*.db"
+  - "*.mdb"  # Access database
+  - "*mongod.conf"
+  - "*redis.conf"
+  - "*postgresql.conf"
   
-  # AWS credentials
+  # Cloud provider credentials
   - "**/.aws/**"
   - "*aws_access_key*"
   - "*aws_secret*"
-  
-  # Other cloud provider credentials
   - "**/.azure/**"
   - "**/.gcp/**"
+  - "**/.digitalocean/**"
   - "**/service-account*.json"
+  - "**/gcloud/**"
+  - "**/.kube/**"
+  - "**/.docker/**"
+  - "docker-compose*.yml"
+  - "Dockerfile*"
   
-  # Sensitive configuration
-  - "**/private/**"
-  - "**/confidential/**"
-  - "**/sensitive/**"
+  # SSH and remote access
+  - "**/.ssh/**"
+  - "*.ssh"
+  - "sshd_config"
+  - "ssh_config"
+  - "*.rdp"  # Remote Desktop
+  - "*.vnc"  # VNC config
+  
+  # Package manager and build files with potential secrets
+  - "**/node_modules/**"
+  - "**/.npm/**"
+  - "**/.yarn/**"
+  - "**/vendor/**"
+  - "**/.gradle/**"
+  - "**/.m2/**"
+  - "**/target/**"
+  - "**/dist/**"
+  - "**/build/**"
+  - "*.exe"
+  - "*.dll"
+  - "*.so"
+  - "*.dylib"
+  - "*.bin"
+  - "*.obj"
+  - "*.o"
+  - "*.a"
+  - "*.lib"
+  - "*.ko"  # Kernel objects
+  
+  # Log files that might contain sensitive data
+  - "*.log"
+  - "*.log.*"
+  - "**/logs/**"
+  - "**/log/**"
+  - "*.out"
+  - "*.err"
+  - "*_log"
+  - "*_error"
+  - "audit.log*"
+  - "access.log*"
+  - "error.log*"
+  
+  # Backup and temporary files
+  - "*.orig"
+  - ".#*"
+  - "#*#"
+  
+  # History files
+  - ".*_history"
+  - "*.history"
+  - ".bash_history"
+  - ".zsh_history"
+  - ".mysql_history"
+  - ".psql_history"
+  - ".irb_history"
+  - ".python_history"
+  
+  # Git sensitive files
+  - ".git-credentials"
+  - ".gitconfig"
+  - "*.patch"
+  - "*.diff"
+  
+  # Wallet and cryptocurrency files
+  - "*wallet*.dat"
+  - "*wallet*.json"
+  - "*seed*phrase*"
+  - "*mnemonic*"
+  
+  # Browser data
+  - "cookies.txt"
+  - "*cookies.sqlite*"
+  - "*session*storage*"
+  - "*local*storage*"
 
 # Content filters: additional validation rules
 content_filters:
@@ -182,6 +273,26 @@ content_filters:
       description: "AWS secret keys"
     - pattern: "-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----"
       description: "Private keys"
+    - pattern: "(?i)github[_\\.]?token\\s*[:=]"
+      description: "GitHub token"
+    - pattern: "(?i)slack[_\\.]?token\\s*[:=]"
+      description: "Slack token"
+    - pattern: "(?i)discord[_\\.]?token\\s*[:=]"
+      description: "Discord token"
+    - pattern: "(?i)(consumer[_\\.]?key|consumer[_\\.]?secret)\\s*[:=]"
+      description: "OAuth consumer credentials"
+    - pattern: "(?i)smtp[_\\.]?(password|pass|pwd)\\s*[:=]"
+      description: "SMTP credentials"
+    - pattern: "(?i)database[_\\.]?password\\s*[:=]"
+      description: "Database password"
+    - pattern: "(?i)redis[_\\.]?password\\s*[:=]"
+      description: "Redis password"
+    - pattern: "[a-f0-9]{32}"
+      description: "Potential MD5 hash or API key"
+    - pattern: "[a-f0-9]{40}"
+      description: "Potential SHA1 hash or token"
+    - pattern: "[a-f0-9]{64}"
+      description: "Potential SHA256 hash or secret"
 
 # Sync behavior configuration
 sync_behavior:
