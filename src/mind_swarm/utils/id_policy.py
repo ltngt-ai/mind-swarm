@@ -65,4 +65,3 @@ def normalize_cbr_case_id(path_or_id: str) -> str:
         return f"cases/{_normalize_path_segments(stripped)}"
     # Non-path explicit IDs: return as provided
     return raw
-

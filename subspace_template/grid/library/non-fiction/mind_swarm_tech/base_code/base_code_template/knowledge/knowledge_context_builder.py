@@ -39,12 +39,16 @@ class KnowledgeSnippet:
         score: Relevance score for the snippet
         source: Source file or reference
         tags: Comma-separated string of tags (stored as string for ChromaDB compatibility)
+        
+    Notes on tags:
+    - Provide tags as a comma-separated string (e.g., "foo,bar") or None.
+    - ChromaDB stores tags as strings; list values are joined upstream.
     """
     id: str
     content: str
     score: float
     source: str
-    tags: Optional[str]
+    tags: Optional[str]  # Comma-separated string (e.g., "foo,bar") or None
 
 
 class KnowledgeContextBuilder:

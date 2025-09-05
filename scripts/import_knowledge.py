@@ -18,6 +18,11 @@ import sys
 sys.path.append(str(Path(__file__).parent.parent))
 
 from src.mind_swarm.subspace.knowledge_handler import KnowledgeHandler
+from src.mind_swarm.utils.metadata_helpers import (
+    normalize_metadata,
+    compute_content_hash,
+    prepare_for_chromadb
+)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -77,7 +82,10 @@ class KnowledgeImporter:
                     # Include parent directory in ID for better organization
                     knowledge_id = f"{file_path.parent.name}/{knowledge_id}"
             
-            # Extract metadata
+            # The content should be the full YAML document
+            content = yaml.dump(data, default_flow_style=False, sort_keys=False)
+            
+            # Extract and prepare metadata
             metadata = {
                 "title": data.get('title', knowledge_id),
                 "tags": data.get('tags', []),
@@ -87,8 +95,19 @@ class KnowledgeImporter:
                 "imported_by": "import_tool"
             }
             
-            # The content should be the full YAML document
-            content = yaml.dump(data, default_flow_style=False, sort_keys=False)
+            # Add content hash for change detection
+            metadata['content_hash'] = compute_content_hash(content, metadata)
+            
+            # Check if this knowledge already exists and hasn't changed
+            existing = await self.knowledge_handler.get_shared_knowledge(knowledge_id)
+            if existing:
+                existing_hash = existing.get('metadata', {}).get('content_hash')
+                current_hash = metadata['content_hash']
+                if existing_hash == current_hash:
+                    logger.info(f"↔ Unchanged: {knowledge_id}")
+                    return True  # Success, but no changes needed
+                else:
+                    logger.info(f"↻ Updating: {knowledge_id}")
             
             # Store in ChromaDB
             success, message = await self.knowledge_handler.add_shared_knowledge_with_id(
@@ -125,7 +144,9 @@ class KnowledgeImporter:
             "total_files": 0,
             "successful": 0,
             "failed": 0,
-            "skipped": 0
+            "skipped": 0,
+            "unchanged": 0,
+            "updated": 0
         }
         
         # Find all YAML files

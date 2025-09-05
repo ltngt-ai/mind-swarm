@@ -1,0 +1,255 @@
+# Knowledge Sync Configuration
+# Controls how knowledge is synced from filesystem sources to the shared knowledge store
+#
+# This configuration defines:
+# - Source roots: where knowledge originates from in the filesystem
+# - ID prefixes: namespace prefixes applied to knowledge IDs
+# - Include/exclude patterns: control which files are synced
+# - Security filters: prevent secrets and sensitive data from being synced
+
+# Version for config schema evolution
+version: "1.0"
+
+# Sync roots define where knowledge is sourced from and how IDs are namespaced
+sync_roots:
+  # Templates: Initial knowledge from subspace_template/initial_knowledge
+  - name: "templates"
+    source_path: "subspace_template/initial_knowledge"
+    id_prefix: "templates/"
+    description: "Built-in knowledge templates synced on system initialization"
+    enabled: true
+    priority: 100  # Higher priority items override lower priority on ID conflicts
+
+  # Library sections: Curated knowledge sections
+  - name: "library_sections"
+    source_path: "subspace_template/grid/library/sections"
+    id_prefix: "library/sections/"
+    description: "Curated library sections organized by topic"
+    enabled: true
+    priority: 90
+
+  # Library schemas: Data schemas and formats
+  - name: "library_schemas"
+    source_path: "subspace_template/grid/library/schemas"
+    id_prefix: "library/schemas/"
+    description: "Schema definitions for data formats and structures"
+    enabled: true
+    priority: 90
+
+  # Community knowledge: User-contributed knowledge
+  - name: "community"
+    source_path: "subspace/grid/community/knowledge"
+    id_prefix: "community/"
+    description: "Community-maintained knowledge and guides"
+    enabled: true
+    priority: 50
+    # Community content uses runtime path since it's user-generated
+    runtime: true
+
+# File patterns to include in sync
+include_patterns:
+  # Documentation formats
+  - "*.md"
+  - "*.markdown"
+  - "*.txt"
+  - "*.rst"
+  
+  # Structured data formats
+  - "*.yaml"
+  - "*.yml"
+  - "*.json"
+  - "*.toml"
+  
+  # Knowledge-specific formats
+  - "*.knowledge"
+  - "*.prompt"
+  - "*.template"
+
+# File patterns to exclude from sync
+exclude_patterns:
+  # Version control
+  - ".git/**"
+  - ".gitignore"
+  - ".gitattributes"
+  
+  # Build artifacts
+  - "**/__pycache__/**"
+  - "*.pyc"
+  - "*.pyo"
+  - "*.pyd"
+  - "*.so"
+  - "*.dll"
+  - "*.dylib"
+  
+  # IDE and editor files
+  - ".vscode/**"
+  - ".idea/**"
+  - "*.swp"
+  - "*.swo"
+  - "*~"
+  - ".DS_Store"
+  
+  # Temporary files
+  - "*.tmp"
+  - "*.temp"
+  - "*.bak"
+  - "*.backup"
+  - "*.old"
+  - ".tmp_*"
+  
+  # Log files
+  - "*.log"
+  - "*.log.*"
+  
+  # Test files (optional - uncomment if needed)
+  # - "*_test.*"
+  # - "test_*.*"
+  # - "tests/**"
+
+# Security denylist: patterns that indicate sensitive content
+# Files matching these patterns will never be synced
+security_denylist:
+  # Credentials and secrets
+  - "**/secrets/**"
+  - "**/credentials/**"
+  - "**/.env"
+  - "**/.env.*"
+  - "**/config/secrets.*"
+  
+  # API keys and tokens
+  - "*api_key*"
+  - "*api_token*"
+  - "*access_token*"
+  - "*refresh_token*"
+  - "*bearer_token*"
+  - "*auth_token*"
+  
+  # Private keys and certificates
+  - "*.pem"
+  - "*.key"
+  - "*.cert"
+  - "*.crt"
+  - "*.p12"
+  - "*.pfx"
+  - "id_rsa*"
+  - "id_dsa*"
+  - "id_ecdsa*"
+  - "id_ed25519*"
+  
+  # Database credentials
+  - "*connection_string*"
+  - "*database_url*"
+  - "*db_password*"
+  
+  # AWS credentials
+  - "**/.aws/**"
+  - "*aws_access_key*"
+  - "*aws_secret*"
+  
+  # Other cloud provider credentials
+  - "**/.azure/**"
+  - "**/.gcp/**"
+  - "**/service-account*.json"
+  
+  # Sensitive configuration
+  - "**/private/**"
+  - "**/confidential/**"
+  - "**/sensitive/**"
+
+# Content filters: additional validation rules
+content_filters:
+  # Maximum file size in bytes (default: 10MB)
+  max_file_size: 10485760
+  
+  # Minimum file size in bytes (skip empty files)
+  min_file_size: 1
+  
+  # Check for binary content (skip binary files)
+  skip_binary: true
+  
+  # Pattern-based content scanning
+  content_denylist:
+    # Patterns that indicate sensitive content within files
+    - pattern: "(?i)(password|passwd|pwd)\\s*[:=]"
+      description: "Password assignments"
+    - pattern: "(?i)(api[_-]?key|apikey)\\s*[:=]"
+      description: "API key assignments"
+    - pattern: "(?i)bearer\\s+[a-zA-Z0-9_\\-]+\\.[a-zA-Z0-9_\\-]+\\.[a-zA-Z0-9_\\-]+"
+      description: "JWT tokens"
+    - pattern: "(?i)aws_access_key_id\\s*="
+      description: "AWS access keys"
+    - pattern: "(?i)aws_secret_access_key\\s*="
+      description: "AWS secret keys"
+    - pattern: "-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----"
+      description: "Private keys"
+
+# Sync behavior configuration
+sync_behavior:
+  # How to handle existing knowledge with same ID
+  on_conflict: "update"  # Options: "skip", "update", "error"
+  
+  # Whether to remove knowledge items that no longer exist in source
+  remove_orphaned: false
+  
+  # Batch size for sync operations
+  batch_size: 100
+  
+  # Enable parallel processing for large sync operations
+  parallel: true
+  max_workers: 4
+  
+  # Compute content hash to detect changes
+  use_content_hash: true
+  
+  # Preserve metadata from existing items when updating
+  preserve_metadata:
+    - "created_at"
+    - "created_by"
+    - "usage_count"
+    - "last_accessed"
+
+# Metadata enrichment: additional metadata to add during sync
+metadata_defaults:
+  # Default metadata applied to all synced items
+  source: "knowledge_sync"
+  sync_version: "1.0"
+  
+  # Per-root metadata (overrides defaults)
+  root_metadata:
+    templates:
+      category: "system"
+      editable: false
+    library_sections:
+      category: "library"
+      editable: false
+    library_schemas:
+      category: "schema"
+      editable: false
+    community:
+      category: "community"
+      editable: true
+
+# Logging and monitoring
+logging:
+  # Log level for sync operations
+  level: "INFO"  # Options: "DEBUG", "INFO", "WARNING", "ERROR"
+  
+  # Log sync statistics
+  log_statistics: true
+  
+  # Log individual file operations (verbose)
+  log_file_operations: false
+  
+  # Report files skipped due to filters
+  report_skipped: true
+
+# Future extensions (reserved for later implementation)
+extensions:
+  # Plugin system for custom processors
+  plugins: []
+  
+  # Custom transformers for specific file types
+  transformers: []
+  
+  # Webhooks for sync events
+  webhooks: []
