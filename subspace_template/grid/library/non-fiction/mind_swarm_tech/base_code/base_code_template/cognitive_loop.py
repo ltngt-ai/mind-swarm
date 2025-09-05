@@ -247,6 +247,8 @@ class CognitiveLoop:
         existing_state = self.state_manager.load_state()
         if existing_state:
             self.cycle_count = existing_state.get("cycle_count", 0)
+            # Update memory system with resumed cycle count
+            self.memory_system.update_cycle(self.cycle_count)
             logger.info(f"Resumed at cycle {self.cycle_count}")
         
         # Load execution state
@@ -434,6 +436,9 @@ class CognitiveLoop:
             # Increment cycle count
             self.cycle_count = self.state_manager.increment_cycle_count()
             
+            # Update memory system with current cycle for aging
+            self.memory_system.update_cycle(self.cycle_count)
+            
             # Set cycle in recorder
             self.cycle_recorder.set_cycle(self.cycle_count)
             
@@ -501,6 +506,27 @@ class CognitiveLoop:
                 self.cycle_recorder.complete_cycle("completed")
             except Exception as e:
                 logger.debug(f"Failed to complete cycle recording: {e}")
+            
+            # Periodic memory cleanup - every 5 cycles
+            if self.cycle_count % 5 == 0:
+                try:
+                    # Clean up old memories (older than 100 cycles)
+                    old_count = self.memory_system.cleanup_old_memories(self.cycle_count, max_age_cycles=100)
+                    if old_count > 0:
+                        logger.info(f"Cleaned up {old_count} old memories (> 100 cycles old)")
+                    
+                    # Also clean up expired memories
+                    expired_count = self.memory_system.cleanup_expired()
+                    if expired_count > 0:
+                        logger.info(f"Cleaned up {expired_count} expired memories")
+                    
+                    # Clean up cache
+                    cache_count = self.memory_system.cleanup_cache()
+                    if cache_count > 0:
+                        logger.debug(f"Cleaned up {cache_count} expired cache entries")
+                        
+                except Exception as e:
+                    logger.error(f"Error during periodic memory cleanup: {e}")
                         
         except Exception as e:
             logger.error(f"Error in cognitive cycle: {e}", exc_info=True)

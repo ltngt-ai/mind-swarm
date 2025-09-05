@@ -456,9 +456,24 @@ class CyberTerminalManager:
         """
         try:
             # Read request
-            with open(body_path, 'r') as f:
-                data = json.load(f)
+            try:
+                with open(body_path, 'r') as f:
+                    data = json.load(f)
+            except (json.JSONDecodeError, ValueError) as e:
+                logger.warning(f"Failed to parse terminal body file for {cyber_id}: {e}")
+                # Reset the file to a valid empty state
+                with open(body_path, 'w') as f:
+                    json.dump({"request": None, "response": None}, f, indent=2)
+                return
             
+            # Check if data was loaded successfully
+            if not data or not isinstance(data, dict):
+                logger.warning(f"Invalid or empty terminal body file for {cyber_id}")
+                # Reset the file to a valid empty state
+                with open(body_path, 'w') as f:
+                    json.dump({"request": None, "response": None}, f, indent=2)
+                return
+                
             request = data.get('request')
             
             # Skip if no request or request has been cleared

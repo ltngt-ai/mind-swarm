@@ -56,8 +56,9 @@ echo ""
 
 # Create minimal Debian system
 # Include libmagic1t64 for python-magic file type detection
+# Include curl and lynx for network operations
 debootstrap --variant=minbase \
-    --include=python3,python3-pip,python3-venv,ca-certificates,python3-dev,build-essential,libmagic1t64 \
+    --include=python3,python3-pip,python3-venv,ca-certificates,python3-dev,build-essential,libmagic1t64,curl,lynx,wget \
     "$DEBIAN_RELEASE" \
     "$ROOTFS_DIR" \
     "$DEBIAN_MIRROR"
@@ -97,6 +98,10 @@ jsonschema>=4.0
 # File type detection
 python-magic>=0.4.27
 
+# Network operations
+requests>=2.31.0
+urllib3>=2.0.0
+
 # Data processing
 pandas>=2.0.0
 numpy>=1.24.0
@@ -104,6 +109,7 @@ numpy>=1.24.0
 # Text processing
 markdown>=3.4
 beautifulsoup4>=4.12.0
+lxml>=4.9.0
 
 # Date/time utilities
 python-dateutil>=2.8.2

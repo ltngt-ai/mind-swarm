@@ -493,10 +493,16 @@ class StatusManager:
         memory_stats = self.memory_system.get_memory_stats()
         
         # Update and get biofeedback from UnifiedStateManager (single source of truth)
-        return self.state_manager.update_biofeedback(
+        biofeedback = self.state_manager.update_biofeedback(
             current_task=current_task,
             memory_stats=memory_stats
         )
+        
+        # Manage maintenance tasks based on tiredness level
+        # This needs to be called after biofeedback update to get current tiredness
+        self._manage_maintenance_tasks()
+        
+        return biofeedback
     
     def _manage_maintenance_tasks(self):
         """Manage maintenance tasks based on tiredness level.
@@ -513,8 +519,8 @@ class StatusManager:
             if not maintenance_dir.exists() or not completed_dir.exists():
                 return
             
-            # Get current tiredness
-            tiredness = self.state['tiredness']
+            # Get current tiredness from state manager (the single source of truth)
+            tiredness = self.state_manager.get_value(StateSection.BIOFEEDBACK, "tiredness")
             
             # Calculate how many maintenance tasks should be active
             # For every 10% above 30%, add one task

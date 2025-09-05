@@ -167,46 +167,33 @@ class EnvironmentScanner:
             List of observation dictionaries
         """
         observations = []
-        memories = []
         scan_start = datetime.now()
         
-        # Always scan current location first (like looking around the room)
-        # This returns MemoryBlocks for location files, not observations
-        memories.extend(self._scan_current_location(cycle_count))
+        # REMOVED: Location, activity log, status, and terminal scanning that created MemoryBlocks
+        # These were creating persistent memories every cycle that were never cleaned up
+        # The observation stage reads files directly when needed
         
-        # Personal.txt is now created and managed by cognitive_loop.py
+        # Only scan for actual new events that need attention:
         
-        # Scan activity log (personal history)
-        memories.extend(self._scan_activity_log(cycle_count))
-        
-        # Scan status file (consolidated status with biofeedback)
-        memories.extend(self._scan_status_file(cycle_count))
-        
-        # Scan terminal sessions
-        memories.extend(self._scan_terminal_sessions(cycle_count))
-        
-        # Scan different areas - these return observations and MemoryBlocks
+        # Scan inbox for new messages - these return observations
         inbox_results = self._scan_inbox(cycle_count)
         observations.extend(inbox_results)
         
+        # Scan announcements - these return observations
         announcement_results = self._scan_announcements(cycle_count)
         observations.extend(announcement_results)
         
         self.last_scan = scan_start
         
         # Log summary of what was found
-        if observations or memories:
-            file_count = len([m for m in memories if isinstance(m, MemoryBlock)])
-            logger.debug(f"Scan details: {len(observations)} observations, {file_count} file memories")
+        if observations:
+            logger.debug(f"Scan found {len(observations)} observations")
         
-        logger.debug(f"Environment scan found {len(observations)} observations and {len(memories)} memories")
+        logger.debug(f"Environment scan found {len(observations)} observations")
         
-        # Add MemoryBlocks to the memory system (location files, etc)
-        if self.memory_system and memories:
-            for memory in memories:
-                self.memory_system.add_memory(memory)
-                logger.debug(f"Added to memory system: {memory.id} (type: {type(memory).__name__})")
-            logger.info(f"Added {len(memories)} memories to working memory")
+        # REMOVED: Adding MemoryBlocks to memory system - this was legacy code
+        # Observations are meant to be ephemeral and shouldn't persist as memories
+        # The observation stage reads files directly when needed
         
         return observations
             

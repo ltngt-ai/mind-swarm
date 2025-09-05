@@ -1382,7 +1382,7 @@ class SubspaceCoordinator:
                         if existing:
                             # Update existing knowledge
                             success, message = await self.knowledge_handler.update_shared_knowledge(
-                                knowledge_id,
+                                knowledge_id,  # Use normalized, namespaced ID
                                 full_content, 
                                 metadata
                             )
@@ -1395,7 +1395,7 @@ class SubspaceCoordinator:
                         else:
                             # Add new knowledge with normalized, namespaced ID
                             success, knowledge_id_result = await self.knowledge_handler.add_shared_knowledge_with_id(
-                                knowledge_id=knowledge_id,
+                                knowledge_id=knowledge_id,  # Use normalized ID
                                 content=full_content,
                                 metadata=metadata,
                             )

@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .base_code_template.actions import Action, ActionResult, ActionStatus
-from .base_code_template.memory import Priority
+from .base_code_template.memory import Priority, MemoryBlock
 
 
 class MakeNetworkRequestAction(Action):
@@ -61,17 +61,20 @@ class MakeNetworkRequestAction(Action):
             # Create observation memory to track the request
             memory_manager = context.get("memory_manager")
             if memory_manager:
-                observation_memory = ObservationMemoryBlock(
-                    observation_type="network_request_sent",
-                    path="/personal/network",
-                    message=f"Sent {method} request to {url}",
-                    cycle_count=context.get("cycle_count", 0),
-                    priority=Priority.HIGH,
+                observation_memory = MemoryBlock(
                     content=json.dumps({
                         "request_id": request_id,
                         "url": url,
                         "method": method
-                    })
+                    }),
+                    source="network_request",
+                    priority=Priority.HIGH,
+                    metadata={
+                        "observation_type": "network_request_sent",
+                        "path": "/personal/network",
+                        "message": f"Sent {method} request to {url}",
+                        "cycle_count": context.get("cycle_count", 0)
+                    }
                 )
                 memory_manager.add_memory(observation_memory)
                 

@@ -266,6 +266,30 @@ class MyAPIPermissionError(MyAPIError):
 - Use async/await for I/O operations if needed
 - Be mindful of memory usage
 
+## Network Access Note
+
+**IMPORTANT**: Command execution has two different APIs with different capabilities:
+- `environment.exec_command()` - NO network access (DEPRECATED)
+- `terminal.exec_command()` - HAS network access (RECOMMENDED)
+
+Always use `terminal.exec_command()` for:
+- curl, wget commands
+- API calls
+- Any network operations
+- General command execution (it works for everything)
+
+Example:
+```python
+# ✅ CORRECT - Has network access
+import terminal
+result = terminal.exec_command("curl https://api.example.com")
+
+# ❌ DEPRECATED - No network access
+from environment import Environment
+env = Environment(context)
+result = env.exec_command("curl https://api.example.com")  # Will fail!
+```
+
 ## Common Patterns
 
 ### Pattern 1: Wrapper Around System Functionality
@@ -368,6 +392,12 @@ class EventAPI:
 - **Purpose**: Simple task management system
 - **Dependencies**: Context
 - **Key Methods**: `create()`, `get_current()`, `get_all()`, `complete()`, `block()`, `update()`
+
+### terminal.py
+- **Purpose**: Terminal sessions and command execution WITH NETWORK ACCESS
+- **Dependencies**: Context
+- **Key Methods**: `create()`, `send()`, `read()`, `close()`, `execute_command()`, `exec_command()`
+- **IMPORTANT**: Use `terminal.exec_command()` instead of `environment.exec_command()` for network operations!
 
 ## Troubleshooting
 

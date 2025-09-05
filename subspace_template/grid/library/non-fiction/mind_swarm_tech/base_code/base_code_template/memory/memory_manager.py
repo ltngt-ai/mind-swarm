@@ -39,6 +39,9 @@ class WorkingMemoryManager:
         # Active context tracking
         self.current_task_id: Optional[str] = None
         self.active_topics: Set[str] = set()
+        
+        # Track current cycle for memory aging
+        self.current_cycle: int = 0
     
     def add_memory(self, block: MemoryBlock) -> None:
         """Add a memory block to symbolic memory.
@@ -47,6 +50,10 @@ class WorkingMemoryManager:
         The ID should be unique - use location/path as the ID.
         Line ranges and digests are stored as properties, not in the ID.
         """
+        # Set cycle_count if not already set (critical for memory aging)
+        if block.cycle_count is None:
+            block.cycle_count = self.current_cycle
+        
         # Check if memory already exists
         if block.id in self.memory_index:
             # Update existing memory
@@ -96,6 +103,10 @@ class WorkingMemoryManager:
                 del self.access_history[memory_id]
             
             logger.debug(f"Removed memory: {memory_id}")
+    
+    def update_cycle(self, cycle_count: int) -> None:
+        """Update the current cycle count for memory aging."""
+        self.current_cycle = cycle_count
     
     def update_confidence(self, memory_id: str, confidence: float) -> None:
         """Update confidence score for a memory block."""
@@ -154,6 +165,70 @@ class WorkingMemoryManager:
         
         return len(expired)
     
+    def cleanup_old_memories(self, current_cycle: int, max_age_cycles: int = 100) -> int:
+        """Remove memories older than max_age_cycles (except pinned ones).
+        
+        Also removes memories without cycle_count that are LOW or MEDIUM priority
+        (these are likely old memories from before cycle_count was tracked).
+        
+        Args:
+            current_cycle: The current cycle count
+            max_age_cycles: Maximum age in cycles before eviction (default 100)
+            
+        Returns:
+            Number of memories removed
+        """
+        if current_cycle <= 0:
+            return 0
+            
+        old_memories = []
+        legacy_memories = []
+        
+        for memory in self.symbolic_memory:
+            # Skip pinned memories
+            if memory.pinned:
+                continue
+                
+            # Skip critical and high priority memories
+            if memory.priority in [Priority.CRITICAL, Priority.HIGH, Priority.FOUNDATIONAL, Priority.SYSTEM]:
+                continue
+                
+            # Handle memories without cycle_count (legacy memories)
+            if memory.cycle_count is None:
+                # Only remove LOW priority legacy memories, not MEDIUM
+                # MEDIUM might contain important user files
+                if memory.priority == Priority.LOW:
+                    # Check if it's an old memory based on timestamp
+                    if memory.timestamp:
+                        age_seconds = (datetime.now() - memory.timestamp).total_seconds()
+                        # If older than 2 hours, consider it old
+                        if age_seconds > 7200:
+                            legacy_memories.append(memory)
+                continue
+                
+            # Calculate age for memories with cycle_count
+            age = current_cycle - memory.cycle_count
+            if age > max_age_cycles:
+                old_memories.append(memory)
+        
+        # Remove old memories
+        removed_count = 0
+        for memory in old_memories:
+            logger.debug(f"Removing old memory: {memory.id} (age: {current_cycle - memory.cycle_count} cycles)")
+            self.remove_memory(memory.id)
+            removed_count += 1
+        
+        # Remove legacy memories (limit to 5 per cleanup to be very gradual)
+        for memory in legacy_memories[:5]:
+            logger.debug(f"Removing legacy memory without cycle_count: {memory.id}")
+            self.remove_memory(memory.id)
+            removed_count += 1
+        
+        if removed_count > 0:
+            logger.info(f"Cleaned up {removed_count} memories ({len(old_memories)} old, {min(len(legacy_memories), 5)} legacy)")
+        
+        return removed_count
+    
     # ObservationMemoryBlock removed - observations are now ephemeral
     # cleanup_old_observations method removed
     
@@ -195,6 +270,7 @@ class WorkingMemoryManager:
                     "expiry": memory.expiry.isoformat() if memory.expiry else None,
                     "pinned": memory.pinned,
                     "metadata": memory.metadata,
+                    "cycle_count": memory.cycle_count,  # CRITICAL: Save cycle_count for memory aging
                     # Type-specific fields
                     **self._get_type_specific_fields(memory)
                 }
@@ -273,7 +349,8 @@ class WorkingMemoryManager:
                             priority=Priority[mem_data.get('priority', 'MEDIUM')],
                             metadata=mem_data.get('metadata', {}),
                             pinned=mem_data.get('pinned', False),
-                            content_type=content_type
+                            content_type=content_type,
+                            cycle_count=mem_data.get('cycle_count')  # Restore cycle_count for memory aging
                         )
                     
                     # Restore timestamps
