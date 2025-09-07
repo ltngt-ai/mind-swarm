@@ -35,7 +35,6 @@ def sync(
         "-s",
         help="Scope to sync: library | template | community | all (default: all)",
         case_sensitive=False,
-        callback=lambda v: v.lower() if isinstance(v, str) else v,
     )
 ):
     """Trigger a server-side knowledge sync and show a summary.
@@ -43,6 +42,10 @@ def sync(
     Contacts the server's /knowledge/sync endpoint with an optional scope
     filter and displays counts for added, updated, unchanged, and errors.
     """
+    # Normalize scope to lowercase if provided
+    if scope is not None:
+        scope = scope.lower()
+    
     valid_scopes = {"library", "template", "community", "all"}
     if scope is not None and scope not in valid_scopes:
         console.print(
