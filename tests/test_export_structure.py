@@ -216,7 +216,11 @@ class TestExportStructure:
             assert data['_export_metadata']['id'] == 'cbr_auto_123_456789', \
                 "CBR export should preserve auto-generated ID when no case_path"
             assert data['_export_metadata'].get('case_path') is None, \
+<<<<<<< HEAD
+                "case_path should be None for auto-generated IDs"
+=======
                 "No case_path should be present for auto-generated IDs"
+>>>>>>> origin/main
 
     @pytest.mark.asyncio
     @patch('scripts.export_knowledge.KnowledgeHandler')
