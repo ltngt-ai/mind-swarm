@@ -240,14 +240,19 @@ class CBRImporter:
                         metadatas=[metadata]
                     )
                     logger.info(f"✓ Imported: {case_id} to {collection_name}")
-            except:
+            except Exception as e:
                 # If get fails, try to add (backward compatibility)
-                collection.add(
-                    ids=[case_id],
-                    documents=[json.dumps(case_doc)],
-                    metadatas=[metadata]
-                )
-                logger.info(f"✓ Imported: {case_id} to {collection_name}")
+                logger.debug(f"Could not check for existing case, attempting add: {e}")
+                try:
+                    collection.add(
+                        ids=[case_id],
+                        documents=[json.dumps(case_doc)],
+                        metadatas=[metadata]
+                    )
+                    logger.info(f"✓ Imported: {case_id} to {collection_name}")
+                except Exception as add_error:
+                    logger.error(f"Failed to add case {case_id}: {add_error}")
+                    raise
             
             # Update statistics
             if target_collection == 'shared':
