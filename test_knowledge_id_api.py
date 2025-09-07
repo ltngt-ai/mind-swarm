@@ -97,7 +97,7 @@ async def test_explicit_id_storage():
     
     response3 = await cyber_handler.store(request3)
     assert response3["status"] == "success", f"Failed idempotent store: {response3}"
-    assert response3.get("idempotent") == True, "Should be idempotent"
+    assert response3.get("idempotent") is True, "Should be idempotent"
     assert response3["knowledge_id"] == "docs/architecture/overview", f"ID changed: {response3['knowledge_id']}"
     print(f"✓ Idempotent operation succeeded, ID unchanged: {response3['knowledge_id']}")
     

@@ -33,6 +33,9 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# Constants for knowledge management
+MAX_VERSION_LIMIT = 100  # Maximum number of version suffixes to try when handling ID collisions
+
 
 class CyberKnowledgeHandler:
     """Handles knowledge operations for a specific cyber."""
@@ -115,14 +118,14 @@ class CyberKnowledgeHandler:
                 
                 try:
                     result = self.personal_collection.get(ids=[knowledge_id])
-                    if result and result.get('documents') and result['documents'][0]:
+                    if result and result.get('documents') and len(result['documents']) > 0 and result['documents'][0]:
                         existing_personal = result['documents'][0]
                 except:
                     pass
                 
                 try:
                     result = self.shared_collection.get(ids=[knowledge_id])
-                    if result and result.get('documents') and result['documents'][0]:
+                    if result and result.get('documents') and len(result['documents']) > 0 and result['documents'][0]:
                         existing_shared = result['documents'][0]
                 except:
                     pass
@@ -146,7 +149,7 @@ class CyberKnowledgeHandler:
                             collision = False
                             try:
                                 r = self.personal_collection.get(ids=[versioned_id])
-                                if r and r.get('documents') and r['documents'][0]:
+                                if r and r.get('documents') and len(r['documents']) > 0 and r['documents'][0]:
                                     collision = True
                             except:
                                 pass
@@ -154,7 +157,7 @@ class CyberKnowledgeHandler:
                             if not collision:
                                 try:
                                     r = self.shared_collection.get(ids=[versioned_id])
-                                    if r and r.get('documents') and r['documents'][0]:
+                                    if r and r.get('documents') and len(r['documents']) > 0 and r['documents'][0]:
                                         collision = True
                                 except:
                                     pass
@@ -165,7 +168,7 @@ class CyberKnowledgeHandler:
                                 break
                             
                             version += 1
-                            if version > 100:  # Safety limit
+                            if version > MAX_VERSION_LIMIT:  # Safety limit
                                 return {
                                     "request_id": request.get('request_id'),
                                     "status": "error",
