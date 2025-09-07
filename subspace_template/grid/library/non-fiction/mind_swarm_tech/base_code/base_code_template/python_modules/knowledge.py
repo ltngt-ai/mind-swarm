@@ -63,6 +63,35 @@ if existing:
     )
 ```
 
+### Intention: "Store documentation with a path-based ID for easy retrieval"
+```python
+# Store with explicit hierarchical ID
+knowledge.store(
+    content="System architecture overview...",
+    knowledge_id="docs/architecture/overview",
+    tags=["architecture", "documentation"],
+    personal=False
+)
+
+# Later retrieve by the exact ID
+doc = knowledge.get("docs/architecture/overview")
+if doc:
+    print(f"Architecture doc: {doc['content']}")
+```
+
+### Intention: "Import knowledge from a file preserving its path structure"
+```python
+# Read a file and store with path-based ID
+file_path = "/grid/library/fiction/stories/the_tale.md"
+content = memory[file_path]
+knowledge.store(
+    content=content,
+    knowledge_id=f"imported{file_path}",  # e.g., "imported/grid/library/fiction/stories/the_tale.md"
+    tags=["imported", "fiction", "stories"],
+    metadata={"source_path": file_path}
+)
+```
+
 ### Intention: "Find the knowledge for tags[architecture, memory]"
 ```python
 # Find all knowledge with specific tags
@@ -211,9 +240,10 @@ Returns:
     
     def store(self, content: str, tags: Optional[List[str]] = None, 
               personal: bool = False, metadata: Optional[Dict[str, Any]] = None,
+              knowledge_id: Optional[str] = None,
               timeout: float = DEFAULT_REQUEST_TIMEOUT) -> Optional[str]:
         """
-        Store new knowledge.
+        Store new knowledge with optional explicit knowledge_id.
         
         Args:
             content: The knowledge to store
@@ -221,10 +251,30 @@ Returns:
             personal: If True, stores as personal knowledge (not shared with hive mind).
             metadata: Additional metadata to store. The 'tags' and 'personal' arguments
                       will be merged into this dictionary.
+            knowledge_id: Optional explicit ID for the knowledge. If provided, will be used
+                         instead of auto-generating one. If an item with this ID already exists
+                         with different content, a versioned ID (e.g., "myid_v1") will be used.
+                         If the content is identical (idempotent), the operation succeeds silently.
             timeout: How long to wait for response
             
         Returns:
-            Knowledge ID if successfully stored, None otherwise
+            Knowledge ID if successfully stored (may differ from requested ID if collision occurred),
+            None otherwise
+            
+        Examples:
+            # Store with explicit path-based ID
+            knowledge.store(
+                content="Important system documentation...",
+                knowledge_id="docs/system/README",
+                tags=["documentation", "system"]
+            )
+            
+            # Store with hierarchical ID
+            knowledge.store(
+                content="Architecture decision record #001...",
+                knowledge_id="architecture/decisions/ADR-001",
+                personal=False
+            )
         """
         # Rate limiting
         self._wait_for_rate_limit()
@@ -247,13 +297,20 @@ Returns:
             "metadata": full_metadata
         }
         
+        # Add knowledge_id if provided
+        if knowledge_id:
+            request["knowledge_id"] = knowledge_id
+        
         # Send request and get response
         response = self._send_request(request, timeout)
         
         if response and response.get("status") == "success":
-            knowledge_id = response.get("knowledge_id")
-            logger.info(f"Stored {'personal' if personal else 'shared'} knowledge: {knowledge_id}")
-            return knowledge_id
+            actual_id = response.get("knowledge_id")
+            if response.get("idempotent"):
+                logger.info(f"Knowledge already exists with same content: {actual_id}")
+            else:
+                logger.info(f"Stored {'personal' if personal else 'shared'} knowledge: {actual_id}")
+            return actual_id
         else:
             error = response.get("error", "Unknown error") if response else "Timeout"
             logger.warning(f"Knowledge store failed: {error}")
@@ -442,7 +499,8 @@ Returns:
         return knowledge_text
     
     def share_learning(self, content: str, category: str = "experience", 
-                      confidence: float = DEFAULT_CONFIDENCE) -> Optional[str]:
+                      confidence: float = DEFAULT_CONFIDENCE, 
+                      knowledge_id: Optional[str] = None) -> Optional[str]:
         """
         Share a learning or insight with the hive mind.
         
@@ -453,12 +511,14 @@ Returns:
             content: The learning or insight to share
             category: Category of the learning (e.g., "experience", "discovery", "warning")
             confidence: Confidence level (0-1)
+            knowledge_id: Optional explicit ID for the learning
             
         Returns:
             Knowledge ID if stored successfully
         """
         return self.store(
             content=content,
+            knowledge_id=knowledge_id,
             tags=["learning", category],
             personal=False,
             metadata={

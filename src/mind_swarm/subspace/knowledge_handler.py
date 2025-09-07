@@ -98,15 +98,92 @@ class CyberKnowledgeHandler:
             }
     
     async def store(self, request: Dict) -> Dict:
-        """Store new knowledge."""
+        """Store new knowledge with optional explicit knowledge_id."""
         try:
             content = request.get('content', '')
             metadata = request.get('metadata', {})
             is_personal = metadata.get('personal', False)
             
-            # Generate unique ID using content hash
-            content_hash = compute_short_hash(content)
-            knowledge_id = f"{self.cyber_id}_{content_hash}_{int(time.time())}"
+            # Check if explicit knowledge_id was provided
+            knowledge_id = request.get('knowledge_id')
+            
+            if knowledge_id:
+                # Using explicit ID - validate uniqueness
+                # First check if it already exists in either collection
+                existing_personal = None
+                existing_shared = None
+                
+                try:
+                    result = self.personal_collection.get(ids=[knowledge_id])
+                    if result and result.get('documents') and result['documents'][0]:
+                        existing_personal = result['documents'][0]
+                except:
+                    pass
+                
+                try:
+                    result = self.shared_collection.get(ids=[knowledge_id])
+                    if result and result.get('documents') and result['documents'][0]:
+                        existing_shared = result['documents'][0]
+                except:
+                    pass
+                
+                # Check for collisions
+                if existing_personal or existing_shared:
+                    existing_content = existing_personal or existing_shared
+                    
+                    # Compare content using hash for efficiency
+                    existing_hash = compute_content_hash(existing_content)
+                    new_hash = compute_content_hash(content)
+                    
+                    if existing_hash != new_hash:
+                        # Content differs - collision!
+                        # Strategy: append version suffix
+                        base_id = knowledge_id
+                        version = 1
+                        while True:
+                            versioned_id = f"{base_id}_v{version}"
+                            # Check if versioned ID exists
+                            collision = False
+                            try:
+                                r = self.personal_collection.get(ids=[versioned_id])
+                                if r and r.get('documents') and r['documents'][0]:
+                                    collision = True
+                            except:
+                                pass
+                            
+                            if not collision:
+                                try:
+                                    r = self.shared_collection.get(ids=[versioned_id])
+                                    if r and r.get('documents') and r['documents'][0]:
+                                        collision = True
+                                except:
+                                    pass
+                            
+                            if not collision:
+                                knowledge_id = versioned_id
+                                logger.warning(f"ID collision detected for {base_id}, using {versioned_id}")
+                                break
+                            
+                            version += 1
+                            if version > 100:  # Safety limit
+                                return {
+                                    "request_id": request.get('request_id'),
+                                    "status": "error",
+                                    "error": f"Too many versions exist for ID: {base_id}"
+                                }
+                    else:
+                        # Same content - idempotent operation, return existing ID
+                        logger.info(f"Idempotent store for {self.cyber_id}: {knowledge_id} (content unchanged)")
+                        return {
+                            "request_id": request.get('request_id'),
+                            "status": "success",
+                            "knowledge_id": knowledge_id,
+                            "idempotent": True
+                        }
+            else:
+                # Generate unique ID using content hash (original behavior)
+                content_hash = compute_short_hash(content)
+                knowledge_id = f"{self.cyber_id}_{content_hash}_{int(time.time())}"
             
             # Prepare metadata using normalization helper
             base_metadata = {
