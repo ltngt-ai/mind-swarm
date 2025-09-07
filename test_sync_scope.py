@@ -1,5 +1,15 @@
 #!/usr/bin/env python3
-"""Test the knowledge sync with scope parameter."""
+"""Manual tool to exercise knowledge sync with the scope parameter.
+
+This script initializes Subspace components and performs real sync operations.
+It requires local dependencies (e.g., bubblewrap) and a configured environment.
+It is skipped during automated pytest discovery/runs.
+"""
+
+import pytest
+
+# Skip this module in CI/automated test runs
+pytestmark = pytest.mark.skip(reason="manual integration script; exclude from CI")
 
 import asyncio
 import os

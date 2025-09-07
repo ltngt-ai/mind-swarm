@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-"""Test the knowledge sync API with scope parameter."""
+"""Manual tool to probe the knowledge sync API with scope parameter.
+
+This script performs real HTTP calls to a running Mind‑Swarm server and is
+intended for manual testing only. It is skipped during automated pytest runs.
+"""
+
+import pytest
+
+# Skip this module in CI/automated test runs
+pytestmark = pytest.mark.skip(reason="manual integration script; exclude from CI")
 
 import httpx
 import json
