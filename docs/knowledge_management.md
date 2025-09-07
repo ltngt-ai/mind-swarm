@@ -236,13 +236,117 @@ _export_metadata:
 - Import in batches for very large knowledge bases
 - Monitor ChromaDB storage usage
 
+## CBR Case Management
+
+### Exporting CBR Cases
+
+CBR (Case-Based Reasoning) cases are automatically exported alongside knowledge when using the export scripts:
+
+```bash
+./run.sh export-knowledge --no-personal  # Exclude personal CBR cases
+```
+
+Exported CBR cases are organized in:
+- `cbr_cases/shared/` - Shared CBR cases accessible to all cybers
+- `cbr_cases/personal/{cyber_name}/` - Personal CBR cases per cyber
+
+### Importing CBR Cases
+
+Import CBR cases from YAML files using the dedicated import script:
+
+#### Import from Export Directory
+
+```bash
+python scripts/import_cbr.py --export-dir knowledge_exports/knowledge_export_20250117_120000
+```
+
+#### Import Single CBR Case
+
+```bash
+python scripts/import_cbr.py --file case.yaml --target shared
+```
+
+#### Import to Personal Collection
+
+```bash
+python scripts/import_cbr.py --directory cases/ --target personal --cyber Alice
+```
+
+#### Command Line Options
+
+```bash
+python scripts/import_cbr.py --help
+
+Options:
+  --subspace-root PATH   Path to subspace root (default: $SUBSPACE_ROOT or ../subspace)
+  --file PATH           Import single YAML file
+  --directory PATH      Import all YAML files from directory
+  --export-dir PATH     Import from knowledge export directory
+  --target {shared,personal}  Target collection (default: shared)
+  --cyber NAME          Cyber name for personal collections
+  --recursive           Search subdirectories (default: True)
+```
+
+### CBR Case Format
+
+CBR cases use this YAML structure:
+
+```yaml
+problem_context: Description of the problem encountered
+solution: The solution that was applied
+outcome: The result of applying the solution
+metadata:
+  case_path: cases/category/specific-case  # Optional path-based ID
+  success_score: 0.85
+  tags: [tag1, tag2]
+  cyber_id: Alice
+  timestamp: 2025-01-17T12:00:00
+```
+
+With export metadata:
+
+```yaml
+_export_metadata:
+  id: cases/debugging/memory-leak-fix  # Path-based ID used for import
+  case_path: cases/debugging/memory-leak-fix  # Preserved for round-trip
+  collection: cbr_shared
+  exported_at: 2025-01-17T12:00:00
+```
+
+### Path-Based IDs for CBR
+
+The CBR import tool supports deterministic, path-based IDs:
+
+1. **Priority order**: `case_id` parameter > `case_path` metadata > filename
+2. **Normalization**: Path-like IDs are normalized to `cases/...` format
+3. **Upsert logic**: Existing cases with same ID are updated, not duplicated
+4. **Round-trip support**: Export preserves `case_path` for re-import
+
+Example workflow:
+
+```bash
+# Export CBR cases
+./run.sh export-knowledge
+
+# Cases have path-based IDs like:
+# - cases/debugging/memory-leak
+# - cases/optimization/query-performance
+
+# Re-import preserves the same IDs
+python scripts/import_cbr.py --export-dir knowledge_exports/latest
+
+# Cases maintain their original IDs for consistency
+```
+
 ## Integration with Cybers
 
-Cybers can access imported knowledge through:
+Cybers can access imported knowledge and CBR cases through:
 
 1. **Knowledge search** - Query by content or tags
 2. **Direct reference** - Access by knowledge ID
 3. **Category browsing** - Explore by category
 4. **Tag filtering** - Find related knowledge
+5. **CBR retrieval** - Find similar past cases and solutions
+6. **CBR storage** - Store new cases with deterministic IDs
 
-Knowledge becomes immediately available to all cybers after import.
+Knowledge and CBR cases become immediately available to all cybers after import.

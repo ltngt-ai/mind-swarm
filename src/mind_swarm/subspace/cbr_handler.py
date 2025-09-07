@@ -127,7 +127,7 @@ class CyberCBRHandler:
             metadata = case.get('metadata', {})
 
             # Use shared normalizer for deterministic case IDs
-            from mind_swarm.utils.id_policy import normalize_cbr_case_id
+            from ..utils.id_policy import normalize_cbr_case_id
 
             case_path = metadata.get('case_path')
 
@@ -152,6 +152,10 @@ class CyberCBRHandler:
             metadata['cyber_id'] = self.cyber_id
             metadata['case_id'] = case_id
             metadata['case_type'] = 'cbr_case'
+            
+            # Preserve case_path in metadata if provided for round-trip support
+            if case_path:
+                metadata['case_path'] = case_path
             
             # Sanitize metadata - ChromaDB only accepts str, int, float, bool, None
             sanitized_metadata = {}

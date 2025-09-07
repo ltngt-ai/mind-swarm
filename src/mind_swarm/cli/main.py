@@ -33,6 +33,10 @@ app.add_typer(models_app, name="models", help="Manage AI models")
 from mind_swarm.cli.commands.sync_openrouter import app as sync_openrouter_app
 app.add_typer(sync_openrouter_app, name="sync-openrouter", help="Sync models from OpenRouter API")
 
+# Import knowledge command group
+from mind_swarm.cli.commands.knowledge import app as knowledge_app
+app.add_typer(knowledge_app, name="knowledge", help="Knowledge system commands")
+
 
 class MindSwarmCLI:
     """Main CLI application class."""
