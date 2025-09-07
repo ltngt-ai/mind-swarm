@@ -17,6 +17,7 @@ import pytest
 import yaml
 
 from mind_swarm.subspace.coordinator import SubspaceCoordinator
+from mind_swarm.subspace.knowledge_handler import KnowledgeHandler
 from mind_swarm.utils.knowledge_sync_config import (
     KnowledgeSyncConfig,
     SyncRoot,
@@ -74,8 +75,8 @@ class MockChromaCollection:
         return len(self.data)
 
 
-class MockKnowledgeHandler:
-    """Mock knowledge handler with embedded storage - completely isolated from real KnowledgeHandler."""
+class MockKnowledgeHandler(KnowledgeHandler):
+    """Mock knowledge handler with embedded storage."""
     
     def __init__(self, root_path: Path):
         self.enabled = True
