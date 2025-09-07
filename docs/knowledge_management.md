@@ -327,7 +327,7 @@ mind-swarm knowledge sync --scope all
 # System A:
 ./run.sh export-knowledge --export-dir exports/system-a
 
-# System B: 
+# System B:
 ./run.sh export-knowledge --export-dir exports/system-b
 
 # 2. On target system, import in priority order

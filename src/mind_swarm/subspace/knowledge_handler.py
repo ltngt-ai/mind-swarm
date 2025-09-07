@@ -120,14 +120,14 @@ class CyberKnowledgeHandler:
                     result = self.personal_collection.get(ids=[knowledge_id])
                     if result and result.get('documents') and len(result['documents']) > 0 and result['documents'][0]:
                         existing_personal = result['documents'][0]
-                except:
+                except Exception:
                     pass
                 
                 try:
                     result = self.shared_collection.get(ids=[knowledge_id])
                     if result and result.get('documents') and len(result['documents']) > 0 and result['documents'][0]:
                         existing_shared = result['documents'][0]
-                except:
+                except Exception:
                     pass
                 
                 # Check for collisions
@@ -151,7 +151,7 @@ class CyberKnowledgeHandler:
                                 r = self.personal_collection.get(ids=[versioned_id])
                                 if r and r.get('documents') and len(r['documents']) > 0 and r['documents'][0]:
                                     collision = True
-                            except:
+                            except Exception:
                                 pass
                             
                             if not collision:
@@ -159,7 +159,7 @@ class CyberKnowledgeHandler:
                                     r = self.shared_collection.get(ids=[versioned_id])
                                     if r and r.get('documents') and len(r['documents']) > 0 and r['documents'][0]:
                                         collision = True
-                                except:
+                                except Exception:
                                     pass
                             
                             if not collision:
@@ -250,7 +250,7 @@ class CyberKnowledgeHandler:
                         'score': 1.0  # Direct lookup has perfect score
                     }
                     source = 'personal'
-            except:
+            except Exception:
                 pass
             
             # Try shared collection if not found
@@ -266,7 +266,7 @@ class CyberKnowledgeHandler:
                             'score': 1.0  # Direct lookup has perfect score
                         }
                         source = 'shared'
-                except:
+                except Exception:
                     pass
             
             if result:
@@ -307,13 +307,13 @@ class CyberKnowledgeHandler:
             try:
                 self.personal_collection.delete(ids=[knowledge_id])
                 deleted = True
-            except:
+            except Exception:
                 pass
             
             try:
                 self.shared_collection.delete(ids=[knowledge_id])
                 deleted = True
-            except:
+            except Exception:
                 pass
             
             if deleted:
@@ -358,7 +358,7 @@ class CyberKnowledgeHandler:
                 if result and result.get('documents'):
                     existing_data = result
                     collection = self.personal_collection
-            except:
+            except Exception:
                 pass
             
             if not existing_data:
@@ -368,7 +368,7 @@ class CyberKnowledgeHandler:
                     if result and result.get('documents'):
                         existing_data = result
                         collection = self.shared_collection
-                except:
+                except Exception:
                     pass
             
             if not existing_data or not collection:
@@ -478,7 +478,7 @@ class KnowledgeHandler:
                 self.chroma_client.heartbeat()
                 logger.info(f"Connected to ChromaDB server at {chroma_host}:{chroma_port}")
                 self.client_type = 'http'
-            except:
+            except Exception:
                 # Fall back to persistent client (embedded mode)
                 logger.info("ChromaDB server not available, using embedded mode")
                 knowledge_db_path = self.subspace_root / "knowledge_db"
@@ -490,7 +490,7 @@ class KnowledgeHandler:
                     current_mode = knowledge_db_path.stat().st_mode
                     if not (current_mode & stat.S_IWGRP):  # If not group writable
                         knowledge_db_path.chmod(0o775)  # Make group writable
-                except:
+                except Exception:
                     pass  # Ignore permission errors
                 
                 self.chroma_client = chromadb.PersistentClient(
@@ -885,7 +885,7 @@ class KnowledgeHandler:
                     stats["cybers"][cyber_id] = {
                         "personal_knowledge_count": personal_count
                     }
-                except:
+                except Exception:
                     pass
             
             return stats

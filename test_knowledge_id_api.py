@@ -12,6 +12,8 @@ This script tests:
 import asyncio
 import json
 import logging
+import tempfile
+import pytest
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Optional
@@ -26,12 +28,14 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+@pytest.mark.asyncio
 async def test_explicit_id_storage():
     """Test storing knowledge with explicit IDs."""
     
-    # Create a mock subspace root
-    test_root = Path("/tmp/test_knowledge_api")
-    test_root.mkdir(exist_ok=True)
+    # Create a mock subspace root using tempfile for cross-platform compatibility
+    tmpdir = tempfile.mkdtemp()
+    test_root = Path(tmpdir) / "test_knowledge_api"
+    test_root.mkdir(parents=True, exist_ok=True)
     
     # Initialize knowledge handler
     knowledge_handler = KnowledgeHandler(test_root)
