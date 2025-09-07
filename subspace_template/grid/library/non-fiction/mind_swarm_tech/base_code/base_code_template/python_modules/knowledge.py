@@ -240,8 +240,8 @@ Returns:
     
     def store(self, content: str, tags: Optional[List[str]] = None, 
               personal: bool = False, metadata: Optional[Dict[str, Any]] = None,
-              knowledge_id: Optional[str] = None,
-              timeout: float = DEFAULT_REQUEST_TIMEOUT) -> Optional[str]:
+              timeout: float = DEFAULT_REQUEST_TIMEOUT,
+              knowledge_id: Optional[str] = None) -> Optional[str]:
         """
         Store new knowledge with optional explicit knowledge_id.
         
@@ -499,7 +499,7 @@ Returns:
         return knowledge_text
     
     def share_learning(self, content: str, category: str = "experience", 
-                      confidence: float = DEFAULT_CONFIDENCE, 
+                      confidence: float = DEFAULT_CONFIDENCE,
                       knowledge_id: Optional[str] = None) -> Optional[str]:
         """
         Share a learning or insight with the hive mind.
