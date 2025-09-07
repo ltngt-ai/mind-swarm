@@ -19,6 +19,7 @@ import sys
 sys.path.append(str(Path(__file__).parent.parent))
 
 from src.mind_swarm.subspace.knowledge_handler import KnowledgeHandler
+from src.mind_swarm.utils.id_policy import normalize_knowledge_id, normalize_cbr_case_id
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -108,9 +109,10 @@ class KnowledgeExporter:
             content = doc.get('content', '')
             collection = doc.get('collection', 'unknown')
             
-            # Clean up the ID for use as filename
-            safe_id = doc_id.replace('/', '_').replace('\\', '_')
-            if not safe_id.endswith('.yaml'):
+            # Use path-based ID as filename - preserve the hierarchy by replacing slashes
+            # Keep the original ID structure for filenames but ensure filesystem safety
+            safe_id = doc_id.replace('/', '__').replace('\\', '__')
+            if not safe_id.endswith('.yaml') and not safe_id.endswith('.yml'):
                 safe_id += '.yaml'
             
             # Try to parse content as YAML to get structured data
@@ -131,9 +133,9 @@ class KnowledgeExporter:
                     "content": content
                 }
             
-            # Add metadata from ChromaDB
+            # Add metadata from ChromaDB - preserve original ID structure
             yaml_data['_export_metadata'] = {
-                "id": doc_id,
+                "id": doc_id,  # This is the path-based ID (e.g., templates/guides/onboarding.md)
                 "collection": collection,
                 "exported_at": datetime.now().isoformat(),
                 "chromadb_metadata": metadata
@@ -209,16 +211,31 @@ class KnowledgeExporter:
                         shared_cases.get('documents', []),
                         shared_cases.get('metadatas', [])
                     )):
-                        safe_id = doc_id.replace('/', '_').replace('\\', '_') + '.yaml'
-                        
                         # Parse the CBR case
                         try:
                             case_data = json.loads(doc) if doc else {}
                         except:
                             case_data = {"content": doc}
                         
+                        # Prefer case_path for filename and ID when present
+                        case_path = metadata.get('case_path') if metadata else None
+                        export_id = case_path if case_path else doc_id
+                        
+                        # Normalize the export ID using CBR rules if it's path-like
+                        if '/' in export_id or export_id.startswith('cases/'):
+                            normalized_id = normalize_cbr_case_id(export_id)
+                        else:
+                            normalized_id = export_id
+                        
+                        # Use the normalized ID for filename
+                        safe_id = normalized_id.replace('/', '__').replace('\\', '__')
+                        if not safe_id.endswith('.yaml'):
+                            safe_id += '.yaml'
+                        
                         case_data['_export_metadata'] = {
-                            "id": doc_id,
+                            "id": normalized_id,  # Use normalized path-based ID
+                            "original_id": doc_id if doc_id != normalized_id else None,
+                            "case_path": case_path,
                             "collection": "cbr_shared",
                             "exported_at": datetime.now().isoformat(),
                             "chromadb_metadata": metadata
@@ -258,16 +275,31 @@ class KnowledgeExporter:
                                         personal_cases.get('documents', []),
                                         personal_cases.get('metadatas', [])
                                     ):
-                                        safe_id = doc_id.replace('/', '_').replace('\\', '_') + '.yaml'
-                                        
                                         # Parse the CBR case
                                         try:
                                             case_data = json.loads(doc) if doc else {}
                                         except:
                                             case_data = {"content": doc}
                                         
+                                        # Prefer case_path for filename and ID when present
+                                        case_path = metadata.get('case_path') if metadata else None
+                                        export_id = case_path if case_path else doc_id
+                                        
+                                        # Normalize the export ID using CBR rules if it's path-like
+                                        if '/' in export_id or export_id.startswith('cases/'):
+                                            normalized_id = normalize_cbr_case_id(export_id)
+                                        else:
+                                            normalized_id = export_id
+                                        
+                                        # Use the normalized ID for filename
+                                        safe_id = normalized_id.replace('/', '__').replace('\\', '__')
+                                        if not safe_id.endswith('.yaml'):
+                                            safe_id += '.yaml'
+                                        
                                         case_data['_export_metadata'] = {
-                                            "id": doc_id,
+                                            "id": normalized_id,  # Use normalized path-based ID
+                                            "original_id": doc_id if doc_id != normalized_id else None,
+                                            "case_path": case_path,
                                             "collection": collection.name,
                                             "cyber": cyber_name,
                                             "exported_at": datetime.now().isoformat(),
