@@ -174,10 +174,27 @@ Also create a single-line summary describing what was accomplished this cycle, i
             "lessons_learned": output_values.get("lessons_learned", ""),
         }
         
-        # Save as a reflection_on_last_cycle memory block
-        reflection_file = self.cognitive_loop.memory_dir / "reflection_on_last_cycle.json"
-        with open(reflection_file, 'w') as f:
-            json.dump(reflection_content, f, indent=2)
+        # Store reflection in knowledge database
+        try:
+            from ..python_modules.reflection_knowledge import ReflectionKnowledge
+            from ..python_modules.knowledge import Knowledge
+            knowledge_api = Knowledge(self.cognitive_loop.memory_system.memory_api)
+            reflection_knowledge = ReflectionKnowledge(knowledge_api)
+            
+            reflection_id = reflection_knowledge.store_cycle_reflection(
+                cycle_number=self.cognitive_loop.cycle_count,
+                insights=output_values.get("insights", ""),
+                lessons_learned=output_values.get("lessons_learned", ""),
+                challenges=output_values.get("challenges", ""),
+                next_focus=output_values.get("next_focus", "")
+            )
+            logger.debug(f"Stored reflection in knowledge DB: {reflection_id}")
+        except Exception as e:
+            logger.warning(f"Failed to store reflection in knowledge DB: {e}")
+            # Fallback to file storage
+            reflection_file = self.cognitive_loop.memory_dir / "reflection_on_last_cycle.json"
+            with open(reflection_file, 'w') as f:
+                json.dump(reflection_content, f, indent=2)
         
         # Add or update the reflection memory block
         from ..memory import MemoryBlock, Priority

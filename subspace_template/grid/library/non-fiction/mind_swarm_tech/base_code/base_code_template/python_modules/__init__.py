@@ -95,6 +95,12 @@ from .reflection_knowledge import (
     ReflectionKnowledgeError
 )
 
+# Export the PipelineKnowledge class and exceptions
+from .pipeline_knowledge import (
+    PipelineKnowledge,
+    PipelineKnowledgeError
+)
+
 
 __all__ = [
     'Memory',
@@ -124,5 +130,7 @@ __all__ = [
     'ChatKnowledge',
     'ChatKnowledgeError',
     'ReflectionKnowledge',
-    'ReflectionKnowledgeError'
+    'ReflectionKnowledgeError',
+    'PipelineKnowledge',
+    'PipelineKnowledgeError'
 ]

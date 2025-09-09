@@ -118,13 +118,32 @@ class ObservationStage:
         Returns:
             Reflection data or None
         """
+        # Try to get from knowledge database first
+        try:
+            from ..python_modules.reflection_knowledge import ReflectionKnowledge
+            from ..python_modules.knowledge import Knowledge
+            knowledge_api = Knowledge(self.cognitive_loop.memory_system.memory_api)
+            reflection_knowledge = ReflectionKnowledge(knowledge_api)
+            
+            # Get the most recent reflection
+            recent_reflections = reflection_knowledge.get_recent_reflections(limit=1)
+            if recent_reflections:
+                latest = recent_reflections[0]
+                return {
+                    "insights": latest.get("insights", ""),
+                    "lessons_learned": latest.get("lessons_learned", "")
+                }
+        except Exception as e:
+            logger.debug(f"Could not read reflection from knowledge DB: {e}")
+        
+        # Fallback to file storage
         reflection_file = self.personal / ".internal" / "memory" / "reflection_on_last_cycle.json"
         try:
             if reflection_file.exists():
                 with open(reflection_file, 'r') as f:
                     return json.load(f)
         except Exception as e:
-            logger.debug(f"Could not read reflection: {e}")
+            logger.debug(f"Could not read reflection file: {e}")
         return None
     
     def _query_semantic_knowledge(self, situation_summary: str, recommended_focus: str) -> Dict[str, Any]:
