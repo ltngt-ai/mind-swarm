@@ -164,11 +164,16 @@ class SimplifiedKnowledgeManager:
                     import yaml
                     with open(boot_rom_path, 'r') as f:
                         data = yaml.safe_load(f)
-            
-            # Validate new pure YAML format - fields at top level
-            if not isinstance(data, dict):
-                logger.error("Boot ROM is not a valid YAML dictionary")
-                return None
+                    
+                    # Validate new pure YAML format - fields at top level
+                    if not isinstance(data, dict):
+                        logger.error("Boot ROM is not a valid YAML dictionary")
+                        return None
+                    
+                    return data
+                else:
+                    logger.error("No boot ROM found in knowledge DB or as fallback file")
+                    return None
             
             # Boot ROM uses the new format with fields at top level
             # No nested metadata structure anymore

@@ -121,8 +121,24 @@ class ObservationStage:
         # Try to get from knowledge database first
         try:
             from ..python_modules.reflection_knowledge import ReflectionKnowledge
+            from ..python_modules.memory import Memory
             from ..python_modules.knowledge import Knowledge
-            knowledge_api = Knowledge(self.cognitive_loop.memory_system.memory_api)
+            
+            # Create memory context for Knowledge API
+            memory_context = {
+                'cognitive_loop': self.cognitive_loop,
+                'memory_system': self.cognitive_loop.memory_system,
+                'brain_interface': None,
+                'cyber_id': getattr(self.cognitive_loop, 'cyber_id', 'unknown'),
+                'personal_dir': self.cognitive_loop.memory_dir.parent,
+                'outbox_dir': self.cognitive_loop.memory_dir.parent / 'outbox',
+                'memory_dir': self.cognitive_loop.memory_dir,
+                'current_location': '/personal'
+            }
+            
+            # Create Memory API instance, then Knowledge API
+            memory_api = Memory(memory_context)
+            knowledge_api = Knowledge(memory_api)
             reflection_knowledge = ReflectionKnowledge(knowledge_api)
             
             # Get the most recent reflection
@@ -466,8 +482,24 @@ Focus on analyzing the new information provided and suggesting what to do regard
         # Store in knowledge database
         try:
             from ..python_modules.pipeline_knowledge import PipelineKnowledge
+            from ..python_modules.memory import Memory
             from ..python_modules.knowledge import Knowledge
-            knowledge_api = Knowledge(self.cognitive_loop.memory_system.memory_api)
+            
+            # Create memory context for Knowledge API
+            memory_context = {
+                'cognitive_loop': self.cognitive_loop,
+                'memory_system': self.cognitive_loop.memory_system,
+                'brain_interface': None,
+                'cyber_id': getattr(self.cognitive_loop, 'cyber_id', 'unknown'),
+                'personal_dir': self.cognitive_loop.memory_dir.parent,
+                'outbox_dir': self.cognitive_loop.memory_dir.parent / 'outbox',
+                'memory_dir': self.cognitive_loop.memory_dir,
+                'current_location': '/personal'
+            }
+            
+            # Create Memory API instance, then Knowledge API
+            memory_api = Memory(memory_context)
+            knowledge_api = Knowledge(memory_api)
             pipeline_knowledge = PipelineKnowledge(knowledge_api)
             
             buffer_id = pipeline_knowledge.store_stage_output(

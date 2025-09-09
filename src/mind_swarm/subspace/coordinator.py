@@ -960,19 +960,21 @@ class SubspaceCoordinator:
                         else:
                             full_content = content
                         
-                        # Add to shared knowledge with path as ID
+                        # Add to shared knowledge with normalized ID
                         relative_path = str(file_path.relative_to(knowledge_dir))
-                        success, knowledge_id = await self.knowledge_handler.add_shared_knowledge_with_id(
-                            knowledge_id=relative_path,  # Use path as ID
+                        from mind_swarm.utils.id_policy import normalize_knowledge_id
+                        knowledge_id = normalize_knowledge_id("templates", relative_path)
+                        success, knowledge_id_result = await self.knowledge_handler.add_shared_knowledge_with_id(
+                            knowledge_id=knowledge_id,  # Use normalized ID with templates/ prefix
                             content=full_content, 
                             metadata=metadata
                         )
                         
                         if success:
                             loaded_count += 1
-                            logger.debug(f"Loaded {file_path.name} with ID: {relative_path}")
+                            logger.debug(f"Loaded {file_path.name} with ID: {knowledge_id}")
                         else:
-                            logger.warning(f"Failed to load {file_path.name}: {knowledge_id}")
+                            logger.warning(f"Failed to load {file_path.name}: {knowledge_id_result}")
                             
                     except Exception as e:
                         logger.error(f"Error loading {file_path}: {e}")
