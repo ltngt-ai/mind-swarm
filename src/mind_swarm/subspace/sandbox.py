@@ -375,8 +375,8 @@ class SubspaceManager:
         # Copy maintenance tasks to tasks directory
         self._copy_maintenance_tasks(internal_dir)
         
-        # Copy boot ROM for this cyber type
-        self._copy_boot_rom(internal_dir, cyber_type)
+        # Boot ROM is now loaded from knowledge database, not copied as a file
+        # self._copy_boot_rom(internal_dir, cyber_type)
         
         logger.info(f"Created sandbox for Cyber {name}")
         return sandbox
@@ -672,14 +672,23 @@ class SubspaceManager:
         Returns:
             True if bubblewrap is available
         """
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "bwrap", "--version",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            await proc.communicate()
-            return proc.returncode == 0
-        except FileNotFoundError:
+        import shutil
+        import subprocess
+        
+        # Fast path: is the binary present on PATH?
+        bwrap_path = shutil.which("bwrap")
+        if not bwrap_path:
             logger.error("Bubblewrap (bwrap) not found. Please install it.")
+            return False
+        
+        # Verify it is runnable without using asyncio subprocess to avoid noisy warnings.
+        try:
+            def _check():
+                return subprocess.run([bwrap_path, "--version"], capture_output=True, text=True, timeout=5)
+            
+            result = await asyncio.to_thread(_check)
+            return result.returncode == 0
+        except Exception:
+            # If invocation fails for any reason, report unavailable
+            logger.error("Bubblewrap (bwrap) check failed; it may not be runnable in this environment.")
             return False

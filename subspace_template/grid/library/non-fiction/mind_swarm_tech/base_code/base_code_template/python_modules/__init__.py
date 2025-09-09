@@ -65,6 +65,18 @@ from .tasks import (
     TasksError
 )
 
+# Export the MessagesKnowledge class and exceptions
+from .messages_knowledge import (
+    MessagesKnowledge,
+    MessagesKnowledgeError
+)
+
+# Export the TasksKnowledge class and exceptions
+from .tasks_knowledge import (
+    TasksKnowledge,
+    TasksKnowledgeError
+)
+
 
 __all__ = [
     'Memory',
@@ -84,5 +96,9 @@ __all__ = [
     'Communication',
     'CommunicationError',
     'Tasks',
-    'TasksError'
+    'TasksError',
+    'MessagesKnowledge',
+    'MessagesKnowledgeError',
+    'TasksKnowledge',
+    'TasksKnowledgeError'
 ]

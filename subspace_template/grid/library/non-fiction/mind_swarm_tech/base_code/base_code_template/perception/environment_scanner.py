@@ -640,36 +640,63 @@ class EnvironmentScanner:
                             # Read message header for metadata
                             msg_data = json.loads(msg_file.read_text())
                             
-                            # Store this message in semantic memory for future retrieval
-                            assert self.memory_system, "Memory system is required for environment scanner"
-                            
-                            # Create semantic content for the message
-                            semantic_content = f"Message from {msg_data.get('from', 'unknown')} "
-                            semantic_content += f"to {msg_data.get('to', 'me')} "
-                            semantic_content += f"on {msg_data.get('timestamp', 'unknown time')}: "
-                            semantic_content += f"Subject: {msg_data.get('subject', 'No subject')}. "
-                            semantic_content += f"Content: {msg_data.get('content', '')[:500]}"
-                            
-                            # Store in knowledge base with metadata
-                            knowledge_file = self.personal_path / ".internal" / "memory" / "knowledge" / f"msg_{msg_file.stem}.json"
-                            knowledge_file.parent.mkdir(parents=True, exist_ok=True)
-                            
-                            knowledge_entry = {
-                                "content": semantic_content,
-                                "metadata": {
-                                    "type": "message",
-                                    "from": msg_data.get('from', 'unknown'),
-                                    "to": msg_data.get('to', 'me'),
-                                    "subject": msg_data.get('subject', 'No subject'),
-                                    "timestamp": msg_data.get('timestamp', ''),
-                                    "message_id": msg_data.get('message_id', msg_file.stem),
-                                    "path": str(msg_file)
-                                },
-                                "timestamp": datetime.now().isoformat()
-                            }
-                            
-                            with open(knowledge_file, 'w') as f:
-                                json.dump(knowledge_entry, f, indent=2)
+                            # Store this message in knowledge database if available
+                            try:
+                                from ..python_modules.messages_knowledge import MessagesKnowledge
+                                from ..python_modules.knowledge import Knowledge
+                                from ..python_modules.memory import Memory
+                                
+                                # Create a minimal context for the APIs
+                                context = {
+                                    'cyber_id': msg_data.get('to', 'me'),
+                                    'personal_dir': str(self.personal_path),
+                                    'memory_api': Memory({'personal_dir': str(self.personal_path)})
+                                }
+                                
+                                knowledge = Knowledge(context['memory_api'])
+                                messages_kb = MessagesKnowledge(knowledge)
+                                
+                                # Store incoming message in knowledge
+                                messages_kb.store_message(
+                                    from_cyber=msg_data.get('from', 'unknown'),
+                                    to_cyber=msg_data.get('to', 'me'),
+                                    subject=msg_data.get('subject', 'No subject'),
+                                    content=msg_data.get('content', ''),
+                                    message_type=msg_data.get('type', 'MESSAGE'),
+                                    message_id=msg_data.get('message_id', msg_file.stem)
+                                )
+                            except Exception as e:
+                                # Fall back to file-based storage
+                                # Store this message in semantic memory for future retrieval
+                                assert self.memory_system, "Memory system is required for environment scanner"
+                                
+                                # Create semantic content for the message
+                                semantic_content = f"Message from {msg_data.get('from', 'unknown')} "
+                                semantic_content += f"to {msg_data.get('to', 'me')} "
+                                semantic_content += f"on {msg_data.get('timestamp', 'unknown time')}: "
+                                semantic_content += f"Subject: {msg_data.get('subject', 'No subject')}. "
+                                semantic_content += f"Content: {msg_data.get('content', '')[:500]}"
+                                
+                                # Store in knowledge base with metadata
+                                knowledge_file = self.personal_path / ".internal" / "memory" / "knowledge" / f"msg_{msg_file.stem}.json"
+                                knowledge_file.parent.mkdir(parents=True, exist_ok=True)
+                                
+                                knowledge_entry = {
+                                    "content": semantic_content,
+                                    "metadata": {
+                                        "type": "message",
+                                        "from": msg_data.get('from', 'unknown'),
+                                        "to": msg_data.get('to', 'me'),
+                                        "subject": msg_data.get('subject', 'No subject'),
+                                        "timestamp": msg_data.get('timestamp', ''),
+                                        "message_id": msg_data.get('message_id', msg_file.stem),
+                                        "path": str(msg_file)
+                                    },
+                                    "timestamp": datetime.now().isoformat()
+                                }
+                                
+                                with open(knowledge_file, 'w') as f:
+                                    json.dump(knowledge_entry, f, indent=2)
                             
                             # Now search for related past messages
                             search_query = f"{msg_data.get('from', '')} {msg_data.get('subject', '')}"

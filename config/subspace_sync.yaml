@@ -8,8 +8,7 @@ template_owned:
   - "grid/library/fiction"  # Fiction library for cybers to read
   - "grid/library/non-fiction"  # Non-fiction library (excluding cyber code templates above)
   - "grid/library/schemas"  # Library schemas
-  - "boot_rom"
-  - "initial_knowledge"
+  - "initial_knowledge"  # Now includes boot_rom as knowledge entries
 
 cyber_owned:
   # These are never overwritten (cyber modifications preserved)

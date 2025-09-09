@@ -92,6 +92,20 @@ class Communication:
         
         # Path to dynamic context for getting current location
         self._unified_state_file = self.personal / ".internal" / "memory" / "unified_state.json"
+        
+        # Initialize Messages Knowledge API for semantic storage
+        try:
+            from .messages_knowledge import MessagesKnowledge
+            from .knowledge import Knowledge
+            memory_api = context.get('memory_api')
+            if memory_api:
+                knowledge = Knowledge(memory_api)
+                self.messages_knowledge = MessagesKnowledge(knowledge)
+            else:
+                self.messages_knowledge = None
+        except Exception as e:
+            # Fall back to file-based if knowledge not available
+            self.messages_knowledge = None
     
     def send_message(self, 
                     to: str,
@@ -142,6 +156,22 @@ class Communication:
         # Add metadata if provided
         if metadata:
             message["metadata"] = metadata
+        
+        # Store in knowledge database if available
+        if self.messages_knowledge:
+            try:
+                self.messages_knowledge.store_message(
+                    from_cyber=self.cyber_id,
+                    to_cyber=to,
+                    subject=subject,
+                    content=content,
+                    message_type="MESSAGE",
+                    metadata=metadata,
+                    message_id=message_id
+                )
+            except Exception as e:
+                # Log but don't fail - file-based is primary for now
+                pass
         
         # Write to outbox with .msg.json extension
         # The mail router will pick this up and deliver it

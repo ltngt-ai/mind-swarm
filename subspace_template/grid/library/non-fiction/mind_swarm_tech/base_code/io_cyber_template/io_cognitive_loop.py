@@ -90,7 +90,7 @@ class IOCognitiveLoop(CognitiveLoop):
     """Extended cognitive loop for I/O Cybers."""
     
     def __init__(self, cyber_id: str, personal: Path):
-        super().__init__(cyber_id, personal, cyber_type='io_cyber')
+        super().__init__(cyber_id, personal, cyber_type='io_gateway')
         self.io_handler = IOBodyFileHandler(personal)
         
         # Register base actions first (memory and goals)

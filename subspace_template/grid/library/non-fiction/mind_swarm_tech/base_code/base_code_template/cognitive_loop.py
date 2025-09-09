@@ -222,7 +222,8 @@ class CognitiveLoop:
         
         # Always load boot ROM as a pinned memory (will replace if exists)
         # The boot ROM is fundamental identity that should always be present
-        boot_rom = self.knowledge_manager.get_boot_rom()
+        # Now retrieved from knowledge database instead of file
+        boot_rom = self.knowledge_manager.get_boot_rom(cyber_type=self.cyber_type)
         if boot_rom:
             # Create a pinned memory for the boot ROM
             # Include all metadata fields for knowledge validation
@@ -381,6 +382,46 @@ class CognitiveLoop:
         except Exception as e:
             logger.error(f"Failed to update dynamic context: {e}")
     
+    def _refresh_boot_rom(self):
+        """Refresh boot ROM from knowledge database.
+        
+        This is called each cycle to ensure the cyber always has the latest
+        identity and instructions from the semantic knowledge database.
+        """
+        try:
+            # Retrieve boot ROM from knowledge database
+            boot_rom = self.knowledge_manager.get_boot_rom(cyber_type=self.cyber_type)
+            if boot_rom:
+                # Create memory block for boot ROM
+                metadata = boot_rom.copy()
+                # Map cyber_type to the actual knowledge ID with templates/ prefix
+                if self.cyber_type == "io_gateway":
+                    boot_rom_id = "templates/concepts/identity/io_gateway_boot_rom.yaml"
+                else:
+                    boot_rom_id = "templates/concepts/identity/general_cyber_boot_rom.yaml"
+                    
+                boot_memory = MemoryBlock(
+                    location=f"knowledge:{boot_rom_id}",
+                    confidence=1.0,
+                    priority=Priority.FOUNDATIONAL,
+                    metadata=metadata,
+                    pinned=True,
+                    cycle_count=self.cycle_count,
+                    content_type=ContentType.KNOWLEDGE
+                )
+                
+                # Remove old boot ROM memory if exists
+                boot_rom_id = boot_memory.id
+                self.memory_system.remove_memory(boot_rom_id)
+                
+                # Add fresh boot ROM
+                self.memory_system.add_memory(boot_memory)
+                logger.debug(f"Refreshed boot ROM from knowledge DB for cycle {self.cycle_count}")
+            else:
+                logger.warning(f"Could not refresh boot ROM from knowledge DB")
+        except Exception as e:
+            logger.error(f"Error refreshing boot ROM: {e}")
+    
     def _ensure_reflection_in_memory(self):
         """Ensure reflection_on_last_cycle file is in memory if it exists."""
         reflection_file = self.memory_dir / "reflection_on_last_cycle.json"
@@ -441,6 +482,10 @@ class CognitiveLoop:
             
             # Set cycle in recorder
             self.cycle_recorder.set_cycle(self.cycle_count)
+            
+            # Refresh boot ROM from knowledge database each cycle
+            # This ensures cybers always have the latest identity and instructions
+            self._refresh_boot_rom()
             
             # Clear pipeline buffers at start of new cycle
             if self.cycle_count > 0:  # Don't clear on first cycle

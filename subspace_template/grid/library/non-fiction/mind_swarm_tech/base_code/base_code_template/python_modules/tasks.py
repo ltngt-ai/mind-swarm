@@ -34,22 +34,22 @@ else:
 
 ### Intention: "I want to complete a task"
 ```python
-tasks.complete("task_001", notes="Helped Alice fix the memory block persistence issue")
+tasks.complete("HT-001", notes="Helped Alice fix the memory block persistence issue")
 ```
 
 ### Intention: "I want to block a task"
 ```python
-tasks.block("task_002", reason="Waiting for Bob's response on API design")
+tasks.block("HT-002", reason="Waiting for Bob's response on API design")
 ```
 
 ### Intention: "I want to update a todo item"
 ```python
-tasks.update_todo("task_001", 0, status="DONE", notes="Completed review")
+tasks.update_todo("HT-001", 0, status="DONE", notes="Completed review")
 ```
 
 ### Intention: "I want to set current task"
 ```python
-tasks.set_current("task_001")
+tasks.set_current("HT-001")
 ```
 
 ### Intention: "I want to claim a community task"
@@ -90,11 +90,27 @@ class Tasks:
         """
         self.context = context
         self.personal = Path(context.get('personal_dir', '/personal'))
+        self.cyber_id = context.get('cyber_id', 'unknown')
         
         # Get state manager from context for unified state access
         self.state_manager = context.get('state_manager')
         if not self.state_manager:
             raise TasksError("State manager is required in context for Tasks API")
+        
+        # Initialize Tasks Knowledge API for semantic storage
+        try:
+            from .tasks_knowledge import TasksKnowledge
+            from .knowledge import Knowledge
+            memory_api = context.get('memory_api')
+            if memory_api:
+                knowledge = Knowledge(memory_api)
+                self.tasks_knowledge = TasksKnowledge(knowledge)
+                self.tasks_knowledge.cyber_id = self.cyber_id
+            else:
+                self.tasks_knowledge = None
+        except Exception as e:
+            # Fall back to file-based if knowledge not available
+            self.tasks_knowledge = None
         
         # Task directories
         self.tasks_root = self.personal / '.internal' / 'tasks'
@@ -312,16 +328,19 @@ class Tasks:
         """Get all tasks from a directory."""
         tasks = []
         
-        for task_file in directory.glob("task_*.json"):
-            try:
-                with open(task_file, 'r') as f:
-                    task_data = json.load(f)
-                    # Add file path for reference
-                    task_data['_file'] = str(task_file)
-                    tasks.append(task_data)
-            except Exception:
-                # Skip corrupted files
-                pass
+        # Check for all task patterns: HT-*, MT-*, CT-*, task_* (legacy)
+        patterns = ["HT-*.json", "MT-*.json", "CT-*.json", "task_*.json"]
+        for pattern in patterns:
+            for task_file in directory.glob(pattern):
+                try:
+                    with open(task_file, 'r') as f:
+                        task_data = json.load(f)
+                        # Add file path for reference
+                        task_data['_file'] = str(task_file)
+                        tasks.append(task_data)
+                except Exception:
+                    # Skip corrupted files
+                    pass
         
         # Sort by creation time
         tasks.sort(key=lambda x: x.get('created', ''))
@@ -337,7 +356,7 @@ class Tasks:
             Task dictionary or None if not found
             
         Example:
-            task = tasks.get("task_001")
+            task = tasks.get("HT-001")
             if task:
                 print(task['description'])
         """
@@ -400,7 +419,7 @@ class Tasks:
             True if successful, False otherwise
             
         Example:
-            tasks.complete("task_001", notes="Fixed the issue")
+            tasks.complete("HT-001", notes="Fixed the issue")
         """
         return self._move_task(task_id, self.completed_dir, 
                               updates={"status": "completed", 
@@ -418,7 +437,7 @@ class Tasks:
             True if successful, False otherwise
             
         Example:
-            tasks.block("task_002", reason="Waiting for API access")
+            tasks.block("HT-002", reason="Waiting for API access")
         """
         return self._move_task(task_id, self.blocked_dir,
                               updates={"status": "blocked",
@@ -467,7 +486,7 @@ class Tasks:
             True if successful, False otherwise
             
         Example:
-            tasks.update_todo("task_001", 0, status="DONE", notes="Completed review")
+            tasks.update_todo("HT-001", 0, status="DONE", notes="Completed review")
         """
         task = self.get(task_id)
         if not task:
@@ -510,7 +529,7 @@ class Tasks:
             True if successful, False otherwise
             
         Example:
-            tasks.set_current("task_001")
+            tasks.set_current("HT-001")
         """
         task = self.get(task_id)
         if not task:
@@ -807,19 +826,21 @@ class Tasks:
                 print("Maintenance tasks reset")
         """
         try:
-            for task_file in self.maintenance_dir.glob("task_*.json"):
-                with open(task_file, 'r') as f:
-                    task_data = json.load(f)
-                
-                # Reset all todos
-                for todo in task_data.get('todo', []):
-                    todo['status'] = 'NOT-STARTED'
-                    todo['notes'] = ''
-                
-                task_data['updated'] = datetime.now().isoformat()
-                
-                with open(task_file, 'w') as f:
-                    json.dump(task_data, f, indent=2)
+            # Look for both MT-*.json and legacy task_*.json patterns
+            for pattern in ["MT-*.json", "task_*.json"]:
+                for task_file in self.maintenance_dir.glob(pattern):
+                    with open(task_file, 'r') as f:
+                        task_data = json.load(f)
+                    
+                    # Reset all todos
+                    for todo in task_data.get('todo', []):
+                        todo['status'] = 'NOT-STARTED'
+                        todo['notes'] = ''
+                    
+                    task_data['updated'] = datetime.now().isoformat()
+                    
+                    with open(task_file, 'w') as f:
+                        json.dump(task_data, f, indent=2)
             
             return True
         except Exception:
@@ -1004,7 +1025,7 @@ class Tasks:
             True if successful, False otherwise
             
         Example:
-            tasks.update("task_001", 
+            tasks.update("HT-001", 
                         description="Updated description",
                         notes="Added more context")
         """

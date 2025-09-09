@@ -128,25 +128,41 @@ class SimplifiedKnowledgeManager:
             logger.error(f"Failed to store knowledge: {e}")
             return False
         
-    def get_boot_rom(self) -> Optional[Dict[str, Any]]:
-        """Get the boot ROM content for this cyber.
+    def get_boot_rom(self, cyber_type: str = "general") -> Optional[Dict[str, Any]]:
+        """Get the boot ROM content from the knowledge database.
         
-        The boot ROM should be copied to /personal/.internal/boot_rom.yaml
-        at cyber initialization.
+        Boot ROM is now stored in the semantic knowledge database instead of
+        as a file. This retrieves it based on the cyber type.
+        
+        Args:
+            cyber_type: Type of cyber ("general" or "io_gateway")
         
         Returns:
             Boot ROM content with metadata and content fields
         """
-        boot_rom_path = Path("/personal/.internal/boot_rom.yaml")
-        
-        if not boot_rom_path.exists():
-            logger.warning("Boot ROM not found at expected location")
-            return None
-            
         try:
-            import yaml
-            with open(boot_rom_path, 'r') as f:
-                data = yaml.safe_load(f)
+            # Determine the knowledge ID based on cyber type
+            # The knowledge_id includes the "templates/" prefix added by the coordinator
+            if cyber_type == "io_gateway":
+                knowledge_id = "templates/concepts/identity/io_gateway_boot_rom.yaml"
+            else:
+                knowledge_id = "templates/concepts/identity/general_cyber_boot_rom.yaml"
+            
+            # Retrieve from knowledge database
+            result = self.knowledge.get(knowledge_id)
+            
+            if result:
+                logger.info(f"Successfully retrieved boot ROM for {cyber_type} cyber from knowledge DB")
+                return result
+            else:
+                logger.warning(f"Boot ROM not found in knowledge DB for {cyber_type} cyber")
+                # Fall back to file-based boot ROM if available for backward compatibility
+                boot_rom_path = Path("/personal/.internal/boot_rom.yaml")
+                if boot_rom_path.exists():
+                    logger.info("Falling back to file-based boot ROM")
+                    import yaml
+                    with open(boot_rom_path, 'r') as f:
+                        data = yaml.safe_load(f)
             
             # Validate new pure YAML format - fields at top level
             if not isinstance(data, dict):
