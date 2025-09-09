@@ -77,6 +77,24 @@ from .tasks_knowledge import (
     TasksKnowledgeError
 )
 
+# Export the LocationKnowledge class and exceptions
+from .location_knowledge import (
+    LocationKnowledge,
+    LocationKnowledgeError
+)
+
+# Export the ChatKnowledge class and exceptions
+from .chat_knowledge import (
+    ChatKnowledge,
+    ChatKnowledgeError
+)
+
+# Export the ReflectionKnowledge class and exceptions
+from .reflection_knowledge import (
+    ReflectionKnowledge,
+    ReflectionKnowledgeError
+)
+
 
 __all__ = [
     'Memory',
@@ -100,5 +118,11 @@ __all__ = [
     'MessagesKnowledge',
     'MessagesKnowledgeError',
     'TasksKnowledge',
-    'TasksKnowledgeError'
+    'TasksKnowledgeError',
+    'LocationKnowledge',
+    'LocationKnowledgeError',
+    'ChatKnowledge',
+    'ChatKnowledgeError',
+    'ReflectionKnowledge',
+    'ReflectionKnowledgeError'
 ]
