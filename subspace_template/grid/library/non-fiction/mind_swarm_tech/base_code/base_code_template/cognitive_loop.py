@@ -226,8 +226,20 @@ class CognitiveLoop:
         boot_rom = self.knowledge_manager.get_boot_rom(cyber_type=self.cyber_type)
         if boot_rom:
             # Create a pinned memory for the boot ROM
-            # Include all metadata fields for knowledge validation
-            metadata = boot_rom.copy()  # Include all fields from boot ROM
+            # Ensure metadata has all required fields for knowledge validation
+            metadata = {
+                'title': boot_rom.get('title', 'Boot ROM'),
+                'category': boot_rom.get('category', 'boot_rom'),
+                'tags': boot_rom.get('tags', ['identity', 'core', 'boot']),
+                'content': boot_rom.get('content', ''),
+                'knowledge_id': boot_rom.get('knowledge_id', 'boot_rom')
+            }
+            
+            # Add any additional fields from boot_rom
+            for key, value in boot_rom.items():
+                if key not in metadata:
+                    metadata[key] = value
+            
             boot_memory = MemoryBlock(
                 location="/personal/.internal/boot_rom.yaml",
                 confidence=1.0,
@@ -392,8 +404,20 @@ class CognitiveLoop:
             # Retrieve boot ROM from knowledge database
             boot_rom = self.knowledge_manager.get_boot_rom(cyber_type=self.cyber_type)
             if boot_rom:
-                # Create memory block for boot ROM
-                metadata = boot_rom.copy()
+                # Ensure metadata has all required fields for knowledge schema
+                metadata = {
+                    'title': boot_rom.get('title', 'Boot ROM'),
+                    'category': boot_rom.get('category', 'boot_rom'),
+                    'tags': boot_rom.get('tags', ['identity', 'core', 'boot']),
+                    'content': boot_rom.get('content', ''),
+                    'knowledge_id': boot_rom.get('knowledge_id', 'boot_rom')
+                }
+                
+                # Add any additional fields from boot_rom
+                for key, value in boot_rom.items():
+                    if key not in metadata:
+                        metadata[key] = value
+                
                 # Map cyber_type to the actual knowledge ID with templates/ prefix
                 if self.cyber_type == "io_gateway":
                     boot_rom_id = "templates/concepts/identity/io_gateway_boot_rom.yaml"
@@ -401,13 +425,13 @@ class CognitiveLoop:
                     boot_rom_id = "templates/concepts/identity/general_cyber_boot_rom.yaml"
                     
                 boot_memory = MemoryBlock(
-                    location=f"knowledge:{boot_rom_id}",
+                    location="/personal/.internal/boot_rom.yaml",
                     confidence=1.0,
                     priority=Priority.FOUNDATIONAL,
                     metadata=metadata,
                     pinned=True,
                     cycle_count=self.cycle_count,
-                    content_type=ContentType.KNOWLEDGE
+                    content_type=ContentType.MINDSWARM_KNOWLEDGE
                 )
                 
                 # Remove old boot ROM memory if exists

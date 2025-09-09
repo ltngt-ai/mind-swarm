@@ -50,8 +50,9 @@ class SimplifiedKnowledgeManager:
             Stage instructions or None if not found
         """
         try:
-            # The stage instructions have consistent IDs based on their path
-            knowledge_id = f"stages/{stage_name}_stage.yaml"
+            # The stage instructions have consistent IDs based on their path in initial_knowledge
+            # The coordinator prefixes with "templates/" and includes the .yaml extension
+            knowledge_id = f"templates/stages/{stage_name}_stage.yaml"
             
             # Directly get by ID - no caching at cyber level
             # Server should handle caching and invalidation
