@@ -463,10 +463,25 @@ Focus on analyzing the new information provided and suggesting what to do regard
         
         # Write to observation pipeline buffer for Decision stage
         observation_buffer = self.cognitive_loop.get_current_pipeline("observation")
-        buffer_file = self.cognitive_loop.personal.parent / observation_buffer.location
-        
-        with open(buffer_file, 'w') as f:
-            json.dump(intelligence_briefing, f, indent=2)
+        # Store in knowledge database
+        try:
+            from ..python_modules.pipeline_knowledge import PipelineKnowledge
+            from ..python_modules.knowledge import Knowledge
+            knowledge_api = Knowledge(self.cognitive_loop.memory_system.memory_api)
+            pipeline_knowledge = PipelineKnowledge(knowledge_api)
+            
+            buffer_id = pipeline_knowledge.store_stage_output(
+                stage="observation",
+                cycle_number=self.cognitive_loop.cycle_count,
+                output=intelligence_briefing
+            )
+            logger.debug(f"Stored observation output in knowledge DB: {buffer_id}")
+        except Exception as e:
+            logger.debug(f"Failed to store in knowledge DB, using file: {e}")
+            # Fallback to file storage
+            buffer_file = self.cognitive_loop.personal.parent / observation_buffer.location
+            with open(buffer_file, 'w') as f:
+                json.dump(intelligence_briefing, f, indent=2)
         
         # Touch the memory block so it knows when the file was updated
         self.cognitive_loop.memory_system.touch_memory(observation_buffer.id, self.cognitive_loop.cycle_count)

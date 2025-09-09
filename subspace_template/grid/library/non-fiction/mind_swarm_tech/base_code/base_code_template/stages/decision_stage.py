@@ -129,12 +129,27 @@ class DecisionStage:
         observation_file = self.cognitive_loop.personal.parent / observation_buffer.location
         
         observation_data = {}
+        # Try to read from knowledge database first
         try:
-            with open(observation_file, 'r') as f:
-                observation_data = json.load(f)
-                logger.debug(f"Read intelligence briefing from observation stage")
+            from ..python_modules.pipeline_knowledge import PipelineKnowledge
+            from ..python_modules.knowledge import Knowledge
+            knowledge_api = Knowledge(self.cognitive_loop.memory_system.memory_api)
+            pipeline_knowledge = PipelineKnowledge(knowledge_api)
+            
+            observation_data = pipeline_knowledge.get_stage_output("observation", self.cognitive_loop.cycle_count)
+            if observation_data:
+                logger.debug(f"Read intelligence briefing from knowledge DB")
+            else:
+                raise ValueError("No observation data in knowledge DB")
         except Exception as e:
-            logger.debug(f"Could not read observation buffer: {e}")
+            logger.debug(f"Could not read from knowledge DB, trying file: {e}")
+            # Fallback to file
+            try:
+                with open(observation_file, 'r') as f:
+                    observation_data = json.load(f)
+                    logger.debug(f"Read intelligence briefing from observation file")
+            except Exception as e:
+                logger.debug(f"Could not read observation buffer: {e}")
         
         # Extract key information from the briefing
         suggested_problem = observation_data.get("recommended_focus", "")
@@ -197,8 +212,24 @@ class DecisionStage:
         decision_buffer = self.cognitive_loop.get_current_pipeline("decision")
         buffer_file = self.cognitive_loop.personal.parent / decision_buffer.location
         
-        with open(buffer_file, 'w') as f:
-            json.dump(decision_content, f, indent=2)
+        # Store in knowledge database
+        try:
+            from ..python_modules.pipeline_knowledge import PipelineKnowledge
+            from ..python_modules.knowledge import Knowledge
+            knowledge_api = Knowledge(self.cognitive_loop.memory_system.memory_api)
+            pipeline_knowledge = PipelineKnowledge(knowledge_api)
+            
+            buffer_id = pipeline_knowledge.store_stage_output(
+                stage="decision",
+                cycle_number=self.cognitive_loop.cycle_count,
+                output=decision_content
+            )
+            logger.debug(f"Stored decision output in knowledge DB: {buffer_id}")
+        except Exception as e:
+            logger.debug(f"Failed to store in knowledge DB, using file: {e}")
+            # Fallback to file storage
+            with open(buffer_file, 'w') as f:
+                json.dump(decision_content, f, indent=2)
         
         # Touch the memory block so it knows when the file was updated
         self.cognitive_loop.memory_system.touch_memory(decision_buffer.id, self.cognitive_loop.cycle_count)

@@ -111,13 +111,28 @@ class ReflectStage:
         execution_file = self.cognitive_loop.personal.parent / execution_buffer.location
         
         import json
+        last_execution = None
+        
+        # Try to read from knowledge database first
         try:
-            with open(execution_file, 'r') as f:
-                last_execution = json.load(f)
-                if not last_execution or last_execution == {}:
-                    logger.debug("No execution to reflect on")
-                    return
-        except:
+            from ..python_modules.pipeline_knowledge import PipelineKnowledge
+            from ..python_modules.knowledge import Knowledge
+            knowledge_api = Knowledge(self.cognitive_loop.memory_system.memory_api)
+            pipeline_knowledge = PipelineKnowledge(knowledge_api)
+            
+            last_execution = pipeline_knowledge.get_stage_output("execution", self.cognitive_loop.cycle_count)
+            if not last_execution:
+                raise ValueError("No execution data in knowledge DB")
+        except Exception as e:
+            logger.debug(f"Could not read from knowledge DB, trying file: {e}")
+            # Fallback to file
+            try:
+                with open(execution_file, 'r') as f:
+                    last_execution = json.load(f)
+            except Exception as e:
+                logger.debug(f"Could not read execution file: {e}")
+        
+        if not last_execution or last_execution == {}:
             logger.debug("No execution to reflect on")
             return
         

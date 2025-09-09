@@ -433,8 +433,23 @@ class ExecutionStage:
                 execution_buffer = self.cognitive_loop.get_current_pipeline("execution")
                 buffer_file = self.cognitive_loop.personal.parent / execution_buffer.location
                 
-                with open(buffer_file, 'w') as f:
-                    json.dump(execution_content, f, indent=2)
+                # Try to store in knowledge DB even for errors
+                try:
+                    from ..python_modules.pipeline_knowledge import PipelineKnowledge
+                    from ..python_modules.knowledge import Knowledge
+                    knowledge_api = Knowledge(self.cognitive_loop.memory_system.memory_api)
+                    pipeline_knowledge = PipelineKnowledge(knowledge_api)
+                    
+                    buffer_id = pipeline_knowledge.store_stage_output(
+                        stage="execution",
+                        cycle_number=self.cognitive_loop.cycle_count,
+                        output=execution_content
+                    )
+                    logger.debug(f"Stored error execution output in knowledge DB: {buffer_id}")
+                except Exception:
+                    # Fallback to file
+                    with open(buffer_file, 'w') as f:
+                        json.dump(execution_content, f, indent=2)
                     
                 self.cognitive_loop.memory_system.touch_memory(execution_buffer.id, self.cognitive_loop.cycle_count)
             except Exception as buffer_error:
@@ -503,12 +518,26 @@ class ExecutionStage:
             decision_buffer = self.cognitive_loop.get_current_pipeline("decision")
             decision_file = self.cognitive_loop.personal.parent / decision_buffer.location
             intention_text = ""
+            # Try to read from knowledge database first
             try:
-                with open(decision_file, 'r') as f:
-                    decision_data = json.load(f)
+                from ..python_modules.pipeline_knowledge import PipelineKnowledge
+                from ..python_modules.knowledge import Knowledge
+                knowledge_api = Knowledge(self.cognitive_loop.memory_system.memory_api)
+                pipeline_knowledge = PipelineKnowledge(knowledge_api)
+                
+                decision_data = pipeline_knowledge.get_stage_output("decision", self.cognitive_loop.cycle_count)
+                if decision_data:
                     intention_text = str(decision_data.get("intention", ""))
-            except Exception:
-                intention_text = ""
+                else:
+                    raise ValueError("No decision data in knowledge DB")
+            except Exception as e:
+                # Fallback to file
+                try:
+                    with open(decision_file, 'r') as f:
+                        decision_data = json.load(f)
+                        intention_text = str(decision_data.get("intention", ""))
+                except Exception:
+                    intention_text = ""
 
             # Only truncate the working_memory when forming search queries
             qwm = working_memory
@@ -700,8 +729,24 @@ The provided API docs describe the available operations and their usage.
             execution_buffer = self.cognitive_loop.get_current_pipeline("execution")
             buffer_file = self.cognitive_loop.personal.parent / execution_buffer.location
             
-            with open(buffer_file, 'w') as f:
-                json.dump(execution_content, f, indent=2)
+            # Store in knowledge database
+            try:
+                from ..python_modules.pipeline_knowledge import PipelineKnowledge
+                from ..python_modules.knowledge import Knowledge
+                knowledge_api = Knowledge(self.cognitive_loop.memory_system.memory_api)
+                pipeline_knowledge = PipelineKnowledge(knowledge_api)
+                
+                buffer_id = pipeline_knowledge.store_stage_output(
+                    stage="execution",
+                    cycle_number=self.cognitive_loop.cycle_count,
+                    output=execution_content
+                )
+                logger.debug(f"Stored execution output in knowledge DB: {buffer_id}")
+            except Exception as e:
+                logger.debug(f"Failed to store in knowledge DB, using file: {e}")
+                # Fallback to file storage
+                with open(buffer_file, 'w') as f:
+                    json.dump(execution_content, f, indent=2)
             
             self.cognitive_loop.memory_system.touch_memory(execution_buffer.id, self.cognitive_loop.cycle_count)
             
