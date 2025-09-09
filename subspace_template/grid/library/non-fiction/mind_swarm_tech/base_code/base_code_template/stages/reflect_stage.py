@@ -212,6 +212,126 @@ Also create a single-line summary describing what was accomplished this cycle, i
         # Clean up stage instructions before leaving
         self._cleanup_stage_instructions()
            
+    async def _store_learnings_disabled(self, last_execution: dict, reflection_outputs: dict):
+        """Store learnings and answer questions in the semantic knowledge base.
+        
+        Args:
+            last_execution: The execution results from last cycle
+            reflection_outputs: The outputs from reflection
+        """
+        try:
+            # Import Knowledge API
+            from ..python_modules.knowledge import Knowledge
+            from ..python_modules.memory import Memory
+            
+            # Create memory context for Knowledge API with required attributes
+            context = {
+                'personal_dir': str(self.cognitive_loop.personal),
+                'cyber_id': self.cognitive_loop.cyber_id,
+                'memory_system': self.memory_system
+            }
+            memory_api = Memory(context)
+            knowledge = Knowledge(memory_api)
+            
+            # Get the observation buffer to see what questions were asked
+            observation_buffer = self.cognitive_loop.get_current_pipeline("observation")
+            observation_file = self.cognitive_loop.personal.parent / observation_buffer.location
+            
+            questions_asked = []
+            situation_summary = ""
+            try:
+                with open(observation_file, 'r') as f:
+                    observation_data = json.load(f)
+                    questions_asked = observation_data.get("questions_to_explore", [])
+                    situation_summary = observation_data.get("situation_summary", "")
+            except Exception as e:
+                logger.debug(f"Could not read observation buffer: {e}")
+            
+            # Store the situation and outcome as a learning experience
+            if situation_summary and reflection_outputs.get("insights"):
+                experience_content = f"Situation: {situation_summary}\n"
+                experience_content += f"Actions taken: {last_execution.get('intention', 'Unknown')}\n"
+                experience_content += f"Outcome: {reflection_outputs['insights']}"
+                
+                # Determine if this was successful
+                success = "success" in reflection_outputs.get("insights", "").lower() or \
+                         "completed" in reflection_outputs.get("insights", "").lower()
+                
+                tags = ["experience", "situation", "outcome"]
+                if success:
+                    tags.append("success")
+                else:
+                    tags.append("learning")
+                
+                # Store the experience
+                knowledge_id = knowledge.store(
+                    content=experience_content,
+                    tags=tags,
+                    personal=False,  # Share with hive mind
+                    metadata={
+                        "cycle": self.cognitive_loop.cycle_count,
+                        "confidence": 0.8 if success else 0.5,
+                        "type": "experience"
+                    }
+                )
+                
+                if knowledge_id:
+                    logger.info(f"📚 Stored learning experience: {knowledge_id}")
+            
+            # Answer any questions that were asked during observation
+            if questions_asked and reflection_outputs.get("insights"):
+                for question in questions_asked:
+                    # Create an answer based on what we learned
+                    answer_content = f"Question: {question}\n"
+                    answer_content += f"Answer (from cycle {self.cognitive_loop.cycle_count}): "
+                    
+                    # Try to answer based on insights
+                    insights = reflection_outputs.get("insights", "")
+                    if insights:
+                        # Use first relevant part of insights as answer
+                        answer_content += insights[:200]
+                    else:
+                        answer_content += "Still exploring this question."
+                    
+                    # Store the Q&A pair
+                    qa_id = knowledge.store(
+                        content=answer_content,
+                        tags=["question", "answer", "exploration"],
+                        personal=False,  # Share Q&A with hive mind
+                        metadata={
+                            "cycle": self.cognitive_loop.cycle_count,
+                            "type": "qa_pair",
+                            "question": question
+                        }
+                    )
+                    
+                    if qa_id:
+                        logger.info(f"❓ Stored Q&A pair: {question[:50]}...")
+            
+            # Store successful strategies if execution was successful
+            if last_execution.get("status") == "success" and last_execution.get("intention"):
+                strategy_content = f"Strategy that worked: {last_execution['intention']}\n"
+                strategy_content += f"Context: {situation_summary[:100]}\n"
+                strategy_content += f"Result: {reflection_outputs.get('insights', 'Successful')[:100]}"
+                
+                strategy_id = knowledge.store(
+                    content=strategy_content,
+                    tags=["strategy", "success", "solution"],
+                    personal=False,
+                    metadata={
+                        "cycle": self.cognitive_loop.cycle_count,
+                        "confidence": 0.9,
+                        "type": "successful_strategy"
+                    }
+                )
+                
+                if strategy_id:
+                    logger.info(f"✅ Stored successful strategy: {strategy_id}")
+                    
+        except Exception as e:
+            logger.error(f"Error storing learnings: {e}")
+            # Don't break reflection if storage fails
+    
     async def _update_memories_with_summary(self, reflection_outputs: dict):
         """Update both activity log and location memory with cycle summary.
         

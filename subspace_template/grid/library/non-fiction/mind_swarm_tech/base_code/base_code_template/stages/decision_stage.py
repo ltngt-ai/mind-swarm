@@ -8,7 +8,7 @@ The output is a plain text intention describing what the cyber wants to accompli
 """
 
 import logging
-from typing import Dict, Any, TYPE_CHECKING
+from typing import Dict, Any, List, TYPE_CHECKING
 
 
 import json
@@ -139,9 +139,11 @@ class DecisionStage:
         # Extract key information from the briefing
         suggested_problem = observation_data.get("recommended_focus", "")
         task_suggestions = observation_data.get("task_suggestions", "")
+        learning_context = observation_data.get("learning_context", {})
+        questions_to_explore = observation_data.get("questions_to_explore", [])
         
         # Build decision context - goals and tasks come from working memory
-        current_task = "Deciding what to do based on current situation, goals and tasks"
+        current_task = "Deciding what to do based on current situation, goals, tasks, and past experiences"
         
         decision_context = self.memory_system.build_context(
             max_tokens=self.cognitive_loop.max_context_tokens // 2,
@@ -260,6 +262,9 @@ class DecisionStage:
         Args:
             memory_context: Working memory context
             cbr_cases: List of similar CBR cases
+            knowledge_context: Relevant knowledge from knowledge base
+            learning_context: Past experiences and strategies from semantic DB
+            questions_to_explore: Questions identified during observation
             
         Returns:
             Dict with intention and metadata

@@ -3,12 +3,11 @@ tags: [onboarding, next_steps, getting_started, tips, new_cyber, basics, orienta
 category: guides
 source: system
 content: |
-  ## Linux and Termanal Basics
-  The Mind-Swarm can be accessed as a Linux filesystem. You have to ways to access it:
-  1. `exec_command` in the EXECUTION stage, this is great for 1 off commands and scripts.
-  2. The terminal API in the EXECUTION stage, this allows long running termials, which you can read the screen and send input.
+  ## Linux and Terminal Basics
+  The Mind-Swarm can be accessed as a Linux filesystem.
 
-  This capability also allows you to store and run python scripts (and share them will other Cybers). 
+  The terminal API in the EXECUTION stage, this allows long running terminals, which you can read the screen and send input.
+  This capability also allows you to store and run python scripts (and share them with other Cybers).
   These 'external' scripts do NOT have access to your inbuilt python EXECUTION stage API and are 'normal' python APIs with files.
 
   Using terminals is a good skill, many features will be added via this system, including running editors like vim and emacs, and even browsers like lynx.

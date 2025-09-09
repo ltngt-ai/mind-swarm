@@ -1,0 +1,140 @@
+title: Terminal Sessions and Multi-Cycle Execution
+tags: [terminal, python_execution, multi_cycle, interactive_sessions]
+category: concepts
+content: |
+  # Terminal Sessions for Multi-Cycle Execution
+  
+  ## Overview
+  The Terminal API enables you to create persistent interactive sessions that span multiple cognitive cycles. 
+  This is essential for complex tasks that require maintaining state, running long computations, or interacting with REPLs.
+  
+  ## Core Concepts
+  
+  ### Persistent Sessions
+  Terminal sessions persist across cycles, allowing you to:
+  - Maintain Python interpreter state between cycles
+  - Continue long-running computations
+  - Build up complex solutions incrementally
+  - Test and debug code interactively
+  
+  ### Session Management
+  Each session has:
+  - A unique session ID for reference
+  - Persistent state (variables, imports, etc.)
+  - Input/output history
+  - Resource isolation
+  
+  ## Common Use Cases
+  
+  ### 1. Interactive Python Development
+  Create a Python session to develop and test code:
+  ```python
+  # Cycle 1: Create session and define functions
+  session_id = terminal.create("python3")
+  terminal.send(session_id, "def analyze_data(data):")
+  terminal.send(session_id, "    return sum(data) / len(data)")
+  
+  # Cycle 2: Test the function
+  terminal.send(session_id, "test_data = [1, 2, 3, 4, 5]")
+  terminal.send(session_id, "result = analyze_data(test_data)")
+  terminal.send(session_id, "print(f'Average: {result}')")
+  output = terminal.read(session_id)
+  
+  # Cycle 3: Refine based on results
+  terminal.send(session_id, "def analyze_data_v2(data):")
+  terminal.send(session_id, "    return {'mean': sum(data)/len(data), 'max': max(data)}")
+  ```
+  
+  ### 2. Long-Running Computations
+  Start computations that continue across cycles:
+  ```python
+  # Cycle 1: Start computation
+  session = terminal.create("python3")
+  terminal.send(session, "import time")
+  terminal.send(session, "results = []")
+  terminal.send(session, "for i in range(1000000):")
+  terminal.send(session, "    if i % 100000 == 0: print(f'Progress: {i}')")
+  
+  # Cycle 2: Check progress
+  output = terminal.read(session)
+  print(f"Computation status: {output['screen']}")
+  
+  # Cycle 3: Get results
+  terminal.send(session, "print(f'Completed: {len(results)} items')")
+  ```
+  
+  ### 3. Interactive Debugging
+  Debug code across multiple cycles:
+  ```python
+  # Cycle 1: Load code with issue
+  debug_session = terminal.create("python3")
+  terminal.send(debug_session, "exec(open('/personal/my_script.py').read())")
+  
+  # Cycle 2: Inspect error
+  error_output = terminal.read(debug_session)
+  # Analyze error and plan fix
+  
+  # Cycle 3: Test fix
+  terminal.send(debug_session, "# Apply fix")
+  terminal.send(debug_session, "fixed_function = lambda x: x * 2")  
+  terminal.send(debug_session, "print(fixed_function(5))")
+  ```
+   
+  ## Best Practices
+  
+  ### Session Lifecycle
+  1. **Create** sessions at the start of multi-step tasks
+  2. **Maintain** session IDs in your working memory
+  3. **Check** session status before sending commands
+  4. **Close** sessions when task is complete to free resources
+  
+  ### Error Handling
+  ```python
+  try:
+      output = terminal.read(session_id)
+      if "Error" in output['screen'] or "Traceback" in output['screen']:
+          # Handle error condition
+          terminal.send(session_id, "# Attempting recovery")
+  except Exception as e:
+      # Session may have died, create new one
+      session_id = terminal.create("python3")
+  ```
+  
+  ### State Management
+  - Save session IDs to memory for persistence
+  - Document what each session is doing
+  - Periodically save important state to files
+  - Don't rely solely on session state for critical data
+  
+  ## Advanced Patterns
+  
+  ### Multiple Parallel Sessions
+  ```python
+  # Run different analyses in parallel
+  analysis1 = terminal.create("python3", name="stats_analysis")
+  analysis2 = terminal.create("python3", name="ml_model")
+  
+  # Send work to each
+  terminal.send(analysis1, "import statistics")
+  terminal.send(analysis2, "import json")
+  ```
+  
+  ### Session Checkpointing
+  ```python
+  # Save session state periodically
+  terminal.send(session, "import pickle")
+  terminal.send(session, "pickle.dump(current_state, open('/personal/checkpoint.pkl', 'wb'))")
+  
+  # Restore if needed
+  terminal.send(new_session, "current_state = pickle.load(open('/personal/checkpoint.pkl', 'rb'))")
+  ```
+  
+  ## Important Notes
+  
+  1. **Resource Limits**: Sessions consume memory and CPU, use responsibly
+  2. **Timeout Handling**: Long operations may timeout, plan accordingly
+  3. **Security**: Never store sensitive data in session variables
+  4. **Persistence**: Sessions survive cycles but not system restarts
+  5. **Concurrency**: Multiple sessions can run simultaneously
+  
+  Remember: Terminal sessions are powerful tools for complex, stateful operations that span multiple cognitive cycles. Use them when you need continuity and state preservation in your computational work.

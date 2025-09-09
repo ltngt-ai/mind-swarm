@@ -35,7 +35,7 @@ class ObservationStage:
     """Intelligence briefing stage that gathers information and suggests task updates."""
     
     # Knowledge tags to exclude from observation stage context
-    KNOWLEDGE_BLACKLIST = {"decision", "execution", "reflect", "cleanup"}
+    KNOWLEDGE_BLACKLIST = {"decision", "execution", "reflect"}
     
     def __init__(self, cognitive_loop):
         """Initialize the observation stage.
@@ -126,6 +126,112 @@ class ObservationStage:
         except Exception as e:
             logger.debug(f"Could not read reflection: {e}")
         return None
+    
+    def _query_semantic_knowledge(self, situation_summary: str, recommended_focus: str) -> Dict[str, Any]:
+        """Query the semantic database for relevant past experiences and knowledge.
+        
+        Args:
+            situation_summary: Current situation description
+            recommended_focus: What we should focus on
+            
+        Returns:
+            Dictionary containing relevant past experiences, answered questions, and patterns
+        """
+        learning_context = {
+            "past_experiences": [],
+            "relevant_questions": [],
+            "successful_strategies": [],
+            "knowledge_gaps": []
+        }
+        
+        try:
+            # Search for relevant past experiences based on the current situation
+            if situation_summary:
+                # Search for similar situations
+                situation_results = self.knowledge_manager.search_knowledge(
+                    query=situation_summary,
+                    limit=3
+                )
+                
+                # Filter for execution results and past experiences
+                for result in situation_results:
+                    if result.get('metadata', {}).get('category') == 'execution_result':
+                        learning_context["past_experiences"].append({
+                            'content': result.get('content', ''),
+                            'relevance': result.get('relevance', 0.0)
+                        })
+                    elif 'strategy' in result.get('metadata', {}).get('tags', []):
+                        learning_context["successful_strategies"].append({
+                            'content': result.get('content', ''),
+                            'relevance': result.get('relevance', 0.0)
+                        })
+            
+            # Search for knowledge related to recommended focus
+            if recommended_focus:
+                focus_results = self.knowledge_manager.search_knowledge(
+                    query=recommended_focus,
+                    limit=2
+                )
+                
+                # Look for relevant questions or guidance
+                for result in focus_results:
+                    if 'question' in result.get('metadata', {}).get('tags', []):
+                        learning_context["relevant_questions"].append({
+                            'content': result.get('content', ''),
+                            'relevance': result.get('relevance', 0.0)
+                        })
+            
+            # Identify knowledge gaps (areas without much knowledge)
+            # This is simple for now - if we found very little, it's a gap
+            total_found = (len(learning_context["past_experiences"]) + 
+                          len(learning_context["successful_strategies"]) +
+                          len(learning_context["relevant_questions"]))
+            
+            if total_found < 2:
+                learning_context["knowledge_gaps"].append(
+                    "Limited knowledge about current situation - consider exploring and documenting findings"
+                )
+                
+        except Exception as e:
+            logger.debug(f"Failed to query semantic knowledge: {e}")
+            # Return the empty context rather than crashing
+        
+        return learning_context
+    
+    def _formulate_questions(self, situation_summary: str, learning_context: Dict[str, Any]) -> List[str]:
+        """Formulate questions based on current situation and knowledge gaps.
+        
+        Args:
+            situation_summary: Current situation
+            learning_context: Context from semantic queries
+            
+        Returns:
+            List of questions to explore
+        """
+        questions = []
+        
+        try:
+            # If we have knowledge gaps, formulate questions about them
+            for gap in learning_context.get("knowledge_gaps", []):
+                if "No prior experience" in gap:
+                    questions.append(f"What should I know about {situation_summary[:50]}?")
+                elif "No answered questions" in gap:
+                    topic = gap.split(":")[-1].strip() if ":" in gap else "this situation"
+                    questions.append(f"What are the key considerations for {topic}?")
+            
+            # If we found past experiences but they're not highly relevant, ask for clarification
+            past_exp = learning_context.get("past_experiences", [])
+            if past_exp and all(exp.get("relevance", 0) < 0.8 for exp in past_exp):
+                questions.append("How does this situation differ from my past experiences?")
+            
+            # If no successful strategies found, ask for guidance
+            if not learning_context.get("successful_strategies"):
+                questions.append("What strategies have worked for similar situations?")
+                
+        except Exception as e:
+            logger.debug(f"Error formulating questions: {e}")
+            
+        return questions[:3]  # Limit to top 3 questions
     
     def _get_current_tasks(self) -> Dict[str, List[Dict[str, Any]]]:
         """Get current task status.
@@ -305,8 +411,26 @@ Focus on analyzing the new information provided and suggesting what to do regard
         if output_values.get("recommended_focus"):
             query = output_values["recommended_focus"]
             results = self.knowledge_manager.remember_knowledge(query, limit=1)
+        
+        # 8. Query semantic knowledge for learning context
+        logger.info("🔍 Querying semantic knowledge for relevant experiences...")
+        situation_summary = output_values.get("situation_summary", "")
+        recommended_focus = output_values.get("recommended_focus", "")
+        
+        learning_context = self._query_semantic_knowledge(situation_summary, recommended_focus)
+        
+        # 9. Formulate questions based on knowledge gaps
+        questions_to_explore = self._formulate_questions(situation_summary, learning_context)
+        
+        # Log learning insights
+        if learning_context["past_experiences"]:
+            logger.info(f"📚 Found {len(learning_context['past_experiences'])} relevant past experiences")
+        if learning_context["successful_strategies"]:
+            logger.info(f"✅ Found {len(learning_context['successful_strategies'])} successful strategies")
+        if questions_to_explore:
+            logger.info(f"❓ Formulated {len(questions_to_explore)} questions to explore")
 
-        # 8. Create briefing for Decision stage (only analysis results, not raw data)
+        # 10. Create briefing for Decision stage (now includes learning context)
         intelligence_briefing = {
             "cycle_count": self.cognitive_loop.cycle_count,
             "situation_summary": output_values.get("situation_summary", "No significant changes"),
@@ -314,6 +438,8 @@ Focus on analyzing the new information provided and suggesting what to do regard
             "new_message_paths": [msg['path'] for msg in message_contents] if message_contents else [],
             "observation_count": len(observations),
             "recommended_focus_knowledge": results,
+            "learning_context": learning_context,
+            "questions_to_explore": questions_to_explore,
         }
         
         # Write to observation pipeline buffer for Decision stage

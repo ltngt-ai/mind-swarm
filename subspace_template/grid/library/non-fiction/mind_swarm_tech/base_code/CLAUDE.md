@@ -19,13 +19,12 @@ The main coordinator that:
 - Handles graceful stops after cycle completion
 
 ### Cognitive Loop (`cognitive_loop.py`)
-The thinking engine using a **five-stage cognitive architecture**:
+The thinking engine using a **four-stage cognitive architecture**:
 
 1. **Observation Stage** - Understand what's happening
 2. **Decision Stage** - Choose what to do
 3. **Execution Stage** - Take action
-4. **Reflection Stage** - Learn from results
-5. **Cleanup Stage** - Manage memory and remove outdated information
+4. **Reflection Stage** - Learn from results and manage memory
 
 The loop uses a **pipeline system** where each stage writes its results to a buffer that subsequent stages can read.
 
@@ -252,8 +251,7 @@ base_code_template/
 1. **Observation** creates understanding → observation buffer
 2. **Decision** reads observation buffer → decision buffer  
 3. **Execution** reads decision buffer → execution buffer
-4. **Reflection** reads execution buffer → reflection_on_last_cycle file
-5. **Cleanup** manages memory → prepares for next cycle
+4. **Reflection** reads execution buffer → reflection_on_last_cycle file and manages memory for next cycle
 
 ### Key Design Principles
 

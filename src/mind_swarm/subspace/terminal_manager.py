@@ -486,9 +486,10 @@ class CyberTerminalManager:
             
             if action == 'create':
                 # Create new session
-                command = request.get('data', {}).get('command', 'bash')
-                name = request.get('data', {}).get('name')
-                working_dir = request.get('data', {}).get('working_dir')
+                data_dict = request.get('data') or {}
+                command = data_dict.get('command', 'bash')
+                name = data_dict.get('name')
+                working_dir = data_dict.get('working_dir')
                 
                 # If no working_dir provided, try to get cyber's current location
                 if not working_dir:
@@ -523,7 +524,8 @@ class CyberTerminalManager:
             elif action == 'read':
                 # Read screen
                 session_id = request.get('session_id')
-                format = request.get('data', {}).get('format', 'text')
+                data_dict = request.get('data') or {}
+                format = data_dict.get('format', 'text')
                 
                 screen_data = await self.read_screen(cyber_id, session_id, format)
                 response = {
@@ -535,7 +537,8 @@ class CyberTerminalManager:
             elif action == 'write':
                 # Send input
                 session_id = request.get('session_id')
-                input_text = request.get('data', {}).get('input', '')
+                data_dict = request.get('data') or {}
+                input_text = data_dict.get('input', '')
                 
                 await self.send_input(cyber_id, session_id, input_text)
                 response = {

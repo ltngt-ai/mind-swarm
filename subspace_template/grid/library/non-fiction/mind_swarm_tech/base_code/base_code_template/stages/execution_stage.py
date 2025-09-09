@@ -320,9 +320,10 @@ class ExecutionStage:
             'FileNotFoundError': FileNotFoundError,
             'IOError': IOError,
             'OSError': OSError,
+            'StopIteration': StopIteration,  # For iterators
             
-            # Import capability
-            '__import__': __import__,
+            # Import capability is already defined above with safe_import wrapper
+            # DO NOT add __import__ here as it would bypass security!
         }
         
         # Import safe standard library modules

@@ -69,24 +69,30 @@ class ServerDaemon:
             # Start the server in a separate task
             # This will fail early if there are initialization problems (like missing rootfs)
             server_task = asyncio.create_task(self.server.run())
-            
-            # Give the server a moment to initialize and detect any startup failures
-            await asyncio.sleep(1.0)
-            
-            # Check if the server task failed immediately
-            if server_task.done():
-                # Server failed to start, get the exception
+            shutdown_waiter = asyncio.create_task(self._shutdown_event.wait())
+
+            # Race: either the server exits (unexpected) or we get a shutdown signal
+            done, pending = await asyncio.wait(
+                {server_task, shutdown_waiter}, return_when=asyncio.FIRST_COMPLETED
+            )
+
+            if server_task in done and not shutdown_waiter.done():
+                # Server stopped unexpectedly during startup/runtime
                 exc = server_task.exception()
                 if exc:
-                    logger.error(f"Server failed to start: {exc}")
-                    raise exc
-            
-            # Only create PID file after successful startup
-            pid_file.write_text(str(os.getpid()))
-            logger.debug(f"Created PID file: {pid_file}")
-            
-            # Wait for shutdown signal
-            await self._shutdown_event.wait()
+                    logger.error(f"Server crashed during startup/runtime: {exc}", exc_info=True)
+                else:
+                    logger.error("Server stopped unexpectedly with no exception. Check uvicorn logs and port conflicts.")
+                # Propagate to finally for cleanup
+                return
+
+            # Only create PID file after successful startup (we received a shutdown signal later)
+            try:
+                pid_file.write_text(str(os.getpid()))
+                logger.debug(f"Created PID file: {pid_file}")
+            except Exception:
+                # Best-effort; not fatal under systemd
+                pass
             
             # Mark that we're shutting down to prevent duplicate handling
             self._shutting_down = True
@@ -111,34 +117,59 @@ class ServerDaemon:
             # Kill any remaining bwrap processes
             logger.info("Cleaning up any remaining bwrap processes...")
             try:
+                import shutil
                 import subprocess
                 
-                # Strategy 1: Kill all bwrap processes - this works from command line
-                result = subprocess.run(['pkill', '-9', 'bwrap'], 
-                                      capture_output=True, text=True)
-                if result.returncode == 0:
-                    logger.info("Successfully killed bwrap processes with pkill")
-                
-                # Strategy 2: Kill all processes that have bwrap as parent
-                # This catches any lingering child processes
-                result2 = subprocess.run(['pkill', '-9', '-P', '$(pgrep bwrap)'], 
-                                       shell=True, capture_output=True, text=True)
-                if result2.returncode == 0:
-                    logger.info("Killed child processes of bwrap")
-                
-                # Strategy 3: Final backstop - kill anything with bwrap in the command line
-                # This catches bwrap processes that might have been missed
-                result3 = subprocess.run(['pkill', '-9', '-f', 'bwrap'], 
-                                       capture_output=True, text=True)
-                if result3.returncode == 0:
-                    logger.info("Killed remaining processes with bwrap in command")
-                
-                # Strategy 4: Nuclear option - killall
-                subprocess.run(['killall', '-9', 'bwrap'], 
-                             capture_output=True, text=True, check=False)
-                
+                pkill_path = shutil.which('pkill')
+                pgrep_path = shutil.which('pgrep')
+
+                if pkill_path:
+                    # Try direct kill of bwrap processes
+                    subprocess.run([pkill_path, '-9', 'bwrap'], capture_output=True, text=True, check=False)
+                    # Try killing by command match as a backstop
+                    subprocess.run([pkill_path, '-9', '-f', 'bwrap'], capture_output=True, text=True, check=False)
+                    # If pgrep is available, try killing children of any bwrap PIDs
+                    if pgrep_path:
+                        subprocess.run(f"{pkill_path} -9 -P $({pgrep_path} bwrap)", shell=True,
+                                       capture_output=True, text=True, check=False)
+                else:
+                    # Fallback: manually scan /proc for bwrap processes and SIGKILL them
+                    import os
+                    import signal as _signal
+                    killed = 0
+                    for entry in os.listdir('/proc'):
+                        if not entry.isdigit():
+                            continue
+                        pid = int(entry)
+                        cmdline_path = f"/proc/{pid}/cmdline"
+                        comm_path = f"/proc/{pid}/comm"
+                        try:
+                            found = False
+                            if os.path.exists(cmdline_path):
+                                with open(cmdline_path, 'rb') as f:
+                                    data = f.read().replace(b'\x00', b' ').decode(errors='ignore')
+                                    if 'bwrap' in data:
+                                        found = True
+                            if not found and os.path.exists(comm_path):
+                                with open(comm_path, 'r', encoding='utf-8', errors='ignore') as f:
+                                    if 'bwrap' in f.read():
+                                        found = True
+                            if found:
+                                os.kill(pid, _signal.SIGKILL)
+                                killed += 1
+                        except ProcessLookupError:
+                            pass
+                        except PermissionError:
+                            # Skip processes we cannot access
+                            continue
+                        except Exception:
+                            # Keep cleanup best-effort; do not fail shutdown
+                            continue
+                    if killed:
+                        logger.info(f"Killed {killed} bwrap-related process(es) via /proc scan")
             except Exception as e:
-                logger.error(f"Error killing bwrap processes: {e}")
+                # Best-effort cleanup; log and continue without raising
+                logger.warning(f"Non-fatal issue during bwrap cleanup: {e}")
             
             # Stop the uvicorn server properly
             if hasattr(self.server, 'server') and self.server.server:
@@ -149,13 +180,14 @@ class ServerDaemon:
                 self.server.server.force_exit = True
             
             # Cancel the server task
-            server_task.cancel()
-            try:
-                await asyncio.wait_for(server_task, timeout=2.0)
-            except (asyncio.CancelledError, asyncio.TimeoutError):
-                logger.info("Server task cancelled/timed out")
-            except Exception as e:
-                logger.error(f"Error cancelling server task: {e}")
+            if not server_task.done():
+                server_task.cancel()
+                try:
+                    await asyncio.wait_for(server_task, timeout=2.0)
+                except (asyncio.CancelledError, asyncio.TimeoutError):
+                    logger.info("Server task cancelled/timed out")
+                except Exception as e:
+                    logger.error(f"Error cancelling server task: {e}")
                     
         finally:
             # Remove signal handlers

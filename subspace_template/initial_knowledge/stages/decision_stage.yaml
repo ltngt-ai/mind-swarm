@@ -57,8 +57,9 @@ content: |
   8. Run any Linux style command (from Debian trixie) on the memory system represented as a file system.
   9. EXECUTION is an expert coder, with access to both python, C++ and shell scripts.
   10. Wait for events, just as new mail or an amount of time
-  11. Use most python standard libraries.
-  12. Use some installed python libraries:
+  11. Create and manage interactive terminal sessions for multi-cycle Python execution and command interaction using the Terminal API.
+  12. Use most python standard libraries.
+  13. Use some installed python libraries:
     - pyyaml - YAML parsing
     - python-dotenv - Environment variables
     - aiofiles - Async file operations

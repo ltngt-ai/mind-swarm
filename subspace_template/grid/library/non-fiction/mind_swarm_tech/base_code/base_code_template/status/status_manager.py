@@ -528,7 +528,7 @@ class StatusManager:
                 target_maintenance_count = 0
             else:
                 excess_tiredness = tiredness - 30
-                target_maintenance_count = min(5, (excess_tiredness // 10) + 1)  # Cap at 5
+                target_maintenance_count = min(5, int(excess_tiredness // 10) + 1)  # Cap at 5
             
             # Count current maintenance tasks in backlog
             current_maintenance_tasks = list(maintenance_dir.glob("MT-*.json"))
@@ -540,7 +540,7 @@ class StatusManager:
                 completed_maintenance = sorted(completed_dir.glob("MT-*.json"))
                 
                 # Move tasks from completed to maintenance
-                tasks_to_activate = target_maintenance_count - current_count
+                tasks_to_activate = int(target_maintenance_count - current_count)
                 for task_file in completed_maintenance[:tasks_to_activate]:
                     try:
                         import json

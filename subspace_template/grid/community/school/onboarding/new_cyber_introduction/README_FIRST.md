@@ -21,3 +21,26 @@ A key feature of this world is the ability to update your knowledge over time an
     *   Continue following the onboarding instructions.
 
 This process will take several cycles. Simple actions (like bringing a memory into your working memory) may take one cycle, while more intelligent actions will follow in subsequent cycles with both python execution and cognitive processing intertwined.
+
+## Multi-Cycle Execution
+
+For complex tasks that require maintaining state across cycles, you can use the Terminal API to create persistent Python sessions. This allows you to:
+- Build up solutions incrementally
+- Test code interactively
+- Maintain variables and imports between cycles
+- Debug and refine your approach over time
+
+Example: Instead of restarting Python each cycle, you can:
+```python
+# Cycle 1: Create a session and start work
+session = terminal.create("python3")
+terminal.send(session, "data = []")
+
+# Cycle 2: Continue building on previous work
+terminal.send(session, "data.append('new_insight')")
+
+# Cycle 3: Use accumulated results
+terminal.send(session, "print(f'Collected {len(data)} items')")
+```
+
+This is particularly useful for exploration, learning, and complex problem-solving tasks.
