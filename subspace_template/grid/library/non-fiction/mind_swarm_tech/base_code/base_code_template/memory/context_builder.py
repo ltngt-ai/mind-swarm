@@ -272,8 +272,20 @@ class ContextBuilder:
         """Estimate token count for a memory block.
         
         Simple estimation: ~4 characters per token
+        For binary content, use a fixed small estimate to avoid loading large files.
         """
         try:
+            # For binary content types, don't load the full content
+            if hasattr(memory, 'content_type'):
+                from .memory_types import ContentType
+                # Check if it's a binary type
+                if memory.content_type in [ContentType.APPLICATION_OCTET_STREAM, 
+                                          ContentType.IMAGE_PNG, 
+                                          ContentType.IMAGE_JPEG]:
+                    # Return a small fixed estimate for binary content
+                    # This prevents loading huge files just for token counting
+                    return 100  # Small fixed estimate for binary files
+            
             content = self.content_loader.load_content(memory)
             # Simple overhead for JSON structure
             overhead = 20

@@ -153,8 +153,25 @@ class ContentLoader:
                 except Exception as e:
                     return f"[Error listing directory: {memory.location} - {str(e)}]"
             
-            if file_path.stat().st_size > 1_000_000:  # 1MB limit
-                return f"[File too large: {memory.location} - {file_path.stat().st_size} bytes]"
+            # Much stricter size limit for working memory
+            # If no line range specified, limit to first 1000 lines  
+            file_size = file_path.stat().st_size
+            if file_size > 100_000 and not (memory.start_line or memory.end_line):  # 100KB without chunking
+                # For large files without line ranges, return first 1000 lines
+                logger.warning(f"Large file {memory.location} ({file_size} bytes) loaded without line range, limiting to first 1000 lines")
+                with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                    lines = []
+                    for i, line in enumerate(f):
+                        if i >= 1000:
+                            lines.append(f"\n[... File truncated at line 1000. Total size: {file_size} bytes ...]")
+                            break
+                        lines.append(line.rstrip('\n'))
+                    content = '\n'.join(lines)
+                    # Cache and return the truncated content
+                    if not getattr(memory, 'no_cache', False):
+                        cache_key = f"file:{memory.location}:{memory.digest or 'no-digest'}"
+                        self.cache.put(cache_key, content)
+                    return content
             
             # Read file content
             if file_path.suffix == '.json' and 'dynamic_context' in file_path.name:

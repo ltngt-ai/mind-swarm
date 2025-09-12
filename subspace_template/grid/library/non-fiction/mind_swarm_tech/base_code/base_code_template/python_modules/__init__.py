@@ -104,6 +104,15 @@ from .community_tasks import (
     CommunityTasksError
 )
 
+# Export the Terminal class and exceptions
+from .terminal import (
+    Terminal,
+    TerminalError
+)
+
+# Export the Knowledge class
+from .knowledge import Knowledge
+
 
 __all__ = [
     'Location',
@@ -134,5 +143,8 @@ __all__ = [
     'CommunityTasks',
     'CommunityTasksError',
     'WorkingMemory',
-    'WorkingMemoryError'
+    'WorkingMemoryError',
+    'Terminal',
+    'TerminalError',
+    'Knowledge'
 ]
