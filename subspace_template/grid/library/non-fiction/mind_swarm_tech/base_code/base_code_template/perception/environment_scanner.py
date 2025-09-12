@@ -281,7 +281,7 @@ class EnvironmentScanner:
                     location=str(location_contents_file),
                     confidence=1.0,
                     priority=Priority.FOUNDATIONAL,
-                    pinned=False,  # Let memory selector manage
+                    pinned=True,  # Always visible - cyber needs to know where they are
                     metadata={
                         "file_type": "current_location",
                         "description": f"Looking around at: {current_location}",
@@ -435,12 +435,12 @@ class EnvironmentScanner:
             with open(location_contents_file, 'w') as f:
                 f.write(contents_text)
             
-            # Create a SYSTEM priority memory for location contents
+            # Create a FOUNDATIONAL priority memory for location contents
             location_memory = MemoryBlock(
                 location="personal/.internal/memory/current_location.txt",
-                priority=Priority.SYSTEM,  # System-controlled, like looking around
+                priority=Priority.FOUNDATIONAL,  # Essential environmental awareness
                 confidence=1.0,
-                pinned=False,  # Let memory selector manage
+                pinned=True,  # Always visible - cyber needs to know where they are
                 metadata={
                     "file_type": "current_location",
                     "description": f"Looking around at: {current_location}",
@@ -449,7 +449,7 @@ class EnvironmentScanner:
                 },
                 cycle_count=cycle_count,
                 no_cache=True,  # Always fresh
-                content_type=ContentType.APPLICATION_JSON  # System JSON file
+                content_type=ContentType.TEXT_PLAIN  # Plain text file
             )
             memories.append(location_memory)
             
