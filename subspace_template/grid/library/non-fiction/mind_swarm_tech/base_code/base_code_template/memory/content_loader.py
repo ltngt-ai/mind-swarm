@@ -153,25 +153,29 @@ class ContentLoader:
                 except Exception as e:
                     return f"[Error listing directory: {memory.location} - {str(e)}]"
             
-            # Much stricter size limit for working memory
-            # If no line range specified, limit to first 1000 lines  
+            # Check file size for working memory limits
             file_size = file_path.stat().st_size
             if file_size > 100_000 and not (memory.start_line or memory.end_line):  # 100KB without chunking
-                # For large files without line ranges, return first 1000 lines
-                logger.warning(f"Large file {memory.location} ({file_size} bytes) loaded without line range, limiting to first 1000 lines")
+                # Return error message that helps cyber self-correct
+                line_count = 0
                 with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
-                    lines = []
-                    for i, line in enumerate(f):
-                        if i >= 1000:
-                            lines.append(f"\n[... File truncated at line 1000. Total size: {file_size} bytes ...]")
-                            break
-                        lines.append(line.rstrip('\n'))
-                    content = '\n'.join(lines)
-                    # Cache and return the truncated content
-                    if not getattr(memory, 'no_cache', False):
-                        cache_key = f"file:{memory.location}:{memory.digest or 'no-digest'}"
-                        self.cache.put(cache_key, content)
-                    return content
+                    for _ in f:
+                        line_count += 1
+                
+                return (
+                    f"[ERROR: File too large for working memory]\n"
+                    f"File: {memory.location}\n"
+                    f"Size: {file_size:,} bytes ({line_count:,} lines)\n"
+                    f"Limit: Files over 100KB require chunking\n\n"
+                    f"TO FIX: Create a MemoryBlock with start_line and end_line:\n"
+                    f"  MemoryBlock(location='{memory.location}',\n"
+                    f"             start_line=1, end_line=1000,  # First 1000 lines\n"
+                    f"             ...)\n\n"
+                    f"Or use chunks:\n"
+                    f"  - Lines 1-1000: start_line=1, end_line=1000\n"
+                    f"  - Lines 1001-2000: start_line=1001, end_line=2000\n"
+                    f"  - Last 500 lines: start_line={line_count-500}, end_line={line_count}\n"
+                )
             
             # Read file content
             if file_path.suffix == '.json' and 'dynamic_context' in file_path.name:
