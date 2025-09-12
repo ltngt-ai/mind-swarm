@@ -63,35 +63,18 @@ class PipelineKnowledge:
     
     VALID_STAGES = ["observation", "decision", "execution", "reflection"]
     
-    def __init__(self, context_or_knowledge):
+    def __init__(self, context):
         """Initialize the Pipeline Knowledge API.
         
         Args:
-            context_or_knowledge: Either execution context dict or Knowledge API instance
+            context: Execution context dict
         """
-        if isinstance(context_or_knowledge, dict):
-            # Initialize from context
-            self.context = context_or_knowledge
-            self.cyber_id = context_or_knowledge.get('cyber_id', 'unknown')
-            
-            # Create Memory API if not present, then Knowledge API
-            from .memory import Memory
-            from .knowledge import Knowledge
-            
-            memory_api = context_or_knowledge.get('memory_api')
-            if not memory_api:
-                # Create Memory API from context
-                memory_api = Memory(context_or_knowledge)
-            
-            self.knowledge = Knowledge(memory_api)
-        else:
-            # Direct Knowledge API instance - try to get cyber_id
-            self.knowledge = context_or_knowledge
-            # Try to get cyber_id from the memory API if possible
-            if hasattr(context_or_knowledge, 'memory') and hasattr(context_or_knowledge.memory, 'context'):
-                self.cyber_id = context_or_knowledge.memory.context.get('cyber_id', 'unknown')
-            else:
-                self.cyber_id = getattr(context_or_knowledge, 'cyber_id', 'unknown')
+        self.context = context
+        self.cyber_id = context.get('cyber_id', 'unknown')
+        
+        # Create Knowledge API from context
+        from .knowledge import Knowledge
+        self.knowledge = Knowledge(context)
     
     def store_stage_output(self,
                           stage: str,

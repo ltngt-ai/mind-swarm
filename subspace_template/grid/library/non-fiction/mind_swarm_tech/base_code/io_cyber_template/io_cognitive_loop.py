@@ -7,12 +7,12 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 
-from .base_code_template.cognitive_loop import CognitiveLoop
-from .base_code_template.memory import MemoryBlock, Priority
-from .base_code_template.actions import Action, ActionResult, ActionStatus, action_registry
+from .cognitive_loop import CognitiveLoop
+from .memory import MemoryBlock, Priority
+from .actions import Action, ActionResult, ActionStatus, action_registry
 from .io_actions import register_io_actions
-from .base_code_template.memory_actions import register_memory_actions
-from .base_code_template.goal_actions import register_goal_actions
+from .memory_actions import register_memory_actions
+from .goal_actions import register_goal_actions
 
 logger = logging.getLogger("Cyber.io_cognitive")
 

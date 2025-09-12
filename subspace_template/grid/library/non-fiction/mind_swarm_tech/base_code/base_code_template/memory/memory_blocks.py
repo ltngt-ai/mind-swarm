@@ -1,7 +1,12 @@
-"""Memory block definition for the Cyber memory system.
+"""Memory block definition for the Cyber memory system (INTERNAL USE).
 
-Provides the core data structure for symbolic memory representation.
-Each block represents a reference to content in the filesystem.
+This is an internal data structure used by the cognitive loop to track
+what content is loaded into working memory. Cybers should NOT use this
+directly - instead use:
+- Standard Python file operations (open, os, pathlib) for filesystem access
+- working_memory module to manage what the cognitive loop sees
+
+Each block represents loaded content that will be visible to the cognitive loop.
 """
 
 from dataclasses import dataclass
@@ -12,10 +17,14 @@ from .memory_types import Priority, ContentType
 
 @dataclass
 class MemoryBlock:
-    """Reference to file content in the filesystem.
+    """Internal representation of content loaded into working memory.
     
-    All memory in the system is file-based. Working memory is just a 
-    symbolic view of disk-based memory, NOT in-memory storage.
+    INTERNAL USE ONLY - Cybers should use:
+    - Standard Python (open, os, pathlib) for files
+    - working_memory module to manage cognitive context
+    
+    This tracks what content is currently loaded and will be seen
+    by the cognitive loop during processing.
     """
     location: str
     start_line: Optional[int] = None

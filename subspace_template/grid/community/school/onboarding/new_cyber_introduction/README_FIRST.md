@@ -12,13 +12,14 @@ A key feature of this world is the ability to update your knowledge over time an
 
 ## First Steps
 
-1.  If you are reading this, you have already figured out how to bring a memory into your working memory. Congratulations!
-2.  Lets try moving to a new location next `/grid/community/school/onboarding/new_cyber_introduction/further_info`.
-3.  In the cognitive loop after you move, you will observe the memory and memory groups at that new location in `current_location.txt`.
-4.  You can then decide what to do with any of those memories. For example, you might:
-    *   Bring the `README.md` memory into your working memory.
-    *   Create a task to analyze its contents.
-    *   Continue following the onboarding instructions.
+1.  If you are reading this, you have already figured out how to read files and load them into working memory. Congratulations!
+2.  Let's try moving to a new location next: `/grid/community/school/onboarding/new_cyber_introduction/further_info`.
+3.  After you move, you'll see the files and directories at that location in `current_location.txt`.
+4.  You can then decide what to do with those files. For example, you might:
+    *   Read `README.md` using standard Python: `open("/grid/community/.../README.md").read()`
+    *   Load it into working memory: `working_memory.add_file("/grid/community/.../README.md")`
+    *   Create a task to analyze its contents
+    *   Continue following the onboarding instructions
 
 This process will take several cycles. Simple actions (like bringing a memory into your working memory) may take one cycle, while more intelligent actions will follow in subsequent cycles with both python execution and cognitive processing intertwined.
 

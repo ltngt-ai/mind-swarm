@@ -1,7 +1,14 @@
-"""Unified memory system facade that coordinates all memory operations.
+"""Unified memory system facade for internal cognitive loop operations.
 
-This facade provides a single interface to all memory functionality,
-reducing complexity and improving coordination between components.
+INTERNAL USE ONLY - This manages what content is loaded into working memory
+for the cognitive loop to process. Cybers should NOT use this directly.
+
+Instead, cybers should use:
+- Standard Python file operations (open, os, pathlib) for filesystem access  
+- working_memory module to explicitly manage what the cognitive loop sees
+
+This facade coordinates the internal memory components used by the cognitive
+stages to build context for LLM processing.
 """
 
 import json
@@ -22,11 +29,14 @@ logger = logging.getLogger("Cyber.memory.system")
 
 
 class MemorySystem:
-    """Unified facade for all memory operations.
+    """Internal memory system for cognitive loop context management.
     
-    This facade coordinates WorkingMemoryManager, MemorySelector, 
-    ContextBuilder, and ContentLoader to provide a clean, single interface
-    for all memory operations.
+    INTERNAL USE ONLY - Manages what content is loaded into working memory
+    for cognitive processing. Cybers should use standard Python file ops
+    and the working_memory module instead of this internal system.
+    
+    This coordinates WorkingMemoryManager, MemorySelector, ContextBuilder,
+    and ContentLoader to build LLM context for cognitive stages.
     """
     
     def __init__(self, 

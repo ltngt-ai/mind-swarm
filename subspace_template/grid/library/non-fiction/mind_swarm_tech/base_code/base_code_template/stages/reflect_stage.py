@@ -113,7 +113,7 @@ class ReflectStage:
         # Read from knowledge database
         try:
             from ..python_modules.pipeline_knowledge import PipelineKnowledge
-            from ..python_modules.memory import Memory
+            # Memory API removed - using context directly
             from ..python_modules.knowledge import Knowledge
             
             # Get cyber name from unified state
@@ -141,9 +141,8 @@ class ReflectStage:
                 'current_location': '/personal'
             }
             
-            # Create Memory API instance, then Knowledge API
-            memory_api = Memory(memory_context)
-            knowledge_api = Knowledge(memory_api)
+            # Create Knowledge APIs
+            knowledge_api = Knowledge(memory_context)
             # Pass context to PipelineKnowledge so it has cyber_id
             pipeline_knowledge = PipelineKnowledge(memory_context)
             
@@ -219,7 +218,7 @@ Also create a single-line summary describing what was accomplished this cycle, i
         # Store reflection in knowledge database
         try:
             from ..python_modules.reflection_knowledge import ReflectionKnowledge
-            from ..python_modules.memory import Memory
+            # Memory API removed - using context directly
             from ..python_modules.knowledge import Knowledge
             
             # Get cyber name from unified state
@@ -247,12 +246,10 @@ Also create a single-line summary describing what was accomplished this cycle, i
                 'current_location': '/personal'
             }
             
-            # Create Memory API instance, then Knowledge API
-            memory_api = Memory(memory_context)
-            knowledge_api = Knowledge(memory_api)
+            # Create Knowledge API using context
+            knowledge_api = Knowledge(memory_context)
             # Pass the context with cyber_id to ReflectionKnowledge
             reflection_context = memory_context.copy()
-            reflection_context['memory_api'] = memory_api
             reflection_context['cycle_count'] = self.cognitive_loop.cycle_count
             reflection_knowledge = ReflectionKnowledge(reflection_context)
             
@@ -303,7 +300,7 @@ Also create a single-line summary describing what was accomplished this cycle, i
         try:
             # Import Knowledge API
             from ..python_modules.knowledge import Knowledge
-            from ..python_modules.memory import Memory
+            # Memory API removed - using context directly
             
             # Create memory context for Knowledge API with required attributes
             context = {
@@ -311,8 +308,7 @@ Also create a single-line summary describing what was accomplished this cycle, i
                 'cyber_id': self.cognitive_loop.cyber_id,
                 'memory_system': self.memory_system
             }
-            memory_api = Memory(context)
-            knowledge = Knowledge(memory_api)
+            knowledge = Knowledge(context)
             
             # Get the observation data from knowledge DB
             questions_asked = []

@@ -192,8 +192,8 @@ class CyberTerminalManager:
                 "--bind", str(cyber_dir), "/personal",
                 # The Grid
                 "--bind", str(self.coordinator.subspace.root_path / "grid"), "/grid",
-                # Temp directory
-                "--tmpfs", "/tmp",
+                # Temp directory - bind to persistent storage in cyber's home
+                "--bind", str(cyber_dir / "tmp"), "/tmp",
                 # Set working directory
                 "--chdir", sandbox_working_dir,
                 # Environment

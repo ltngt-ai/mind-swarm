@@ -121,11 +121,10 @@ class ObservationStage:
         # Try to get from knowledge database first
         try:
             from ..python_modules.reflection_knowledge import ReflectionKnowledge
-            from ..python_modules.memory import Memory
             from ..python_modules.knowledge import Knowledge
             
-            # Create memory context for Knowledge API
-            memory_context = {
+            # Create context for Knowledge API
+            knowledge_context = {
                 'cognitive_loop': self.cognitive_loop,
                 'memory_system': self.cognitive_loop.memory_system,
                 'brain_interface': None,
@@ -136,10 +135,9 @@ class ObservationStage:
                 'current_location': '/personal'
             }
             
-            # Create Memory API instance, then Knowledge API
-            memory_api = Memory(memory_context)
-            knowledge_api = Knowledge(memory_api)
-            reflection_knowledge = ReflectionKnowledge(knowledge_api)
+            # Create Knowledge APIs
+            knowledge_api = Knowledge(knowledge_context)
+            reflection_knowledge = ReflectionKnowledge(knowledge_context)
             
             # Get the most recent reflection
             recent_reflections = reflection_knowledge.get_recent_reflections(limit=1)
@@ -331,7 +329,26 @@ class ObservationStage:
         # Load stage instructions into memory if not already present
         self._load_stage_instructions()
         
-        # 1. Scan environment for new observations
+        # 1. Add environmental memories (status, location, etc.)
+        logger.info("📍 Adding environmental context to working memory...")
+        
+        # Add status.txt memory if it exists
+        status_memories = self.environment_scanner._scan_status_file(
+            cycle_count=self.cognitive_loop.cycle_count
+        )
+        for memory in status_memories:
+            self.memory_system.add_memory(memory)
+            logger.debug(f"Added status memory: {memory.id}")
+        
+        # Add current location memory
+        location_memories = self.environment_scanner._scan_current_location(
+            cycle_count=self.cognitive_loop.cycle_count
+        )
+        for memory in location_memories:
+            self.memory_system.add_memory(memory)
+            logger.debug(f"Added location memory: {memory.id}")
+        
+        # 2. Scan environment for new observations
         logger.info("📡 Scanning for new observations...")
         self.cognitive_loop._update_dynamic_context(stage="OBSERVATION", phase="SCAN")
         observations = self.environment_scanner.scan_environment(
@@ -339,7 +356,7 @@ class ObservationStage:
             cycle_count=self.cognitive_loop.cycle_count
         )
         
-        # 2. Read actual content of new messages
+        # 3. Read actual content of new messages
         message_contents = []
         if observations:
             logger.info(f"📋 Found {len(observations)} new observations")
@@ -473,11 +490,9 @@ Focus on analyzing the new information provided and suggesting what to do regard
         # Store in knowledge database
         try:
             from ..python_modules.pipeline_knowledge import PipelineKnowledge
-            from ..python_modules.memory import Memory
-            from ..python_modules.knowledge import Knowledge
             
-            # Create memory context for Knowledge API
-            memory_context = {
+            # Create context for Knowledge APIs
+            knowledge_context = {
                 'cognitive_loop': self.cognitive_loop,
                 'memory_system': self.cognitive_loop.memory_system,
                 'brain_interface': None,
@@ -488,11 +503,8 @@ Focus on analyzing the new information provided and suggesting what to do regard
                 'current_location': '/personal'
             }
             
-            # Create Memory API instance, then Knowledge API
-            memory_api = Memory(memory_context)
-            knowledge_api = Knowledge(memory_api)
-            # Pass context to PipelineKnowledge so it has cyber_id
-            pipeline_knowledge = PipelineKnowledge(memory_context)
+            # Create Pipeline Knowledge API
+            pipeline_knowledge = PipelineKnowledge(knowledge_context)
             
             buffer_id = pipeline_knowledge.store_stage_output(
                 stage="observation",

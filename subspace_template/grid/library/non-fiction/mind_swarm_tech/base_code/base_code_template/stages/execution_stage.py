@@ -77,7 +77,7 @@ class ExecutionStage:
         self._setup_execution_environment()
         
         # Generate API documentation as knowledge for all modules
-        self._extract_and_save_module_docs(self.memory_api, "memory_api_docs")
+        # Memory API removed - use standard Python file operations
         self._extract_and_save_module_docs(self.location_api, "location_api_docs")
         self._extract_and_save_module_docs(self.events, "events_api_docs")
         self._extract_and_save_module_docs(self.knowledge_api, "knowledge_api_docs")
@@ -87,6 +87,7 @@ class ExecutionStage:
         self._extract_and_save_module_docs(self.tasks_api, "tasks_api_docs")
         self._extract_and_save_module_docs(self.community_tasks_api, "community_tasks_api_docs")
         self._extract_and_save_module_docs(self.terminal_api, "terminal_api_docs")
+        self._extract_and_save_module_docs(self.working_memory_api, "working_memory_api_docs")
         
         # Initialize error case tracking
         self.error_case_ids = []  # Track current cycle's error cases for cleanup
@@ -228,7 +229,7 @@ class ExecutionStage:
                 confidence=1.0,
                 priority=Priority.FOUNDATIONAL,  # High priority so it's always included
                 metadata=metadata,
-                pinned=True,  # Pin it so it's never removed
+                pinned=False,  # Let memory selector manage based on priority
                 cycle_count=0,
                 content_type=ContentType.MINDSWARM_KNOWLEDGE
             )
@@ -255,10 +256,18 @@ class ExecutionStage:
         # Create safe import wrapper
         def safe_import(name, *args, **kwargs):
             """Restricted __import__ that blocks dangerous modules."""
+            # Special case for working_memory - it's not a real module, just use from namespace
+            if name == 'working_memory':
+                # This will fail with a helpful message
+                raise ImportError(
+                    "Don't import working_memory! It's already available. "
+                    "Just use it directly: working_memory.add('name', data)"
+                )
+            
             # Block dangerous modules that could exit or harm the system
             blocked_modules = {
                 'sys',  # Can call sys.exit()
-                'os',   # Can call os._exit() and other dangerous operations
+                # 'os' is now allowed - it's in safe_modules and available in namespace
                 'subprocess',  # Can spawn processes
                 'multiprocessing',  # Can spawn processes
                 'signal',  # Can send signals
@@ -313,6 +322,9 @@ class ExecutionStage:
             # Constants
             'True': True, 'False': False, 'None': None,
             
+            # File operations (standard Python)
+            'open': open,
+            
             # Safe exceptions for the memory API
             'Exception': Exception, 
             'ValueError': ValueError,
@@ -336,6 +348,12 @@ class ExecutionStage:
         import itertools
         import functools
         import collections
+        import os
+        import pathlib
+        import shutil
+        import glob as glob_module
+        import csv
+        import yaml as yaml_module
         
         self.safe_modules = {
             'math': math,
@@ -346,10 +364,15 @@ class ExecutionStage:
             'itertools': itertools,
             'functools': functools,
             'collections': collections,
+            'os': os,
+            'pathlib': pathlib,
+            'shutil': shutil,
+            'glob': glob_module,
+            'csv': csv,
+            'yaml': yaml_module,
         }
         
         # Import and create API instances for documentation
-        from ..python_modules.memory import Memory
         from ..python_modules.location import Location
         from ..python_modules.events import Events
         from ..python_modules.knowledge import Knowledge
@@ -371,12 +394,12 @@ class ExecutionStage:
         }
         
         # Create instances for documentation extraction
-        self.memory_api = Memory(context)
         self.location_api = Location(context)
         self.events = Events(context)
-        self.knowledge_api = Knowledge(self.memory_api)  # Knowledge uses Memory instance
+        # APIs now use context directly instead of Memory
+        self.knowledge_api = Knowledge(context)
         self.environment_api = Environment(context)
-        self.cbr_api = CBR(self.memory_api)  # CBR uses Memory instance
+        self.cbr_api = CBR(context)
         self.communication_api = Communication(context)
         
         # Import and initialize Tasks API
@@ -390,6 +413,10 @@ class ExecutionStage:
         # Import Terminal API
         from ..python_modules.terminal import Terminal
         self.terminal_api = Terminal(context)
+        
+        # Import Working Memory API
+        from ..python_modules.working_memory import WorkingMemory
+        self.working_memory_api = WorkingMemory(context)
     
     async def execute(self):
         """Run the execution stage."""
@@ -438,11 +465,9 @@ class ExecutionStage:
                 # Store in knowledge DB for errors
                 try:
                     from ..python_modules.pipeline_knowledge import PipelineKnowledge
-                    from ..python_modules.memory import Memory
-                    from ..python_modules.knowledge import Knowledge
                     
-                    # Create memory context for Knowledge API
-                    memory_context = {
+                    # Create context for Knowledge APIs
+                    knowledge_context = {
                         'cognitive_loop': self.cognitive_loop,
                         'memory_system': self.cognitive_loop.memory_system,
                         'brain_interface': None,
@@ -453,11 +478,8 @@ class ExecutionStage:
                         'current_location': '/personal'
                     }
                     
-                    # Create Memory API instance, then Knowledge API
-                    memory_api = Memory(memory_context)
-                    knowledge_api = Knowledge(memory_api)
-                    # Pass context to PipelineKnowledge so it has cyber_id
-                    pipeline_knowledge = PipelineKnowledge(memory_context)
+                    # Create Pipeline Knowledge API
+                    pipeline_knowledge = PipelineKnowledge(knowledge_context)
                     
                     buffer_id = pipeline_knowledge.store_stage_output(
                         stage="execution",
@@ -533,11 +555,9 @@ class ExecutionStage:
             intention_text = ""
             try:
                 from ..python_modules.pipeline_knowledge import PipelineKnowledge
-                from ..python_modules.memory import Memory
-                from ..python_modules.knowledge import Knowledge
                 
-                # Create memory context for Knowledge API
-                memory_context = {
+                # Create context for Knowledge APIs
+                knowledge_context = {
                     'cognitive_loop': self.cognitive_loop,
                     'memory_system': self.cognitive_loop.memory_system,
                     'brain_interface': None,
@@ -548,11 +568,8 @@ class ExecutionStage:
                     'current_location': '/personal'
                 }
                 
-                # Create Memory API instance, then Knowledge API
-                memory_api = Memory(memory_context)
-                knowledge_api = Knowledge(memory_api)
-                # Pass context to PipelineKnowledge so it has cyber_id
-                pipeline_knowledge = PipelineKnowledge(memory_context)
+                # Create Pipeline Knowledge API
+                pipeline_knowledge = PipelineKnowledge(knowledge_context)
                 
                 decision_data = pipeline_knowledge.get_stage_output("decision", self.cognitive_loop.cycle_count)
                 if decision_data:
@@ -584,9 +601,21 @@ class ExecutionStage:
         thinking_request = {
             "signature": {
                 "instruction": """
-Generate Python code based on the current intentions to mutate the Mind-Swarm memory.
+Generate Python code based on the current intentions.
 The current intention is available via the pipeline_knowledge API.
 If there's no clear intention, return an empty script.
+
+IMPORTANT: Use standard Python for file operations:
+- Use open(), os, pathlib for reading/writing files
+- Use working_memory directly (NO IMPORT NEEDED - it's pre-loaded)
+- The memory API is deprecated - avoid using memory[path] syntax
+
+Example:
+# ✅ CORRECT - working_memory is already available
+working_memory.add("data", my_data)
+
+# ❌ WRONG - Don't import it
+import working_memory  # This will fail!
 
 The provided API docs describe the available operations and their usage.
 """,
@@ -758,11 +787,9 @@ The provided API docs describe the available operations and their usage.
             # Store in knowledge database
             try:
                 from ..python_modules.pipeline_knowledge import PipelineKnowledge
-                from ..python_modules.memory import Memory
-                from ..python_modules.knowledge import Knowledge
                 
-                # Create memory context for Knowledge API
-                memory_context = {
+                # Create context for Knowledge APIs
+                knowledge_context = {
                     'cognitive_loop': self.cognitive_loop,
                     'memory_system': self.cognitive_loop.memory_system,
                     'brain_interface': None,
@@ -773,11 +800,8 @@ The provided API docs describe the available operations and their usage.
                     'current_location': '/personal'
                 }
                 
-                # Create Memory API instance, then Knowledge API
-                memory_api = Memory(memory_context)
-                knowledge_api = Knowledge(memory_api)
-                # Pass context to PipelineKnowledge so it has cyber_id
-                pipeline_knowledge = PipelineKnowledge(memory_context)
+                # Create Pipeline Knowledge API
+                pipeline_knowledge = PipelineKnowledge(knowledge_context)
                 
                 buffer_id = pipeline_knowledge.store_stage_output(
                     stage="execution",
@@ -788,10 +812,12 @@ The provided API docs describe the available operations and their usage.
             except Exception as e:
                 logger.debug(f"Failed to store in knowledge DB, using file: {e}")
                 # Fallback to file storage
+                buffer_file = self.memory_dir / "pipeline" / f"execution_buffer_cycle_{self.cognitive_loop.cycle_count}.json"
+                buffer_file.parent.mkdir(parents=True, exist_ok=True)
                 with open(buffer_file, 'w') as f:
                     json.dump(execution_content, f, indent=2)
             
-            self.cognitive_loop.memory_system.touch_memory(execution_buffer.id, self.cognitive_loop.cycle_count)
+            # Note: We no longer need to touch_memory for execution_buffer as we're using knowledge DB
             
             logger.info(f"⚡ Execution complete after {attempt} attempt(s)")
             
@@ -905,15 +931,18 @@ The provided API docs describe the available operations and their usage.
         # Add safe modules
         namespace.update(self.safe_modules)
         
-        # Import and initialize the new Memory API
-        from ..python_modules.memory import Memory, MemoryError, MemoryNotFoundError, MemoryPermissionError
+        # Import and initialize Working Memory API
+        from ..python_modules import working_memory
+        from ..python_modules.working_memory import WorkingMemory, WorkingMemoryError
         
-        # Create memory instance
-        memory_instance = Memory(context)
-        namespace['memory'] = memory_instance
-        namespace['MemoryError'] = MemoryError
-        namespace['MemoryNotFoundError'] = MemoryNotFoundError
-        namespace['MemoryPermissionError'] = MemoryPermissionError
+        # Create working memory instance
+        working_memory_instance = WorkingMemory(context)
+        # Set the module-level instance for function API
+        working_memory._instance = working_memory_instance
+        # Add both class and module to namespace
+        namespace['WorkingMemory'] = WorkingMemory
+        namespace['working_memory'] = working_memory  # Module with functions
+        namespace['WorkingMemoryError'] = WorkingMemoryError
         
         # Import and initialize the Location API
         from ..python_modules.location import Location, LocationError
@@ -934,8 +963,8 @@ The provided API docs describe the available operations and their usage.
         # Import and initialize the Knowledge API
         from ..python_modules.knowledge import Knowledge
         
-        # Create knowledge instance (uses Memory instance)
-        knowledge_instance = Knowledge(memory_instance)
+        # Create knowledge instance using context
+        knowledge_instance = Knowledge(context)
         namespace['knowledge'] = knowledge_instance
         
         # Import and initialize the Environment API
@@ -950,8 +979,8 @@ The provided API docs describe the available operations and their usage.
         # Import and initialize the CBR API
         from ..python_modules.cbr import CBR, CBRError
         
-        # Create CBR instance (uses Memory instance)
-        cbr_instance = CBR(memory_instance)
+        # Create CBR instance using context
+        cbr_instance = CBR(context)
         namespace['cbr'] = cbr_instance
         namespace['CBRError'] = CBRError
         
@@ -987,6 +1016,7 @@ The provided API docs describe the available operations and their usage.
         namespace['terminal'] = terminal_instance
         namespace['TerminalError'] = TerminalError
         
+        # Import and initialize the Biofeedback API
         # Add convenience alias for exec_command with network access
         # This replaces the deprecated environment.exec_command
         namespace['exec_command'] = terminal_instance.execute_command
@@ -1004,11 +1034,9 @@ The provided API docs describe the available operations and their usage.
         start_time = datetime.now()
         
         try:
-            # Start a transaction for automatic rollback on error
-            with memory_instance.transaction():
-                # Compile and execute
-                compiled = compile(script, '<cyber_script>', 'exec')
-                exec(compiled, namespace)
+            # Compile and execute
+            compiled = compile(script, '<cyber_script>', 'exec')
+            exec(compiled, namespace)
             
             duration = (datetime.now() - start_time).total_seconds()
             

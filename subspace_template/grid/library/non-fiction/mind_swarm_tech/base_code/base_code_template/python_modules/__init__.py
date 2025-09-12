@@ -1,6 +1,6 @@
 """Python modules for cyber script execution.
 
-The Memory class provides a unified interface for all memory operations.
+The WorkingMemory class manages what content is visible to the cognitive loop.
 It is instantiated with the cyber's context when scripts are executed.
 
 The Location class provides methods for navigating the cyber's environment.
@@ -18,15 +18,6 @@ It is instantiated with the Memory instance when scripts are executed.
 The Communication class provides inter-Cyber messaging capabilities.
 It is instantiated with the cyber's context when scripts are executed.
 """
-
-# Export the Memory class and exceptions
-from .memory import (
-    Memory,
-    MemoryError,
-    MemoryNotFoundError, 
-    MemoryPermissionError,
-    MemoryTypeError
-)
 
 # Export the Location class and exceptions
 from .location import (
@@ -63,6 +54,12 @@ from .communication import (
 from .tasks import (
     Tasks,
     TasksError
+)
+
+# Export the WorkingMemory class and exceptions
+from .working_memory import (
+    WorkingMemory,
+    WorkingMemoryError
 )
 
 # Export the MessagesKnowledge class and exceptions
@@ -109,11 +106,6 @@ from .community_tasks import (
 
 
 __all__ = [
-    'Memory',
-    'MemoryError',
-    'MemoryNotFoundError',
-    'MemoryPermissionError',
-    'MemoryTypeError',
     'Location',
     'LocationError',
     'Events',
@@ -140,5 +132,7 @@ __all__ = [
     'PipelineKnowledge',
     'PipelineKnowledgeError',
     'CommunityTasks',
-    'CommunityTasksError'
+    'CommunityTasksError',
+    'WorkingMemory',
+    'WorkingMemoryError'
 ]

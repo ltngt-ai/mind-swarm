@@ -281,7 +281,7 @@ class EnvironmentScanner:
                     location=str(location_contents_file),
                     confidence=1.0,
                     priority=Priority.FOUNDATIONAL,
-                    pinned=True,  # Always visible
+                    pinned=False,  # Let memory selector manage
                     metadata={
                         "file_type": "current_location",
                         "description": f"Looking around at: {current_location}",
@@ -440,7 +440,7 @@ class EnvironmentScanner:
                 location="personal/.internal/memory/current_location.txt",
                 priority=Priority.SYSTEM,  # System-controlled, like looking around
                 confidence=1.0,
-                pinned=True,  # Always visible
+                pinned=False,  # Let memory selector manage
                 metadata={
                     "file_type": "current_location",
                     "description": f"Looking around at: {current_location}",
@@ -644,16 +644,15 @@ class EnvironmentScanner:
                             try:
                                 from ..python_modules.messages_knowledge import MessagesKnowledge
                                 from ..python_modules.knowledge import Knowledge
-                                from ..python_modules.memory import Memory
+                                # Memory API removed - no longer needed
                                 
                                 # Create a minimal context for the APIs
                                 context = {
                                     'cyber_id': msg_data.get('to', 'me'),
-                                    'personal_dir': str(self.personal_path),
-                                    'memory_api': Memory({'personal_dir': str(self.personal_path)})
+                                    'personal_dir': str(self.personal_path)
                                 }
                                 
-                                knowledge = Knowledge(context['memory_api'])
+                                knowledge = Knowledge(context)
                                 messages_kb = MessagesKnowledge(knowledge)
                                 
                                 # Store incoming message in knowledge
@@ -935,7 +934,7 @@ class EnvironmentScanner:
                     location="personal/.internal/memory/status/status.txt",
                     priority=Priority.HIGH,  # High priority to ensure it's included
                     confidence=1.0,
-                    pinned=True,  # Always visible in working memory
+                    pinned=True,  # ALWAYS include status - contains biofeedback & self-awareness
                     metadata={
                         "file_type": "status",
                         "description": "Consolidated status with biofeedback, tasks, and activity",

@@ -297,25 +297,36 @@ class KnowledgeContextBuilder:
         try:
             # Get decision from current cycle via pipeline knowledge
             from ..python_modules.pipeline_knowledge import PipelineKnowledge
-            from ..python_modules.memory import Memory
             
             # Create context for APIs
-            memory_context = {
-                'cognitive_loop': getattr(self.state_manager, 'cognitive_loop', None),
-                'cyber_id': getattr(self.state_manager.cognitive_loop, 'cyber_id', 'unknown') if hasattr(self.state_manager, 'cognitive_loop') else 'unknown',
-                'cycle_count': getattr(self.state_manager.cognitive_loop, 'cycle_count', 0) if hasattr(self.state_manager, 'cognitive_loop') else 0
+            # Note: state_manager is part of cognitive_loop, not the other way around
+            from ..state.unified_state_manager import StateSection
+            
+            knowledge_context = {
+                'cognitive_loop': None,  # Not available from state_manager
+                'cyber_id': getattr(self.state_manager, 'cyber_id', 'unknown'),
+                'cycle_count': self.state_manager.get_value(StateSection.COGNITIVE, "cycle_count", 0) if hasattr(self.state_manager, 'get_value') else 0
             }
             
             # Create APIs
-            memory_api = Memory(memory_context)
-            pipeline_knowledge = PipelineKnowledge(memory_context)
+            pipeline_knowledge = PipelineKnowledge(knowledge_context)
             
-            # Get current cycle's decision
-            cycle_number = memory_context['cycle_count']
+            # Get decision from appropriate cycle
+            # During observation stage, the current cycle's decision doesn't exist yet,
+            # so we should look at the previous cycle's decision
+            cycle_number = knowledge_context['cycle_count']
+            # Check if we're in observation stage (no decision yet for current cycle)
+            # If so, use previous cycle's decision
             decision_data = pipeline_knowledge.get_stage_output(
                 stage="decision",
                 cycle_number=cycle_number
             )
+            if not decision_data and cycle_number > 0:
+                # Try previous cycle if current doesn't exist
+                decision_data = pipeline_knowledge.get_stage_output(
+                    stage="decision",
+                    cycle_number=cycle_number - 1
+                )
             
             if decision_data and isinstance(decision_data, dict):
                 intention = decision_data.get("intention") or ""
@@ -338,11 +349,10 @@ class KnowledgeContextBuilder:
         try:
             # Try to get reflection from previous cycle via pipeline
             from ..python_modules.pipeline_knowledge import PipelineKnowledge
-            from ..python_modules.memory import Memory
             from ..python_modules.knowledge import Knowledge
             
             # Create context for APIs
-            memory_context = {
+            knowledge_context = {
                 'cognitive_loop': getattr(self.state_manager, 'cognitive_loop', None),
                 'memory_system': getattr(self.state_manager, 'memory_system', None),
                 'brain_interface': None,
@@ -354,12 +364,12 @@ class KnowledgeContextBuilder:
             }
             
             # Get previous cycle's reflection
-            memory_api = Memory(memory_context)
-            knowledge_api = Knowledge(memory_api)
-            pipeline_knowledge = PipelineKnowledge(memory_context)
+            knowledge_api = Knowledge(knowledge_context)
+            pipeline_knowledge = PipelineKnowledge(knowledge_context)
             
             # Get current cycle count and fetch previous reflection
-            cycle_count = getattr(self.state_manager, 'cycle_count', 0)
+            from ..state.unified_state_manager import StateSection
+            cycle_count = self.state_manager.get_value(StateSection.COGNITIVE, "cycle_count", 0) if hasattr(self.state_manager, 'get_value') else 0
             if cycle_count > 0:
                 reflection_data = pipeline_knowledge.get_stage_output("reflection", cycle_count - 1)
                 if reflection_data:

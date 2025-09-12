@@ -17,28 +17,23 @@ logger = logging.getLogger("Cyber.knowledge.simplified")
 class SimplifiedKnowledgeManager:
     """Manages knowledge access through the existing Knowledge API."""
     
-    def __init__(self, memory_context: Optional[Any] = None):
+    def __init__(self, context: Optional[Any] = None):
         """Initialize the simplified knowledge manager.
         
         Args:
-            memory_context: Optional memory context. If None, creates a minimal context.
+            context: Optional context dict. If None, creates a minimal context.
         """
-        if memory_context is None:
-            memory_context = self._create_minimal_context()
-        self.knowledge = Knowledge(memory_context)
+        if context is None:
+            context = self._create_minimal_context()
+        self.knowledge = Knowledge(context)
     
     def _create_minimal_context(self):
-        """Create a minimal memory context for standalone usage."""
-        class MinimalMemoryContext:
-            """Minimal memory context for Knowledge API."""
-            memory_api = None
-            _context = {
-                "cyber_id": "unknown",
-                "personal": Path(DEFAULT_PERSONAL_PATH),
-                "memory_dir": Path(DEFAULT_MEMORY_DIR_PATH)
-            }
-        
-        return MinimalMemoryContext()
+        """Create a minimal context for standalone usage."""
+        return {
+            "cyber_id": "unknown",
+            "personal": Path(DEFAULT_PERSONAL_PATH),
+            "memory_dir": Path(DEFAULT_MEMORY_DIR_PATH)
+        }
         
     def get_stage_instructions(self, stage_name: str) -> Optional[Dict[str, Any]]:
         """Fetch instructions for a specific cognitive stage.

@@ -128,11 +128,9 @@ class DecisionStage:
         observation_data = {}
         try:
             from ..python_modules.pipeline_knowledge import PipelineKnowledge
-            from ..python_modules.memory import Memory
-            from ..python_modules.knowledge import Knowledge
             
-            # Create memory context for Knowledge API
-            memory_context = {
+            # Create context for Knowledge APIs
+            knowledge_context = {
                 'cognitive_loop': self.cognitive_loop,
                 'memory_system': self.cognitive_loop.memory_system,
                 'brain_interface': None,
@@ -143,11 +141,8 @@ class DecisionStage:
                 'current_location': '/personal'
             }
             
-            # Create Memory API instance, then Knowledge API
-            memory_api = Memory(memory_context)
-            knowledge_api = Knowledge(memory_api)
-            # Pass context to PipelineKnowledge so it has cyber_id
-            pipeline_knowledge = PipelineKnowledge(memory_context)
+            # Create Pipeline Knowledge API
+            pipeline_knowledge = PipelineKnowledge(knowledge_context)
             
             observation_data = pipeline_knowledge.get_stage_output("observation", self.cognitive_loop.cycle_count)
             if observation_data:
@@ -219,11 +214,9 @@ class DecisionStage:
         # Store in knowledge database
         try:
             from ..python_modules.pipeline_knowledge import PipelineKnowledge
-            from ..python_modules.memory import Memory
-            from ..python_modules.knowledge import Knowledge
             
-            # Create memory context for Knowledge API
-            memory_context = {
+            # Create context for Knowledge APIs
+            knowledge_context = {
                 'cognitive_loop': self.cognitive_loop,
                 'memory_system': self.cognitive_loop.memory_system,
                 'brain_interface': None,
@@ -234,11 +227,8 @@ class DecisionStage:
                 'current_location': '/personal'
             }
             
-            # Create Memory API instance, then Knowledge API
-            memory_api = Memory(memory_context)
-            knowledge_api = Knowledge(memory_api)
-            # Pass context to PipelineKnowledge so it has cyber_id
-            pipeline_knowledge = PipelineKnowledge(memory_context)
+            # Create Pipeline Knowledge API
+            pipeline_knowledge = PipelineKnowledge(knowledge_context)
             
             buffer_id = pipeline_knowledge.store_stage_output(
                 stage="decision",
@@ -264,18 +254,13 @@ class DecisionStage:
             # Initialize CBR API
             from ..python_modules.cbr import CBR
             
-            # Create a temporary context for CBR
+            # Create a context for CBR
             cbr_context = {
                 'cyber_id': self.cognitive_loop.cyber_id,
                 'personal_dir': str(self.cognitive_loop.personal)
             }
             
-            # Create memory mock for CBR
-            class MemoryMock:
-                def __init__(self, context):
-                    self._context = context
-            
-            cbr_api = CBR(MemoryMock(cbr_context))
+            cbr_api = CBR(cbr_context)
             
             # Use the problem statement directly if it's short, otherwise summarize
             context_summary = problem_or_context[:1000]  # Use first 1000 chars

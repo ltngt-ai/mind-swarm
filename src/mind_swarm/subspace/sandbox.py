@@ -82,8 +82,8 @@ class BubblewrapSandbox:
             # The Grid - where Cybers meet and collaborate
             "--bind", str(self.grid_root), "/grid",
             
-            # Temp directory
-            "--tmpfs", "/tmp",
+            # Temp directory - bind to persistent storage in cyber's home
+            "--bind", str(self.cyber_personal / "tmp"), "/tmp",
             
             # Set working directory to .internal where base_code is
             "--chdir", "/personal/.internal",
@@ -365,6 +365,9 @@ class SubspaceManager:
         # Only inbox is visible to cybers (outbox and mail_archive are in .internal)
         (sandbox.cyber_personal / "inbox").mkdir(exist_ok=True)
         
+        # Create persistent tmp directory for the cyber
+        (sandbox.cyber_personal / "tmp").mkdir(exist_ok=True)
+        
         # Memory directory with subdirectories (now inside .internal)
         memory_dir = internal_dir / "memory"
         memory_dir.mkdir(exist_ok=True)
@@ -438,16 +441,21 @@ class SubspaceManager:
             # Copy entire directory structure from template
             import shutil
             
-            # For I/O Cybers, first copy base template as dependency
+            # For I/O Cybers, first copy base template files directly
             if cyber_type == "io_gateway":
                 base_template = template_root / "grid" / "library" / "non-fiction" / "mind_swarm_tech" / "base_code" / "base_code_template"
                 if base_template.exists():
-                    # Create base_code_template subdirectory
-                    base_dest = base_code_dir / "base_code_template"
-                    if base_dest.exists():
-                        shutil.rmtree(base_dest)
-                    shutil.copytree(base_template, base_dest)
-                    logger.debug("Copied base_code_template for I/O Cyber")
+                    # Copy base template files directly to base_code_dir (not as subdirectory)
+                    # This allows IO cyber to import from . instead of .base_code_template
+                    for item in base_template.iterdir():
+                        if item.is_file():
+                            shutil.copy2(item, base_code_dir / item.name)
+                        elif item.is_dir() and not item.name.startswith('.'):
+                            dst_subdir = base_code_dir / item.name
+                            if dst_subdir.exists():
+                                shutil.rmtree(dst_subdir)
+                            shutil.copytree(item, dst_subdir)
+                    logger.debug("Copied base_code_template files for I/O Cyber")
             
             # First copy all .py files in the root
             for py_file in template_dir.glob("*.py"):

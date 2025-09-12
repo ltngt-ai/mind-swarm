@@ -75,10 +75,8 @@ class CommunityTasks:
         # Support both context dict and direct Knowledge API
         if isinstance(context_or_knowledge, dict):
             # It's a context, extract what we need
-            from .memory import Memory
             from .knowledge import Knowledge
-            memory_api = Memory(context_or_knowledge)
-            self.knowledge = Knowledge(memory_api)
+            self.knowledge = Knowledge(context_or_knowledge)
             self.context = context_or_knowledge
             self.cyber_id = context_or_knowledge.get('cyber_id', 'unknown')
             self._load_cyber_name()

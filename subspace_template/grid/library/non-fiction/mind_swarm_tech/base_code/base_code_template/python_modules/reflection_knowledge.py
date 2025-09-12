@@ -70,31 +70,21 @@ class ReflectionKnowledgeError(Exception):
 class ReflectionKnowledge:
     """Manages reflection storage and retrieval using the knowledge database."""
     
-    def __init__(self, context_or_knowledge):
+    def __init__(self, context):
         """Initialize the Reflection Knowledge API.
         
         Args:
-            context_or_knowledge: Either execution context dict or Knowledge API instance
+            context: Execution context dict
         """
-        if isinstance(context_or_knowledge, dict):
-            # Initialize from context
-            self.context = context_or_knowledge
-            self.cyber_id = context_or_knowledge.get('cyber_id', 'unknown')
-            
-            # Get Knowledge API from context
-            from .knowledge import Knowledge
-            memory_api = context_or_knowledge.get('memory_api')
-            if not memory_api:
-                raise ReflectionKnowledgeError("Memory API required in context")
-            self.knowledge = Knowledge(memory_api)
-            
-            # Try to get cycle count from context
-            self.current_cycle = context_or_knowledge.get('cycle_count', 0)
-        else:
-            # Direct Knowledge API instance
-            self.knowledge = context_or_knowledge
-            self.cyber_id = 'unknown'
-            self.current_cycle = 0
+        self.context = context
+        self.cyber_id = context.get('cyber_id', 'unknown')
+        
+        # Get Knowledge API from context
+        from .knowledge import Knowledge
+        self.knowledge = Knowledge(context)
+        
+        # Try to get cycle count from context
+        self.current_cycle = context.get('cycle_count', 0)
     
     def store_reflection(self,
                         insights: List[str] = None,

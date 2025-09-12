@@ -256,7 +256,7 @@ class CognitiveLoop:
                     location="personal/.internal/memory/current_location.txt",
                     priority=Priority.SYSTEM,  # System-controlled location tracking
                     confidence=1.0,
-                    pinned=True,  # Always visible
+                    pinned=False,  # Let memory selector manage based on priority
                     metadata={"file_type": "location", "description": "My current location in the grid"},
                     cycle_count=self.cycle_count,
                     no_cache=True,  # Always read fresh

@@ -196,6 +196,8 @@ class CycleRecorder:
                 cycle_dir = self._get_cycle_dir(cyber_name, cycle_number)
             
             # Create stage data
+            # IMPORTANT: Don't store llm_input - it's 800KB+ of redundant context
+            # that causes token budget overflow when loaded as memories
             stage = StageData(
                 stage=stage_name,
                 start_time=stage_data.get("start_time", datetime.now().isoformat()),
@@ -205,7 +207,7 @@ class CycleRecorder:
                 output_data=stage_data.get("output", {}),
                 brain_requests=stage_data.get("brain_requests", []),
                 working_memory=stage_data.get("working_memory", {}),
-                llm_input=stage_data.get("llm_input", {}),
+                llm_input={},  # Don't store full LLM input - too large
                 llm_output=stage_data.get("llm_output", {}),
                 errors=stage_data.get("errors", []),
                 token_usage=stage_data.get("token_usage", {})

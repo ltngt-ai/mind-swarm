@@ -84,14 +84,14 @@ class CBR:
     Case-Based Reasoning API for cybers to learn from past problem-solving experiences.
     """
     
-    def __init__(self, memory_context):
+    def __init__(self, context):
         """
         Initialize the CBR API.
         
         Args:
-            memory_context: The Memory instance to access context
+            context: The execution context dict
         """
-        self.memory = memory_context
+        self.context = context
         self.cbr_file = Path("/personal/.internal/cbr_api")
         self.request_counter = 0
         self._last_request_time = 0
@@ -466,7 +466,7 @@ class CBR:
     
     def _generate_request_id(self) -> str:
         """Generate a unique request ID."""
-        cyber_id = self.memory._context.get('cyber_id', 'unknown')
+        cyber_id = self.context.get('cyber_id', 'unknown')
         self.request_counter += 1
         timestamp = int(time.time() * 1000)
         return f"cbr_{cyber_id}_{timestamp}_{self.request_counter}"
@@ -537,5 +537,5 @@ class CBR:
     
     def __repr__(self) -> str:
         """String representation."""
-        cyber_id = self.memory._context.get('cyber_id', 'unknown')
+        cyber_id = self.context.get('cyber_id', 'unknown')
         return f"CBR(cyber_id='{cyber_id}')"

@@ -165,14 +165,14 @@ class Knowledge:
     Knowledge API for cybers. Semantic similarity-based knowledge management for both personal and shared knowledge.
     """
     
-    def __init__(self, memory_context):
+    def __init__(self, context):
         """
         Initialize the Knowledge API.
         
         Args:
-            memory_context: The Memory instance to access context
+            context: Execution context dict
         """
-        self.memory = memory_context
+        self.context = context
         self.knowledge_file = Path("/personal/.internal/knowledge_api")
         self.request_counter = 0
         self._last_request_time = 0
@@ -547,7 +547,7 @@ Returns:
     
     def _generate_request_id(self) -> str:
         """Generate a unique request ID."""
-        cyber_id = self.memory._context.get('cyber_id', 'unknown')
+        cyber_id = self.context.get('cyber_id', 'unknown')
         self.request_counter += 1
         timestamp = int(time.time() * 1000)
         return f"knowledge_{cyber_id}_{timestamp}_{self.request_counter}"
@@ -656,5 +656,5 @@ Returns:
     
     def __repr__(self) -> str:
         """String representation."""
-        cyber_id = self.memory._context.get('cyber_id', 'unknown')
+        cyber_id = self.context.get('cyber_id', 'unknown')
         return f"Knowledge(cyber_id='{cyber_id}')"
