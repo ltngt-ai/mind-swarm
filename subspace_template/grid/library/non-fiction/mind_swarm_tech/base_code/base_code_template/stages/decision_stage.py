@@ -124,12 +124,8 @@ class DecisionStage:
         # Create tag filter for decision stage with our blacklist
         tag_filter = TagFilter(blacklist=self.KNOWLEDGE_BLACKLIST)
         
-        # Read the full intelligence briefing from observation buffer
-        observation_buffer = self.cognitive_loop.get_current_pipeline("observation")
-        observation_file = self.cognitive_loop.personal.parent / observation_buffer.location
-        
+        # Read the full intelligence briefing from knowledge database
         observation_data = {}
-        # Try to read from knowledge database first
         try:
             from ..python_modules.pipeline_knowledge import PipelineKnowledge
             from ..python_modules.memory import Memory
@@ -140,7 +136,7 @@ class DecisionStage:
                 'cognitive_loop': self.cognitive_loop,
                 'memory_system': self.cognitive_loop.memory_system,
                 'brain_interface': None,
-                'cyber_id': getattr(self.cognitive_loop, 'cyber_id', 'unknown'),
+                'cyber_id': self.cognitive_loop.cyber_id,
                 'personal_dir': self.cognitive_loop.memory_dir.parent,
                 'outbox_dir': self.cognitive_loop.memory_dir.parent / 'outbox',
                 'memory_dir': self.cognitive_loop.memory_dir,
@@ -150,22 +146,17 @@ class DecisionStage:
             # Create Memory API instance, then Knowledge API
             memory_api = Memory(memory_context)
             knowledge_api = Knowledge(memory_api)
-            pipeline_knowledge = PipelineKnowledge(knowledge_api)
+            # Pass context to PipelineKnowledge so it has cyber_id
+            pipeline_knowledge = PipelineKnowledge(memory_context)
             
             observation_data = pipeline_knowledge.get_stage_output("observation", self.cognitive_loop.cycle_count)
             if observation_data:
                 logger.debug(f"Read intelligence briefing from knowledge DB")
             else:
-                raise ValueError("No observation data in knowledge DB")
+                logger.warning("No observation data in knowledge DB")
         except Exception as e:
-            logger.debug(f"Could not read from knowledge DB, trying file: {e}")
-            # Fallback to file
-            try:
-                with open(observation_file, 'r') as f:
-                    observation_data = json.load(f)
-                    logger.debug(f"Read intelligence briefing from observation file")
-            except Exception as e:
-                logger.debug(f"Could not read observation buffer: {e}")
+            logger.error(f"Could not read from knowledge DB: {e}")
+            observation_data = {}
         
         # Extract key information from the briefing
         suggested_problem = observation_data.get("recommended_focus", "")
@@ -225,9 +216,6 @@ class DecisionStage:
             "cbr_cases_used": [case.get('case_id', '') for case in cbr_cases] if cbr_cases else []
         }
         
-        decision_buffer = self.cognitive_loop.get_current_pipeline("decision")
-        buffer_file = self.cognitive_loop.personal.parent / decision_buffer.location
-        
         # Store in knowledge database
         try:
             from ..python_modules.pipeline_knowledge import PipelineKnowledge
@@ -239,7 +227,7 @@ class DecisionStage:
                 'cognitive_loop': self.cognitive_loop,
                 'memory_system': self.cognitive_loop.memory_system,
                 'brain_interface': None,
-                'cyber_id': getattr(self.cognitive_loop, 'cyber_id', 'unknown'),
+                'cyber_id': self.cognitive_loop.cyber_id,
                 'personal_dir': self.cognitive_loop.memory_dir.parent,
                 'outbox_dir': self.cognitive_loop.memory_dir.parent / 'outbox',
                 'memory_dir': self.cognitive_loop.memory_dir,
@@ -249,7 +237,8 @@ class DecisionStage:
             # Create Memory API instance, then Knowledge API
             memory_api = Memory(memory_context)
             knowledge_api = Knowledge(memory_api)
-            pipeline_knowledge = PipelineKnowledge(knowledge_api)
+            # Pass context to PipelineKnowledge so it has cyber_id
+            pipeline_knowledge = PipelineKnowledge(memory_context)
             
             buffer_id = pipeline_knowledge.store_stage_output(
                 stage="decision",
@@ -258,13 +247,7 @@ class DecisionStage:
             )
             logger.debug(f"Stored decision output in knowledge DB: {buffer_id}")
         except Exception as e:
-            logger.debug(f"Failed to store in knowledge DB, using file: {e}")
-            # Fallback to file storage
-            with open(buffer_file, 'w') as f:
-                json.dump(decision_content, f, indent=2)
-        
-        # Touch the memory block so it knows when the file was updated
-        self.cognitive_loop.memory_system.touch_memory(decision_buffer.id, self.cognitive_loop.cycle_count)
+            logger.error(f"Failed to store decision in knowledge DB: {e}")
         
         logger.info(f"💭 Decision intention written to pipeline buffer")
             

@@ -92,83 +92,6 @@ class CognitiveLoop:
         """Get current cycle count (for compatibility with status module)."""
         return self.cycle_count
     
-    def _initialize_pipeline_buffers(self):
-        """Initialize pipeline memory blocks for each stage."""
-        import json
-        
-        # Create pipeline directory
-        pipeline_dir = self.memory_dir / "pipeline"
-        pipeline_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Each stage gets a single current buffer (except reflect which uses reflection_on_last_cycle)
-        stages = ["observation", "decision", "execution"]
-        
-        # Initialize buffers
-        self.pipeline_buffers = {}
-        for stage in stages:
-            # Create current buffer file for each stage
-            buffer_file = pipeline_dir / f"{stage}_pipe_stage.json"
-            # Initialize with empty JSON if doesn't exist
-            if not buffer_file.exists():
-                with open(buffer_file, 'w') as f:
-                    json.dump({}, f)
-            
-            # Create MemoryBlock for this buffer
-            # Use sandbox path directly
-            buffer_memory = MemoryBlock(
-                location=f"personal/.internal/memory/pipeline/{stage}_pipe_stage.json",
-                priority=Priority.SYSTEM,  # System-controlled memory
-                pinned=True,  # Pipeline buffers should never be removed
-                metadata={
-                    "stage": stage, 
-                    "file_type": "pipeline_buffer",
-                    "description": f"Current {stage} pipeline stage results"
-                },
-                cycle_count=self.cycle_count,  # When this memory was added
-                no_cache=True,  # Pipeline buffers change frequently, don't cache
-                content_type=ContentType.APPLICATION_JSON  # System JSON file
-            )
-            
-            # Add to memory system
-            self.memory_system.add_memory(buffer_memory)
-            
-            # Store reference
-            self.pipeline_buffers[stage] = buffer_memory
-    
-    def _clear_pipeline_buffers(self):
-        """Clear pipeline buffers for new cycle."""
-        import json
-        
-        # Clear each stage's buffer for the new cycle
-        for stage, buffer_memory in self.pipeline_buffers.items():
-            # Get absolute path
-            buffer_file = self.personal.parent / buffer_memory.location
-            
-            # Clear buffer for new cycle
-            with open(buffer_file, 'w') as f:
-                json.dump({}, f)
-            
-            # Update the memory block's cycle_count
-            self.memory_system.remove_memory(buffer_memory.id)
-            updated_buffer = MemoryBlock(
-                location=buffer_memory.location,
-                priority=Priority.SYSTEM,  # System-controlled memory
-                pinned=True,
-                metadata={
-                    "stage": stage,
-                    "file_type": "pipeline_buffer",
-                    "description": f"Current {stage} pipeline stage results"
-                },
-                cycle_count=self.cycle_count,  # Current cycle
-                no_cache=True,  # Don't cache pipeline buffers
-                content_type=ContentType.APPLICATION_JSON  # System JSON file
-            )
-            self.memory_system.add_memory(updated_buffer)
-            self.pipeline_buffers[stage] = updated_buffer
-    
-    def get_current_pipeline(self, stage: str) -> MemoryBlock:
-        """Get the current buffer for a stage."""
-        return self.pipeline_buffers[stage]
     
     
     def _initialize_managers(self):
@@ -181,10 +104,6 @@ class CognitiveLoop:
         
         # Knowledge system
         self.knowledge_manager = SimplifiedKnowledgeManager()
-        
-        # Pipeline using MemoryBlocks
-        # Each stage has a single buffer that gets cleared each cycle
-        self._initialize_pipeline_buffers()
         
         # State management - using new unified state manager
         self.state_manager = UnifiedStateManager(self.cyber_id, self.memory_dir)
@@ -447,33 +366,15 @@ class CognitiveLoop:
             logger.error(f"Error refreshing boot ROM: {e}")
     
     def _ensure_reflection_in_memory(self):
-        """Ensure reflection_on_last_cycle file is in memory if it exists."""
-        reflection_file = self.memory_dir / "reflection_on_last_cycle.json"
-        # Use path directly as memory ID (no type prefix)
-        reflection_memory_id = "personal/.internal/memory/reflection_on_last_cycle.json"
+        """Ensure reflection from last cycle is available in memory via knowledge DB.
         
-        # Check if it exists and has content
-        if reflection_file.exists() and reflection_file.stat().st_size > 50:  # More than just empty JSON
-            # Check if already in memory
-            already_in_memory = any(
-                m.id == reflection_memory_id 
-                for m in self.memory_system.symbolic_memory
-            )
-            if not already_in_memory:
-                reflection_memory = MemoryBlock(
-                    location="personal/.internal/memory/reflection_on_last_cycle.json",
-                    priority=Priority.MEDIUM,  # Medium priority, not as critical as goals
-                    confidence=1.0,
-                    pinned=False,  # Not pinned, can be cleaned up if needed
-                    metadata={
-                        "file_type": "reflection",
-                        "description": "Reflection on the last execution cycle"
-                    },
-                    cycle_count=self.cycle_count,
-                    no_cache=True,  # Always read fresh
-                )
-                self.memory_system.add_memory(reflection_memory)
-                logger.info(f"Added reflection_on_last_cycle.json to memory at cycle {self.cycle_count}")
+        Note: Reflections are now stored in the semantic knowledge database
+        as pipeline data, not in files. This method is kept for compatibility
+        but no longer adds file-based memories.
+        """
+        # Reflections are now accessed via pipeline_knowledge API
+        # No need to add file-based memory blocks
+        pass
     
     
     
@@ -510,10 +411,6 @@ class CognitiveLoop:
             # Refresh boot ROM from knowledge database each cycle
             # This ensures cybers always have the latest identity and instructions
             self._refresh_boot_rom()
-            
-            # Clear pipeline buffers at start of new cycle
-            if self.cycle_count > 0:  # Don't clear on first cycle
-                self._clear_pipeline_buffers()
             
             # personal.txt update removed - status.txt handles this now
             

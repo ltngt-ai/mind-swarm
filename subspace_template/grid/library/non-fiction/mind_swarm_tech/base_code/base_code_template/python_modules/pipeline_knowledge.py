@@ -74,16 +74,24 @@ class PipelineKnowledge:
             self.context = context_or_knowledge
             self.cyber_id = context_or_knowledge.get('cyber_id', 'unknown')
             
-            # Get Knowledge API from context
+            # Create Memory API if not present, then Knowledge API
+            from .memory import Memory
             from .knowledge import Knowledge
+            
             memory_api = context_or_knowledge.get('memory_api')
             if not memory_api:
-                raise PipelineKnowledgeError("Memory API required in context")
+                # Create Memory API from context
+                memory_api = Memory(context_or_knowledge)
+            
             self.knowledge = Knowledge(memory_api)
         else:
-            # Direct Knowledge API instance
+            # Direct Knowledge API instance - try to get cyber_id
             self.knowledge = context_or_knowledge
-            self.cyber_id = getattr(context_or_knowledge, 'cyber_id', 'unknown')
+            # Try to get cyber_id from the memory API if possible
+            if hasattr(context_or_knowledge, 'memory') and hasattr(context_or_knowledge.memory, 'context'):
+                self.cyber_id = context_or_knowledge.memory.context.get('cyber_id', 'unknown')
+            else:
+                self.cyber_id = getattr(context_or_knowledge, 'cyber_id', 'unknown')
     
     def store_stage_output(self,
                           stage: str,
@@ -117,8 +125,9 @@ class PipelineKnowledge:
         
         timestamp = datetime.now()
         
-        # Generate pipeline buffer ID
-        buffer_id = f"pipeline_{self.cyber_id}_{stage}_{cycle_number}_{timestamp.strftime('%Y%m%d_%H%M%S')}"
+        # Use stable ID based on cyber, stage, and cycle number - NO TIMESTAMP!
+        # This allows direct lookup like ROM and stage instructions
+        knowledge_id = f"pipeline/{self.cyber_id}/{stage}/cycle_{cycle_number}"
         
         # Create semantic content
         semantic_content = f"""
@@ -152,9 +161,6 @@ Output Data:
             f"cyber_{self.cyber_id}"
         ]
         
-        # Store in knowledge with hierarchical ID
-        knowledge_id = f"pipeline/{self.cyber_id}/{stage}/{buffer_id}"
-        
         # Pipeline buffers are personal (specific to this cyber)
         stored_id = self.knowledge.store(
             content=semantic_content,
@@ -164,7 +170,42 @@ Output Data:
             metadata=buffer_metadata
         )
         
-        logger.debug(f"Stored {stage} stage output for cycle {cycle_number}")
+        # Validate storage succeeded
+        if not stored_id:
+            logger.error(f"Failed to store {stage} stage output for cycle {cycle_number} - no ID returned")
+            raise PipelineKnowledgeError(f"Storage failed for {stage} cycle {cycle_number}")
+        
+        # Check if it was idempotent (same content already exists)
+        if isinstance(stored_id, dict):
+            if stored_id.get('idempotent'):
+                logger.warning(f"Idempotent store for {stage} cycle {cycle_number} - content unchanged")
+            else:
+                logger.info(f"Successfully stored {stage} stage output for cycle {cycle_number}: {stored_id}")
+        else:
+            logger.info(f"Stored {stage} stage output for cycle {cycle_number}: {stored_id}")
+        
+        # Validate we can retrieve what we just stored
+        try:
+            # Try to get by the ID we specified (not the returned one which might be different)
+            retrieved = self.knowledge.get(knowledge_id)
+            if retrieved:
+                # The get method returns the full result under 'result' key
+                result = retrieved if 'metadata' in retrieved else retrieved.get('result', {})
+                if result:
+                    retrieved_metadata = result.get('metadata', {})
+                    # Verify critical fields
+                    if retrieved_metadata.get('cycle_number') != cycle_number:
+                        logger.error(f"Validation failed: stored cycle {cycle_number} but retrieved {retrieved_metadata.get('cycle_number')}")
+                    if retrieved_metadata.get('stage') != stage:
+                        logger.error(f"Validation failed: stored stage {stage} but retrieved {retrieved_metadata.get('stage')}")
+                    logger.info(f"✓ Validation successful: {stage} cycle {cycle_number} stored with correct metadata")
+                else:
+                    logger.error(f"Validation failed: no result in response for {stage} cycle {cycle_number}")
+            else:
+                logger.error(f"Validation failed: could not retrieve {stage} cycle {cycle_number} after storage")
+        except Exception as e:
+            logger.error(f"Validation error for {stage} cycle {cycle_number}: {e}")
+        
         return stored_id
     
     def get_stage_input(self,
@@ -221,24 +262,34 @@ Output Data:
         if stage not in self.VALID_STAGES:
             return None
         
-        # Search for specific stage and cycle
-        tags = [
-            "pipeline",
-            f"stage_{stage}",
-            f"cycle_{cycle_number}",
-            f"cyber_{self.cyber_id}"
-        ]
+        # Use direct ID lookup like ROM and stage instructions
+        # Format: pipeline/{cyber_id}/{stage}/cycle_{cycle_number}
+        knowledge_id = f"pipeline/{self.cyber_id}/{stage}/cycle_{cycle_number}"
         
-        results = self.knowledge.search(
-            query="",
-            tags=tags,
-            limit=1
-        )
+        # Direct get by ID - no searching!
+        result = self.knowledge.get(knowledge_id)
         
-        if results:
-            metadata = results[0].get('metadata', {})
-            return metadata.get('output')
-        
+        if result:
+            # The result should have metadata with the output
+            if isinstance(result, dict):
+                metadata = result.get('metadata', {})
+                output = metadata.get('output')
+                
+                # Validate it's the right cycle and stage
+                if metadata.get('cycle_number') == cycle_number and metadata.get('stage') == stage:
+                    # Parse JSON string if needed
+                    if isinstance(output, str):
+                        try:
+                            import json
+                            output = json.loads(output)
+                        except (json.JSONDecodeError, ValueError):
+                            logger.warning(f"Output is string but not valid JSON for {stage} cycle {cycle_number}")
+                            # Return as dict with the string to avoid breaking downstream code
+                            output = {"raw_output": output}
+                    return output
+                else:
+                    logger.warning(f"ID mismatch: expected {stage} cycle {cycle_number}, got {metadata.get('stage')} cycle {metadata.get('cycle_number')}")
+            
         return None
     
     def get_latest_stage_output(self, stage: str) -> Optional[Dict[str, Any]]:
@@ -256,17 +307,13 @@ Output Data:
         if stage not in self.VALID_STAGES:
             return None
         
-        # Search for stage outputs
-        tags = [
-            "pipeline",
-            f"stage_{stage}",
-            f"cyber_{self.cyber_id}"
-        ]
+        # Search for stage outputs using semantic query
+        search_query = f"Pipeline Buffer {stage} Stage Output"
         
         results = self.knowledge.search(
-            query="",
-            tags=tags,
-            limit=10  # Get recent ones to find latest
+            query=search_query,
+            limit=10,  # Get recent ones to find latest
+            scope=["personal"]  # Only search personal knowledge
         )
         
         if not results:
@@ -335,10 +382,11 @@ Output Data:
             return 0
         
         # Search for pipeline buffers
+        search_query = "Pipeline Buffer Stage Output"
         results = self.knowledge.search(
-            query="",
-            tags=["pipeline", f"cyber_{self.cyber_id}"],
-            limit=100
+            query=search_query,
+            limit=100,
+            scope=["personal"]  # Only search personal knowledge
         )
         
         deleted_count = 0
@@ -385,17 +433,13 @@ Output Data:
         if stage not in self.VALID_STAGES:
             return []
         
-        # Search for stage outputs
-        tags = [
-            "pipeline",
-            f"stage_{stage}",
-            f"cyber_{self.cyber_id}"
-        ]
+        # Search for stage outputs using semantic query
+        search_query = f"Pipeline Buffer {stage} Stage Output"
         
         results = self.knowledge.search(
-            query="",
-            tags=tags,
-            limit=limit * 2  # Get extra to sort
+            query=search_query,
+            limit=limit * 2,  # Get extra to sort
+            scope=["personal"]  # Only search personal knowledge
         )
         
         outputs = []

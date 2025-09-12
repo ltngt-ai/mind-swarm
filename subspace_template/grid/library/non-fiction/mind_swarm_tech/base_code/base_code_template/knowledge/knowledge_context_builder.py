@@ -293,51 +293,87 @@ class KnowledgeContextBuilder:
             return None
 
     def _current_decision_intention(self) -> Optional[str]:
+        """Get current decision intention from pipeline knowledge API."""
         try:
-            pdir = self._pipeline_dir()
-            if not pdir:
-                return None
-            decision_file = pdir / "decision_pipe_stage.json"
-            if not decision_file.exists():
-                return None
-            data = json.loads(decision_file.read_text())
-            intention = data.get("intention") or ""
-            if not intention:
-                return None
-            return (
-                str(intention)[:KNOWLEDGE_QUERY_TRUNCATE_CHARS]
-                if KNOWLEDGE_QUERY_TRUNCATE_CHARS and KNOWLEDGE_QUERY_TRUNCATE_CHARS > 0
-                else str(intention)
+            # Get decision from current cycle via pipeline knowledge
+            from ..python_modules.pipeline_knowledge import PipelineKnowledge
+            from ..python_modules.memory import Memory
+            
+            # Create context for APIs
+            memory_context = {
+                'cognitive_loop': getattr(self.state_manager, 'cognitive_loop', None),
+                'cyber_id': getattr(self.state_manager.cognitive_loop, 'cyber_id', 'unknown') if hasattr(self.state_manager, 'cognitive_loop') else 'unknown',
+                'cycle_count': getattr(self.state_manager.cognitive_loop, 'cycle_count', 0) if hasattr(self.state_manager, 'cognitive_loop') else 0
+            }
+            
+            # Create APIs
+            memory_api = Memory(memory_context)
+            pipeline_knowledge = PipelineKnowledge(memory_context)
+            
+            # Get current cycle's decision
+            cycle_number = memory_context['cycle_count']
+            decision_data = pipeline_knowledge.get_stage_output(
+                stage="decision",
+                cycle_number=cycle_number
             )
+            
+            if decision_data and isinstance(decision_data, dict):
+                intention = decision_data.get("intention") or ""
+                if intention:
+                    return (
+                        str(intention)[:KNOWLEDGE_QUERY_TRUNCATE_CHARS]
+                        if KNOWLEDGE_QUERY_TRUNCATE_CHARS and KNOWLEDGE_QUERY_TRUNCATE_CHARS > 0
+                        else str(intention)
+                    )
+            return None
         except Exception:
             return None
 
     def _recent_reflection_summary(self) -> Optional[str]:
+        """Get recent reflection summary from knowledge DB via pipeline.
+        
+        Reflections are now stored in the semantic knowledge database
+        as pipeline data, not in files.
+        """
         try:
-            mem_dir: Path = getattr(self.state_manager, "memory_dir", None)
-            if not mem_dir:
-                return None
-            reflection_file = Path(mem_dir) / "reflection_on_last_cycle.json"
-            if not reflection_file.exists():
-                return None
-            data = json.loads(reflection_file.read_text())
-            # Try a few common keys; fallback to truncated string of JSON
-            for k in ("summary", "learnings", "reflection", "notes"):
-                v = data.get(k)
-                if isinstance(v, str) and v.strip():
-                    text = v.strip()
-                    return (
-                        text[:KNOWLEDGE_QUERY_TRUNCATE_CHARS]
-                        if KNOWLEDGE_QUERY_TRUNCATE_CHARS and KNOWLEDGE_QUERY_TRUNCATE_CHARS > 0
-                        else text
-                    )
-            # Fallback: first 400 chars of the file
-            text = reflection_file.read_text()
-            return (
-                text[:KNOWLEDGE_QUERY_TRUNCATE_CHARS]
-                if KNOWLEDGE_QUERY_TRUNCATE_CHARS and KNOWLEDGE_QUERY_TRUNCATE_CHARS > 0
-                else text
-            )
+            # Try to get reflection from previous cycle via pipeline
+            from ..python_modules.pipeline_knowledge import PipelineKnowledge
+            from ..python_modules.memory import Memory
+            from ..python_modules.knowledge import Knowledge
+            
+            # Create context for APIs
+            memory_context = {
+                'cognitive_loop': getattr(self.state_manager, 'cognitive_loop', None),
+                'memory_system': getattr(self.state_manager, 'memory_system', None),
+                'brain_interface': None,
+                'cyber_id': getattr(self.state_manager, 'cyber_id', 'unknown'),
+                'personal_dir': getattr(self.state_manager, 'personal', Path('/personal')),
+                'outbox_dir': getattr(self.state_manager, 'personal', Path('/personal')) / 'outbox',
+                'memory_dir': getattr(self.state_manager, 'memory_dir', Path('/personal/.internal/memory')),
+                'current_location': '/personal'
+            }
+            
+            # Get previous cycle's reflection
+            memory_api = Memory(memory_context)
+            knowledge_api = Knowledge(memory_api)
+            pipeline_knowledge = PipelineKnowledge(memory_context)
+            
+            # Get current cycle count and fetch previous reflection
+            cycle_count = getattr(self.state_manager, 'cycle_count', 0)
+            if cycle_count > 0:
+                reflection_data = pipeline_knowledge.get_stage_output("reflection", cycle_count - 1)
+                if reflection_data:
+                    # Extract key insights
+                    for k in ("insights", "summary", "cycle_summary", "learnings", "reflection", "notes"):
+                        v = reflection_data.get(k)
+                        if isinstance(v, str) and v.strip():
+                            text = v.strip()
+                            return (
+                                text[:KNOWLEDGE_QUERY_TRUNCATE_CHARS]
+                                if KNOWLEDGE_QUERY_TRUNCATE_CHARS and KNOWLEDGE_QUERY_TRUNCATE_CHARS > 0
+                                else text
+                            )
+            return None
         except Exception:
             return None
 

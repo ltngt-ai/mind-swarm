@@ -2,8 +2,8 @@
 # Reflection Knowledge API for Cybers
 
 ## Core Concept: Semantic Reflection Storage
-The Reflection Knowledge API provides semantic storage and retrieval for cognitive reflections,
-replacing file-based reflection_on_last_cycle.json with a knowledge database approach.
+The Reflection Knowledge API provides semantic storage and retrieval for cognitive reflections
+using a knowledge database approach.
 
 Reflections are stored with insights, patterns, and learnings, enabling
 cybers to build on past experiences and share wisdom with the hive mind.

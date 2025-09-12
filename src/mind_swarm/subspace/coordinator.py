@@ -20,6 +20,7 @@ from mind_swarm.subspace.io_handlers import NetworkBodyHandler, UserIOBodyHandle
 from mind_swarm.subspace.knowledge_handler import KnowledgeHandler
 from mind_swarm.subspace.awareness_handler import AwarenessHandler
 from mind_swarm.subspace.freeze_handler import FreezeHandler
+from mind_swarm.subspace.community_task_manager import CommunityTaskManager
 # from mind_swarm.subspace.cycle_hooks import get_cycle_monitor  # Removed - stages handle their own recording
 from mind_swarm.schemas.cyber_types import CyberType
 from mind_swarm.ai.providers.factory import create_ai_service
@@ -255,6 +256,9 @@ class SubspaceCoordinator:
         
         # Initialize knowledge handler first
         self.knowledge_handler = KnowledgeHandler(self.subspace.root_path)
+        
+        # Initialize community task manager
+        self.community_task_manager = CommunityTaskManager(self.knowledge_handler) if self.knowledge_handler.enabled else None
         
         # Initialize CBR handler (reuse ChromaDB client from knowledge handler if available)
         from .cbr_handler import CBRHandler
@@ -2086,9 +2090,15 @@ class SubspaceCoordinator:
                 logger.debug(f"First cyber {new_cyber_name} created, no welcome task needed")
                 return
             
-            # Generate a welcome/mentoring task for the new cyber
-            await self._create_community_task_from_template("CT-welcome_new_cyber", cyber_name=new_cyber_name)
-            logger.info(f"Created welcome community task for new cyber {new_cyber_name}")
+            # Use new community task manager if available
+            if self.community_task_manager:
+                task_id = await self.community_task_manager.create_welcome_task(new_cyber_name)
+                if task_id:
+                    logger.info(f"Created welcome community task {task_id} for new cyber {new_cyber_name}")
+            else:
+                # Fallback to old file-based system
+                await self._create_community_task_from_template("CT-welcome_new_cyber", cyber_name=new_cyber_name)
+                logger.info(f"Created welcome community task for new cyber {new_cyber_name}")
             
         except Exception as e:
             logger.error(f"Failed to generate community tasks for new cyber: {e}")
@@ -2099,6 +2109,14 @@ class SubspaceCoordinator:
         This is called periodically to create maintenance and discussion tasks.
         """
         try:
+            # Use new community task manager if available
+            if self.community_task_manager:
+                tasks_created = await self.community_task_manager.check_and_generate_periodic_tasks()
+                if tasks_created:
+                    logger.info(f"Generated {len(tasks_created)} periodic community tasks")
+                return
+            
+            # Fallback to old file-based system
             from datetime import datetime
             import json
             

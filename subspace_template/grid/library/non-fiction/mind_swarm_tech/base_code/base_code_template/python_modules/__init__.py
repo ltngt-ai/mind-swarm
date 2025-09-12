@@ -101,6 +101,12 @@ from .pipeline_knowledge import (
     PipelineKnowledgeError
 )
 
+# Export the CommunityTasks class and exceptions
+from .community_tasks import (
+    CommunityTasks,
+    CommunityTasksError
+)
+
 
 __all__ = [
     'Memory',
@@ -132,5 +138,7 @@ __all__ = [
     'ReflectionKnowledge',
     'ReflectionKnowledgeError',
     'PipelineKnowledge',
-    'PipelineKnowledgeError'
+    'PipelineKnowledgeError',
+    'CommunityTasks',
+    'CommunityTasksError'
 ]

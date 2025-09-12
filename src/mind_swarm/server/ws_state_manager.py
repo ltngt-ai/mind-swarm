@@ -334,6 +334,12 @@ class WebSocketStateManager:
         
         msg_type = message.get("type")
         
+        # Log all incoming WebSocket messages for debugging
+        if msg_type in ["get_cycle_data", "get_current_reflection"]:
+            logger.info(f"WebSocket message from {client_id}: type={msg_type}, cyber={message.get('cyber')}, cycle={message.get('cycle_number')}")
+        else:
+            logger.debug(f"WebSocket message from {client_id}: type={msg_type}")
+        
         if msg_type == "subscribe":
             # Update subscriptions
             subscriptions = message.get("cybers", ["*"])
@@ -452,40 +458,102 @@ class WebSocketStateManager:
             subspace_root = Path(os.environ.get("SUBSPACE_ROOT", "../subspace"))
             recorder = get_cycle_recorder(subspace_root, event_emitter=get_event_emitter())
             
-            # Try to get reflection from memory first (most current)
-            reflection_file = Path(os.environ.get("SUBSPACE_ROOT", "../subspace")) / "cybers" / cyber_name / ".internal" / "memory" / "reflection_on_last_cycle.json"
+            # First sync the latest cycle data from knowledge DB to files
+            try:
+                # Get current cycle number for this cyber
+                status = self.server.coordinator.get_status()
+                cyber_status = status.get('Cybers', {}).get(cyber_name, {})
+                current_cycle = cyber_status.get('cycle_count', 1)
+                
+                # Sync current and previous cycle from DB
+                await recorder.sync_from_knowledge_db(cyber_name, current_cycle)
+                if current_cycle > 1:
+                    await recorder.sync_from_knowledge_db(cyber_name, current_cycle - 1)
+                    
+                logger.debug(f"Synced cycle data from knowledge DB for {cyber_name}")
+            except Exception as e:
+                logger.debug(f"Could not sync from knowledge DB: {e}")
+            
             reflection = None
             cycle_data = None
             
-            if reflection_file.exists():
+            # First try to get reflection from knowledge database
+            # Try multiple times to handle transient failures
+            for attempt in range(3):
                 try:
-                    import json
-                    with open(reflection_file, 'r') as f:
-                        reflection_data = json.load(f)
-                        # Extract insights which is the main reflection text
-                        if isinstance(reflection_data, dict):
-                            reflection = reflection_data.get("insights", reflection_data)
+                    from mind_swarm.subspace.knowledge_handler import KnowledgeHandler
+                    kh = KnowledgeHandler(subspace_root)
+                    
+                    if kh.enabled:
+                        # Get handler for the cyber
+                        handler = kh.get_cyber_handler(cyber_name)
+                        if not handler:
+                            self.logger.debug(f"No knowledge handler for {cyber_name}")
+                            handler = None
+                        
+                        # Search for recent reflections if handler exists
+                        if handler:
+                            # Search for reflections - they start with "Reflection - Cycle"
+                            search_request = {
+                                'query': 'Reflection - Cycle',
+                                'options': {
+                                    'limit': 1,
+                                    'scope': ['personal']  # Only search personal knowledge
+                                }
+                            }
+                            search_response = await handler.search(search_request)
+                            results = search_response.get('results', []) if search_response.get('status') == 'success' else []
                         else:
-                            reflection = reflection_data
-                except:
-                    pass
+                            results = []
+                        
+                        if results:
+                            # Get the most recent reflection
+                            reflection_data = results[0]
+                            content = reflection_data.get('content', '')
+                            metadata = reflection_data.get('metadata', {})
+                            
+                            # Extract insights from metadata - handle list format
+                            insights = metadata.get('insights', [])
+                            if isinstance(insights, list) and insights:
+                                # Join insights list into a single string
+                                reflection = '\n'.join(str(item) for item in insights if item and str(item).strip())
+                            else:
+                                reflection = insights if isinstance(insights, str) else None
+                            
+                            # If no reflection from metadata, use the content directly
+                            if not reflection:
+                                reflection = content
+                                # Try to parse JSON from content
+                                if isinstance(content, str):
+                                    try:
+                                        import json
+                                        content_dict = json.loads(content)
+                                        reflection = content_dict.get('insights', content)
+                                    except:
+                                        # Content is likely the formatted reflection text, use as-is
+                                        reflection = content
+                                    
+                        if reflection:
+                            logger.debug(f"Retrieved reflection from knowledge DB for {cyber_name} on attempt {attempt + 1}")
+                            break  # Success, exit retry loop
+                        
+                except Exception as e:
+                    logger.debug(f"Could not get reflection from knowledge DB (attempt {attempt + 1}/3): {e}")
+                    if attempt < 2:
+                        await asyncio.sleep(0.1)  # Small delay before retry
+                    continue
             
-            # Fallback to cycle data if no memory file
-            if not reflection:
-                cycle_data = await recorder.get_current_cycle(cyber_name)
-                if cycle_data and "reflection_from_last_cycle" in cycle_data:
-                    reflection = cycle_data["reflection_from_last_cycle"]
-                    if isinstance(reflection, dict):
-                        reflection = reflection.get("insights", reflection)
-                elif cycle_data and "reflection" in cycle_data:
-                    reflection_stage = cycle_data.get("reflection", {})
-                    reflection = reflection_stage.get("stage_output", {})
-                    if isinstance(reflection, dict):
-                        reflection = reflection.get("insights", reflection)
+            # No file-based fallbacks - only use knowledge DB
+            # The sync_from_knowledge_db above ensures data is available
             
             # Get cycle number if we don't have cycle_data yet
             if not cycle_data:
                 cycle_data = await recorder.get_current_cycle(cyber_name)
+            
+            # Log what we're sending
+            logger.info(f"Sending reflection to {client_id}: cyber={cyber_name}, has_reflection={bool(reflection)}, reflection_type={type(reflection).__name__}")
+            if reflection and isinstance(reflection, str):
+                logger.debug(f"Reflection content preview: {reflection[:200]}")
             
             await self.send_to_client(client_id, {
                 "type": "current_reflection",
@@ -512,7 +580,10 @@ class WebSocketStateManager:
         cyber_name = message.get("cyber")
         cycle_number = message.get("cycle_number")
         
+        logger.info(f"Getting cycle data for {cyber_name} cycle {cycle_number}")
+        
         if not cyber_name or cycle_number is None:
+            logger.warning(f"Invalid cycle data request: cyber={cyber_name}, cycle={cycle_number}")
             await self.send_to_client(client_id, {
                 "type": "error",
                 "data": {"error": "cyber name and cycle_number required"},
@@ -523,20 +594,64 @@ class WebSocketStateManager:
         
         try:
             import os
+            from mind_swarm.subspace.knowledge_handler import KnowledgeHandler
+            
             subspace_root = Path(os.environ.get("SUBSPACE_ROOT", "../subspace"))
-            recorder = get_cycle_recorder(subspace_root, event_emitter=get_event_emitter())
+            kh = KnowledgeHandler(subspace_root)
             
-            cycle_data = await recorder.get_cycle_data(cyber_name, cycle_number)
+            cycle_data = {}
             
-            # Debug logging for problematic cycles
-            if cycle_number in [72, 73]:
-                logger.info(f"Cycle {cycle_number} data keys: {list(cycle_data.keys()) if cycle_data else 'None'}")
-                if cycle_data:
-                    for key, value in cycle_data.items():
-                        size = len(str(value)) if value else 0
-                        logger.info(f"  {key}: {size} chars")
+            # Fetch directly from knowledge DB - no files, no caching
+            if kh.enabled:
+                handler = kh.get_cyber_handler(cyber_name)
+                if handler:
+                    stages = ["observation", "decision", "execution", "reflection"]
+                    
+                    for stage in stages:
+                        # Use DIRECT ID LOOKUP like ROM and stage instructions
+                        # New format: pipeline/{cyber_name}/{stage}/cycle_{cycle_number}
+                        knowledge_id = f"pipeline/{cyber_name}/{stage}/cycle_{cycle_number}"
+                        
+                        # Direct get by ID - no searching!
+                        get_request = {
+                            "request_id": f"get_cycle_{stage}_{cycle_number}",
+                            "knowledge_id": knowledge_id  # Use knowledge_id for get requests
+                        }
+                        
+                        try:
+                            response = await handler.get(get_request)
+                            
+                            if response and response.get("status") == "success":
+                                result = response.get("result", {})
+                                metadata = result.get("metadata", {})
+                                
+                                # Validate it's the right cycle and stage
+                                if (metadata.get('cycle_number') == cycle_number and 
+                                    metadata.get('stage') == stage):
+                                    
+                                    stage_output = metadata.get('output', {})
+                                    
+                                    # Parse JSON string if needed
+                                    if isinstance(stage_output, str):
+                                        try:
+                                            import json
+                                            stage_output = json.loads(stage_output)
+                                        except:
+                                            pass  # Keep as string if not valid JSON
+                                    
+                                    if stage_output:
+                                        cycle_data[stage] = {
+                                            "stage": stage,
+                                            "output_data": stage_output
+                                        }
+                                        logger.debug(f"Retrieved {stage} data for cycle {cycle_number} via direct ID lookup")
+                            else:
+                                logger.debug(f"No data found for {stage} cycle {cycle_number} at ID {knowledge_id}")
+                        except Exception as e:
+                            logger.debug(f"Could not retrieve {stage} for cycle {cycle_number}: {e}")
             
-            await self.send_to_client(client_id, {
+            logger.info(f"Sending cycle data response for {cyber_name} cycle {cycle_number}, stages found: {list(cycle_data.keys())}")
+            response = {
                 "type": "cycle_data",
                 "data": {
                     "cyber": cyber_name,
@@ -545,7 +660,9 @@ class WebSocketStateManager:
                 },
                 "request_id": message.get("request_id"),
                 "timestamp": datetime.now().isoformat()
-            })
+            }
+            
+            await self.send_to_client(client_id, response)
             
         except Exception as e:
             logger.error(f"Failed to get cycle data for {cyber_name}: {e}")

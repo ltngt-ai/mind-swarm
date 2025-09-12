@@ -239,6 +239,104 @@ class CycleRecorder:
         except Exception as e:
             self.logger.error(f"Failed to record stage {stage_name} for {cyber_name}: {e}")
     
+    async def sync_from_knowledge_db(self, cyber_name: str, cycle_number: int) -> None:
+        """Sync cycle data from knowledge database to cycle files.
+        
+        This fetches stage outputs from the semantic DB and writes them to 
+        the cycle directory for frontend access.
+        
+        Args:
+            cyber_name: Name of the cyber
+            cycle_number: The cycle number to sync
+        """
+        try:
+            from mind_swarm.subspace.knowledge_handler import KnowledgeHandler
+            
+            # Get knowledge handler
+            kh = KnowledgeHandler(self.subspace_root)
+            if not kh.enabled:
+                return
+                
+            # Get handler for this cyber
+            handler = kh.get_cyber_handler(cyber_name)
+            if not handler:
+                self.logger.debug(f"No knowledge handler for {cyber_name}")
+                return
+            
+            # Fetch stage outputs for this cycle from the knowledge DB
+            stages = ["observation", "decision", "execution", "reflection"]
+            
+            for stage in stages:
+                try:
+                    # Search using query that includes the stage and cycle info
+                    # PipelineKnowledge stores with semantic content that includes stage and cycle
+                    query = f"Pipeline Buffer {stage} Stage Output Cycle {cycle_number}"
+                    
+                    # Create the search request in the format CyberKnowledgeHandler expects
+                    request = {
+                        "request_id": f"sync_{stage}_{cycle_number}",
+                        "query": query,
+                        "options": {
+                            "limit": 1,
+                            "scope": ["personal"]  # Only search personal knowledge
+                        }
+                    }
+                    
+                    # Search for the pipeline buffer
+                    response = await handler.search(request)
+                    results = response.get("results", []) if response.get("status") == "success" else []
+                    
+                    if results:
+                        # Get the stage output data from metadata
+                        stage_data = results[0]
+                        metadata = stage_data.get('metadata', {})
+                        
+                        # The actual output is stored in metadata['output']
+                        stage_output = metadata.get('output', {})
+                        
+                        # If output is a string, it might be JSON that needs parsing
+                        if isinstance(stage_output, str):
+                            import json
+                            try:
+                                stage_output = json.loads(stage_output)
+                            except:
+                                pass  # Keep as string if not JSON
+                        
+                        if not stage_output:
+                            # Try to parse from content as fallback
+                            content = stage_data.get('content', '')
+                            if 'Output Data:' in content:
+                                # Extract JSON after "Output Data:"
+                                import json
+                                try:
+                                    json_start = content.index('Output Data:') + len('Output Data:')
+                                    json_str = content[json_start:].strip()
+                                    stage_output = json.loads(json_str)
+                                except:
+                                    stage_output = {"raw_content": content}
+                        
+                        # Write to cycle directory
+                        cycle_dir = self._get_cycle_dir(cyber_name, cycle_number)
+                        if not cycle_dir.exists():
+                            cycle_dir.mkdir(parents=True, exist_ok=True)
+                        
+                        # Just store the stage output - no fake timestamps
+                        stage_data_obj = {
+                            "stage": stage,
+                            "output_data": stage_output
+                        }
+                        
+                        stage_file = cycle_dir / f"{stage}.json"
+                        await self._write_json(stage_file, stage_data_obj)
+                        
+                        self.logger.info(f"Synced {stage} for {cyber_name} cycle {cycle_number} from knowledge DB")
+                        
+                except Exception as e:
+                    self.logger.debug(f"Could not sync {stage} for {cyber_name}: {e}")
+                    
+        except Exception as e:
+            self.logger.error(f"Failed to sync from knowledge DB for {cyber_name}: {e}")
+    
     async def record_reflection(self, cyber_name: str, cycle_number: int, 
                                reflection_data: Dict[str, Any]) -> None:
         """Record reflection data for a cycle.
@@ -408,24 +506,23 @@ class CycleRecorder:
             
             result = {}
             
-            # Load all JSON files in the cycle directory
-            json_files = list(cycle_dir.glob("*.json"))
-            self.logger.debug(f"Found {len(json_files)} JSON files in cycle {cycle_number} for {cyber_name}")
+            # Load only stage JSON files, not reflection_from_last_cycle
+            stages = ["observation", "decision", "execution", "reflection", "metadata"]
             
-            for json_file in json_files:
-                try:
-                    async with aiofiles.open(json_file, 'r') as f:
-                        content = await f.read()
-                        if content.strip():  # Only parse non-empty files
-                            data = json.loads(content)
-                            result[json_file.stem] = data
-                            self.logger.debug(f"Loaded {json_file.stem} ({len(content)} bytes)")
-                        else:
-                            self.logger.warning(f"Skipping empty file: {json_file.stem}")
-                except json.JSONDecodeError as e:
-                    self.logger.error(f"Failed to parse {json_file}: {e}")
-                except Exception as e:
-                    self.logger.error(f"Failed to read {json_file}: {e}")
+            for stage in stages:
+                json_file = cycle_dir / f"{stage}.json"
+                if json_file.exists():
+                    try:
+                        async with aiofiles.open(json_file, 'r') as f:
+                            content = await f.read()
+                            if content.strip():  # Only parse non-empty files
+                                data = json.loads(content)
+                                result[stage] = data
+                                self.logger.debug(f"Loaded {stage} ({len(content)} bytes)")
+                            else:
+                                self.logger.warning(f"Skipping empty file: {stage}")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to load {stage}: {e}")
             
             self.logger.debug(f"Returning {len(result)} stages for cycle {cycle_number}")
             return result

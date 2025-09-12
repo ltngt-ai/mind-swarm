@@ -85,6 +85,7 @@ class ExecutionStage:
         self._extract_and_save_module_docs(self.cbr_api, "cbr_api_docs")
         self._extract_and_save_module_docs(self.communication_api, "communication_api_docs")
         self._extract_and_save_module_docs(self.tasks_api, "tasks_api_docs")
+        self._extract_and_save_module_docs(self.community_tasks_api, "community_tasks_api_docs")
         self._extract_and_save_module_docs(self.terminal_api, "terminal_api_docs")
         
         # Initialize error case tracking
@@ -382,6 +383,10 @@ class ExecutionStage:
         from ..python_modules.tasks import Tasks
         self.tasks_api = Tasks(context)
         
+        # Import and initialize Community Tasks API
+        from ..python_modules.community_tasks import CommunityTasks
+        self.community_tasks_api = CommunityTasks(context)
+        
         # Import Terminal API
         from ..python_modules.terminal import Terminal
         self.terminal_api = Terminal(context)
@@ -430,10 +435,7 @@ class ExecutionStage:
                     "attempts": 0
                 }
                 
-                execution_buffer = self.cognitive_loop.get_current_pipeline("execution")
-                buffer_file = self.cognitive_loop.personal.parent / execution_buffer.location
-                
-                # Try to store in knowledge DB even for errors
+                # Store in knowledge DB for errors
                 try:
                     from ..python_modules.pipeline_knowledge import PipelineKnowledge
                     from ..python_modules.memory import Memory
@@ -444,7 +446,7 @@ class ExecutionStage:
                         'cognitive_loop': self.cognitive_loop,
                         'memory_system': self.cognitive_loop.memory_system,
                         'brain_interface': None,
-                        'cyber_id': getattr(self.cognitive_loop, 'cyber_id', 'unknown'),
+                        'cyber_id': self.cognitive_loop.cyber_id,
                         'personal_dir': self.cognitive_loop.memory_dir.parent,
                         'outbox_dir': self.cognitive_loop.memory_dir.parent / 'outbox',
                         'memory_dir': self.cognitive_loop.memory_dir,
@@ -454,20 +456,17 @@ class ExecutionStage:
                     # Create Memory API instance, then Knowledge API
                     memory_api = Memory(memory_context)
                     knowledge_api = Knowledge(memory_api)
-                    pipeline_knowledge = PipelineKnowledge(knowledge_api)
+                    # Pass context to PipelineKnowledge so it has cyber_id
+                    pipeline_knowledge = PipelineKnowledge(memory_context)
                     
                     buffer_id = pipeline_knowledge.store_stage_output(
                         stage="execution",
                         cycle_number=self.cognitive_loop.cycle_count,
                         output=execution_content
                     )
-                    logger.debug(f"Stored error execution output in knowledge DB: {buffer_id}")
-                except Exception:
-                    # Fallback to file
-                    with open(buffer_file, 'w') as f:
-                        json.dump(execution_content, f, indent=2)
-                    
-                self.cognitive_loop.memory_system.touch_memory(execution_buffer.id, self.cognitive_loop.cycle_count)
+                    logger.info(f"✅ Stored ERROR execution output in knowledge DB: {buffer_id}")
+                except Exception as kb_error:
+                    logger.error(f"Failed to store error in knowledge DB: {kb_error}")
             except Exception as buffer_error:
                 logger.error(f"Failed to write error to execution buffer: {buffer_error}")
         
@@ -530,11 +529,8 @@ class ExecutionStage:
         """Request script generation from brain with full working memory context."""
         # Try to augment with concise knowledge based on the current intention
         try:
-            # Read intention from decision buffer
-            decision_buffer = self.cognitive_loop.get_current_pipeline("decision")
-            decision_file = self.cognitive_loop.personal.parent / decision_buffer.location
+            # Read intention from knowledge database
             intention_text = ""
-            # Try to read from knowledge database first
             try:
                 from ..python_modules.pipeline_knowledge import PipelineKnowledge
                 from ..python_modules.memory import Memory
@@ -545,7 +541,7 @@ class ExecutionStage:
                     'cognitive_loop': self.cognitive_loop,
                     'memory_system': self.cognitive_loop.memory_system,
                     'brain_interface': None,
-                    'cyber_id': getattr(self.cognitive_loop, 'cyber_id', 'unknown'),
+                    'cyber_id': self.cognitive_loop.cyber_id,
                     'personal_dir': self.cognitive_loop.memory_dir.parent,
                     'outbox_dir': self.cognitive_loop.memory_dir.parent / 'outbox',
                     'memory_dir': self.cognitive_loop.memory_dir,
@@ -555,7 +551,8 @@ class ExecutionStage:
                 # Create Memory API instance, then Knowledge API
                 memory_api = Memory(memory_context)
                 knowledge_api = Knowledge(memory_api)
-                pipeline_knowledge = PipelineKnowledge(knowledge_api)
+                # Pass context to PipelineKnowledge so it has cyber_id
+                pipeline_knowledge = PipelineKnowledge(memory_context)
                 
                 decision_data = pipeline_knowledge.get_stage_output("decision", self.cognitive_loop.cycle_count)
                 if decision_data:
@@ -588,7 +585,7 @@ class ExecutionStage:
             "signature": {
                 "instruction": """
 Generate Python code based on the current intentions to mutate the Mind-Swarm memory.
-system:personal/.internal/memory/pipeline/current_decision_pipe_stage.json has the current intention.
+The current intention is available via the pipeline_knowledge API.
 If there's no clear intention, return an empty script.
 
 The provided API docs describe the available operations and their usage.
@@ -758,9 +755,6 @@ The provided API docs describe the available operations and their usage.
                 "attempts": attempt
             }
             
-            execution_buffer = self.cognitive_loop.get_current_pipeline("execution")
-            buffer_file = self.cognitive_loop.personal.parent / execution_buffer.location
-            
             # Store in knowledge database
             try:
                 from ..python_modules.pipeline_knowledge import PipelineKnowledge
@@ -772,7 +766,7 @@ The provided API docs describe the available operations and their usage.
                     'cognitive_loop': self.cognitive_loop,
                     'memory_system': self.cognitive_loop.memory_system,
                     'brain_interface': None,
-                    'cyber_id': getattr(self.cognitive_loop, 'cyber_id', 'unknown'),
+                    'cyber_id': self.cognitive_loop.cyber_id,
                     'personal_dir': self.cognitive_loop.memory_dir.parent,
                     'outbox_dir': self.cognitive_loop.memory_dir.parent / 'outbox',
                     'memory_dir': self.cognitive_loop.memory_dir,
@@ -782,14 +776,15 @@ The provided API docs describe the available operations and their usage.
                 # Create Memory API instance, then Knowledge API
                 memory_api = Memory(memory_context)
                 knowledge_api = Knowledge(memory_api)
-                pipeline_knowledge = PipelineKnowledge(knowledge_api)
+                # Pass context to PipelineKnowledge so it has cyber_id
+                pipeline_knowledge = PipelineKnowledge(memory_context)
                 
                 buffer_id = pipeline_knowledge.store_stage_output(
                     stage="execution",
                     cycle_number=self.cognitive_loop.cycle_count,
                     output=execution_content
                 )
-                logger.debug(f"Stored execution output in knowledge DB: {buffer_id}")
+                logger.info(f"✅ Stored execution output in knowledge DB: {buffer_id} (success={execution_content.get('success')})")
             except Exception as e:
                 logger.debug(f"Failed to store in knowledge DB, using file: {e}")
                 # Fallback to file storage
@@ -810,13 +805,18 @@ The provided API docs describe the available operations and their usage.
             # On successful execution, store a concise result as personal knowledge
             try:
                 if execution_content.get("success"):
-                    # Read intention from decision buffer
-                    decision_buffer = self.cognitive_loop.get_current_pipeline("decision")
-                    decision_file = self.cognitive_loop.personal.parent / decision_buffer.location
+                    # Get intention from knowledge DB
                     intention_text = ""
                     try:
-                        with open(decision_file, 'r') as f:
-                            decision_data = json.load(f)
+                        from ..python_modules.pipeline_knowledge import PipelineKnowledge
+                        memory_context = {
+                            'cognitive_loop': self.cognitive_loop,
+                            'cyber_id': self.cognitive_loop.cyber_id,
+                            'cycle_count': self.cognitive_loop.cycle_count
+                        }
+                        pipeline_knowledge = PipelineKnowledge(memory_context)
+                        decision_data = pipeline_knowledge.get_stage_output("decision", self.cognitive_loop.cycle_count)
+                        if decision_data:
                             intention_text = str(decision_data.get("intention", "")).strip()
                     except Exception:
                         intention_text = ""
@@ -970,6 +970,14 @@ The provided API docs describe the available operations and their usage.
         tasks_instance = Tasks(context)
         namespace['tasks'] = tasks_instance
         namespace['TasksError'] = TasksError
+        
+        # Import and initialize the Community Tasks API
+        from ..python_modules.community_tasks import CommunityTasks, CommunityTasksError
+        
+        # Create community tasks instance
+        community_tasks_instance = CommunityTasks(context)
+        namespace['community_tasks'] = community_tasks_instance
+        namespace['CommunityTasksError'] = CommunityTasksError
         
         # Import and initialize the Terminal API
         from ..python_modules.terminal import Terminal, TerminalError

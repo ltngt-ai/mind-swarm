@@ -129,7 +129,7 @@ class ObservationStage:
                 'cognitive_loop': self.cognitive_loop,
                 'memory_system': self.cognitive_loop.memory_system,
                 'brain_interface': None,
-                'cyber_id': getattr(self.cognitive_loop, 'cyber_id', 'unknown'),
+                'cyber_id': self.cognitive_loop.cyber_id,
                 'personal_dir': self.cognitive_loop.memory_dir.parent,
                 'outbox_dir': self.cognitive_loop.memory_dir.parent / 'outbox',
                 'memory_dir': self.cognitive_loop.memory_dir,
@@ -152,14 +152,7 @@ class ObservationStage:
         except Exception as e:
             logger.debug(f"Could not read reflection from knowledge DB: {e}")
         
-        # Fallback to file storage
-        reflection_file = self.personal / ".internal" / "memory" / "reflection_on_last_cycle.json"
-        try:
-            if reflection_file.exists():
-                with open(reflection_file, 'r') as f:
-                    return json.load(f)
-        except Exception as e:
-            logger.debug(f"Could not read reflection file: {e}")
+        # No file fallback - we only use knowledge DB now
         return None
     
     def _query_semantic_knowledge(self, situation_summary: str, recommended_focus: str) -> Dict[str, Any]:
@@ -477,8 +470,6 @@ Focus on analyzing the new information provided and suggesting what to do regard
             "questions_to_explore": questions_to_explore,
         }
         
-        # Write to observation pipeline buffer for Decision stage
-        observation_buffer = self.cognitive_loop.get_current_pipeline("observation")
         # Store in knowledge database
         try:
             from ..python_modules.pipeline_knowledge import PipelineKnowledge
@@ -490,7 +481,7 @@ Focus on analyzing the new information provided and suggesting what to do regard
                 'cognitive_loop': self.cognitive_loop,
                 'memory_system': self.cognitive_loop.memory_system,
                 'brain_interface': None,
-                'cyber_id': getattr(self.cognitive_loop, 'cyber_id', 'unknown'),
+                'cyber_id': self.cognitive_loop.cyber_id,
                 'personal_dir': self.cognitive_loop.memory_dir.parent,
                 'outbox_dir': self.cognitive_loop.memory_dir.parent / 'outbox',
                 'memory_dir': self.cognitive_loop.memory_dir,
@@ -500,7 +491,8 @@ Focus on analyzing the new information provided and suggesting what to do regard
             # Create Memory API instance, then Knowledge API
             memory_api = Memory(memory_context)
             knowledge_api = Knowledge(memory_api)
-            pipeline_knowledge = PipelineKnowledge(knowledge_api)
+            # Pass context to PipelineKnowledge so it has cyber_id
+            pipeline_knowledge = PipelineKnowledge(memory_context)
             
             buffer_id = pipeline_knowledge.store_stage_output(
                 stage="observation",
@@ -509,14 +501,7 @@ Focus on analyzing the new information provided and suggesting what to do regard
             )
             logger.debug(f"Stored observation output in knowledge DB: {buffer_id}")
         except Exception as e:
-            logger.debug(f"Failed to store in knowledge DB, using file: {e}")
-            # Fallback to file storage
-            buffer_file = self.cognitive_loop.personal.parent / observation_buffer.location
-            with open(buffer_file, 'w') as f:
-                json.dump(intelligence_briefing, f, indent=2)
-        
-        # Touch the memory block so it knows when the file was updated
-        self.cognitive_loop.memory_system.touch_memory(observation_buffer.id, self.cognitive_loop.cycle_count)
+            logger.error(f"Failed to store observation in knowledge DB: {e}")
         
         logger.info(f"📊 Intelligence briefing prepared and written to pipeline")
         

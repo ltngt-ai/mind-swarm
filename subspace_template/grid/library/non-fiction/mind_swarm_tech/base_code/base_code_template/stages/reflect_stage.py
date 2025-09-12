@@ -8,6 +8,7 @@ This is the 4th stage in the cognitive architecture.
 
 import json
 import logging
+import os
 from typing import TYPE_CHECKING
 from datetime import datetime
 
@@ -105,26 +106,35 @@ class ReflectStage:
         # Update dynamic context
         self.cognitive_loop._update_dynamic_context(stage="REFLECT", phase="REVIEWING")
         
-        # Check if there's an execution to reflect on from current pipeline
-        # (It was filled by the execution stage in this cycle)
-        execution_buffer = self.cognitive_loop.get_current_pipeline("execution")
-        execution_file = self.cognitive_loop.personal.parent / execution_buffer.location
-        
+        # Check if there's an execution to reflect on from knowledge database
         import json
         last_execution = None
         
-        # Try to read from knowledge database first
+        # Read from knowledge database
         try:
             from ..python_modules.pipeline_knowledge import PipelineKnowledge
             from ..python_modules.memory import Memory
             from ..python_modules.knowledge import Knowledge
+            
+            # Get cyber name from unified state
+            cyber_name = 'unknown'
+            try:
+                unified_state_file = self.cognitive_loop.personal / '.internal' / 'memory' / 'unified_state.json'
+                if unified_state_file.exists():
+                    with open(unified_state_file, 'r') as f:
+                        state_data = json.load(f)
+                        identity = state_data.get('identity', {})
+                        cyber_name = identity.get('name', identity.get('cyber_id', 'unknown'))
+            except Exception as e:
+                logger.debug(f"Could not get cyber name from unified state: {e}")
+                cyber_name = os.environ.get('CYBER_NAME', 'unknown')
             
             # Create memory context for Knowledge API
             memory_context = {
                 'cognitive_loop': self.cognitive_loop,
                 'memory_system': self.cognitive_loop.memory_system,
                 'brain_interface': None,  # Not needed for Knowledge API
-                'cyber_id': getattr(self.cognitive_loop, 'cyber_id', 'unknown'),
+                'cyber_id': cyber_name,
                 'personal_dir': self.cognitive_loop.memory_dir.parent,
                 'outbox_dir': self.cognitive_loop.memory_dir.parent / 'outbox',
                 'memory_dir': self.cognitive_loop.memory_dir,
@@ -134,22 +144,23 @@ class ReflectStage:
             # Create Memory API instance, then Knowledge API
             memory_api = Memory(memory_context)
             knowledge_api = Knowledge(memory_api)
-            pipeline_knowledge = PipelineKnowledge(knowledge_api)
+            # Pass context to PipelineKnowledge so it has cyber_id
+            pipeline_knowledge = PipelineKnowledge(memory_context)
             
+            # Try current cycle first
             last_execution = pipeline_knowledge.get_stage_output("execution", self.cognitive_loop.cycle_count)
-            if not last_execution:
-                raise ValueError("No execution data in knowledge DB")
+            if last_execution:
+                logger.info(f"Retrieved execution data from knowledge DB for cycle {self.cognitive_loop.cycle_count}")
+            else:
+                # Try previous cycle as reflection often happens after execution
+                last_execution = pipeline_knowledge.get_stage_output("execution", self.cognitive_loop.cycle_count - 1)
+                if last_execution:
+                    logger.info(f"Retrieved execution data from knowledge DB for previous cycle {self.cognitive_loop.cycle_count - 1}")
         except Exception as e:
-            logger.debug(f"Could not read from knowledge DB, trying file: {e}")
-            # Fallback to file
-            try:
-                with open(execution_file, 'r') as f:
-                    last_execution = json.load(f)
-            except Exception as e:
-                logger.debug(f"Could not read execution file: {e}")
+            logger.error(f"Could not read from knowledge DB: {e}")
         
-        if not last_execution or last_execution == {}:
-            logger.debug("No execution to reflect on")
+        if not last_execution:
+            logger.debug("No execution to reflect on yet")
             return
         
         # Build context for reflection - let the brain see everything in memory
@@ -211,12 +222,25 @@ Also create a single-line summary describing what was accomplished this cycle, i
             from ..python_modules.memory import Memory
             from ..python_modules.knowledge import Knowledge
             
+            # Get cyber name from unified state
+            cyber_name = 'unknown'
+            try:
+                unified_state_file = self.cognitive_loop.personal / '.internal' / 'memory' / 'unified_state.json'
+                if unified_state_file.exists():
+                    with open(unified_state_file, 'r') as f:
+                        state_data = json.load(f)
+                        identity = state_data.get('identity', {})
+                        cyber_name = identity.get('name', identity.get('cyber_id', 'unknown'))
+            except Exception as e:
+                logger.debug(f"Could not get cyber name from unified state: {e}")
+                cyber_name = os.environ.get('CYBER_NAME', 'unknown')
+            
             # Create memory context for Knowledge API
             memory_context = {
                 'cognitive_loop': self.cognitive_loop,
                 'memory_system': self.cognitive_loop.memory_system,
                 'brain_interface': None,  # Not needed for Knowledge API
-                'cyber_id': getattr(self.cognitive_loop, 'cyber_id', 'unknown'),
+                'cyber_id': cyber_name,
                 'personal_dir': self.cognitive_loop.memory_dir.parent,
                 'outbox_dir': self.cognitive_loop.memory_dir.parent / 'outbox',
                 'memory_dir': self.cognitive_loop.memory_dir,
@@ -226,45 +250,38 @@ Also create a single-line summary describing what was accomplished this cycle, i
             # Create Memory API instance, then Knowledge API
             memory_api = Memory(memory_context)
             knowledge_api = Knowledge(memory_api)
-            reflection_knowledge = ReflectionKnowledge(knowledge_api)
+            # Pass the context with cyber_id to ReflectionKnowledge
+            reflection_context = memory_context.copy()
+            reflection_context['memory_api'] = memory_api
+            reflection_context['cycle_count'] = self.cognitive_loop.cycle_count
+            reflection_knowledge = ReflectionKnowledge(reflection_context)
             
-            reflection_id = reflection_knowledge.store_cycle_reflection(
+            # Store as both a reflection and in the pipeline
+            reflection_id = reflection_knowledge.store_reflection(
+                insights=[output_values.get("insights", "")],
+                successes=[output_values.get("cycle_summary", "")] if output_values.get("cycle_summary") else [],
+                challenges=[output_values.get("challenges", "")] if output_values.get("challenges") else [],
+                next_priorities=[output_values.get("next_focus", "")] if output_values.get("next_focus") else [],
+                patterns_noticed=[output_values.get("lessons_learned", "")] if output_values.get("lessons_learned") else [],
                 cycle_number=self.cognitive_loop.cycle_count,
-                insights=output_values.get("insights", ""),
-                lessons_learned=output_values.get("lessons_learned", ""),
-                challenges=output_values.get("challenges", ""),
-                next_focus=output_values.get("next_focus", "")
+                metadata={"timestamp": datetime.now().isoformat()}
             )
-            logger.debug(f"Stored reflection in knowledge DB: {reflection_id}")
+            
+            # Also store in pipeline for cycle recording
+            from ..python_modules.pipeline_knowledge import PipelineKnowledge
+            # Pass context to PipelineKnowledge so it has cyber_id
+            pipeline_knowledge = PipelineKnowledge(memory_context)
+            
+            # Store the reflection in the pipeline
+            pipeline_id = pipeline_knowledge.store_stage_output(
+                stage="reflection",
+                cycle_number=self.cognitive_loop.cycle_count,
+                output=reflection_content
+            )
+            logger.info(f"💭 Stored reflection in knowledge DB: {reflection_id}")
         except Exception as e:
-            logger.warning(f"Failed to store reflection in knowledge DB: {e}")
-            # Fallback to file storage
-            reflection_file = self.cognitive_loop.memory_dir / "reflection_on_last_cycle.json"
-            with open(reflection_file, 'w') as f:
-                json.dump(reflection_content, f, indent=2)
-        
-        # Add or update the reflection memory block
-        from ..memory import MemoryBlock, Priority
-        reflection_memory = MemoryBlock(
-            location="personal/.internal/memory/reflection_on_last_cycle.json",
-            priority=Priority.HIGH,
-            pinned=False,  # Not pinned, can be cleaned up if needed
-            metadata={
-                "file_type": "reflection",
-                "description": "Reflection on the last execution cycle"
-            },
-            cycle_count=self.cognitive_loop.cycle_count,
-            no_cache=True,  # Don't cache, always read fresh
-        )
-        
-        # Remove old reflection if it exists and add new one
-        reflection_id = "personal/.internal/memory/reflection_on_last_cycle.json"
-        existing_memory = self.cognitive_loop.memory_system.get_memory(reflection_id)
-        if existing_memory:
-            self.cognitive_loop.memory_system.remove_memory(reflection_id)
-        self.cognitive_loop.memory_system.add_memory(reflection_memory)
-        
-        logger.info(f"💭 Created reflection for cycle {self.cognitive_loop.cycle_count}")
+            logger.error(f"Failed to store reflection in knowledge DB: {e}")
+            # No fallback - we only use the knowledge DB now
                
         # Update both activity log and location memory with the cycle summary
         await self._update_memories_with_summary(output_values)
@@ -297,19 +314,16 @@ Also create a single-line summary describing what was accomplished this cycle, i
             memory_api = Memory(context)
             knowledge = Knowledge(memory_api)
             
-            # Get the observation buffer to see what questions were asked
-            observation_buffer = self.cognitive_loop.get_current_pipeline("observation")
-            observation_file = self.cognitive_loop.personal.parent / observation_buffer.location
-            
+            # Get the observation data from knowledge DB
             questions_asked = []
             situation_summary = ""
             try:
-                with open(observation_file, 'r') as f:
-                    observation_data = json.load(f)
+                observation_data = pipeline_knowledge.get_stage_output("observation", self.cognitive_loop.cycle_count)
+                if observation_data:
                     questions_asked = observation_data.get("questions_to_explore", [])
                     situation_summary = observation_data.get("situation_summary", "")
             except Exception as e:
-                logger.debug(f"Could not read observation buffer: {e}")
+                logger.debug(f"Could not read observation from knowledge DB: {e}")
             
             # Store the situation and outcome as a learning experience
             if situation_summary and reflection_outputs.get("insights"):

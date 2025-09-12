@@ -251,7 +251,7 @@ base_code_template/
 1. **Observation** creates understanding → observation buffer
 2. **Decision** reads observation buffer → decision buffer  
 3. **Execution** reads decision buffer → execution buffer
-4. **Reflection** reads execution buffer → reflection_on_last_cycle file and manages memory for next cycle
+4. **Reflection** reads execution buffer → stores to pipeline knowledge and manages memory for next cycle
 
 ### Key Design Principles
 
