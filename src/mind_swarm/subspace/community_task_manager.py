@@ -5,9 +5,10 @@ the file system, providing a cleaner and more efficient approach.
 """
 
 import logging
-from typing import Dict, List, Optional, Any
-from datetime import datetime, timedelta
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Dict, List, Optional
+from datetime import datetime, timedelta
 import json
 import asyncio
 
@@ -16,70 +17,38 @@ from mind_swarm.subspace.knowledge_handler import KnowledgeHandler
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class TaskTemplate:
+    """Represents a community task template loaded from disk."""
+
+    name: str
+    summary: str
+    description: str
+    priority: str
+    category: str
+    metadata: Dict[str, Any]
+
+
 class CommunityTaskManager:
     """Manages community tasks through the semantic knowledge database."""
-    
+
     TASK_NAMESPACE = "community_tasks"
-    
-    # Task templates for periodic generation
-    PERIODIC_TEMPLATES = [
-        {
-            "name": "school_tidy",
-            "summary": "organize and maintain the school directory",
-            "description": "Help maintain the /grid/community/school directory by organizing materials, updating documentation, and ensuring resources are properly categorized.",
-            "category": "maintenance",
-            "priority": "normal",
-            "tags": ["school", "organization", "maintenance"],
-            "interval_hours": 24
-        },
-        {
-            "name": "library_organize",
-            "summary": "organize and catalog library resources",
-            "description": "Review and organize resources in /grid/library, ensuring proper categorization and updating the catalog with new additions.",
-            "category": "library",
-            "priority": "normal",
-            "tags": ["library", "organization", "cataloging"],
-            "interval_hours": 24
-        },
-        {
-            "name": "book_discussion",
-            "summary": "lead a book discussion session",
-            "description": "Choose an interesting book or document from the library and lead a discussion about its themes, ideas, and applications.",
-            "category": "social",
-            "priority": "low",
-            "tags": ["discussion", "library", "social"],
-            "interval_hours": 48
-        },
-        {
-            "name": "workshop_cleanup",
-            "summary": "clean up and organize the workshop",
-            "description": "Help maintain the /grid/workshop directory by organizing tools, updating documentation, and removing outdated materials.",
-            "category": "maintenance",
-            "priority": "normal",
-            "tags": ["workshop", "cleanup", "maintenance"],
-            "interval_hours": 36
-        },
-        {
-            "name": "knowledge_sharing",
-            "summary": "share interesting knowledge or discoveries",
-            "description": "Share something interesting you've learned or discovered recently with the community. Create a document in the appropriate location.",
-            "category": "knowledge",
-            "priority": "low",
-            "tags": ["knowledge", "sharing", "community"],
-            "interval_hours": 24
-        }
-    ]
-    
+    TEMPLATE_DIR = Path(__file__).resolve().parents[3] / "subspace_template" / "community_task_templates"
+    DEFAULT_INTERVAL_HOURS = 24
+    ESTIMATED_CYCLE_DURATION_SECONDS = 300  # Approximate 5 minutes per generation check
+
     def __init__(self, knowledge_handler: KnowledgeHandler):
         """Initialize the Community Task Manager.
-        
+
         Args:
             knowledge_handler: The knowledge handler instance
         """
         self.knowledge_handler = knowledge_handler
         self.task_counter = 0
+        self.templates: Dict[str, TaskTemplate] = {}
         self._load_task_counter()
-    
+        self._load_templates()
+
     def _load_task_counter(self):
         """Load the task counter from knowledge DB."""
         try:
@@ -102,13 +71,59 @@ class CommunityTaskManager:
             )
         except Exception as e:
             logger.warning(f"Failed to save task counter: {e}")
-    
+
+    def _load_templates(self):
+        """Load community task templates from disk."""
+        if not self.TEMPLATE_DIR.exists():
+            logger.warning(f"Community task template directory missing: {self.TEMPLATE_DIR}")
+            return
+
+        for template_file in self.TEMPLATE_DIR.glob("*.json"):
+            try:
+                with open(template_file, "r") as f:
+                    data = json.load(f)
+
+                metadata = data.get("metadata") or {}
+                template = TaskTemplate(
+                    name=template_file.stem,
+                    summary=data.get("summary", template_file.stem.replace('_', ' ')),
+                    description=data.get("description", ""),
+                    priority=data.get("priority", "normal"),
+                    category=metadata.get("category", data.get("task_type", "general")),
+                    metadata=metadata,
+                )
+                self.templates[template.name] = template
+                logger.debug(f"Loaded community task template: {template.name}")
+            except Exception as exc:
+                logger.error(f"Failed to load community task template {template_file}: {exc}")
+
+    def _get_template_interval_seconds(self, template: TaskTemplate) -> int:
+        """Determine how often a template should be generated."""
+        metadata = template.metadata or {}
+
+        # Direct seconds definition takes precedence
+        if "frequency_seconds" in metadata:
+            return max(int(metadata["frequency_seconds"]), 1)
+
+        if "frequency_minutes" in metadata:
+            return max(int(metadata["frequency_minutes"] * 60), 1)
+
+        if "frequency_hours" in metadata:
+            return max(int(metadata["frequency_hours"] * 3600), 1)
+
+        if "frequency_cycles" in metadata:
+            cycles = max(int(metadata["frequency_cycles"]), 1)
+            return cycles * self.ESTIMATED_CYCLE_DURATION_SECONDS
+
+        # Default interval
+        return int(self.DEFAULT_INTERVAL_HOURS * 3600)
+
     def _generate_task_id(self) -> str:
         """Generate a unique task ID."""
         self.task_counter += 1
         asyncio.create_task(self._save_task_counter())
         return f"CT-{self.task_counter:03d}"
-    
+
     async def create_task(
         self,
         summary: str,
@@ -116,7 +131,8 @@ class CommunityTaskManager:
         priority: str = "normal",
         category: str = "general",
         created_by: str = "system",
-        tags: Optional[List[str]] = None
+        tags: Optional[List[str]] = None,
+        extra_metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """Create a new community task in the knowledge database.
         
@@ -148,7 +164,10 @@ class CommunityTaskManager:
                 "claimed_at": None,
                 "tags": tags or []
             }
-            
+
+            if extra_metadata:
+                metadata.update(extra_metadata)
+
             # Store in knowledge database
             success, result = await self.knowledge_handler.add_shared_knowledge_with_id(
                 knowledge_id=knowledge_id,
@@ -214,8 +233,54 @@ class CommunityTaskManager:
             logger.error(f"Failed to get tasks: {e}")
             return []
     
+    async def create_task_from_template(
+        self, template_name: str, *, created_by: str = "scheduler", overrides: Optional[Dict[str, Any]] = None
+    ) -> Optional[str]:
+        """Create a task instance from a stored template."""
+        template = self.templates.get(template_name)
+        if not template:
+            logger.error(f"Community task template not found: {template_name}")
+            return None
+
+        overrides = overrides or {}
+        summary = overrides.get("summary", template.summary)
+        description = overrides.get("description", template.description)
+        priority = overrides.get("priority", template.priority)
+        category = overrides.get("category", template.category)
+
+        extra_metadata = dict(template.metadata)
+        extra_metadata.update(overrides.get("metadata", {}))
+        extra_metadata["template_name"] = template.name
+        extra_metadata.setdefault("auto_generated", template.metadata.get("auto_generated", False))
+
+        template_tags = template.metadata.get("tags")
+        if isinstance(template_tags, list):
+            tags = template_tags.copy()
+        elif template_tags:
+            tags = [str(template_tags)]
+        else:
+            tags = []
+
+        override_tags = overrides.get("tags")
+        if override_tags is not None:
+            tags = override_tags
+
+        return await self.create_task(
+            summary=summary,
+            description=description,
+            priority=priority,
+            category=category,
+            created_by=created_by,
+            tags=tags,
+            extra_metadata=extra_metadata,
+        )
+
     async def check_and_generate_periodic_tasks(self):
         """Check and generate periodic community tasks."""
+        if not self.knowledge_handler.enabled:
+            logger.debug("Knowledge handler disabled; skipping periodic community task generation")
+            return []
+
         try:
             # Load state from knowledge DB
             state_data = await self.knowledge_handler.get_shared_knowledge("community_tasks/periodic_state")
@@ -223,47 +288,44 @@ class CommunityTaskManager:
                 state = state_data.get('metadata', {})
             else:
                 state = {}
-            
+
             current_time = datetime.now()
             tasks_created = []
-            
-            for template in self.PERIODIC_TEMPLATES:
-                template_name = template['name']
-                state_key = f"CT-{template_name}"
-                
-                # Check if this task type needs to be generated
-                last_generated = state.get(state_key)
-                if last_generated:
-                    last_time = datetime.fromisoformat(last_generated)
-                    if current_time - last_time < timedelta(hours=template['interval_hours']):
+
+            open_tasks = await self.get_all_tasks(status="OPEN")
+
+            for template in self.templates.values():
+                template_trigger = template.metadata.get("trigger")
+                if template.metadata.get("auto_generated") and template_trigger == "periodic":
+                    state_key = f"template::{template.name}"
+
+                    last_generated = state.get(state_key)
+                    if last_generated:
+                        last_time = datetime.fromisoformat(last_generated)
+                        interval_seconds = self._get_template_interval_seconds(template)
+                        if (current_time - last_time) < timedelta(seconds=interval_seconds):
+                            continue
+
+                    # Prevent duplicates by checking open tasks with same summary
+                    duplicate_exists = any(
+                        task['summary'].lower() == template.summary.lower()
+                        for task in open_tasks
+                    )
+
+                    if duplicate_exists:
+                        logger.debug(
+                            "Skipping community task generation for %s because an open task already exists",
+                            template.summary,
+                        )
                         continue
-                
-                # Check if similar task already exists and is unclaimed
-                existing_tasks = await self.get_all_tasks(status="OPEN")
-                duplicate_exists = any(
-                    task['summary'] == template['summary'] 
-                    for task in existing_tasks
-                )
-                
-                if duplicate_exists:
-                    logger.info(f"Skipping duplicate task creation: '{template['summary']}' already exists")
-                    continue
-                
-                # Create the task
-                task_id = await self.create_task(
-                    summary=template['summary'],
-                    description=template['description'],
-                    priority=template['priority'],
-                    category=template['category'],
-                    created_by="scheduler",
-                    tags=template['tags']
-                )
-                
-                if task_id:
-                    tasks_created.append(task_id)
-                    state[state_key] = current_time.isoformat()
-                    logger.info(f"Generated periodic community task: {state_key}")
-            
+
+                    task_id = await self.create_task_from_template(template.name)
+                    if task_id:
+                        tasks_created.append(task_id)
+                        open_tasks.append({'summary': template.summary})
+                        state[state_key] = current_time.isoformat()
+                        logger.info(f"Generated periodic community task from template: {template.name}")
+
             # Save state back to knowledge DB
             if tasks_created:
                 await self.knowledge_handler.add_shared_knowledge_with_id(

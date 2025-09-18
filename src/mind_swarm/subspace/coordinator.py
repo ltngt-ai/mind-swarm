@@ -2091,14 +2091,21 @@ class SubspaceCoordinator:
                 return
             
             # Use new community task manager if available
-            if self.community_task_manager:
-                task_id = await self.community_task_manager.create_welcome_task(new_cyber_name)
-                if task_id:
-                    logger.info(f"Created welcome community task {task_id} for new cyber {new_cyber_name}")
+            if not self.community_task_manager:
+                logger.warning(
+                    "Community task manager unavailable; unable to create welcome task for %s",
+                    new_cyber_name,
+                )
+                return
+
+            task_id = await self.community_task_manager.create_welcome_task(new_cyber_name)
+            if task_id:
+                logger.info(f"Created welcome community task {task_id} for new cyber {new_cyber_name}")
             else:
-                # Fallback to old file-based system
-                await self._create_community_task_from_template("CT-welcome_new_cyber", cyber_name=new_cyber_name)
-                logger.info(f"Created welcome community task for new cyber {new_cyber_name}")
+                logger.warning(
+                    "Failed to create welcome community task for new cyber %s via knowledge manager",
+                    new_cyber_name,
+                )
             
         except Exception as e:
             logger.error(f"Failed to generate community tasks for new cyber: {e}")
@@ -2110,57 +2117,14 @@ class SubspaceCoordinator:
         """
         try:
             # Use new community task manager if available
-            if self.community_task_manager:
-                tasks_created = await self.community_task_manager.check_and_generate_periodic_tasks()
-                if tasks_created:
-                    logger.info(f"Generated {len(tasks_created)} periodic community tasks")
+            if not self.community_task_manager:
+                logger.debug("Community task manager unavailable; skipping periodic community task generation")
                 return
-            
-            # Fallback to old file-based system
-            from datetime import datetime
-            import json
-            
-            # Track last generation time for each task type
-            state_file = self.subspace.root_path / ".mind-swarm" / "community_task_state.json"
-            state_file.parent.mkdir(exist_ok=True)
-            
-            if state_file.exists():
-                with open(state_file, 'r') as f:
-                    state = json.load(f)
-            else:
-                state = {}
-            
-            current_time = datetime.now()
-            
-            # Define task generation intervals (in minutes)
-            task_intervals = {
-                "CT-school_tidy": 30,      # Every 30 minutes
-                "CT-library_organize": 45,  # Every 45 minutes  
-                "CT-book_discussion": 20    # Every 20 minutes
-            }
-            
-            # Check each periodic template
-            for template_name, interval_minutes in task_intervals.items():
-                last_generated = state.get(template_name)
-                
-                if last_generated:
-                    last_time = datetime.fromisoformat(last_generated)
-                    minutes_passed = (current_time - last_time).total_seconds() / 60
-                    
-                    if minutes_passed >= interval_minutes:
-                        await self._create_community_task_from_template(template_name)
-                        state[template_name] = current_time.isoformat()
-                        logger.info(f"Generated periodic community task: {template_name}")
-                else:
-                    # First time - generate immediately
-                    await self._create_community_task_from_template(template_name)
-                    state[template_name] = current_time.isoformat()
-                    logger.info(f"Generated initial community task: {template_name}")
-            
-            # Save state
-            with open(state_file, 'w') as f:
-                json.dump(state, f, indent=2)
-                
+
+            tasks_created = await self.community_task_manager.check_and_generate_periodic_tasks()
+            if tasks_created:
+                logger.info(f"Generated {len(tasks_created)} periodic community tasks")
+
         except Exception as e:
             logger.error(f"Failed to check periodic community tasks: {e}")
     
@@ -2184,209 +2148,62 @@ class SubspaceCoordinator:
         Returns:
             Task ID
         """
-        try:
-            import json
-            from datetime import datetime
-            
-            # Find next available CT number
-            community_tasks_dir = self.subspace.grid_dir / "community" / "tasks"
-            community_tasks_open_dir = community_tasks_dir / "open"
-            community_tasks_open_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Also ensure claimed and completed folders exist
-            (community_tasks_dir / "claimed").mkdir(parents=True, exist_ok=True)
-            (community_tasks_dir / "completed").mkdir(parents=True, exist_ok=True)
-            
-            next_id = 1
-            # Check all folders for existing task IDs
-            for folder in ["open", "claimed", "completed"]:
-                folder_path = community_tasks_dir / folder
-                if folder_path.exists():
-                    for task_file in folder_path.glob("CT-*.json"):
-                        try:
-                            task_id = task_file.stem.split('_')[0]
-                            num = int(task_id.split('-')[1])
-                            next_id = max(next_id, num + 1)
-                        except Exception:
-                            pass
-            
-            task_id = f"CT-{next_id:03d}"
-            
-            # Check if a similar task already exists to prevent duplicates
-            task_summary_lower = summary.lower()
-            duplicate_found = False
-            
-            for folder in ["open", "claimed"]:
-                folder_path = community_tasks_dir / folder
-                if folder_path.exists():
-                    for existing_file in folder_path.glob("CT-*.json"):
-                        try:
-                            with open(existing_file, 'r') as f:
-                                existing_task = json.load(f)
-                                if existing_task.get('summary', '').lower() == task_summary_lower:
-                                    logger.info(f"Skipping duplicate task creation: '{summary}' already exists as {existing_task['id']}")
-                                    return existing_task['id']  # Return existing task ID
-                        except Exception:
-                            pass
-            
-            # Create task data
-            task_data = {
-                "id": task_id,
-                "summary": summary,
-                "description": description,
-                "status": "open",
-                "claimed_by": None,
-                "priority": priority,
-                "category": category,
-                "creator": created_by,
-                "created": datetime.now().isoformat()
-            }
-            
-            # Generate filename
-            summary_slug = summary[:50].lower()
-            summary_slug = ''.join(c if c.isalnum() or c == ' ' else '' for c in summary_slug)
-            summary_slug = '_'.join(summary_slug.split())
-            
-            # Save to open folder
-            task_file = community_tasks_open_dir / f"{task_id}_{summary_slug}.json"
-            
-            with open(task_file, 'w') as f:
-                json.dump(task_data, f, indent=2)
-            
-            logger.info(f"Created community task {task_id}: {summary}")
-            return task_id
-            
-        except Exception as e:
-            logger.error(f"Failed to create community task: {e}")
-            raise
+        if not self.community_task_manager:
+            raise RuntimeError("Community task manager unavailable - manual task creation is disabled")
+
+        task_id = await self.community_task_manager.create_task(
+            summary=summary,
+            description=description,
+            priority=priority,
+            category=category,
+            created_by=created_by,
+            tags=["manual", created_by] if created_by else ["manual"],
+            extra_metadata={
+                "creation_mode": "manual",
+                "auto_generated": False,
+            },
+        )
+
+        if not task_id:
+            raise RuntimeError("Failed to create community task via knowledge manager")
+
+        logger.info(f"Created community task {task_id}: {summary}")
+        return task_id
     
     async def get_community_tasks(self) -> List[Dict[str, Any]]:
         """Get all community tasks from all folders.
-        
+
         Returns:
             List of task dictionaries
         """
-        tasks = []
+        if self.community_task_manager:
+            return await self.community_task_manager.get_all_tasks()
+
+        logger.warning("Community task manager unavailable; returning file-based tasks (deprecated)")
+
+        tasks: List[Dict[str, Any]] = []
         community_tasks_dir = self.subspace.grid_dir / "community" / "tasks"
-        
+
         try:
-            # Check all folders
             for folder in ["open", "claimed", "completed"]:
                 folder_path = community_tasks_dir / folder
-                if folder_path.exists():
-                    for task_file in folder_path.glob("CT-*.json"):
-                        try:
-                            with open(task_file, 'r') as f:
-                                task_data = json.load(f)
-                                task_data['folder'] = folder  # Add which folder it's in
-                                tasks.append(task_data)
-                        except Exception as e:
-                            logger.error(f"Failed to read task file {task_file}: {e}")
-            
-            # Sort by ID
+                if not folder_path.exists():
+                    continue
+
+                for task_file in folder_path.glob("CT-*.json"):
+                    try:
+                        with open(task_file, 'r') as f:
+                            task_data = json.load(f)
+                        task_data['folder'] = folder
+                        tasks.append(task_data)
+                    except Exception as exc:
+                        logger.error(f"Failed to read task file %s: %s", task_file, exc)
+
             tasks.sort(key=lambda x: x.get('id', ''))
-            
-        except Exception as e:
-            logger.error(f"Failed to get community tasks: {e}")
-        
+        except Exception as exc:
+            logger.error(f"Failed to get community tasks: {exc}")
+
         return tasks
-    
-    async def _create_community_task_from_template(self, template_name: str, **kwargs):
-        """Create a community task from a template.
-        
-        Args:
-            template_name: Name of the template file (without .json)
-            **kwargs: Variables to substitute in the template
-        """
-        try:
-            # Load template
-            template_path = Path(__file__).parent.parent.parent.parent / "subspace_template" / "community_task_templates" / f"{template_name}.json"
-            if not template_path.exists():
-                logger.error(f"Community task template not found: {template_name}")
-                return
-            
-            import json
-            from datetime import datetime
-            
-            with open(template_path, 'r') as f:
-                template_content = f.read()
-            
-            # Find next available CT number
-            # Tasks should be created in the open/ subfolder
-            community_tasks_dir = self.subspace.grid_dir / "community" / "tasks"
-            community_tasks_open_dir = community_tasks_dir / "open"
-            community_tasks_open_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Also ensure claimed and completed folders exist
-            (community_tasks_dir / "claimed").mkdir(parents=True, exist_ok=True)
-            (community_tasks_dir / "completed").mkdir(parents=True, exist_ok=True)
-            
-            next_id = 1
-            # Check all folders for existing task IDs
-            for folder in ["open", "claimed", "completed"]:
-                folder_path = community_tasks_dir / folder
-                if folder_path.exists():
-                    for task_file in folder_path.glob("CT-*.json"):
-                        try:
-                            task_id = task_file.stem.split('_')[0]
-                            num = int(task_id.split('-')[1])
-                            next_id = max(next_id, num + 1)
-                        except Exception:
-                            pass
-            
-            task_id = f"CT-{next_id:03d}"
-            
-            # Substitute variables
-            task_content = template_content.replace("{timestamp}", datetime.now().isoformat())
-            task_content = task_content.replace("CT-XXX", task_id)
-            
-            # Replace any custom kwargs
-            for key, value in kwargs.items():
-                task_content = task_content.replace(f"{{{key}}}", str(value))
-            
-            # Parse task data
-            task_data = json.loads(task_content)
-            task_data['id'] = task_id
-            
-            # Check if a similar task already exists in open or claimed folders
-            # to prevent duplicate task creation
-            task_summary = task_data.get('summary', '').lower()
-            duplicate_found = False
-            
-            for folder in ["open", "claimed"]:
-                folder_path = community_tasks_dir / folder
-                if folder_path.exists():
-                    for existing_file in folder_path.glob("CT-*.json"):
-                        try:
-                            with open(existing_file, 'r') as f:
-                                existing_task = json.load(f)
-                                if existing_task.get('summary', '').lower() == task_summary:
-                                    logger.info(f"Skipping duplicate task creation: '{task_summary}' already exists as {existing_task['id']}")
-                                    duplicate_found = True
-                                    break
-                        except Exception:
-                            pass
-                    if duplicate_found:
-                        break
-            
-            if duplicate_found:
-                return
-            
-            # Generate filename
-            summary_slug = task_data['summary'][:50].lower()
-            summary_slug = ''.join(c if c.isalnum() or c == ' ' else '' for c in summary_slug)
-            summary_slug = '_'.join(summary_slug.split())
-            
-            # Save to open folder for new tasks
-            task_file = community_tasks_open_dir / f"{task_id}_{summary_slug}.json"
-            
-            with open(task_file, 'w') as f:
-                json.dump(task_data, f, indent=2)
-            
-            logger.info(f"Created community task {task_id}: {task_data['summary']}")
-            
-        except Exception as e:
-            logger.error(f"Failed to create community task from template {template_name}: {e}")
     
     async def _create_io_agent_body_files(self, cyber_name: str, cyber_personal: Path):
         """Create additional body files for I/O Cybers.

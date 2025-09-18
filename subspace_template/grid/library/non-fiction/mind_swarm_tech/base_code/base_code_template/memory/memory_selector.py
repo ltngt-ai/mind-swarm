@@ -195,18 +195,36 @@ class MemorySelector:
         pinned_memories = [m for m in memories if m.pinned]
         unpinned_memories = [m for m in memories if not m.pinned]
         
-        # Calculate tokens for pinned memories
-        pinned_tokens = sum(self.context_builder.estimate_tokens(m) for m in pinned_memories)
+        # Calculate tokens for pinned memories and trim if they exceed budget
+        def _estimate(mem):
+            try:
+                return self.context_builder.estimate_tokens(mem)
+            except Exception:
+                return 50
+
+        # Order pinned by priority: FOUNDATIONAL, SYSTEM, CRITICAL, then others
+        priority_order = [Priority.FOUNDATIONAL, Priority.SYSTEM, Priority.CRITICAL,
+                          Priority.HIGH, Priority.MEDIUM, Priority.LOW]
+        pinned_sorted = []
+        for pr in priority_order:
+            pinned_sorted.extend([m for m in pinned_memories if m.priority == pr])
+
+        selected = []
+        used_tokens = 0
+        threshold = int(max_tokens * 0.98)  # small buffer
+        for m in pinned_sorted:
+            t = _estimate(m)
+            # STRICTLY enforce token budget - no exceptions even for pinned!
+            if used_tokens + t <= threshold:
+                selected.append(m)
+                used_tokens += t
+            else:
+                logger.warning(f"Skipping pinned memory {getattr(m,'id','unknown')} to respect budget (would be {used_tokens + t} > {threshold})")
         
-        if pinned_tokens > max_tokens:
-            logger.warning(f"Pinned memories alone exceed token budget: {pinned_tokens} > {max_tokens}")
-            # Still include all pinned memories
-            return pinned_memories
-        
-        # Start with all pinned memories
-        selected = pinned_memories.copy()
-        used_tokens = pinned_tokens
-        remaining_tokens = max_tokens - pinned_tokens
+        if used_tokens > max_tokens:
+            logger.warning(f"Pinned memories (trimmed subset) still exceed budget: {used_tokens} > {max_tokens}")
+        # Recompute remaining based on selected subset
+        remaining_tokens = max(0, max_tokens - used_tokens)
         
         # Debug log pinned memories
         pinned_ids = [m.id for m in pinned_memories]
@@ -256,29 +274,14 @@ class MemorySelector:
         for memory, _, score in scored_memories:
             tokens = self.context_builder.estimate_tokens(memory)
             
-            # Always include foundational, system, and critical unpinned
-            if memory.priority in [Priority.FOUNDATIONAL, Priority.SYSTEM, Priority.CRITICAL]:
+            # STRICTLY enforce budget - no exceptions!
+            if used_tokens + tokens <= max_tokens:
                 selected.append(memory)
                 used_tokens += tokens
-                continue
-            
-            # For others, check budget with buffer
-            buffer_factor = {
-                Priority.HIGH: 0.8,      # 80% of budget
-                Priority.MEDIUM: 0.9,    # 90% of budget
-                Priority.LOW: 0.95       # 95% of budget
-            }
-            
-            threshold = max_tokens * buffer_factor.get(memory.priority, 0.9)
-            
-            if used_tokens + tokens <= threshold:
-                selected.append(memory)
-                used_tokens += tokens
-            elif memory.priority == Priority.HIGH and score > 0.8:
-                # Try to squeeze in high priority, high relevance items
-                if used_tokens + tokens <= max_tokens * 0.98:
-                    selected.append(memory)
-                    used_tokens += tokens
+            else:
+                # Budget exceeded - stop adding memories
+                logger.debug(f"Stopping selection - budget would exceed: {used_tokens + tokens} > {max_tokens}")
+                break
         
         logger.info(f"Selected {len(selected)} memories using {used_tokens} tokens (budget: {max_tokens})")
         return selected
@@ -289,16 +292,24 @@ class MemorySelector:
         pinned_memories = [m for m in memories if m.pinned]
         unpinned_memories = [m for m in memories if not m.pinned]
         
-        # Calculate tokens for pinned memories
-        pinned_tokens = sum(self.context_builder.estimate_tokens(m) for m in pinned_memories)
-        
-        if pinned_tokens > max_tokens:
-            logger.warning(f"Pinned memories alone exceed token budget: {pinned_tokens} > {max_tokens}")
-            return pinned_memories
-        
-        # Start with all pinned memories
-        selected = pinned_memories.copy()
-        used_tokens = pinned_tokens
+        # Calculate tokens for pinned memories and trim if needed
+        def _estimate(mem):
+            try:
+                return self.context_builder.estimate_tokens(mem)
+            except Exception:
+                return 50
+        # Keep same order for recent strategy; just trim to budget
+        selected = []
+        used_tokens = 0
+        threshold = int(max_tokens * 0.98)
+        for m in pinned_memories:
+            t = _estimate(m)
+            # STRICTLY enforce budget
+            if used_tokens + t <= threshold:
+                selected.append(m)
+                used_tokens += t
+            else:
+                logger.warning(f"Skipping pinned memory to respect budget")
         
         # Sort unpinned by timestamp descending
         sorted_unpinned = sorted(unpinned_memories, key=lambda m: m.timestamp, reverse=True)
@@ -328,16 +339,23 @@ class MemorySelector:
         pinned_memories = [m for m in memories if m.pinned]
         unpinned_memories = [m for m in memories if not m.pinned]
         
-        # Calculate tokens for pinned memories
-        pinned_tokens = sum(self.context_builder.estimate_tokens(m) for m in pinned_memories)
-        
-        if pinned_tokens > max_tokens:
-            logger.warning(f"Pinned memories alone exceed token budget: {pinned_tokens} > {max_tokens}")
-            return pinned_memories
-        
-        # Start with all pinned memories
-        selected = pinned_memories.copy()
-        used_tokens = pinned_tokens
+        # Calculate tokens for pinned memories and trim if needed
+        def _estimate(mem):
+            try:
+                return self.context_builder.estimate_tokens(mem)
+            except Exception:
+                return 50
+        selected = []
+        used_tokens = 0
+        threshold = int(max_tokens * 0.98)
+        for m in pinned_memories:
+            t = _estimate(m)
+            # STRICTLY enforce budget
+            if used_tokens + t <= threshold:
+                selected.append(m)
+                used_tokens += t
+            else:
+                logger.warning(f"Skipping pinned memory to respect budget")
         
         # Score unpinned memories
         scored = []
@@ -355,14 +373,15 @@ class MemorySelector:
         for memory, score in scored:
             tokens = self.context_builder.estimate_tokens(memory)
             
-            # Always include critical unpinned
-            if memory.priority == Priority.CRITICAL:
+            # STRICTLY enforce budget - no exceptions!
+            if used_tokens + tokens <= max_tokens:
                 selected.append(memory)
                 used_tokens += tokens
-                critical_added = True
-            elif used_tokens + tokens <= max_tokens * 0.9:
-                selected.append(memory)
-                used_tokens += tokens
+                if memory.priority == Priority.CRITICAL:
+                    critical_added = True
+            else:
+                # Stop - budget exceeded
+                break
                 if memory.priority == Priority.HIGH:
                     high_count += 1
         

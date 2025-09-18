@@ -3,7 +3,7 @@
 import asyncio
 import json
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Union
 from datetime import datetime
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -11,11 +11,17 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from mind_swarm.server.schemas.events import make_event
+from mind_swarm.server.twitch_manager import (
+    TwitchAuthenticationError,
+    TwitchConfigurationError,
+    TwitchConnectionError,
+    TwitchIntegrationManager,
+)
 
 from mind_swarm.subspace.coordinator import SubspaceCoordinator
 from mind_swarm.utils.logging import logger
 from mind_swarm.server.monitoring_events import set_server_reference, get_event_emitter
-from mind_swarm.server.ws_state_manager import get_ws_state_manager
+from mind_swarm.server.ws_state_manager import get_ws_state_manager, set_ws_server
 from mind_swarm.subspace.cycle_recorder import get_cycle_recorder
 
 
@@ -79,6 +85,51 @@ class AnnouncementRequest(BaseModel):
     expires: Optional[str] = None
 
 
+class TwitchConnectRequest(BaseModel):
+    """Request to connect Twitch chat integration."""
+
+    channel: str
+    mock: bool = False
+    prefix: str = "!"
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class TwitchCommandRequest(BaseModel):
+    """Request to process a Twitch chat command."""
+
+    command: str
+    args: Optional[Union[str, List[str]]] = None
+    user: Optional[str] = None
+    badges: Optional[List[str]] = None
+    raw: Optional[str] = None
+    broadcast: bool = True
+
+
+class TwitchAskRequest(BaseModel):
+    """Request payload for Twitch ask command."""
+
+    agent: str
+    question: str
+    user: Optional[str] = None
+
+
+class TwitchTaskRequest(BaseModel):
+    """Request payload for Twitch task creation."""
+
+    description: str
+    summary: Optional[str] = None
+    priority: str = "normal"
+    category: str = "general"
+    created_by: Optional[str] = None
+
+
+class TwitchSendRequest(BaseModel):
+    """Request to send a message to Twitch chat."""
+
+    message: str
+    channel: Optional[str] = None
+
+
 class RegisterDeveloperRequest(BaseModel):
     """Request model for registering a developer."""
     name: str
@@ -128,7 +179,8 @@ class MindSwarmServer:
         self.coordinator: Optional[SubspaceCoordinator] = None
         self.start_time = datetime.now()
         self.clients: List[WebSocket] = []
-        
+        self.twitch_manager = TwitchIntegrationManager()
+
         # Configure CORS - allow all origins for network access
         # In production, you may want to restrict this to specific IPs or domains
         self.app.add_middleware(
@@ -197,12 +249,132 @@ class MindSwarmServer:
                                 
                 await self.coordinator.start()
                 self._coordinator_ready = True
+                
+                # Set the server reference for WebSocket state manager
+                set_ws_server(self)
+                
                 logger.info("Server initialized successfully")
             except Exception as e:
                 logger.error(f"Failed to initialize coordinator: {e}", exc_info=True)
                 # Store the error so we can report it in status
                 self._initialization_error = str(e)
-        
+
+        async def _ensure_ready() -> None:
+            """Ensure coordinator is initialized before handling requests."""
+            if not self.coordinator:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            if not getattr(self, '_coordinator_ready', False):
+                raise HTTPException(status_code=503, detail="Server still initializing, please wait")
+
+        async def _perform_twitch_ask(
+            agent: str,
+            question: str,
+            user: Optional[str],
+        ) -> Dict[str, Any]:
+            """Handle ask commands directed at Cybers."""
+
+            await _ensure_ready()
+
+            agent_name = agent.strip()
+            question_text = question.strip()
+            if not agent_name or not question_text:
+                return {
+                    "success": False,
+                    "message": "Agent and question are required.",
+                    "data": {},
+                }
+
+            created_by = (user or "twitch").strip() or "twitch"
+
+            try:
+                subject = f"Twitch question from {user}" if user else "Twitch question"
+                await self.coordinator.send_message(agent_name, question_text, subject)
+
+                question_id: Optional[str] = None
+                try:
+                    question_id = await self.coordinator.create_community_question(
+                        f"[{agent_name}] {question_text}",
+                        created_by=created_by,
+                    )
+                except Exception as exc:  # noqa: BLE001 - logging only
+                    logger.debug("Unable to log Twitch question: %s", exc)
+
+                message = f"Question sent to {agent_name}."
+                data = {
+                    "agent": agent_name,
+                    "question": question_text,
+                    "question_id": question_id,
+                }
+                return {"success": True, "message": message, "data": data}
+            except Exception as exc:  # noqa: BLE001 - include message for clients
+                logger.error("Failed to handle Twitch ask command: %s", exc)
+                return {
+                    "success": False,
+                    "message": f"Failed to deliver question to {agent_name}: {exc}",
+                    "data": {},
+                }
+
+        async def _perform_twitch_task(
+            description: str,
+            created_by: Optional[str],
+            summary: Optional[str],
+            priority: str,
+            category: str,
+        ) -> Dict[str, Any]:
+            """Create community tasks sourced from Twitch."""
+
+            await _ensure_ready()
+
+            manager = getattr(self.coordinator, "community_task_manager", None)
+            if not manager:
+                return {
+                    "success": False,
+                    "message": "Community task manager is not available.",
+                    "data": {},
+                }
+
+            description_text = description.strip()
+            if not description_text:
+                return {
+                    "success": False,
+                    "message": "Task description cannot be empty.",
+                    "data": {},
+                }
+
+            creator = (created_by or "twitch").strip() or "twitch"
+            summary_text = summary.strip() if summary else ""
+            if not summary_text:
+                first_line = description_text.splitlines()[0]
+                summary_text = first_line[:80]
+
+            try:
+                task_id = await manager.create_task(
+                    summary=summary_text,
+                    description=description_text,
+                    priority=priority,
+                    category=category,
+                    created_by=creator,
+                    extra_metadata={"source": "twitch", "submitted_by": creator},
+                )
+            except Exception as exc:  # noqa: BLE001 - propagate to clients
+                logger.error("Failed to create Twitch task: %s", exc)
+                return {
+                    "success": False,
+                    "message": f"Failed to create task: {exc}",
+                    "data": {},
+                }
+
+            if not task_id:
+                return {
+                    "success": False,
+                    "message": "Failed to create task.",
+                    "data": {},
+                }
+
+            message = f"Created task {task_id}."
+            data = {"task_id": task_id, "summary": summary_text, "priority": priority}
+            return {"success": True, "message": message, "data": data}
+
         @self.app.on_event("shutdown")
         async def shutdown():
             """Clean shutdown."""
@@ -232,7 +404,7 @@ class MindSwarmServer:
         @self.app.get("/status", response_model=StatusResponse)
         async def get_status(check_llm: bool = True):
             """Get server and Cyber status.
-            
+
             Args:
                 check_llm: Whether to check local LLM status (can be slow)
             """
@@ -274,6 +446,228 @@ class MindSwarmServer:
             )
             logger.info(f"STATUS: /status endpoint completed in {time.time() - endpoint_start:.2f}s total")
             return response
+
+        @self.app.post("/api/twitch/connect")
+        async def twitch_connect(request: TwitchConnectRequest):
+            """Connect Twitch integration to a channel."""
+
+            channel = request.channel.strip()
+            if not channel:
+                raise HTTPException(status_code=400, detail="Channel is required")
+
+            try:
+                state = await self.twitch_manager.connect(
+                    channel=channel,
+                    mock=request.mock,
+                    prefix=request.prefix or "!",
+                    metadata=request.metadata,
+                )
+            except TwitchConfigurationError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            except TwitchAuthenticationError as exc:
+                raise HTTPException(status_code=401, detail=str(exc)) from exc
+            except TwitchConnectionError as exc:
+                raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+            connected_at = state.connected_at.isoformat() if state.connected_at else None
+
+            if state.connected:
+                await self.twitch_manager.push_system_message(
+                    f"Twitch connected to #{state.channel}",
+                    metadata={"type": "connect", "mock": state.mock},
+                )
+
+            return {
+                "connected": state.connected,
+                "channel": state.channel,
+                "mock": state.mock,
+                "prefix": state.prefix,
+                "connected_at": connected_at,
+                "last_error": state.last_error,
+            }
+
+        @self.app.get("/api/twitch/messages")
+        async def twitch_messages(limit: int = 50):
+            """Retrieve queued Twitch chat and system messages."""
+
+            limit = max(1, min(limit, 200))
+            state = self.twitch_manager.state
+            messages = await self.twitch_manager.drain_messages(limit=limit)
+
+            return {
+                "messages": messages,
+                "connected": state.connected,
+                "channel": state.channel,
+                "mock": state.mock,
+                "commands": self.twitch_manager.recent_commands(),
+                "last_error": state.last_error,
+            }
+
+        @self.app.post("/api/twitch/command")
+        async def twitch_command(request: TwitchCommandRequest):
+            """Process Twitch chat commands and dispatch to the coordinator."""
+
+            await _ensure_ready()
+
+            prefix = self.twitch_manager.prefix or "!"
+            raw_command = (request.raw or request.command or "").strip()
+            if not raw_command:
+                raise HTTPException(status_code=400, detail="Command cannot be empty")
+
+            trimmed = raw_command
+            if trimmed.startswith(prefix):
+                trimmed = trimmed[len(prefix):]
+
+            parts = [part for part in trimmed.split() if part]
+            if parts:
+                command_name = parts[0].lower()
+                args_from_raw = parts[1:]
+            else:
+                command_name = request.command.strip().lower()
+                args_from_raw = []
+
+            provided_args = request.args
+            if isinstance(provided_args, str):
+                provided_args = [item for item in provided_args.split() if item]
+
+            command_args = list(provided_args) if provided_args else args_from_raw
+            user = (request.user or "viewer").strip() or "viewer"
+            badges = request.badges or []
+
+            success = True
+            response_message = ""
+            response_data: Dict[str, Any] = {}
+
+            if command_name == "ask":
+                if len(command_args) < 2:
+                    success = False
+                    response_message = "Usage: !ask <agent> <question>"
+                else:
+                    agent = command_args[0]
+                    question = " ".join(command_args[1:])
+                    ask_result = await _perform_twitch_ask(agent, question, user)
+                    success = ask_result["success"]
+                    response_message = ask_result.get("message", "")
+                    response_data = ask_result.get("data", {})
+            elif command_name == "task":
+                if not command_args:
+                    success = False
+                    response_message = "Usage: !task <description>"
+                else:
+                    description = " ".join(command_args)
+                    task_result = await _perform_twitch_task(
+                        description=description,
+                        created_by=user,
+                        summary=None,
+                        priority="normal",
+                        category="general",
+                    )
+                    success = task_result["success"]
+                    response_message = task_result.get("message", "")
+                    response_data = task_result.get("data", {})
+            elif command_name == "status":
+                cyber_states = await self.coordinator.get_cyber_states()
+                active_agents = sorted(cyber_states.keys())
+                response_data = {"agents": active_agents, "count": len(active_agents)}
+                if active_agents:
+                    response_message = "Active agents: " + ", ".join(active_agents)
+                else:
+                    response_message = "No active agents right now."
+            elif command_name == "focus":
+                if not command_args:
+                    success = False
+                    response_message = "Usage: !focus <agent>"
+                else:
+                    response_data = {"target": command_args[0]}
+                    response_message = f"Focusing on {command_args[0]}"
+            elif command_name == "overview":
+                response_data = {"mode": "overview"}
+                response_message = "Switching to overview."
+            elif command_name == "help":
+                response_message = (
+                    "Commands: !ask <agent> <question>, !focus <agent>, !status, !overview, "
+                    "!task <description>, !help"
+                )
+            else:
+                success = False
+                response_message = f"Unknown command: {command_name}"
+
+            command_text = f"{prefix}{command_name}"
+            if command_args:
+                command_text = f"{command_text} {' '.join(command_args)}"
+
+            overlay_text = f"{user} issued {command_text}"
+            payload = {
+                "user": user,
+                "command": command_name,
+                "args": command_args,
+                "success": success,
+                "message": overlay_text,
+                "badges": badges,
+                "raw": raw_command,
+                "response": response_message,
+                "broadcast": request.broadcast,
+            }
+            await self.twitch_manager.record_command(payload)
+
+            if response_message:
+                metadata: Dict[str, Any] = {
+                    "type": "command_response",
+                    "command": command_name,
+                    "success": success,
+                }
+                if response_data:
+                    metadata.update(response_data)
+                await self.twitch_manager.push_system_message(
+                    response_message,
+                    metadata=metadata,
+                )
+                if request.broadcast and success:
+                    await self.twitch_manager.queue_outbound_message(response_message)
+
+            return {
+                "success": success,
+                "command": command_name,
+                "message": response_message,
+                "data": response_data,
+            }
+
+        @self.app.post("/api/twitch/ask")
+        async def twitch_ask(request: TwitchAskRequest):
+            """Handle Twitch ask endpoint directly."""
+
+            result = await _perform_twitch_ask(request.agent, request.question, request.user)
+            if result["success"]:
+                metadata = {"type": "ask", **result.get("data", {})}
+                await self.twitch_manager.push_system_message(result["message"], metadata=metadata)
+            return result
+
+        @self.app.post("/api/twitch/task")
+        async def twitch_task(request: TwitchTaskRequest):
+            """Create community tasks from Twitch viewers."""
+
+            result = await _perform_twitch_task(
+                description=request.description,
+                created_by=request.created_by,
+                summary=request.summary,
+                priority=request.priority,
+                category=request.category,
+            )
+            if result["success"]:
+                metadata = {"type": "task", **result.get("data", {})}
+                await self.twitch_manager.push_system_message(result["message"], metadata=metadata)
+            return result
+
+        @self.app.post("/api/twitch/send")
+        async def twitch_send(request: TwitchSendRequest):
+            """Send a message back to Twitch chat."""
+
+            message = request.message.strip()
+            if not message:
+                raise HTTPException(status_code=400, detail="Message cannot be empty")
+
+            await self.twitch_manager.queue_outbound_message(message)
+            return {"success": True, "message": message}
         
         @self.app.post("/Cybers/create")
         async def create_agent(request: CreateAgentRequest):

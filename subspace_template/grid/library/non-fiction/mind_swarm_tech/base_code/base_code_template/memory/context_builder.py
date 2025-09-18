@@ -46,13 +46,10 @@ class ContextBuilder:
     def _build_json_context(self, memories: List[MemoryBlock]) -> str:
         """Build JSON-formatted context."""
         context_entries = []
-        
+
         for memory in memories:
             try:
                 content = self.content_loader.load_content(memory)
-                
-                # Don't truncate - we need full context
-                # User explicitly requested no truncation anywhere in the system
                 
                 # Compact format - only include non-default values
                 entry = {
@@ -78,6 +75,11 @@ class ContextBuilder:
                 
                 # Always add priority so Cybers understand the memory hierarchy
                 entry["priority"] = memory.priority.name  # Use name not value
+                # Expose whether the memory is pinned (explicit persistence)
+                try:
+                    entry["pinned"] = bool(getattr(memory, 'pinned', False))
+                except Exception:
+                    entry["pinned"] = False
                 
                 # Add cycle_count if present (helps Cyber track what's current)
                 if hasattr(memory, 'cycle_count') and memory.cycle_count is not None:

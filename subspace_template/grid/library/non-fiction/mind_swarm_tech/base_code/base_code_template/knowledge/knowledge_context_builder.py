@@ -367,22 +367,28 @@ class KnowledgeContextBuilder:
             knowledge_api = Knowledge(knowledge_context)
             pipeline_knowledge = PipelineKnowledge(knowledge_context)
             
-            # Get current cycle count and fetch previous reflection
-            from ..state.unified_state_manager import StateSection
-            cycle_count = self.state_manager.get_value(StateSection.COGNITIVE, "cycle_count", 0) if hasattr(self.state_manager, 'get_value') else 0
-            if cycle_count > 0:
-                reflection_data = pipeline_knowledge.get_stage_output("reflection", cycle_count - 1)
-                if reflection_data:
-                    # Extract key insights
-                    for k in ("insights", "summary", "cycle_summary", "learnings", "reflection", "notes"):
-                        v = reflection_data.get(k)
-                        if isinstance(v, str) and v.strip():
-                            text = v.strip()
-                            return (
-                                text[:KNOWLEDGE_QUERY_TRUNCATE_CHARS]
-                                if KNOWLEDGE_QUERY_TRUNCATE_CHARS and KNOWLEDGE_QUERY_TRUNCATE_CHARS > 0
-                                else text
-                            )
+            # DISABLED: Reflections from previous cycles contain stale biofeedback data
+            # that causes hallucinations. The current status.txt provides accurate
+            # real-time stats from unified_state.json
+            return None
+
+            # Original code commented out to prevent stale data issues:
+            # # Get current cycle count and fetch previous reflection
+            # from ..state.unified_state_manager import StateSection
+            # cycle_count = self.state_manager.get_value(StateSection.COGNITIVE, "cycle_count", 0) if hasattr(self.state_manager, 'get_value') else 0
+            # if cycle_count > 0:
+            #     reflection_data = pipeline_knowledge.get_stage_output("reflection", cycle_count - 1)
+            #     if reflection_data:
+            #         # Extract key insights
+            #         for k in ("insights", "summary", "cycle_summary", "learnings", "reflection", "notes"):
+            #             v = reflection_data.get(k)
+            #             if isinstance(v, str) and v.strip():
+            #                 text = v.strip()
+            #                 return (
+            #                     text[:KNOWLEDGE_QUERY_TRUNCATE_CHARS]
+            #                     if KNOWLEDGE_QUERY_TRUNCATE_CHARS and KNOWLEDGE_QUERY_TRUNCATE_CHARS > 0
+            #                     else text
+            #                 )
             return None
         except Exception:
             return None

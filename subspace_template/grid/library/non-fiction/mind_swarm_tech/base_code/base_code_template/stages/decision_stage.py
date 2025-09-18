@@ -191,7 +191,13 @@ class DecisionStage:
         
         # Use brain to generate intention
         logger.info("🤔 Generating intention based on situation...")
-        intention_response = await self._generate_intention(decision_context, cbr_cases, knowledge_context)
+        intention_response = await self._generate_intention(
+            decision_context,
+            cbr_cases,
+            knowledge_context,
+            current_task=current_task,
+            tag_filter=tag_filter,
+        )
         
         # Extract intention from the response
         output_values = intention_response.get("output_values", {})
@@ -287,7 +293,15 @@ class DecisionStage:
             logger.error(f"Failed to retrieve CBR cases: {e}")
             return []
     
-    async def _generate_intention(self, memory_context: str, cbr_cases: list, knowledge_context: str) -> Dict[str, Any]:
+    async def _generate_intention(
+        self,
+        memory_context: str,
+        cbr_cases: list,
+        knowledge_context: str,
+        *,
+        current_task: str,
+        tag_filter
+    ) -> Dict[str, Any]:
         """Use brain to generate a plain text intention.
         
         Args:
@@ -316,14 +330,77 @@ class DecisionStage:
         else:
             logger.debug("No CBR cases to add to decision prompt")
         
-        # Combine memory context with CBR cases
-        # Append helpful knowledge (if any)
-        knowledge_block = "\n\n" + knowledge_context if knowledge_context else ""
-        full_context = memory_context + cbr_context + knowledge_block
+        # Integrate CBR and knowledge into working memory as virtual blocks
+        from ..memory.memory_blocks import MemoryBlock
+        from ..memory.memory_types import Priority, ContentType
+        
+        from pathlib import Path
+        ephemeral_ids = []
+        try:
+            ephemeral_dir = Path("/personal/.internal/memory/ephemeral")
+            ephemeral_dir.mkdir(parents=True, exist_ok=True)
+
+            if cbr_context:
+                # Write actual file instead of virtual
+                cbr_file = ephemeral_dir / f"decision_cbr_{self.cognitive_loop.cycle_count}.txt"
+                cbr_file.write_text(cbr_context, encoding='utf-8')
+
+                cbr_block = MemoryBlock(
+                    location=str(cbr_file),
+                    confidence=1.0,
+                    priority=Priority.HIGH,
+                    metadata={
+                        "stage": "decision",
+                        "source": "cbr_context"
+                    },
+                    pinned=False,
+                    cycle_count=self.cognitive_loop.cycle_count,
+                    content_type=ContentType.TEXT_PLAIN
+                )
+                self.memory_system.add_memory(cbr_block)
+                ephemeral_ids.append(cbr_block.id)
+
+            if knowledge_context:
+                # Write actual file instead of virtual
+                know_file = ephemeral_dir / f"decision_knowledge_{self.cognitive_loop.cycle_count}.txt"
+                know_file.write_text(knowledge_context, encoding='utf-8')
+
+                know_block = MemoryBlock(
+                    location=str(know_file),
+                    confidence=1.0,
+                    priority=Priority.MEDIUM,
+                    metadata={
+                        "stage": "decision",
+                        "source": "knowledge_context"
+                    },
+                    pinned=False,
+                    cycle_count=self.cognitive_loop.cycle_count,
+                    content_type=ContentType.TEXT_PLAIN
+                )
+                self.memory_system.add_memory(know_block)
+                ephemeral_ids.append(know_block.id)
+        except Exception as e:
+            logger.debug(f"Could not add decision ephemeral memories: {e}")
+        
+        # Rebuild decision context so selector can apply priorities
+        decision_context = self.memory_system.build_context(
+            max_tokens=self.cognitive_loop.max_context_tokens // 2,
+            current_task=current_task,
+            selection_strategy="balanced",
+            tag_filter=tag_filter,
+            exclude_content_types=[]
+        )
+        
+        # Cleanup ephemerals so they don't persist beyond the stage
+        for mid in ephemeral_ids:
+            try:
+                self.memory_system.remove_memory(mid)
+            except Exception:
+                pass
         
         # Debug: Log if CBR is actually in the context
         if cbr_cases:
-            if "## Similar Past Solutions" in full_context:
+            if "## Similar Past Solutions" in decision_context:
                 logger.info("✅ CBR cases ARE in the full context being sent to brain")
             else:
                 logger.warning("❌ CBR cases NOT found in full context - this is a bug!")
@@ -356,7 +433,7 @@ Always start your output with [[ ## reasoning ## ]]
                 "display_field": "reasoning"
             },
             "input_values": {
-                "working_memory": full_context
+                "working_memory": decision_context
             },
             "request_id": f"decide_intention_{int(time.time()*1000)}",
             "timestamp": datetime.now().isoformat()

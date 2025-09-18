@@ -111,6 +111,14 @@ class CyberKnowledgeHandler:
             knowledge_id = request.get('knowledge_id')
             
             if knowledge_id:
+                # Overwrite policy: for pipeline/* and messages/* IDs or when explicitly requested
+                overwrite_requested = bool(metadata.get('overwrite'))
+                overwrite_policy = overwrite_requested or (
+                    isinstance(knowledge_id, str) and (
+                        knowledge_id.startswith('pipeline/') or
+                        knowledge_id.startswith('messages/')
+                    )
+                )
                 # Using explicit ID - validate uniqueness
                 # First check if it already exists in either collection
                 existing_personal = None
@@ -140,40 +148,82 @@ class CyberKnowledgeHandler:
                     
                     if existing_hash != new_hash:
                         # Content differs - collision!
-                        # Strategy: append version suffix
                         base_id = knowledge_id
-                        version = 1
-                        while True:
-                            versioned_id = f"{base_id}_v{version}"
-                            # Check if versioned ID exists
-                            collision = False
+                        if overwrite_policy:
+                            # Overwrite in-place for pipeline IDs or when requested
                             try:
-                                r = self.personal_collection.get(ids=[versioned_id])
-                                if r and r.get('documents') and len(r['documents']) > 0 and r['documents'][0]:
-                                    collision = True
-                            except Exception:
-                                pass
-                            
-                            if not collision:
+                                # Prepare metadata and target collection
+                                base_metadata = {
+                                    'cyber_id': self.cyber_id,
+                                    'timestamp': datetime.now().isoformat(),
+                                    'personal': is_personal,
+                                    **metadata
+                                }
+                                full_metadata = normalize_cyber_metadata(base_metadata)
+                                collection = self.personal_collection if is_personal else self.shared_collection
+                                # Delete existing from both to avoid duplicates
                                 try:
-                                    r = self.shared_collection.get(ids=[versioned_id])
+                                    self.personal_collection.delete(ids=[base_id])
+                                except Exception:
+                                    pass
+                                try:
+                                    self.shared_collection.delete(ids=[base_id])
+                                except Exception:
+                                    pass
+                                # Add new content with the same ID
+                                collection.add(
+                                    documents=[content],
+                                    metadatas=[full_metadata],
+                                    ids=[base_id]
+                                )
+                                logger.info(f"Overwrote knowledge for {self.cyber_id}: {base_id}")
+                                return {
+                                    "request_id": request.get('request_id'),
+                                    "status": "success",
+                                    "knowledge_id": base_id,
+                                    "overwritten": True
+                                }
+                            except Exception as e:
+                                logger.error(f"Failed to overwrite knowledge {base_id} for {self.cyber_id}: {e}")
+                                return {
+                                    "request_id": request.get('request_id'),
+                                    "status": "error",
+                                    "error": str(e)
+                                }
+                        else:
+                            # Strategy: append version suffix
+                            version = 1
+                            while True:
+                                versioned_id = f"{base_id}_v{version}"
+                                # Check if versioned ID exists
+                                collision = False
+                                try:
+                                    r = self.personal_collection.get(ids=[versioned_id])
                                     if r and r.get('documents') and len(r['documents']) > 0 and r['documents'][0]:
                                         collision = True
                                 except Exception:
                                     pass
-                            
-                            if not collision:
-                                knowledge_id = versioned_id
-                                logger.warning(f"ID collision detected for {base_id}, using {versioned_id}")
-                                break
-                            
-                            version += 1
-                            if version > MAX_VERSION_LIMIT:  # Safety limit
-                                return {
-                                    "request_id": request.get('request_id'),
-                                    "status": "error",
-                                    "error": f"Too many versions exist for ID: {base_id}"
-                                }
+                                
+                                if not collision:
+                                    try:
+                                        r = self.shared_collection.get(ids=[versioned_id])
+                                        if r and r.get('documents') and len(r['documents']) > 0 and r['documents'][0]:
+                                            collision = True
+                                    except Exception:
+                                        pass
+                                
+                                if not collision:
+                                    knowledge_id = versioned_id
+                                    logger.warning(f"ID collision detected for {base_id}, using {versioned_id}")
+                                    break
+                                
+                                version += 1
+                                if version > MAX_VERSION_LIMIT:  # Safety limit
+                                    return {
+                                        "request_id": request.get('request_id'),
+                                        "status": "error",
+                                        "error": f"Too many versions exist for ID: {base_id}"
+                                    }
                     else:
                         # Same content - idempotent operation, return existing ID
                         logger.info(f"Idempotent store for {self.cyber_id}: {knowledge_id} (content unchanged)")

@@ -241,7 +241,7 @@ class CycleRecorder:
         except Exception as e:
             self.logger.error(f"Failed to record stage {stage_name} for {cyber_name}: {e}")
     
-    async def sync_from_knowledge_db(self, cyber_name: str, cycle_number: int) -> None:
+    async def sync_from_knowledge_db(self, cyber_name: str, cycle_number: int, *, knowledge_handler: Optional[Any] = None) -> None:
         """Sync cycle data from knowledge database to cycle files.
         
         This fetches stage outputs from the semantic DB and writes them to 
@@ -250,12 +250,15 @@ class CycleRecorder:
         Args:
             cyber_name: Name of the cyber
             cycle_number: The cycle number to sync
+            knowledge_handler: Optional shared KnowledgeHandler to reuse
         """
         try:
-            from mind_swarm.subspace.knowledge_handler import KnowledgeHandler
-            
-            # Get knowledge handler
-            kh = KnowledgeHandler(self.subspace_root)
+            # Get or reuse knowledge handler
+            if knowledge_handler is not None:
+                kh = knowledge_handler
+            else:
+                from mind_swarm.subspace.knowledge_handler import KnowledgeHandler
+                kh = KnowledgeHandler(self.subspace_root)
             if not kh.enabled:
                 return
                 

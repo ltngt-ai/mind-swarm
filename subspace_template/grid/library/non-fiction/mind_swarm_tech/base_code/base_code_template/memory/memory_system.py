@@ -41,7 +41,7 @@ class MemorySystem:
     
     def __init__(self, 
                  filesystem_root: Path, 
-                 max_tokens: int = 100000,
+                 max_tokens: int = 32000,
                  cache_ttl: int = 300):
         """Initialize the memory system.
         
@@ -206,10 +206,16 @@ class MemorySystem:
         
         # Debug: Log content types in symbolic memory
         content_type_counts = {}
+        large_files = []
         for m in memories_to_select:
             ct_name = m.content_type.name if hasattr(m.content_type, 'name') else str(m.content_type)
             content_type_counts[ct_name] = content_type_counts.get(ct_name, 0) + 1
+            # Check for large cycle files
+            if hasattr(m, 'location') and 'cycles/cycle' in str(m.location):
+                large_files.append(str(m.location))
         logger.debug(f"Content types available: {content_type_counts}")
+        if large_files:
+            logger.warning(f"FOUND CYCLE FILES IN MEMORY: {large_files[:5]}")  # Show first 5
         
         # Filter by content type if specified
         if include_content_types:
@@ -219,22 +225,26 @@ class MemorySystem:
             memories_to_select = [m for m in memories_to_select if m.content_type not in exclude_content_types]
             logger.debug(f"Exclude filter: kept {len(memories_to_select)} memories, excluded types {exclude_content_types}")
         
+        # ALWAYS exclude cycle debug dumps - they should NEVER be in working memory!
+        if not exclude_locations:
+            exclude_locations = []
+        exclude_locations.append("cycles/cycle")  # Always exclude cycle dumps
+        
         # Filter out memories from excluded locations
-        if exclude_locations:
-            before_count = len(memories_to_select)
-            filtered = []
-            for m in memories_to_select:
-                if hasattr(m, 'location'):
-                    location_str = str(m.location)
-                    # Check if any exclusion pattern matches
-                    if not any(pattern in location_str for pattern in exclude_locations):
-                        filtered.append(m)
-                else:
-                    # No location attribute, keep it
+        before_count = len(memories_to_select)
+        filtered = []
+        for m in memories_to_select:
+            if hasattr(m, 'location'):
+                location_str = str(m.location)
+                # Check if any exclusion pattern matches
+                if not any(pattern in location_str for pattern in exclude_locations):
                     filtered.append(m)
-            memories_to_select = filtered
-            if before_count != len(memories_to_select):
-                logger.debug(f"Filtered out {before_count - len(memories_to_select)} memories from excluded locations: {exclude_locations}")
+            else:
+                # No location attribute, keep it
+                filtered.append(m)
+        memories_to_select = filtered
+        if before_count != len(memories_to_select):
+            logger.debug(f"Filtered out {before_count - len(memories_to_select)} memories from excluded locations: {exclude_locations}")
         
         # Apply tag filter if provided (only filters knowledge)
         if tag_filter:

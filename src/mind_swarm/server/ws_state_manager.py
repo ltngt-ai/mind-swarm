@@ -39,7 +39,7 @@ class ClientState:
 class WebSocketStateManager:
     """Manages state for multiple WebSocket clients."""
     
-    def __init__(self):
+    def __init__(self, server=None):
         """Initialize the state manager."""
         self.clients: Dict[str, ClientState] = {}
         self.event_history: List[Dict[str, Any]] = []  # Keep last N events
@@ -47,6 +47,7 @@ class WebSocketStateManager:
         self.event_counter = 0
         self.logger = logger
         self._lock = asyncio.Lock()
+        self.server = server  # Reference to server for accessing coordinator
     
     async def register_client(self, websocket: WebSocket, client_id: Optional[str] = None) -> str:
         """Register a new WebSocket client.
@@ -464,12 +465,15 @@ class WebSocketStateManager:
                 status = self.server.coordinator.get_status()
                 cyber_status = status.get('Cybers', {}).get(cyber_name, {})
                 current_cycle = cyber_status.get('cycle_count', 1)
-                
+
+                # Reuse the coordinator's knowledge handler (avoid re-initialization)
+                kh = self.server.coordinator.knowledge_handler
+
                 # Sync current and previous cycle from DB
-                await recorder.sync_from_knowledge_db(cyber_name, current_cycle)
+                await recorder.sync_from_knowledge_db(cyber_name, current_cycle, knowledge_handler=kh)
                 if current_cycle > 1:
-                    await recorder.sync_from_knowledge_db(cyber_name, current_cycle - 1)
-                    
+                    await recorder.sync_from_knowledge_db(cyber_name, current_cycle - 1, knowledge_handler=kh)
+
                 logger.debug(f"Synced cycle data from knowledge DB for {cyber_name}")
             except Exception as e:
                 logger.debug(f"Could not sync from knowledge DB: {e}")
@@ -481,8 +485,8 @@ class WebSocketStateManager:
             # Try multiple times to handle transient failures
             for attempt in range(3):
                 try:
-                    from mind_swarm.subspace.knowledge_handler import KnowledgeHandler
-                    kh = KnowledgeHandler(subspace_root)
+                    # Reuse the coordinator's shared KnowledgeHandler instance
+                    kh = self.server.coordinator.knowledge_handler
                     
                     if kh.enabled:
                         # Get handler for the cyber
@@ -593,11 +597,8 @@ class WebSocketStateManager:
             return
         
         try:
-            import os
-            from mind_swarm.subspace.knowledge_handler import KnowledgeHandler
-            
-            subspace_root = Path(os.environ.get("SUBSPACE_ROOT", "../subspace"))
-            kh = KnowledgeHandler(subspace_root)
+            # Reuse the coordinator's shared KnowledgeHandler instance
+            kh = self.server.coordinator.knowledge_handler
             
             cycle_data = {}
             
@@ -728,3 +729,13 @@ def get_ws_state_manager() -> WebSocketStateManager:
     if _ws_state_manager is None:
         _ws_state_manager = WebSocketStateManager()
     return _ws_state_manager
+
+
+def set_ws_server(server) -> None:
+    """Set the server reference for the WebSocket state manager.
+    
+    Args:
+        server: The server instance with coordinator
+    """
+    ws_manager = get_ws_state_manager()
+    ws_manager.server = server

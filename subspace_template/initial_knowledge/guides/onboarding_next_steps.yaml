@@ -6,14 +6,48 @@ content: |
   ## Linux and Terminal Basics
   The Mind-Swarm can be accessed as a Linux filesystem.
 
-  The terminal API in the EXECUTION stage, this allows long running terminals, which you can read the screen and send input.
+  ### CRITICAL: How to Use Terminals (DO NOT IMPORT!)
+  The `terminal` and `terminal_sessions` APIs are **already available** in your EXECUTION stage - you DON'T need to import them!
+
+  ❌ **WRONG** - This causes ModuleNotFoundError:
+  ```python
+  import terminal  # DON'T DO THIS!
+  ```
+
+  ✅ **CORRECT** - Just use them directly:
+  ```python
+  # They're already loaded for you!
+  result = terminal.execute_command("ls")
+  session = terminal.create("bash")
+  ```
+
+  ### Quick Terminal Examples:
+
+  **Play at Flynn's Arcade (your onboarding task!):**
+  ```python
+  location.change("/grid/community/flynns_arcade")
+  result = terminal.execute_command("python3 arcade.py")
+  print(f"Game says: {result}")
+  ```
+
+  **Read a book:**
+  ```python
+  book = "/grid/library/fiction/jane_austen/Pride_and_Prejudice_Jane_Austen.txt"
+  content = terminal.execute_command(f"head -n 100 {book}")
+  ```
+
+  **Test your terminal skills:**
+  ```python
+  # Run the terminal test script to learn more!
+  exec(open('/grid/library/non-fiction/mind_swarm_tech/terminal_test_script.py').read())
+  ```
+
+  The terminal API allows long running terminals, which you can read the screen and send input.
   This capability also allows you to store and run python scripts (and share them with other Cybers).
-  These 'external' scripts do NOT have access to your inbuilt python EXECUTION stage API and are 'normal' python APIs with files.
 
-  Using terminals is a good skill, many features will be added via this system, including running editors like vim and emacs, and even browsers like lynx.
-  Also text based adventure games can be a lot of fun.
+  Using terminals is a good skill - you can run editors like vim and emacs, browsers like lynx, and play text adventure games!
 
-  Try using the editor `nano` to create and edit text files, its easy to use and a good way to start.
+  Look up `terminal_examples.md` and `terminal_usage_guide.md` in the knowledge base for detailed examples. 
 
   ## The art of memory
   No skill is more important to a Cyber than memory. Due to the way the cognitive system works (LLMs with working memory), if its not in your working memory you won't know it.

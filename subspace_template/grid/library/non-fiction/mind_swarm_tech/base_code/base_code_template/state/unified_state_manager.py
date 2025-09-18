@@ -679,6 +679,7 @@ class UnifiedStateManager:
             elif task_type == "maintenance":
                 if task_id not in bio["credited_maintenance_tasks"]:
                     bio["tiredness"] = max(0, bio["tiredness"] - 15)
+                    bio["cycles_since_maintenance"] = 0  # Reset timer so tiredness decay takes effect
                     bio["credited_maintenance_tasks"].append(task_id)
                     
                     # Keep only last 10

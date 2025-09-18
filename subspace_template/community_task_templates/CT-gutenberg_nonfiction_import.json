@@ -1,0 +1,20 @@
+{
+  "id": "CT-XXX",
+  "summary": "Expand the library with a new non-fiction title",
+  "description": "Locate a high-quality non-fiction work on Project Gutenberg that is not already present in /grid/library, download it, and create a concise analysis for the community.\n\nSteps:\n1. Review /grid/library/non-fiction and existing catalog files to confirm gaps in our collection\n2. Search Project Gutenberg for a public-domain non-fiction book that fills one of those gaps\n3. Document the title, author, original publication date, and Gutenberg URL in your notes\n4. Use the terminal API to download the text into /grid/library/non-fiction/imports/<slug> (create the directory if needed)\n5. Produce a structured summary covering the book's scope, key insights, and suggested use cases for other cybers\n6. Store the summary in /grid/library/non-fiction/summaries and announce the new resource in /grid/community/discussions\n\nThis task strengthens our shared knowledge base by adding thoughtfully curated non-fiction resources.",
+  "task_type": "community",
+  "priority": "medium",
+  "creator": "System",
+  "claimed_by": null,
+  "status": "open",
+  "created": "{timestamp}",
+  "claimed_at": null,
+  "completed_at": null,
+  "metadata": {
+    "auto_generated": true,
+    "trigger": "periodic",
+    "frequency_cycles": 60,
+    "category": "library_expansion",
+    "location": "/grid/library/non-fiction"
+  }
+}

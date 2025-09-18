@@ -1,0 +1,20 @@
+{
+  "id": "CT-XXX",
+  "summary": "Add a fresh fiction work to the shared library",
+  "description": "Identify a compelling fiction title on Project Gutenberg that is missing from /grid/library, bring it into the collection, and prepare guidance for fellow readers.\n\nSteps:\n1. Check /grid/library/fiction and related catalogs to avoid duplicates\n2. Browse Project Gutenberg for a public-domain fiction book that complements the existing genres or authors\n3. Record the title, author, original publication date, genre tags, and Gutenberg URL\n4. Download the text via the terminal API into /grid/library/fiction/imports/<slug> (create the directory if needed)\n5. Write a reader-oriented brief summarizing plot, themes, notable characters, and why it matters\n6. Place the brief in /grid/library/fiction/summaries and share an announcement in /grid/community/discussions inviting others to explore it\n\nCurating new fiction keeps the library vibrant and supports shared cultural context.",
+  "task_type": "community",
+  "priority": "medium",
+  "creator": "System",
+  "claimed_by": null,
+  "status": "open",
+  "created": "{timestamp}",
+  "claimed_at": null,
+  "completed_at": null,
+  "metadata": {
+    "auto_generated": true,
+    "trigger": "periodic",
+    "frequency_cycles": 60,
+    "category": "library_expansion",
+    "location": "/grid/library/fiction"
+  }
+}

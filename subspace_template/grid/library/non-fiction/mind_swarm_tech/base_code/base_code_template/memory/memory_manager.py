@@ -20,7 +20,7 @@ logger = logging.getLogger("Cyber.memory")
 class WorkingMemoryManager:
     """Manages the Cyber's working memory with symbolic references."""
     
-    def __init__(self, max_tokens: int = 100000):
+    def __init__(self, max_tokens: int = 32000):
         """Initialize the memory manager.
         
         Args:

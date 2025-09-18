@@ -87,6 +87,106 @@ class MindSwarmDSPyLM(dspy.LM):
         self.history = []
         self.kwargs = {}  # DSPy expects this attribute
         
+    # Context safety helpers
+    def _get_model_context_length(self) -> int:
+        """Fetch model context window from the model pool; fallback to 8192."""
+        try:
+            from mind_swarm.ai.model_pool import model_pool
+            if hasattr(self, 'model') and self.model:
+                info = model_pool.get_model(self.model)
+                if info and getattr(info, 'context_length', None):
+                    return int(info.context_length)
+        except Exception as e:
+            logger.debug(f"Could not fetch model context length: {e}")
+        return 8192
+
+    def _estimate_tokens(self, messages: List[Dict[str, Any]]) -> int:
+        """Rough token estimate: ~4 chars per token + small per-message overhead."""
+        if not messages:
+            return 0
+        base = 0
+        try:
+            base = sum(len((m.get('content') or '')) // 4 for m in messages)
+        except Exception:
+            base = sum(len(str(m)) // 4 for m in messages)
+        return base + len(messages) * 20
+
+    def _truncate_text(self, text: str, max_chars: int, keep_tail: bool = True) -> str:
+        """Truncate text with indicator; keep head or tail depending on keep_tail."""
+        if max_chars <= 0 or not text or len(text) <= max_chars:
+            return text
+        marker = "\n[... truncated ...]\n"
+        if max_chars <= len(marker):
+            return text[:max_chars]
+        if keep_tail:
+            tail = text[-(max_chars - len(marker)) :]
+            return marker + tail
+        else:
+            head = text[: (max_chars - len(marker))]
+            return head + marker
+
+    def _fit_messages_to_context(self, messages: List[Dict[str, Any]], max_completion_tokens: int) -> List[Dict[str, Any]]:
+        """Clamp messages so input+completion stays within the model context window.
+
+        - Preserve the first system message (truncate to a cap if needed)
+        - Preserve most recent messages next, truncating the last one to fit
+        - Leave a safety margin beyond max_completion_tokens
+        """
+        if not messages:
+            return messages
+
+        try:
+            context_len = self._get_model_context_length()
+            safety_margin = int(os.getenv("MIND_SWARM_CONTEXT_SAFETY_MARGIN_TOKENS", "1024"))
+            reserve = int(max(0, max_completion_tokens)) + safety_margin
+            allowed_tokens = max(512, context_len - reserve)
+            allowed_chars = allowed_tokens * 4
+
+            if self._estimate_tokens(messages) <= allowed_tokens:
+                return messages
+
+            # Extract and cap first system message
+            sys_idx = next((i for i, m in enumerate(messages) if m.get('role') == 'system'), None)
+            system_msg = None
+            system_chars = 0
+            SYSTEM_CAP_CHARS = min(allowed_chars // 3, 32000)
+            if sys_idx is not None:
+                m = messages[sys_idx].copy()
+                content = m.get('content') or ''
+                if len(content) > SYSTEM_CAP_CHARS:
+                    m['content'] = self._truncate_text(content, SYSTEM_CAP_CHARS, keep_tail=False)
+                system_msg = m
+                system_chars = len(m.get('content') or '')
+
+            remaining_chars = max(0, allowed_chars - system_chars)
+
+            # Add messages from the end (most recent first) within remaining budget
+            kept_rev: List[Dict[str, Any]] = []
+            current_chars = 0
+            for i in range(len(messages) - 1, -1, -1):
+                if sys_idx is not None and i == sys_idx:
+                    continue
+                m = messages[i].copy()
+                content = m.get('content') or ''
+                needed = len(content)
+                if current_chars + needed <= remaining_chars:
+                    kept_rev.append(m)
+                    current_chars += needed
+                else:
+                    available = max(0, remaining_chars - current_chars)
+                    if available > 0:
+                        m['content'] = self._truncate_text(content, available, keep_tail=True)
+                        kept_rev.append(m)
+                    break
+
+            kept = list(reversed(kept_rev))
+            if system_msg is not None:
+                return [system_msg] + kept
+            return kept
+        except Exception as e:
+            logger.warning(f"Failed to clamp messages to context: {e}")
+            return messages
+
     def _setup_provider(self):
         """Set up provider-specific configuration."""
         if self.provider == "openrouter":
@@ -239,6 +339,9 @@ class MindSwarmDSPyLM(dspy.LM):
             logger.warning("DSPy acall with no prompt or messages")
             return []
         
+        # Before logging or rate checks, enforce context window limits safely
+        messages = self._fit_messages_to_context(messages, max_tokens)
+
         # Log full API call if LLM debug is enabled
         if llm_debug:
             _ensure_llm_logger()  # Configure logger if not already done
@@ -280,8 +383,8 @@ class MindSwarmDSPyLM(dspy.LM):
             # Try to get cyber_id from kwargs first, then from instance attribute
             cyber_id = kwargs.get("cyber_id", getattr(self, "current_cyber_id", "unknown"))
             
-            # Estimate tokens (rough estimate based on message length)
-            estimated_tokens = sum(len(msg.get("content", "")) // 4 for msg in messages) + 500
+            # Estimate tokens (rough estimate based on message length) AFTER clamping
+            estimated_tokens = self._estimate_tokens(messages) + 500
             
             allowed, reason = token_tracker.check_rate_limit(
                 cyber_id=cyber_id,

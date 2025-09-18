@@ -119,7 +119,7 @@ class WorkingMemory:
         if not self.memory_system:
             raise WorkingMemoryError("Memory system not available in context")
     
-    def add(self, name: str, content: Any) -> None:
+    def add(self, name: str, content: Any, pinned: bool = False) -> None:
         """Add a Python object to working memory.
         
         Args:
@@ -149,26 +149,30 @@ class WorkingMemory:
             content_str = str(content)
             content_type = ContentType.TEXT_PLAIN
         
-        # Create virtual memory block with content in metadata
-        # This works with the semantic database approach
-        temp_path = f"/personal/.internal/memory/working/{name}.tmp"
-        
-        # Add to memory system with content in metadata
+        # FIXED: Write actual file instead of storing in metadata
+        # Working memory must be disk-based, not virtual
+        temp_dir = Path("/personal/.internal/memory/working")
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        temp_path = temp_dir / f"{name}.tmp"
+
+        # Write content to actual file
+        temp_path.write_text(content_str, encoding='utf-8')
+
+        # Create memory block that references the file
         memory_block = MemoryBlock(
-            location=temp_path,
+            location=str(temp_path),
             confidence=1.0,
             priority=Priority.HIGH,
             metadata={
                 "source": "working_memory",
                 "name": name,
-                "content": content_str,  # Content stored in metadata for semantic DB
-                "added_at": datetime.now().isoformat(),
-                "virtual": True  # Mark as virtual (not file-backed)
+                "added_at": datetime.now().isoformat()
+                # NO content in metadata - it's in the file!
             },
             content_type=content_type,
-            pinned=True  # Pin working memory items so they persist across cycles
+            pinned=pinned  # Manual pinning (default False)
         )
-        
+
         self.memory_system.add_memory(memory_block)
         logger.info(f"Added '{name}' to working memory")
     
@@ -291,6 +295,52 @@ class WorkingMemory:
         """
         all_items = list(self._items.keys()) + list(self._file_items.keys())
         return sorted(set(all_items))
+
+    def pin(self, name: str) -> int:
+        """Pin all memories matching the given working_memory name.
+        
+        Returns:
+            Number of memories pinned
+        """
+        if not name:
+            return 0
+        count = 0
+        try:
+            for memory in self.memory_system._memory_manager._memories.values():
+                if hasattr(memory, 'metadata') and memory.metadata and memory.metadata.get('name') == name:
+                    if not getattr(memory, 'pinned', False):
+                        memory.pinned = True
+                        count += 1
+        except Exception:
+            pass
+        if count:
+            logger.info(f"Pinned {count} memory block(s) for '{name}'")
+        else:
+            logger.warning(f"No memory blocks found to pin for '{name}'")
+        return count
+
+    def unpin(self, name: str) -> int:
+        """Unpin all memories matching the given working_memory name.
+        
+        Returns:
+            Number of memories unpinned
+        """
+        if not name:
+            return 0
+        count = 0
+        try:
+            for memory in self.memory_system._memory_manager._memories.values():
+                if hasattr(memory, 'metadata') and memory.metadata and memory.metadata.get('name') == name:
+                    if getattr(memory, 'pinned', False):
+                        memory.pinned = False
+                        count += 1
+        except Exception:
+            pass
+        if count:
+            logger.info(f"Unpinned {count} memory block(s) for '{name}'")
+        else:
+            logger.warning(f"No memory blocks found to unpin for '{name}'")
+        return count
     
     def get_tokens(self) -> int:
         """Get approximate token count of working memory.
@@ -369,6 +419,10 @@ def add(name: str, content: Any) -> None:
     """Add a Python object to working memory."""
     return _get_instance().add(name, content)
 
+def add_pinned(name: str, content: Any) -> None:
+    """Add a Python object to working memory and pin it (explicit)."""
+    return _get_instance().add(name, content, pinned=True)
+
 
 def add_file(filepath: str, name: Optional[str] = None) -> None:
     """Load a file's content into working memory."""
@@ -398,6 +452,14 @@ def get_tokens() -> int:
 def get(name: str) -> Optional[Any]:
     """Get an item from working memory by name."""
     return _get_instance().get(name)
+
+def pin(name: str) -> int:
+    """Pin all memories created with this working_memory name."""
+    return _get_instance().pin(name)
+
+def unpin(name: str) -> int:
+    """Unpin all memories created with this working_memory name."""
+    return _get_instance().unpin(name)
 
 
 def contains(name: str) -> bool:

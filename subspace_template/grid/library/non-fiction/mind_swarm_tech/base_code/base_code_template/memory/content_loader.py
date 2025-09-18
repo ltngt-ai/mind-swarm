@@ -108,9 +108,15 @@ class ContentLoader:
     
     def load_file_content(self, memory: MemoryBlock) -> str:
         """Load file content with caching."""
-        # Handle virtual files (like boot ROM)
+        # Handle legacy virtual files (should not exist anymore, but handle gracefully)
         if memory.metadata.get("virtual", False):
-            return memory.metadata.get("content", "[Virtual file - no content]")
+            # Log warning about deprecated virtual memory
+            logger.warning(f"Encountered deprecated virtual memory: {memory.location}")
+            # Try to get content from metadata as fallback
+            content = memory.metadata.get("content", None)
+            if content:
+                return content
+            # Otherwise fall through to try loading from filesystem
         
         # Skip cache for no_cache files (e.g., memory-mapped files)
         if not getattr(memory, 'no_cache', False):

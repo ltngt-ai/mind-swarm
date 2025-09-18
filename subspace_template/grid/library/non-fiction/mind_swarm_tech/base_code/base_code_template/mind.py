@@ -32,7 +32,7 @@ class CyberMind:
         self.name = self.identity.get("name", os.environ.get("CYBER_NAME", "unknown"))
         self.cyber_type = self.identity.get("cyber_type", os.environ.get("CYBER_TYPE", "general"))
         # Context length is hardcoded - Cybers don't need to know about models
-        self.max_context_length = 65536  # Standard working memory size
+        self.max_context_length = 32000  # Reasonable context limit to avoid rate limiting
         
         # Load configuration if it exists
         self.config = self._load_config()

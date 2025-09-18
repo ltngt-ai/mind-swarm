@@ -110,6 +110,12 @@ from .terminal import (
     TerminalError
 )
 
+# Export the TerminalSessions class and exceptions
+from .terminal_sessions import (
+    TerminalSessions,
+    TerminalSessionError
+)
+
 # Export the Knowledge class
 from .knowledge import Knowledge
 
@@ -146,5 +152,7 @@ __all__ = [
     'WorkingMemoryError',
     'Terminal',
     'TerminalError',
+    'TerminalSessions',
+    'TerminalSessionError',
     'Knowledge'
 ]

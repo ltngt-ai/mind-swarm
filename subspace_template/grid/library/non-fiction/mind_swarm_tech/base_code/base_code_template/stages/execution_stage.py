@@ -87,6 +87,7 @@ class ExecutionStage:
         self._extract_and_save_module_docs(self.tasks_api, "tasks_api_docs")
         self._extract_and_save_module_docs(self.community_tasks_api, "community_tasks_api_docs")
         self._extract_and_save_module_docs(self.terminal_api, "terminal_api_docs")
+        self._extract_and_save_module_docs(self.terminal_sessions_api, "terminal_sessions_api_docs")
         self._extract_and_save_module_docs(self.working_memory_api, "working_memory_api_docs")
         
         # Initialize error case tracking
@@ -413,6 +414,10 @@ class ExecutionStage:
         # Import Terminal API
         from ..python_modules.terminal import Terminal
         self.terminal_api = Terminal(context)
+        
+        # Import Terminal Sessions API
+        from ..python_modules.terminal_sessions import TerminalSessions
+        self.terminal_sessions_api = TerminalSessions(context)
         
         # Import Working Memory API
         from ..python_modules.working_memory import WorkingMemory
@@ -1016,6 +1021,16 @@ The provided API docs describe the available operations and their usage.
         namespace['terminal'] = terminal_instance
         namespace['TerminalError'] = TerminalError
         
+        # Import and initialize the Terminal Sessions API
+        from ..python_modules.terminal_sessions import TerminalSessions, TerminalSessionError
+        
+        # Create terminal sessions instance
+        terminal_sessions_instance = TerminalSessions(context)
+        namespace['terminal_sessions'] = terminal_sessions_instance
+        namespace['TerminalSessionError'] = TerminalSessionError
+        # Also add to context for actions to use
+        context['terminal_sessions'] = terminal_sessions_instance
+        
         # Import and initialize the Biofeedback API
         # Add convenience alias for exec_command with network access
         # This replaces the deprecated environment.exec_command
@@ -1138,6 +1153,43 @@ The provided API docs describe the available operations and their usage.
             tag_filter=tag_filter,
             exclude_content_types=[]
         )
+
+        # Enforce stage-level context budget: keep combined inputs within half of context
+        try:
+            half_tokens = max(512, int(self.cognitive_loop.max_context_tokens) // 2)
+        except Exception:
+            half_tokens = 32768
+        safety_tokens = 1024
+        # Estimate extras from error details, partial output, and similar solutions (added below)
+        extras_chars = 0
+        try:
+            # Build preliminary error context to estimate size
+            error_context_preview = {
+                "error_type": error.get("error_type", "Unknown"),
+                "error_message": error.get("error", ""),
+                "line_number": error.get("line"),
+                "partial_output": error.get("partial_output", [])
+            }
+            import json as _json
+            extras_chars += len(_json.dumps(error_context_preview))
+        except Exception:
+            pass
+        if similar_solutions:
+            try:
+                # Approximate size of formatted similar solutions
+                extras_chars += sum(len((case.get('problem_context','') or '')) + len((case.get('solution','') or '')) for case in similar_solutions)
+            except Exception:
+                pass
+        extras_tokens_est = extras_chars // 4
+        base_budget_tokens = max(512, half_tokens - safety_tokens - extras_tokens_est)
+        base_budget_chars = max(0, base_budget_tokens * 4)
+        if len(working_memory_context) > base_budget_chars:
+            marker = "\n[... working_memory truncated to fit stage budget ...]\n"
+            keep = max(0, base_budget_chars - len(marker))
+            working_memory_context = working_memory_context[:keep] + marker
+            logger.debug(
+                f"ExecutionStage: truncated working_memory to {keep} chars (+marker) to fit budget"
+            )
         
         # API documentation is already in working memory as pinned MemoryBlocks
         # No need to extract it again - it will be included in working_memory_context
@@ -1154,6 +1206,33 @@ The provided API docs describe the available operations and their usage.
         if "traceback" in error:
             error_context["traceback"] = error["traceback"]
         
+        # Check for common module import errors and provide specific guidance
+        import_error_help = ""
+        if error.get("error_type") == "ModuleNotFoundError" or "No module named" in error.get("error", ""):
+            # Extract module name from error
+            error_msg = error.get("error", "")
+            if "terminal" in error_msg.lower():
+                import_error_help = """
+IMPORTANT: The 'terminal' and 'terminal_sessions' APIs are ALREADY AVAILABLE - do not import them!
+Instead of: import terminal
+Just use: terminal.create("bash") or terminal.execute_command("ls")
+
+The following APIs are pre-loaded and available without import:
+- terminal (for terminal sessions)
+- terminal_sessions (for persistent sessions)
+- location (for navigation)
+- memory (for file operations)
+- tasks (for task management)
+- working_memory (for temporary storage)
+- knowledge (for long-term storage)
+"""
+            elif any(mod in error_msg.lower() for mod in ["memory", "location", "tasks", "knowledge", "working_memory"]):
+                import_error_help = """
+IMPORTANT: Core APIs are ALREADY AVAILABLE - do not import them!
+All system APIs are pre-loaded in the execution environment.
+Just use them directly without import statements.
+"""
+
         # Format similar solutions if available
         similar_solutions_text = ""
         if similar_solutions:
@@ -1163,12 +1242,13 @@ The provided API docs describe the available operations and their usage.
                 similar_solutions_text += f"   Problem: {case.get('problem_context', 'N/A')}\n"
                 similar_solutions_text += f"   Solution: {case.get('solution', 'N/A')}\n"
                 similar_solutions_text += f"   Outcome: {case.get('outcome', 'N/A')}\n"
-        
+
         instruction = f"""
 The Python script failed with an error. Analyze the error and fix the script.
 
 The API documentation is in your working memory.
 The error details show exactly what went wrong.
+{import_error_help}
 {similar_solutions_text}
 
 CRITICAL: Output ONLY the corrected Python code - no markdown, no explanations, just Python.
@@ -1176,6 +1256,73 @@ Remember: NO async/await, all operations are synchronous.
 If similar past solutions exist, consider adapting them to the current context.
 """
         
+        # Integrate error context and similar solutions into working memory as ephemeral files
+        from ..memory.memory_blocks import MemoryBlock
+        from ..memory.memory_types import Priority, ContentType
+        from pathlib import Path
+        exec_ephemeral_ids = []
+        try:
+            ephemeral_dir = Path("/personal/.internal/memory/ephemeral")
+            ephemeral_dir.mkdir(parents=True, exist_ok=True)
+
+            error_details_json = json.dumps(error_context, indent=2)
+            # Write actual file instead of virtual
+            err_file = ephemeral_dir / f"execution_error_{self.cognitive_loop.cycle_count}.json"
+            err_file.write_text(error_details_json, encoding='utf-8')
+
+            err_block = MemoryBlock(
+                location=str(err_file),
+                confidence=1.0,
+                priority=Priority.HIGH,
+                metadata={
+                    "stage": "execution",
+                    "source": "error_details"
+                },
+                pinned=False,
+                cycle_count=self.cognitive_loop.cycle_count,
+                content_type=ContentType.APPLICATION_JSON
+            )
+            self.memory_system.add_memory(err_block)
+            exec_ephemeral_ids.append(err_block.id)
+
+            if similar_solutions_text:
+                # Write actual file instead of virtual
+                sim_file = ephemeral_dir / f"execution_similar_{self.cognitive_loop.cycle_count}.txt"
+                sim_file.write_text(similar_solutions_text, encoding='utf-8')
+
+                sim_block = MemoryBlock(
+                    location=str(sim_file),
+                    confidence=1.0,
+                    priority=Priority.MEDIUM,
+                    metadata={
+                        "stage": "execution",
+                        "source": "similar_solutions"
+                    },
+                    pinned=False,
+                    cycle_count=self.cognitive_loop.cycle_count,
+                    content_type=ContentType.TEXT_PLAIN
+                )
+                self.memory_system.add_memory(sim_block)
+                exec_ephemeral_ids.append(sim_block.id)
+        except Exception as e:
+            logger.debug(f"Could not add execution ephemeral memories: {e}")
+
+        # Rebuild working memory with error details integrated
+        working_memory_context = self.memory_system.build_context(
+            max_tokens=self.cognitive_loop.max_context_tokens // 2,
+            current_task="Fix Python script error based on error details and past solutions",
+            selection_strategy="balanced",
+            tag_filter=tag_filter,
+            exclude_content_types=[]
+        )
+
+        # Cleanup ephemerals
+        for mid in exec_ephemeral_ids:
+            try:
+                self.memory_system.remove_memory(mid)
+            except Exception:
+                pass
+
         fix_request = {
             "signature": {
                 "instruction": instruction,
@@ -1192,10 +1339,10 @@ If similar past solutions exist, consider adapting them to the current context.
             },
             "input_values": {
                 "script": script,
-                "error_details": json.dumps(error_context, indent=2),
+                "error_details": "Included in working_memory",
                 "working_memory": working_memory_context,
-                "partial_output": "\n".join(error.get("partial_output", [])),
-                "similar_solutions": similar_solutions_text if similar_solutions else "No similar solutions found"
+                "partial_output": "\n".join(error.get("partial_output", []))[:2000],
+                "similar_solutions": "Included in working_memory"
             }
         }
         

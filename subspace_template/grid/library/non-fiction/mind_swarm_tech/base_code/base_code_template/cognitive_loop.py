@@ -43,7 +43,7 @@ class CognitiveLoop:
     """
     
     def __init__(self, cyber_id: str, personal: Path, 
-                 max_context_tokens: int = 50000,
+                 max_context_tokens: int = 32000,
                  cyber_type: str = 'general'):
         """Initialize the cognitive loop with all supporting managers.
         

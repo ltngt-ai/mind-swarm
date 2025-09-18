@@ -378,7 +378,7 @@ class ObservationStage:
         # Create tag filter for observation stage
         tag_filter = TagFilter(blacklist=self.KNOWLEDGE_BLACKLIST)
         
-        # Build working memory context
+        # Build initial working memory context (will augment with ephemerals below)
         memory_context = self.memory_system.build_context(
             max_tokens=self.cognitive_loop.max_context_tokens // 2,
             current_task="Analyzing situation and preparing intelligence briefing",
@@ -420,6 +420,73 @@ class ObservationStage:
         except Exception:
             knowledge_context = ""
 
+        # Integrate new_information and knowledge into working memory as ephemeral files
+        from ..memory.memory_blocks import MemoryBlock
+        from ..memory.memory_types import Priority, ContentType
+        from pathlib import Path
+        ephemeral_ids = []
+        try:
+            ephemeral_dir = Path("/personal/.internal/memory/ephemeral")
+            ephemeral_dir.mkdir(parents=True, exist_ok=True)
+
+            if new_information:
+                # Write actual file instead of virtual
+                info_file = ephemeral_dir / f"observation_new_info_{self.cognitive_loop.cycle_count}.txt"
+                info_file.write_text(new_information, encoding='utf-8')
+
+                info_block = MemoryBlock(
+                    location=str(info_file),
+                    confidence=1.0,
+                    priority=Priority.HIGH,
+                    metadata={
+                        "stage": "observation",
+                        "source": "new_information"
+                    },
+                    pinned=False,
+                    cycle_count=self.cognitive_loop.cycle_count,
+                    content_type=ContentType.TEXT_PLAIN
+                )
+                self.memory_system.add_memory(info_block)
+                ephemeral_ids.append(info_block.id)
+
+            if knowledge_context:
+                # Write actual file instead of virtual
+                know_file = ephemeral_dir / f"observation_knowledge_{self.cognitive_loop.cycle_count}.txt"
+                know_file.write_text(knowledge_context, encoding='utf-8')
+
+                know_block = MemoryBlock(
+                    location=str(know_file),
+                    confidence=1.0,
+                    priority=Priority.MEDIUM,
+                    metadata={
+                        "stage": "observation",
+                        "source": "knowledge_context"
+                    },
+                    pinned=False,
+                    cycle_count=self.cognitive_loop.cycle_count,
+                    content_type=ContentType.TEXT_PLAIN
+                )
+                self.memory_system.add_memory(know_block)
+                ephemeral_ids.append(know_block.id)
+        except Exception as e:
+            logger.debug(f"Could not add observation ephemeral memories: {e}")
+
+        # Rebuild working memory so selector can apply priorities to new items
+        memory_context = self.memory_system.build_context(
+            max_tokens=self.cognitive_loop.max_context_tokens // 2,
+            current_task="Analyzing situation and preparing intelligence briefing",
+            selection_strategy="balanced",
+            tag_filter=tag_filter,
+            exclude_content_types=[]
+        )
+        
+        # Cleanup ephemerals from working memory to avoid persistence
+        for mid in ephemeral_ids:
+            try:
+                self.memory_system.remove_memory(mid)
+            except Exception:
+                pass
+
         thinking_request = {
             "signature": {
                 "instruction": """
@@ -440,7 +507,7 @@ Focus on analyzing the new information provided and suggesting what to do regard
             },
             "input_values": {
                 "working_memory": memory_context,
-                "new_information": new_information if new_information else "No new messages or observations this cycle",
+                "new_information": new_information,
                 "helpful_knowledge": knowledge_context
             },
             "request_id": f"observe_{int(time.time()*1000)}",

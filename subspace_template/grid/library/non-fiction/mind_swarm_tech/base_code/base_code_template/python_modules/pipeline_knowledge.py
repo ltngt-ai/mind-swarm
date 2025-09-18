@@ -46,6 +46,7 @@ if latest_execution:
 """
 
 import json
+import time
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 import logging
@@ -249,8 +250,13 @@ Output Data:
         # Format: pipeline/{cyber_id}/{stage}/cycle_{cycle_number}
         knowledge_id = f"pipeline/{self.cyber_id}/{stage}/cycle_{cycle_number}"
         
-        # Direct get by ID - no searching!
-        result = self.knowledge.get(knowledge_id)
+        # Direct get by ID with brief retries to avoid race immediately after store
+        result = None
+        for attempt in range(5):  # total ~250ms
+            result = self.knowledge.get(knowledge_id)
+            if result:
+                break
+            time.sleep(0.05)
         
         if result:
             # The result should have metadata with the output
@@ -273,7 +279,9 @@ Output Data:
                 else:
                     logger.warning(f"ID mismatch: expected {stage} cycle {cycle_number}, got {metadata.get('stage')} cycle {metadata.get('cycle_number')}")
             
-        return None
+        # As a cautious fallback, try the latest stage output if exact cycle not found
+        latest = self.get_latest_stage_output(stage)
+        return latest if latest else None
     
     def get_latest_stage_output(self, stage: str) -> Optional[Dict[str, Any]]:
         """Get the most recent output from a specific stage.
