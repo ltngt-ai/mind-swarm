@@ -104,6 +104,7 @@ class TwitchIntegrationManager:
         self._receiver_task: Optional[asyncio.Task[None]] = None
         self._sender_task: Optional[asyncio.Task[None]] = None
         self._mock_task: Optional[asyncio.Task[None]] = None
+        self._bot_username: str = "MindSwarm"
 
     @property
     def state(self) -> TwitchConnectionState:
@@ -194,9 +195,7 @@ class TwitchIntegrationManager:
                 pass
             self._receiver_task = None
 
-        if self._websocket and not self._websocket.closed:
-            await self._websocket.close()
-        self._websocket = None
+        await self._close_websocket()
 
         # Drain queues so callers do not receive stale information
         while not self._incoming_messages.empty():
@@ -252,6 +251,7 @@ class TwitchIntegrationManager:
 
         self._state.connected = True
         self._state.connected_at = datetime.now(timezone.utc)
+        self._bot_username = credentials.username
         logger.info("Connected to Twitch channel #%s as %s", self._state.channel, credentials.username)
 
         self._receiver_task = asyncio.create_task(self._receiver_loop(websocket))
@@ -278,9 +278,7 @@ class TwitchIntegrationManager:
             logger.error("Twitch receiver loop exited: %s", exc)
         finally:
             self._state.connected = False
-            if self._websocket and not self._websocket.closed:
-                await self._websocket.close()
-            self._websocket = None
+            await self._close_websocket()
 
     async def _sender_loop(self, websocket: WebSocketClientProtocol) -> None:
         """Send queued messages to Twitch chat."""
@@ -296,10 +294,7 @@ class TwitchIntegrationManager:
         except Exception as exc:  # noqa: BLE001 - log and continue to shutdown
             logger.error("Twitch sender loop exited: %s", exc)
         finally:
-            try:
-                await websocket.close()
-            except Exception:  # noqa: BLE001 - best effort
-                pass
+            await self._safe_close(websocket)
 
     async def _mock_message_pump(self, metadata: Dict[str, Any]) -> None:
         """Generate lightweight system messages in mock mode."""
@@ -416,10 +411,22 @@ class TwitchIntegrationManager:
 
     async def queue_outbound_message(self, text: str) -> None:
         """Enqueue message to be sent to Twitch chat (or reflect in mock mode)."""
+        metadata = {"direction": "outbound"}
+        username = self._bot_username or "MindSwarm"
         if self._state.mock or not self._state.connected or not self._websocket:
-            await self.push_system_message(text, username="MindSwarm", metadata={"direction": "outbound"})
+            await self.push_system_message(text, username=username, metadata=metadata)
             return
+
         await self._outgoing_messages.put(text)
+        await self._incoming_messages.put(
+            TwitchMessage(
+                message_id=self._next_message_id("out"),
+                user=username,
+                text=text,
+                badges=["bot/1"],
+                metadata=metadata,
+            )
+        )
 
     async def record_command(self, payload: Dict[str, Any]) -> None:
         """Record executed command for overlay consumption."""
@@ -437,3 +444,31 @@ class TwitchIntegrationManager:
     def recent_commands(self) -> List[Dict[str, Any]]:
         """Return recently executed commands."""
         return list(self._recent_commands)
+
+    async def _close_websocket(self) -> None:
+        """Close any active websocket connection safely."""
+        websocket = self._websocket
+        self._websocket = None
+        if not websocket:
+            return
+        await self._safe_close(websocket)
+
+    async def _safe_close(self, websocket: WebSocketClientProtocol) -> None:
+        """Attempt to close a websocket connection, ignoring spurious errors."""
+        try:
+            closed_attr = getattr(websocket, "closed", None)
+            if callable(closed_attr):
+                try:
+                    if closed_attr():
+                        return
+                except TypeError:
+                    pass
+            elif closed_attr is True:
+                return
+        except Exception:  # noqa: BLE001 - best effort check only
+            pass
+
+        try:
+            await websocket.close()
+        except Exception:  # noqa: BLE001 - connection teardown is best effort
+            pass

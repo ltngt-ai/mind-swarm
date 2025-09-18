@@ -51,11 +51,39 @@ async def test_queue_outbound_message_reflects_in_mock_mode() -> None:
         await manager.queue_outbound_message("Hello viewers")
         messages = await manager.drain_messages(limit=5)
         assert any(
-            msg["message"] == "Hello viewers" and msg["metadata"].get("direction") == "outbound"
+            msg["message"] == "Hello viewers"
+            and msg["metadata"].get("direction") == "outbound"
+            and msg["user"] == "MindSwarm"
             for msg in messages
         )
     finally:
         await manager.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_queue_outbound_message_reflects_when_connected() -> None:
+    class _FakeWebSocket:
+        def __init__(self) -> None:
+            self.closed = False
+
+        async def close(self) -> None:
+            self.closed = True
+
+    manager = TwitchIntegrationManager()
+    manager._state.connected = True
+    manager._websocket = _FakeWebSocket()
+    manager._bot_username = "BotUser"
+
+    await manager.queue_outbound_message("Live ping")
+
+    queued = await manager._outgoing_messages.get()
+    assert queued == "Live ping"
+
+    messages = await manager.drain_messages(limit=5)
+    assert messages
+    assert messages[0]["user"] == "BotUser"
+    assert messages[0]["metadata"].get("direction") == "outbound"
+    assert messages[0]["message"] == "Live ping"
 
 
 @pytest.mark.asyncio

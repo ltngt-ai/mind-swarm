@@ -250,13 +250,14 @@ class WorkingMemory:
         
         # Remove from memory system
         # Find memories with this name in metadata
-        memories_to_remove = []
-        for memory_id, memory in self.memory_system._memory_manager._memories.items():
+        memories_to_remove: List[str] = []
+        memory_manager = self.memory_system.memory_manager
+        for memory_id, memory in list(memory_manager.memory_index.items()):
             if (hasattr(memory, 'metadata') and 
                 memory.metadata and 
                 memory.metadata.get('name') == name):
                 memories_to_remove.append(memory_id)
-        
+
         for memory_id in memories_to_remove:
             self.memory_system.remove_memory(memory_id)
             removed = True
@@ -306,7 +307,7 @@ class WorkingMemory:
             return 0
         count = 0
         try:
-            for memory in self.memory_system._memory_manager._memories.values():
+            for memory in self.memory_system.memory_manager.memory_index.values():
                 if hasattr(memory, 'metadata') and memory.metadata and memory.metadata.get('name') == name:
                     if not getattr(memory, 'pinned', False):
                         memory.pinned = True
@@ -329,7 +330,7 @@ class WorkingMemory:
             return 0
         count = 0
         try:
-            for memory in self.memory_system._memory_manager._memories.values():
+            for memory in self.memory_system.memory_manager.memory_index.values():
                 if hasattr(memory, 'metadata') and memory.metadata and memory.metadata.get('name') == name:
                     if getattr(memory, 'pinned', False):
                         memory.pinned = False
